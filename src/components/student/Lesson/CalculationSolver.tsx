@@ -2020,29 +2020,70 @@ function TapToAdd({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** D149's tray piece, at its own size, in a 44px target. */
+/**
+ * D149's tray piece, at its own size, in a 44px target - and its caption 5px
+ * under it, where the payload names its column (D149's `trayTileCap`).
+ *
+ * THE CAPTION IS THE PAYLOAD'S LABEL, AS GIVEN, OR NOTHING. D149 captions
+ * "Hundred", "Ten" and "One"; those are this screen's words for a payload
+ * that names its columns "Hundreds", "Tens" and "Ones", or names none, and
+ * for a lesson on tenths they would be wrong. The caption sits inside the
+ * button, so the target only grows, and the button's name already says it.
+ *
+ * Without `onPlace` it is the place a full column's piece leaves: the same
+ * box, drawn invisible, so the pieces beside it do not move.
+ */
 function TrayPiece({
   shape,
   label,
+  caption,
+  reading = false,
   onPlace,
 }: {
   shape: string;
   label: string;
-  onPlace: () => void;
+  caption?: string;
+  reading?: boolean;
+  onPlace?: () => void;
 }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onPlace}
-      className="flex size-11 cursor-pointer items-center justify-center"
-    >
+  const box =
+    "flex min-h-11 min-w-11 shrink-0 flex-col items-center justify-center gap-[5px]";
+  const inside = (
+    <>
       <span
         className={cn(
           "box-border border-2 border-nevo-violet bg-nevo-violet/18 shadow-elevation-1",
           shape,
         )}
       />
+      {caption && (
+        <span
+          data-tray-caption
+          className={cn(
+            "text-[10px] font-medium text-nevo-near-black/60",
+            reading && [READING_BODY, READING_INK],
+          )}
+        >
+          {caption}
+        </span>
+      )}
+    </>
+  );
+  if (!onPlace) {
+    return (
+      <span aria-hidden data-tray-place className={cn(box, "invisible")}>
+        {inside}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onPlace}
+      className={cn(box, "cursor-pointer")}
+    >
+      {inside}
     </button>
   );
 }
@@ -2153,7 +2194,8 @@ const COUNTER =
  * scaffold's mark for it, filled as the child taps that column's piece - a
  * flat, a rod or a unit. A column's piece goes from the tray once it is full,
  * and the build is done when every column is: nothing counts them together.
- * Each tray piece is named by its column's label where the payload gives one.
+ * Each tray piece is named and captioned by its column's label where the
+ * payload gives one, and by nothing where it does not (see `TrayPiece`).
  */
 function PlaceValueBuild({
   columns,
@@ -2203,27 +2245,20 @@ function PlaceValueBuild({
       */}
       {needed.some(isOpen) && (
         <TapToAdd>
-          {needed.map((i) =>
-            isOpen(i) ? (
-              <TrayPiece
-                key={i}
-                shape={PIECES[i].tile}
-                label={
-                  columns[i].label
-                    ? `Tap to add, ${columns[i].label}`
-                    : "Tap to add"
-                }
-                onPlace={() => onPlace(i)}
-              />
-            ) : (
-              <span
-                key={i}
-                aria-hidden
-                data-tray-place
-                className="size-11 shrink-0"
-              />
-            ),
-          )}
+          {needed.map((i) => (
+            <TrayPiece
+              key={i}
+              shape={PIECES[i].tile}
+              label={
+                columns[i].label
+                  ? `Tap to add, ${columns[i].label}`
+                  : "Tap to add"
+              }
+              caption={columns[i].label}
+              reading={reading}
+              onPlace={isOpen(i) ? () => onPlace(i) : undefined}
+            />
+          ))}
         </TapToAdd>
       )}
     </>

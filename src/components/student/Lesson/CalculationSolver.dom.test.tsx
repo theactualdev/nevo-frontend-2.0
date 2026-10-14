@@ -966,6 +966,57 @@ describe("D149's array and place value", () => {
     tap("That's the total");
     expect(props.onStepAnswered).toHaveBeenCalledWith("a1", true);
   });
+
+  const PLACE_BUILD = (labels?: string[]) =>
+    build({
+      scaffold: {
+        kind: "place_value",
+        parts: 1,
+        marks: [1, 2, 0],
+        ...(labels ? { labels } : {}),
+      },
+      manipulative: { kind: "place_value", parts: 1 },
+      steps: [TAP(3)],
+    });
+  const captions = () =>
+    [...document.querySelectorAll("[data-tray-caption]")].map((c) => c.textContent);
+
+  it("captions each tray piece with its column's label as the payload gives it (D149)", () => {
+    show(PLACE_BUILD(["Hundreds", "Tens", "Ones"]));
+
+    // The payload's words, not D149's "Hundred" and "Ten".
+    expect(captions()).toEqual(["Hundreds", "Tens"]);
+    const tens = screen.getByRole("button", { name: "Tap to add, Tens" });
+    expect(tens.querySelector("[data-tray-caption]")).toHaveClass(
+      "text-[10px]",
+      "font-medium",
+      "text-nevo-near-black/60",
+    );
+
+    tap("Tap to add, Tens");
+    tap("Tap to add, Tens");
+    // The full column's place keeps its caption's room, unseen, so the
+    // Hundreds piece beside it does not move.
+    const kept = document.querySelector("[data-tray-place]");
+    expect(kept).toHaveClass("invisible");
+    expect(kept).toHaveTextContent("Tens");
+  });
+
+  it("captions no tray piece the payload did not name", () => {
+    show(PLACE_BUILD());
+
+    expect(screen.getAllByRole("button", { name: "Tap to add" })).toHaveLength(2);
+    expect(captions()).toEqual([]);
+  });
+
+  it("sets a caption in the reading type, with the accommodation on (D30)", () => {
+    show(PLACE_BUILD(["Hundreds", "Tens", "Ones"]), true);
+
+    expect(document.querySelector("[data-tray-caption]")).toHaveClass(
+      "text-[18px]",
+      "leading-[2]",
+    );
+  });
 });
 
 describe("what the asked step names (B107)", () => {
