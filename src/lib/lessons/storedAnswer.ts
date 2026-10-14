@@ -3,10 +3,11 @@
  *
  * MATCHED, NEVER WORKED OUT. Lydia on SCRUM-177: judging does not happen at
  * runtime. When the pipeline reads a lesson it writes down every acceptable
- * form of each step - the step's `answer`, its `targets`, the options they
- * name - and the child's entry is compared with that list. So nothing here
- * evaluates anything: "0.75" is not "3/4" unless the pipeline stored both, and
- * "1 + x" is not "x + 1" unless it stored both.
+ * form of each step (`accepted`, SCRUM-185; not in the response yet, so
+ * until it is, the step's `answer` alone - never its `targets`, which name
+ * what it points at) and the child's entry is compared with that list. So
+ * nothing here evaluates anything: "0.75" is not "3/4" unless the pipeline
+ * stored both, and "1 + x" is not "x + 1" unless it stored both.
  *
  * SPACING IS THE ONE THING IGNORED, because it is never part of what is
  * written: "3x - 4" and "3x-4" are the same answer set down twice. Letter case

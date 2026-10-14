@@ -840,22 +840,39 @@ describe("D149's array and place value", () => {
   });
 
   const beads = () => [...document.querySelectorAll<HTMLElement>("[data-bead]")];
+  /** The line's ticks, as where each sits and which violet it is. */
+  const ticks = () =>
+    [...document.querySelectorAll<HTMLElement>("[data-tick]")].map(
+      (t) => `${t.style.left} ${t.dataset.tick}`,
+    );
 
   it("draws a number line of parts positions, a part's label under its own", () => {
     // "Cells or positions in one row": D149's 0 to 10 is eleven positions.
     const labels = ["0", "", "", "", "", "5", "", "", "", "", "10"];
     show(build({ scaffold: { kind: "number_line", parts: 11, labels } }));
 
-    expect(document.querySelectorAll("[data-tick]")).toHaveLength(11);
     expect(screen.getByText("5").style.left).toBe("50%");
     expect(screen.getByText("10").style.left).toBe("100%");
+    expect(screen.getByText("10")).toHaveClass("text-nevo-near-black/60");
     expect(beads()).toHaveLength(0);
   });
 
-  it("puts the marker at each mark's position on the line", () => {
-    show(build({ scaffold: { kind: "number_line", parts: 11, marks: [4] } }));
+  it("ticks only the positions the data labels, in D149's violet pair (D159)", () => {
+    // D159: "labels belong to marks, only where there are marks - not one
+    // per tick". Eleven ticks stood here before, one a position.
+    const labels = ["0", "", "", "", "", "5", "", "", "", "", "10"];
+    show(build({ scaffold: { kind: "number_line", parts: 11, labels } }));
 
-    expect(beads().map((b) => b.style.left)).toEqual(["40%"]);
+    expect(ticks()).toEqual(["0% violet", "50% light", "100% violet"]);
+    const [tick] = document.querySelectorAll("[data-tick]");
+    expect(tick).toHaveClass("w-[3px]", "h-5", "bg-nevo-violet");
+  });
+
+  it("puts the marker, and a tick, at each mark's position on the line", () => {
+    show(build({ scaffold: { kind: "number_line", parts: 11, marks: [4, 7] } }));
+
+    expect(beads().map((b) => b.style.left)).toEqual(["40%", "70%"]);
+    expect(ticks()).toEqual(["40% violet", "70% light"]);
   });
 
   const TAP = (tapCount: number) =>
@@ -898,6 +915,8 @@ describe("D149's array and place value", () => {
     );
     // QUARTERS draws bars, so the only marker is the build's.
     expect(beads().map((b) => b.style.left)).toEqual(["0%"]);
+    // The build carries no marks or labels, so its line has no ticks (D159).
+    expect(ticks()).toEqual([]);
 
     for (let i = 0; i < 3; i++) tap("+1");
 
@@ -957,6 +976,57 @@ describe("D149's array and place value", () => {
     expect(props.onPiecePlaced).toHaveBeenCalledTimes(3);
     tap("That's the total");
     expect(props.onStepAnswered).toHaveBeenCalledWith("a1", true);
+  });
+
+  const PLACE_BUILD = (labels?: string[]) =>
+    build({
+      scaffold: {
+        kind: "place_value",
+        parts: 1,
+        marks: [1, 2, 0],
+        ...(labels ? { labels } : {}),
+      },
+      manipulative: { kind: "place_value", parts: 1 },
+      steps: [TAP(3)],
+    });
+  const captions = () =>
+    [...document.querySelectorAll("[data-tray-caption]")].map((c) => c.textContent);
+
+  it("captions each tray piece with its column's label as the payload gives it (D149)", () => {
+    show(PLACE_BUILD(["Hundreds", "Tens", "Ones"]));
+
+    // The payload's words, not D149's "Hundred" and "Ten".
+    expect(captions()).toEqual(["Hundreds", "Tens"]);
+    const tens = screen.getByRole("button", { name: "Tap to add, Tens" });
+    expect(tens.querySelector("[data-tray-caption]")).toHaveClass(
+      "text-[10px]",
+      "font-medium",
+      "text-nevo-near-black/60",
+    );
+
+    tap("Tap to add, Tens");
+    tap("Tap to add, Tens");
+    // The full column's place keeps its caption's room, unseen, so the
+    // Hundreds piece beside it does not move.
+    const kept = document.querySelector("[data-tray-place]");
+    expect(kept).toHaveClass("invisible");
+    expect(kept).toHaveTextContent("Tens");
+  });
+
+  it("captions no tray piece the payload did not name", () => {
+    show(PLACE_BUILD());
+
+    expect(screen.getAllByRole("button", { name: "Tap to add" })).toHaveLength(2);
+    expect(captions()).toEqual([]);
+  });
+
+  it("sets a caption in the reading type, with the accommodation on (D30)", () => {
+    show(PLACE_BUILD(["Hundreds", "Tens", "Ones"]), true);
+
+    expect(document.querySelector("[data-tray-caption]")).toHaveClass(
+      "text-[18px]",
+      "leading-[2]",
+    );
   });
 });
 
@@ -1059,8 +1129,43 @@ describe("what the asked step names (B107)", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });
     tap("Check my answer");
 
-    expect(screen.getByText("3/4")).toHaveClass("text-nevo-navy");
-    expect(navy()).toEqual([0, 0, 3]);
+    expect(scaffoldRows()).toHaveLength(3);
+  });
+
+  /** A bar's own label, at its start. */
+  const rowLabel = (row: number) => scaffoldRows()[row].previousElementSibling;
+  const solve = () => {
+    pick("4 and 4");
+    tap("Next step");
+    pick("The numerators: 1 and 2");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });
+    tap("Check my answer");
+  };
+
+  it("brings the result's bar in soft violet, its label in navy (D164)", () => {
+    // D164: "the moment the child is right the bars return to Soft Violet".
+    // The solver frame's `mkBar` draws the result row unemphasised, with its
+    // "3/4" in navy at 600. It was held navy for good before.
+    show(CHOREOGRAPHED());
+    solve();
+
+    expect(navy()).toEqual([0, 0, 0]);
+    expect(countIn(".bg-nevo-violet")()).toEqual([1, 2, 3]);
+    expect(rowLabel(2)).toHaveTextContent("3/4");
+    expect(rowLabel(2)).toHaveClass("font-semibold", "text-nevo-navy");
+    expect(rowLabel(0)).not.toHaveClass("text-nevo-navy");
+  });
+
+  it("sets the accepted answer in the solved equation at 700, and nothing else (D204)", () => {
+    // A lesson stored before ids: its result is named by its words.
+    show(CHOREOGRAPHED());
+    solve();
+
+    expect(equation()).toBe("1/4 + 2/4 = 3/4");
+    expect(token("3/4")).toHaveClass("font-bold");
+    expect(
+      document.querySelectorAll('[aria-live="polite"] .font-bold'),
+    ).toHaveLength(1);
   });
 
   it("finds a target among the equation's tokens as well as the drawing's labels", () => {
@@ -1507,6 +1612,8 @@ describe("the equation's tokens and the drawing's ids (B109, B127)", () => {
     render13(WITH_IDS());
 
     expect(token("t-plus")).toHaveClass("outline-nevo-violet");
+    // The solver frame's `eqTokenStyle`: 3px out.
+    expect(token("t-plus")).toHaveClass("outline-offset-3");
     expect(token("t-a")).not.toHaveClass("outline-nevo-violet");
     // The mark named by its id: the whole of its bar.
     expect(countIn(".outline-nevo-violet")()).toEqual([4, 0]);
@@ -1555,6 +1662,64 @@ describe("the equation's tokens and the drawing's ids (B109, B127)", () => {
 
     expect(equation()).toBe("1/4 + 2/4 = ?");
     expect(screen.queryByText("3/4")).toBeNull();
+  });
+
+  it("sets a step's answer at 700 once it is accepted, named by its id (B127, D204)", () => {
+    render13(
+      build({
+        expression: "1/4 + 2/4",
+        steps: [
+          step({
+            equationTokens: TOKENS,
+            resultTargetId: "t-r",
+            highlights: [{ target: "t-r", role: "result" }],
+          }),
+          step({ stepId: "s2" }),
+        ],
+      }),
+    );
+
+    pick("4 and 4");
+    // Accepted, its confirmation showing: the whole line, its answer at 700.
+    expect(equation()).toBe("1/4 + 2/4 = 3/4");
+    expect(token("t-r")).toHaveClass("font-bold");
+    expect(token("t-a")).not.toHaveClass("font-bold");
+  });
+
+  it("picks out no answer in a solved equation that names no token (B101)", () => {
+    // `fullEquation` is a flat string. On a lesson with ids nothing in it can
+    // be named, and the answer is never found by its words instead.
+    render13(WITH_IDS());
+    answer();
+
+    expect(equation()).toBe("1/4 + 2/4 = 3/4");
+    expect(
+      document.querySelectorAll('[aria-live="polite"] .font-bold'),
+    ).toHaveLength(0);
+  });
+
+  it("ticks no position a held-back label marks, and keeps each tick's violet as it arrives", () => {
+    render13(
+      build({
+        scaffold: {
+          kind: "number_line",
+          parts: 3,
+          labels: ["0", "1", "2"],
+          labelIds: ["p0", "p1", "p2"],
+        },
+        steps: [step({ highlights: [{ target: "p1", role: "result" }] })],
+      }),
+    );
+    const ticks = () =>
+      [...document.querySelectorAll<HTMLElement>("[data-tick]")].map(
+        (t) => `${t.style.left} ${t.dataset.tick}`,
+      );
+
+    // On a line, where a held-back label sits is the answer.
+    expect(ticks()).toEqual(["0% violet", "100% violet"]);
+
+    pick("4 and 4");
+    expect(ticks()).toEqual(["0% violet", "50% light", "100% violet"]);
   });
 });
 
