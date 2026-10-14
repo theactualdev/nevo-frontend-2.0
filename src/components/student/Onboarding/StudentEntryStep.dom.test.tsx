@@ -880,7 +880,7 @@ describe("a child whose PIN a teacher cleared (B67)", () => {
       await chooseNewPin();
 
       expect(
-        screen.getByText("Your PIN is kept. That's on us - try again."),
+        screen.getByText("That's on us, not you. Try again."),
       ).toBeInTheDocument();
       expect(push).not.toHaveBeenCalled();
       expect(getSession()).toBeNull();

@@ -75,12 +75,14 @@ describe("when the write fails", () => {
     expect(screen.queryByLabelText("Your PIN")).toBeNull();
   });
 
-  it("says the failure is ours, and that the PIN is kept", async () => {
-    // Frame 15's didn't-save state (D61), verbatim.
+  it("says the failure is ours, and claims nothing about the PIN", async () => {
+    // Frame 15's didn't-save state (D61), in the PIN frame's words since
+    // 13 Oct: the claim that the PIN was kept is gone.
     await renderFailing();
 
     expect(alertText()).toContain("That didn't save");
-    expect(alertText()).toContain("Your PIN is kept. That's on us - try again.");
+    expect(alertText()).toContain("That's on us, not you. Try again.");
+    expect(alertText()).not.toMatch(/kept/i);
   });
 
   it("did try to store the PIN before saying so", async () => {
@@ -160,8 +162,14 @@ describe("when the PIN route says why (B68)", () => {
     );
     // Not an error: nothing is announced as one.
     expect(screen.queryByRole("alert")).toBeNull();
-    // Both rows, held: dimmed, empty, inert.
-    expect(document.querySelectorAll("[data-held-pin]")).toHaveLength(2);
+    // One row, held - dimmed, empty, inert - as the PIN frame's `throttled`
+    // draws it since 13 Oct. It held both.
+    const held = document.querySelectorAll("[data-held-pin]");
+    expect(held).toHaveLength(1);
+    expect(held[0].className).toContain("mt-10");
+    expect(held[0].querySelectorAll(":scope > *")).toHaveLength(
+      STUDENT_PIN_LENGTH,
+    );
     expect(screen.queryByLabelText("Your PIN")).toBeNull();
     // The PIN is still kept: the button sends it again once they have waited.
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
@@ -185,7 +193,7 @@ describe("when the PIN route says why (B68)", () => {
   it("is the not-saved state for those refusals when no caller takes them", async () => {
     await renderRefused(refused(409, "pin_already_set"));
 
-    expect(alertText()).toContain("Your PIN is kept. That's on us - try again.");
+    expect(alertText()).toContain("That's on us, not you. Try again.");
   });
 
   it("is the not-saved state for a refusal that does not name itself", async () => {
@@ -193,6 +201,6 @@ describe("when the PIN route says why (B68)", () => {
     await renderRefused(refused(409), onRefused);
 
     expect(onRefused).not.toHaveBeenCalled();
-    expect(alertText()).toContain("Your PIN is kept. That's on us - try again.");
+    expect(alertText()).toContain("That's on us, not you. Try again.");
   });
 });
