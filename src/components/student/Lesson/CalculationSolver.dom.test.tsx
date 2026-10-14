@@ -261,14 +261,25 @@ describe("judging a step", () => {
     ]);
   });
 
-  it("accepts any form the pipeline stored for a typed step", () => {
+  it("accepts the stored answer for a typed step, however it is spaced", () => {
+    const props = show(build({ steps: [QUARTERS.steps[2]] }));
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: " 3 " } });
+    tap("Check my answer");
+
+    expect(props.onStepAnswered).toHaveBeenCalledWith("s3", true);
+    expect(props.onSolved).toHaveBeenCalled();
+  });
+
+  it("takes no step's targets for a right answer", () => {
+    // The step's targets carry "3.0". They name what it points at.
     const props = show(build({ steps: [QUARTERS.steps[2]] }));
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "3.0" } });
     tap("Check my answer");
 
-    expect(props.onStepAnswered).toHaveBeenCalledWith("s3", true);
-    expect(props.onSolved).toHaveBeenCalled();
+    expect(props.onStepAnswered).toHaveBeenCalledWith("s3", false);
+    expect(props.onSolved).not.toHaveBeenCalled();
   });
 
   it("does not work out an answer the pipeline did not store", () => {
@@ -1708,5 +1719,92 @@ describe("when a hint is offered and used (B130, B131)", () => {
 
     expect(props.onHintOpened).toHaveBeenCalledWith("s1");
     expect(props.onHintUsed).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Backend's tokens as it sends them (`_validated_calculation_variant`): every
+ * step carries exactly one, its own answer, hidden until accepted and named
+ * by `resultTargetId` and a `result` highlight. Those carry no equation line.
+ */
+describe("a step whose only token is its own answer, as backend sends it", () => {
+  const backendStep = (over: Record<string, unknown>) => {
+    const s = step(over);
+    const id = `${s.stepId}-result`;
+    return {
+      ...s,
+      requiredCharacters: [],
+      equationTokens: [{ id, text: String(s.answer), hiddenUntilAccepted: true }],
+      resultTargetId: id,
+      highlights: [
+        ...((over.highlights as unknown[] | undefined) ?? []),
+        { target: id, role: "result" },
+      ],
+    };
+  };
+  const BACKEND = (over: Record<string, unknown> = {}) =>
+    build({
+      scaffold: {
+        kind: "bar",
+        parts: 4,
+        rows: 2,
+        marks: [1, 2],
+        labels: ["1/4", "2/4"],
+        markIds: ["mark-1", "mark-2"],
+        labelIds: ["label-1", "label-2"],
+      },
+      steps: [
+        backendStep({ highlights: [{ target: "mark-1", role: "active" }] }),
+        backendStep({ ...QUARTERS.steps[1] }),
+        backendStep({ ...QUARTERS.steps[2] }),
+      ],
+      ...over,
+    });
+  const typeAnswer = (value: string) => {
+    fireEvent.change(screen.getByRole("textbox"), { target: { value } });
+    tap("Check my answer");
+  };
+
+  it("shows the problem's notation while the step is asked, not a lone ?", () => {
+    render13(BACKEND());
+
+    expect(equation()).toBe("1/4 + 2/4 = ?");
+    expect(document.querySelector("[data-token]")).toBeNull();
+  });
+
+  it("keeps each step's answer back until it is accepted (B127)", () => {
+    render13(BACKEND());
+    expect(equation()).not.toContain("4 and 4");
+
+    pick("4 and 4");
+    tap("Next step");
+    pick("The numerators: 1 and 2");
+    // The last step is asked: the line is the one before it, without its 3.
+    expect(equation()).toBe("1 + 2 = ?");
+    expect(equation()).not.toContain("3");
+
+    typeAnswer("3");
+    expect(equation()).toBe("1/4 + 2/4 = 3/4");
+  });
+
+  it("shows the step's assembles once it is accepted, not its bare answer", () => {
+    render13(BACKEND());
+
+    pick("4 and 4");
+    expect(equation()).toBe("1/4 + 2/4 = ?/4");
+    tap("Next step");
+    expect(equation()).toBe("1/4 + 2/4 = ?/4");
+    cleanup();
+
+    // With no `fullEquation`, the last step's own assembles stands at the end.
+    render13(BACKEND({ fullEquation: "", steps: [backendStep({ ...QUARTERS.steps[2] })] }));
+    typeAnswer("3");
+    expect(equation()).toBe("1/4 + 2/4 = 3/4");
+  });
+
+  it("still rings a mark by its id", () => {
+    render13(BACKEND());
+
+    expect(countIn(".outline-nevo-violet")()).toEqual([4, 0]);
   });
 });

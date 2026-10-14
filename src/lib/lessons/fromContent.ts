@@ -401,9 +401,9 @@ function quickCheckFor(segment: ContentSegment): QuickCheck | undefined {
  * this app can draw and mark from the payload alone (SCRUM-181, on SCRUM-177's
  * payload).
  *
- * THE FRONT END COMPUTES NOTHING HERE. Every step's right answer is one the
- * pipeline wrote down - `answer`, `targets`, or the options they name - and
- * the child's entry is matched against that list (`isStoredAnswer`). The
+ * THE FRONT END COMPUTES NOTHING HERE. Every step's right answer is the one
+ * the pipeline wrote down - `answer`, or the option it names - and the
+ * child's entry is matched against it (`isStoredAnswer`). The
  * drawing is the payload's `scaffold` read as given, and the equation is the
  * payload's own `assembles` and `equationState` strings. Nothing is parsed out
  * of notation and nothing is worked out from it, which is why this no longer
@@ -465,8 +465,15 @@ export function calculationFromVariant(
      * nobody had said what it was. Backend has now (B101): it is the solved
      * equation, so standing it in would show the answer before the first
      * step. A problem with no notation shows none until a step assembles one.
+     *
+     * AND NOR DOES ONE THAT IS ONLY THE SOLVED EQUATION. Backend still stands
+     * it in on the server (`expression or fullEquation`), so a lesson stored
+     * without notation arrives with the two the same, and the answer would
+     * show while step 1 is asked. Nothing here can tell that from a lesson
+     * whose two happen to match, so neither shows a line before a step
+     * assembles one: the answer is never shown early (B127).
      */
-    expression: variant.expression?.trim() ?? "",
+    expression: expressionOf(variant),
     fullEquation: variant.fullEquation?.trim() ?? "",
     ...(scaffold ? { scaffold } : {}),
     ...(manipulative ? { manipulative } : {}),
@@ -559,9 +566,27 @@ function keysFor(step: WireCalculationStep): string[] | undefined {
   return [...new Set(keys)];
 }
 
-/** A step's stored answers - its `answer`, then its `targets` - as written. */
+/** The problem's notation, or none where it is only the solved equation. */
+function expressionOf(variant: {
+  expression?: string | null;
+  fullEquation?: string | null;
+}): string {
+  const expression = variant.expression?.trim() ?? "";
+  return expression === (variant.fullEquation?.trim() ?? "") ? "" : expression;
+}
+
+/**
+ * A step's stored answer - its `answer` - as written.
+ *
+ * NOT ITS `targets`. They name what a step points at, not what is right:
+ * backend fills a step that has none with every one of its options, and uses
+ * them as the step's highlights where it sends none. Read as answers, they
+ * marked every option of such a choice right. Every acceptable form of a step
+ * is stored apart (`accepted`, SCRUM-185) and is not yet in the response;
+ * until it is, the one answer is the only one.
+ */
 function storedAnswers(step: WireCalculationStep): string[] {
-  return [step.answer, ...(step.targets ?? [])]
+  return [step.answer]
     .filter((a): a is string | number | boolean => a != null)
     .map((a) => String(a).trim())
     .filter((a) => a !== "");
