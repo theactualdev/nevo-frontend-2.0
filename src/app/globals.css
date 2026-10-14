@@ -4,6 +4,71 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * INSIDE THE LETTERBOX THE SCREEN IS ON A TABLET (D207). The child's
+ * pre-login flow is drawn at 768 x 1024 and has no desktop composition, so on
+ * a desktop it sits in a 768px tablet frame on near-black (`Letterbox`, and
+ * the rules for it further down). But a media query asks about the WINDOW,
+ * not the frame: at 1280 wide, every `lg:` inside the frame fired and drew the
+ * old desktop sizes, and every `landscape:` fired and drew 28c's sideways
+ * picker in a portrait frame.
+ *
+ * So these variants answer for the frame. Inside `[data-nevo-letterbox]` on a
+ * desktop the screen is an upright tablet: `lg:` does not apply, `portrait:`
+ * does and `landscape:` does not. Everywhere else - on any touch screen,
+ * whatever its size, and outside a letterbox - they are exactly Tailwind's
+ * own. `:where()` adds no specificity, and each keeps its place in the
+ * cascade, because a built-in variant redefined here keeps its order.
+ *
+ * NOT `xl:` OR `2xl:`, which no pre-login screen uses. Each redefined variant
+ * writes its rules twice, once for a desk and once for touch, across the whole
+ * app's stylesheet, and those two would double it again for nothing. A
+ * pre-login screen that ever takes one needs it added here, as `lg` is.
+ *
+ * A DESKTOP is the letterbox's own condition, repeated here because CSS has no
+ * way to name it once: at least 1024 wide, with a fine primary pointer that
+ * hovers - `(width >= 64rem) and (pointer: fine) and (hover: hover)`. Its
+ * opposite, for a rule that must keep firing on a touch screen, is the list
+ * `(pointer: coarse), (pointer: none), (hover: none)`.
+ *
+ * NOT `max-lg:` and its siblings. They are not variants of their own but one
+ * `max-*` variant reading the breakpoints, and a `max-lg` defined here would
+ * be a new variant sorted after every other, reversing which rule wins
+ * wherever one sits beside a `sm:` or `md:`. It does not need to be: a desktop
+ * was never under `lg`, and a touch screen is never letterboxed, so a
+ * `max-lg:` reads the same window it always did.
+ */
+@custom-variant lg {
+  @media (width >= --theme(--breakpoint-lg)) {
+    &:where(:not([data-nevo-letterbox] *)) {
+      @slot;
+    }
+    @media (pointer: coarse), (pointer: none), (hover: none) {
+      @slot;
+    }
+  }
+}
+@custom-variant portrait {
+  @media (orientation: portrait) {
+    @slot;
+  }
+  @media (width >= --theme(--breakpoint-lg)) and (pointer: fine) and (hover: hover) {
+    &:where([data-nevo-letterbox] *) {
+      @slot;
+    }
+  }
+}
+@custom-variant landscape {
+  @media (orientation: landscape) {
+    &:where(:not([data-nevo-letterbox] *)) {
+      @slot;
+    }
+    @media (width < --theme(--breakpoint-lg)), (pointer: coarse), (pointer: none), (hover: none) {
+      @slot;
+    }
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -495,6 +560,19 @@
   html:has([data-nevo-console="teacher"]) body {
     background-color: var(--color-nevo-cream);
   }
+
+  /*
+   * And under a letterboxed screen on a desktop, the near-black field the
+   * tablet frame sits on - so the page pulled past its ends, or longer than
+   * the window, shows the field rather than cream around the frame. After the
+   * student canvas rule above, which it overrides there.
+   */
+  @media (width >= --theme(--breakpoint-lg)) and (pointer: fine) and (hover: hover) {
+    html:has([data-nevo-letterbox]),
+    html:has([data-nevo-letterbox]) body {
+      background-color: var(--color-nevo-near-black);
+    }
+  }
 }
 
 /*
@@ -513,6 +591,74 @@
   outline: 2px solid var(--color-nevo-navy);
   outline-offset: 2px;
   --tw-ring-shadow: 0 0 #0000;
+}
+
+/*
+ * THE LETTERBOX (D207). Design's reference: "The student pre-login /
+ * shared-device flow is tablet-only and letterboxes at desktop width (≥1024)
+ * - by design, not as a fallback. It has no desktop composition and must not
+ * be given one. At desktop widths these screens centre the tablet frame on
+ * the near-black field; they do not reflow to a wide layout."
+ *
+ * ON A DESKTOP, AND ONLY THERE: at least 1024 wide, with a fine primary
+ * pointer that hovers. The reference's reason is a desktop's - "a school
+ * desktop is a teacher's machine or a lab workstation, neither of which is a
+ * shared child device". A touch screen of any size keeps its own layouts: a
+ * classroom iPad held sideways (1080 x 810, 1180 x 820) keeps 28c's landscape
+ * frames, drawn because "tray-mounted tablets cannot be rotated", and an iPad
+ * Pro held upright gets no bars.
+ *
+ * `Letterbox` draws two boxes, and anywhere else neither is drawn at all -
+ * both are `contents`, so the screen is laid out exactly as it was. On a
+ * desktop these rules take over, unlayered so they beat that utility:
+ *
+ *  - the FIELD, the window's width and at least its height, in near-black,
+ *    centring the frame;
+ *  - the FRAME, 768px wide - the pre-login tablet canvas, 768 x 1024 - and
+ *    the window's height, not 1024. Design's desktop canvas is 1280 x 832,
+ *    which a 1024-tall frame cannot fit, and the screens inside size
+ *    themselves to `100dvh`, which is the frame's height only while the frame
+ *    is the window's. Cream, as the screens are.
+ *
+ * NO RADIUS, SHADOW OR INSET YET. Design's letterboxed frames (13 Oct) are not
+ * pushed; the boards draw every canvas with the same 16px corner and drop
+ * shadow, so they say nothing about this one. Square and flush until they do.
+ *
+ * WHAT IS SIZED BY THE WINDOW SIZES BY THE FRAME. `100dvh` already is the
+ * frame's height, and no letterboxed screen sizes by `vw` at this width.
+ * `contain: layout` makes the frame the box a `fixed` descendant is placed
+ * in, so nothing docked to the bottom of a screen lands on the window's edge
+ * instead of the frame's. The on-screen keyboards and PIN pads are in the
+ * screen's flow, not fixed, and with a mouse they are hidden anyway
+ * (`NevoKeyboard`).
+ */
+@media (width >= --theme(--breakpoint-lg)) and (pointer: fine) and (hover: hover) {
+  [data-nevo-letterbox] {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    min-height: 100dvh;
+    background-color: var(--color-nevo-near-black);
+  }
+  [data-nevo-letterbox-frame] {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    width: 768px;
+    min-height: 100dvh;
+    background-color: var(--color-nevo-cream);
+    contain: layout;
+  }
+
+  /*
+   * A sheet's scrim covers the frame, not the field. Sheets portal to `body`,
+   * outside the frame, so the scrim is narrowed to the frame's columns while a
+   * letterbox is on the page. The sheet itself is centred, as is the frame.
+   */
+  html:has([data-nevo-letterbox]) [data-slot="sheet-overlay"] {
+    left: calc(50% - 384px);
+    right: calc(50% - 384px);
+  }
 }
 
 /* Reduced-motion mode (Design System v2 §10 / §9 accessibility).

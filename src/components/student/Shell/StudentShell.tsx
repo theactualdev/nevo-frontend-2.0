@@ -19,7 +19,12 @@ import { useSessionRefresh } from "@/hooks/useSessionRefresh";
 import { flushPendingProgress } from "@/lib/lessons/pendingProgress";
 import { flushPendingBaseline } from "@/lib/profiling/pendingBaseline";
 import { arrivedWithoutSession, getSession } from "@/lib/auth/session";
-import { isHoldDestination } from "@/lib/auth/consentHold";
+import {
+  WAITING_ROUTE,
+  WITHDRAWN_ROUTE,
+  isHoldDestination,
+} from "@/lib/auth/consentHold";
+import { Letterbox } from "./Letterbox";
 import { doorAfterLostSession } from "./lostSession";
 import { MOCK_STUDENT, STUDENT_NAV, STUDENT_PROFILE_HREF } from "./studentNav";
 import { useAvatarTone } from "./useAvatarTone";
@@ -162,13 +167,11 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     // activities are deliberately excluded - see `scalesWithTextSize`.
     // `data-nevo-console`: the student focus ring (globals.css) applies on
     // these routes too. `contents`, so the bare ones stay bare.
-    if (!scalesWithTextSize(pathname))
-      return (
-        <div data-nevo-console="student" className="contents">
-          {children}
-        </div>
-      );
-    return (
+    const bare = !scalesWithTextSize(pathname) ? (
+      <div data-nevo-console="student" className="contents">
+        {children}
+      </div>
+    ) : (
       <div data-nevo-console="student" className="nevo-text-zoom">
         {/*
           Ask Nevo is rendered by the LESSON LAYOUT now, not here. As a sibling
@@ -179,6 +182,10 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
         {children}
       </div>
     );
+    // The pre-login screens sit in the tablet frame at desktop width (D207).
+    // Outside the zoom, so a larger text size scales the screen inside the
+    // frame as it would on a tablet, not the frame.
+    return isLetterboxed(pathname) ? <Letterbox>{bare}</Letterbox> : bare;
   }
 
   const within = (href: string) =>
@@ -393,6 +400,28 @@ export function scalesWithTextSize(pathname: string): boolean {
   if (pathname === "/student/warm-up") return false;
   return true;
 }
+
+/**
+ * The full-screen routes letterboxed at desktop width (D207): each draws only
+ * pre-login screens, on the 768 x 1024 tablet canvas. Welcome, 05 Entry and
+ * 03 Teacher Join with their holds, and the two consent holds, 00d and 00e.
+ *
+ * NOT `/student/onboarding/sequence` as a route. Its Transition and profiling
+ * run are pre-login screens and its learning notice, PIN creation and You're
+ * In are not - they are drawn on the signed-in canvas, with desktop
+ * compositions - so the sequence frames its own screens. Nor the unchecked
+ * consent read (D69), whose screens are frame 28's error states.
+ */
+export function isLetterboxed(pathname: string): boolean {
+  return LETTERBOXED.includes(pathname.replace(/\/+$/, ""));
+}
+const LETTERBOXED = [
+  "/student/onboarding",
+  "/student/onboarding/school",
+  "/student/onboarding/teacher-join",
+  WAITING_ROUTE,
+  WITHDRAWN_ROUTE,
+];
 
 /**
  * The routes that run without chrome: onboarding, the consent hold, the

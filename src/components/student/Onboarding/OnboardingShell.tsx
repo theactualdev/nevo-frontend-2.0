@@ -39,7 +39,7 @@ export function OnboardingShell({
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
       {/* Header: back + wordmark */}
-      <header className="flex h-14 shrink-0 items-center px-4 sm:h-16 sm:px-5 lg:px-6">
+      <header className="flex h-14 shrink-0 items-center px-4 sm:h-16 sm:px-5">
         <button
           type="button"
           aria-label="Back"
@@ -49,16 +49,16 @@ export function OnboardingShell({
           <ChevronLeft className="size-6" strokeWidth={2} />
         </button>
         {/*
-          The entry frame's `logoH`: 16px on a phone, 18 on a tablet and 19
-          on a desktop, set as the profiling shell sets its wordmark. It was
-          20, 22 and 24.
+          The entry frame's `logoH`: 16px on a phone and 18 on a tablet, set
+          as the profiling shell sets its wordmark. It was 20, 22 and 24. A
+          desktop draws the tablet's, in the letterbox (D207).
         */}
         <Image
           src="/brand/nevo-wordmark.png"
           alt="Nevo"
           width={344}
           height={116}
-          className="ml-1.5 h-4 w-auto sm:h-[18px] lg:h-[19px]"
+          className="ml-1.5 h-4 w-auto sm:h-[18px]"
         />
       </header>
 
@@ -67,13 +67,14 @@ export function OnboardingShell({
         header (QA, 30 Sep). `my-auto`, not `justify-center`: auto margins
         drop to zero when the content is taller than the space, so a long step
         on a short screen scrolls from its top instead of losing it above the
-        fold. The column is the frame's `innerMax`: 440px on a tablet, 420px
-        on a desktop.
+        fold. The column is the frame's `innerMax`: 440px on a tablet, and
+        on a desktop, which letterboxes the tablet (D207) and has no
+        composition of its own.
       */}
       <div className="flex flex-1 flex-col items-center overflow-y-auto px-6 pb-6 sm:pb-10">
         <div
           className={cn(
-            "my-auto flex w-full max-w-full flex-col sm:max-w-[440px] lg:max-w-[420px]",
+            "my-auto flex w-full max-w-full flex-col sm:max-w-[440px]",
             lifted && "[@media(pointer:coarse)]:my-0 [@media(pointer:coarse)]:pt-4",
           )}
         >
