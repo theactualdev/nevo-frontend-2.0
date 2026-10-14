@@ -408,7 +408,7 @@ export function CalculationSolver({
       */}
       <div
         aria-live="polite"
-        className="mt-[18px] flex min-h-[52px] items-center justify-center"
+        className="mt-[18px] flex min-h-[52px] items-center justify-center sm:min-h-[60px]"
       >
         {line.key && (
           <div

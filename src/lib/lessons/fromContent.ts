@@ -401,9 +401,9 @@ function quickCheckFor(segment: ContentSegment): QuickCheck | undefined {
  * this app can draw and mark from the payload alone (SCRUM-181, on SCRUM-177's
  * payload).
  *
- * THE FRONT END COMPUTES NOTHING HERE. Every step's right answer is one the
- * pipeline wrote down - `answer`, `targets`, or the options they name - and
- * the child's entry is matched against that list (`isStoredAnswer`). The
+ * THE FRONT END COMPUTES NOTHING HERE. Every step's right answer is the one
+ * the pipeline wrote down - `answer`, or the option it names - and the
+ * child's entry is matched against it (`isStoredAnswer`). The
  * drawing is the payload's `scaffold` read as given, and the equation is the
  * payload's own `assembles` and `equationState` strings. Nothing is parsed out
  * of notation and nothing is worked out from it, which is why this no longer
@@ -575,9 +575,18 @@ function expressionOf(variant: {
   return expression === (variant.fullEquation?.trim() ?? "") ? "" : expression;
 }
 
-/** A step's stored answers - its `answer`, then its `targets` - as written. */
+/**
+ * A step's stored answer - its `answer` - as written.
+ *
+ * NOT ITS `targets`. They name what a step points at, not what is right:
+ * backend fills a step that has none with every one of its options, and uses
+ * them as the step's highlights where it sends none. Read as answers, they
+ * marked every option of such a choice right. Every acceptable form of a step
+ * is stored apart (`accepted`, SCRUM-185) and is not yet in the response;
+ * until it is, the one answer is the only one.
+ */
 function storedAnswers(step: WireCalculationStep): string[] {
-  return [step.answer, ...(step.targets ?? [])]
+  return [step.answer]
     .filter((a): a is string | number | boolean => a != null)
     .map((a) => String(a).trim())
     .filter((a) => a !== "");

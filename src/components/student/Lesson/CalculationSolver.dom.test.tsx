@@ -261,14 +261,25 @@ describe("judging a step", () => {
     ]);
   });
 
-  it("accepts any form the pipeline stored for a typed step", () => {
+  it("accepts the stored answer for a typed step, however it is spaced", () => {
+    const props = show(build({ steps: [QUARTERS.steps[2]] }));
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: " 3 " } });
+    tap("Check my answer");
+
+    expect(props.onStepAnswered).toHaveBeenCalledWith("s3", true);
+    expect(props.onSolved).toHaveBeenCalled();
+  });
+
+  it("takes no step's targets for a right answer", () => {
+    // The step's targets carry "3.0". They name what it points at.
     const props = show(build({ steps: [QUARTERS.steps[2]] }));
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "3.0" } });
     tap("Check my answer");
 
-    expect(props.onStepAnswered).toHaveBeenCalledWith("s3", true);
-    expect(props.onSolved).toHaveBeenCalled();
+    expect(props.onStepAnswered).toHaveBeenCalledWith("s3", false);
+    expect(props.onSolved).not.toHaveBeenCalled();
   });
 
   it("does not work out an answer the pipeline did not store", () => {
