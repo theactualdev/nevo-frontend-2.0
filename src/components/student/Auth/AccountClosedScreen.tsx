@@ -2,6 +2,9 @@ import { Wordmark } from "@/components/shared/BrandMarks";
 import { cn } from "@/lib/utils";
 import { type PauseWayBack, WAY_BACK } from "./AccountOnPauseScreen";
 
+/** 28d's `ctaStyle`: 24px down, a pixel under the body - 15, then 17. */
+const SOMEONE_ELSE = cn(WAY_BACK, "mt-6 text-[15px] sm:text-[17px]");
+
 /** 28d's child version, verbatim, and the one line product added (7 Oct). */
 export const ACCOUNT_CLOSED_COPY = {
   heading: "Your account is closed",
@@ -27,7 +30,8 @@ export const ACCOUNT_CLOSED_COPY = {
  *    shared tablet until the app was reopened, so it carries one line, "Someone
  *    else using this device?", which takes the NEXT child to the picker. It
  *    says nothing about the closed child's own access and is not a way back in
- *    for them. 28d does not draw it yet.
+ *    for them. 28d draws it since 13 Oct, as the pause screen's underlined
+ *    violet line at its own sizes.
  *  - "A QUIET STATIC RING, NOT THE BREATHING DOT (this is settled, not
  *    waiting)", and not the brand mark the pause screen used to carry.
  *  - "Gives no reason, names no decision, attaches no blame in any direction,
@@ -77,11 +81,15 @@ export function AccountClosedView({
           {ACCOUNT_CLOSED_COPY.ask}
         </p>
         {"href" in toPicker ? (
-          <a href={toPicker.href} className={WAY_BACK}>
+          <a href={toPicker.href} className={SOMEONE_ELSE}>
             {ACCOUNT_CLOSED_COPY.someoneElse}
           </a>
         ) : (
-          <button type="button" onClick={toPicker.onBack} className={WAY_BACK}>
+          <button
+            type="button"
+            onClick={toPicker.onBack}
+            className={SOMEONE_ELSE}
+          >
             {ACCOUNT_CLOSED_COPY.someoneElse}
           </button>
         )}
