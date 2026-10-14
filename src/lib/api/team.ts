@@ -1,5 +1,6 @@
 import type { PermissionScope, UserRole } from "@/lib/constants/permissions";
 import { api } from "./client";
+import type { AdminAccessLevel } from "./permissions";
 
 /**
  * School team endpoints (`/api/v1/admin/team/*`), typed against the deployed
@@ -28,6 +29,11 @@ export interface TeamMember {
   founding?: boolean;
   /** When they were last seen, for the row's neutral "Active today". */
   lastActiveAt?: string | null;
+  /**
+   * Senior or standard (B9, 14 Oct). The founder is senior. Absent on an older
+   * answer, and then no level is shown for anyone.
+   */
+  accessLevel?: AdminAccessLevel | null;
 }
 
 /**
@@ -61,6 +67,9 @@ export function toAdminTeam(raw: unknown): AdminTeam {
     seatsRemaining: count(r.seatsRemaining),
   };
 }
+
+/** The 409 returning the school's last senior administrator to standard gets. */
+export const LAST_SENIOR_ADMIN = "last_senior_admin";
 
 /** The 409 a sixth invitation gets past the allowance. */
 export const SEAT_LIMIT_REACHED = "admin_seat_limit_reached";
@@ -164,4 +173,15 @@ export const teamApi = {
     api.put<TeamMember>(`/api/v1/admin/team/${targetUserId}/scopes`, {
       scopes,
     }),
+
+  /**
+   * POST /api/v1/admin/team/{id}/promote-senior and `/demote-standard` (B9,
+   * 14 Oct). Both are a senior administrator's alone (403 otherwise); the
+   * school's last senior cannot be returned to standard (409
+   * `last_senior_admin`). Scopes and Learning Support are kept either way.
+   */
+  promoteSenior: (targetUserId: string) =>
+    api.post<TeamMember>(`/api/v1/admin/team/${targetUserId}/promote-senior`),
+  demoteStandard: (targetUserId: string) =>
+    api.post<TeamMember>(`/api/v1/admin/team/${targetUserId}/demote-standard`),
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ApiError, apiErrorMessage } from "@/lib/api/client";
 import {
   SELF_GRANT_FORBIDDEN,
@@ -170,6 +170,33 @@ export function LearningSupportLine({
 
 /** D03b: "Removing the school's last holder · calm refusal". */
 export function LastHolderDialog({ name, onClose }: { name: string; onClose: () => void }) {
+  return (
+    <CalmRefusal
+      icon="heart"
+      title="Someone needs to hold Learning Support"
+      body={`${name} is the only person in your school with Learning Support right now. Give it to someone else first, then you can remove it here.`}
+      onClose={onClose}
+    />
+  );
+}
+
+/**
+ * D03b's calm refusal: an icon, what has to be true, how to get there, and
+ * Close. Nothing red. Drawn twice - the last Learning Support holder (heart)
+ * and the last senior administrator (shield).
+ */
+export function CalmRefusal({
+  icon,
+  title,
+  body,
+  onClose,
+}: {
+  icon: "heart" | "shield";
+  title: string;
+  body: string;
+  onClose: () => void;
+}) {
+  const titleId = useId();
   const close = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     close.current?.focus();
@@ -187,23 +214,30 @@ export function LastHolderDialog({ name, onClose }: { name: string; onClose: () 
       <div
         role="dialog"
         aria-modal="true"
-        aria-labelledby="ls-last-holder-title"
+        aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
         className="w-[460px] max-w-full rounded-2xl bg-nevo-cream px-8 py-[30px] shadow-[0_24px_60px_rgba(0,0,0,0.3)] motion-safe:animate-nevo-pop max-lg:w-[440px] max-lg:px-7 max-lg:py-[26px]"
       >
         <span className="inline-flex size-[52px] items-center justify-center rounded-full bg-nevo-violet/22 text-nevo-navy max-lg:size-12">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M12 21s-6.5-4.2-9-8.5A5 5 0 0 1 12 6a5 5 0 0 1 9 6.5C18.5 16.8 12 21 12 21z" />
+            {icon === "shield" ? (
+              <>
+                <path d="M12 3l7 3v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6l7-3z" />
+                <path d="M9.5 12l1.8 1.8L15 10" />
+              </>
+            ) : (
+              <path d="M12 21s-6.5-4.2-9-8.5A5 5 0 0 1 12 6a5 5 0 0 1 9 6.5C18.5 16.8 12 21 12 21z" />
+            )}
           </svg>
         </span>
         <h3
-          id="ls-last-holder-title"
+          id={titleId}
           className="m-0 mt-[18px] text-[21px] font-semibold tracking-[-0.01em] text-nevo-near-black max-lg:mt-4 max-lg:text-[19px]"
         >
-          Someone needs to hold Learning Support
+          {title}
         </h3>
         <p className="m-0 mt-[11px] text-[15px] leading-[1.6] text-nevo-near-black/70 max-lg:mt-2.5 max-lg:text-[14.5px]">
-          {`${name} is the only person in your school with Learning Support right now. Give it to someone else first, then you can remove it here.`}
+          {body}
         </p>
         <div className="mt-6 flex justify-end max-lg:mt-[22px]">
           <button
