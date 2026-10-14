@@ -23,6 +23,7 @@ import {
 import { LessonExitProvider } from "@/components/student/Lesson/LessonExit";
 import { LessonRoute } from "@/components/student/Lesson/LessonRoute";
 import { TAB_PAGE, TAB_TITLE } from "@/components/student/Shell/TabPage";
+import { BulkSaveButton } from "./BulkSaveButton";
 
 /**
  * Downloads for a signed-in child.
@@ -141,9 +142,7 @@ export function SavedLessons() {
         );
       }
     } catch {
-      setNotice(
-        "That lesson couldn't be saved just now. Try again when you're connected.",
-      );
+      setNotice(saveFailedLine());
     } finally {
       setBusy((b) => ({ ...b, [id]: "idle" }));
       reload();
@@ -191,14 +190,18 @@ export function SavedLessons() {
         {textOnly && <> Pictures and sound aren&apos;t saved.</>}
       </p>
 
-      {unsaved.length > 0 && !failed && (
-        <button
-          type="button"
-          onClick={() => void saveAll()}
-          className="mt-5 h-[52px] w-full cursor-pointer rounded-[12px] bg-nevo-navy text-[15px] font-medium text-nevo-cream transition-[filter] hover:brightness-110"
-        >
-          Save all my lessons
-        </button>
+      {/*
+        STAYS WHEN EVERYTHING IS SAVED (D211, 13 Oct), finished rather than
+        gone: see `BulkSaveButton`. "Everything" is only claimed once the
+        lesson list has answered - while it is in flight the rows are the shelf
+        alone, all of them saved - and never over a failed read.
+      */}
+      {!failed && (unsaved.length > 0 || (!loading && rows.length > 0)) && (
+        <BulkSaveButton
+          finished={unsaved.length === 0}
+          label="Save all my lessons"
+          onSave={() => void saveAll()}
+        />
       )}
 
       {/* The readable violet: the surface one is 2.3:1 on cream. */}
@@ -319,6 +322,24 @@ export function SavedLessons() {
       </div>
     </div>
   );
+}
+
+/**
+ * WHY A SAVE DIDN'T LAND, ONLY AS FAR AS WE KNOW IT (D181, 13 Oct): "Do not
+ * blame the connection for a server failure." A refused or broken save is the
+ * server's, so it says only that it didn't save. The connection is named only
+ * when the browser itself says there is none - `navigator.onLine` false is
+ * certain, where true proves nothing - and then the old line, which tells the
+ * child the one thing that will help.
+ */
+const SAVE_FAILED = "That didn't save. Try again in a moment.";
+const SAVE_FAILED_OFFLINE =
+  "That lesson couldn't be saved just now. Try again when you're connected.";
+
+function saveFailedLine(): string {
+  return typeof navigator !== "undefined" && navigator.onLine === false
+    ? SAVE_FAILED_OFFLINE
+    : SAVE_FAILED;
 }
 
 /**

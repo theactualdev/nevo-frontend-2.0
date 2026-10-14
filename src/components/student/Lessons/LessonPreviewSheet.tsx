@@ -57,7 +57,7 @@ export function LessonPreviewSheet({
         // 21 draws Close in a row of its own, so the sheet's stock corner
         // button - which sat on the title row - is replaced by that row.
         showCloseButton={false}
-        className="gap-0 rounded-t-[20px] border-0! bg-nevo-cream px-6 pt-3 pb-7 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-1/2 sm:bottom-auto! sm:left-1/2! sm:w-[480px] sm:max-w-[calc(100%-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[20px] sm:px-8 sm:pt-5 sm:pb-8 sm:shadow-[0_8px_32px_rgba(0,0,0,0.16)]"
+        className="gap-0 rounded-t-[16px] border-0! bg-nevo-cream px-6 pt-3 pb-7 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-1/2 sm:bottom-auto! sm:left-1/2! sm:w-[480px] sm:max-w-[calc(100%-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[16px] sm:px-8 sm:pt-5 sm:pb-8 sm:shadow-[0_8px_32px_rgba(0,0,0,0.16)]"
       >
         {/* 21: the 44px Close at the right of its own row, above the title. */}
         <div className="-mr-1.5 mb-1 flex shrink-0 justify-end">

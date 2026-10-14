@@ -7,6 +7,7 @@ import { useHydrated } from "@/hooks/useHydrated";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { cn } from "@/lib/utils";
 import { TAB_PAGE, TAB_TITLE } from "@/components/student/Shell/TabPage";
+import { BulkSaveButton } from "./BulkSaveButton";
 import { SavedLessons } from "./SavedLessons";
 
 type DownloadStatus = "available" | "downloading" | "downloaded";
@@ -55,6 +56,8 @@ export function DownloadsTab() {
     return () => active.forEach(clearTimeout);
   }, []);
 
+  const allDone = ITEMS.every((i) => statuses[i.id] === "downloaded");
+
   const finishAfter = (id: string, delay: number) => {
     timers.current.push(
       setTimeout(
@@ -87,8 +90,6 @@ export function DownloadsTab() {
     pending.forEach((i, n) => finishAfter(i.id, DOWNLOAD_MS + n * 600));
   };
 
-  const allDone = ITEMS.every((i) => statuses[i.id] === "downloaded");
-
   // Nothing renders until we know who is looking - SSR cannot read the token,
   // and a frame of "Saved offline" is the claim this gate exists to prevent.
   if (!hydrated) return <DownloadsShell />;
@@ -104,14 +105,12 @@ export function DownloadsTab() {
       <div className="max-w-[640px]">
       <h1 className={TAB_TITLE}>Downloads</h1>
 
-      <button
-        type="button"
-        onClick={downloadAll}
-        disabled={allDone}
-        className="mt-5 h-[52px] w-full cursor-pointer rounded-[12px] bg-nevo-navy text-[15px] font-medium text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-default disabled:opacity-40"
-      >
-        {allDone ? "All lessons saved for offline" : "Download today's lessons"}
-      </button>
+      {/* Finished, not blocked, so never grey (D211): see `BulkSaveButton`. */}
+      <BulkSaveButton
+        finished={allDone}
+        label="Download today's lessons"
+        onSave={downloadAll}
+      />
 
       <ul className="mt-3">
         {ITEMS.map((item) => (

@@ -447,8 +447,12 @@ export function AskNevo() {
           side="bottom"
           aria-describedby={undefined}
           // The `!` marks out-shout the stock data-[side=bottom] variants
-          // (class + attribute selectors), same as the preview sheet.
-          className="flex h-[88%] flex-col gap-0 rounded-t-[20px] border-0! bg-nevo-cream p-0 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-0! sm:right-0! sm:left-auto! sm:h-full! sm:w-[412px] sm:rounded-none! sm:shadow-[-8px_0_32px_rgba(0,0,0,0.16)] lg:w-[460px]"
+          // (class + attribute selectors), same as the preview sheet. The
+          // height needs one too: without it the stock `h-auto` won, and on a
+          // phone the sheet was as tall as its content rather than the
+          // frame's 88%. `sm:h-full!` is emitted after it, so wider screens
+          // still get the full-height side panel.
+          className="flex h-[88%]! flex-col gap-0 rounded-t-[16px] border-0! bg-nevo-cream p-0 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-0! sm:right-0! sm:left-auto! sm:h-full! sm:w-[412px] sm:rounded-none! sm:shadow-[-8px_0_32px_rgba(0,0,0,0.16)] lg:w-[460px]"
         >
           {/* Header */}
           {/*
