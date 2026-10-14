@@ -829,22 +829,39 @@ describe("D149's array and place value", () => {
   });
 
   const beads = () => [...document.querySelectorAll<HTMLElement>("[data-bead]")];
+  /** The line's ticks, as where each sits and which violet it is. */
+  const ticks = () =>
+    [...document.querySelectorAll<HTMLElement>("[data-tick]")].map(
+      (t) => `${t.style.left} ${t.dataset.tick}`,
+    );
 
   it("draws a number line of parts positions, a part's label under its own", () => {
     // "Cells or positions in one row": D149's 0 to 10 is eleven positions.
     const labels = ["0", "", "", "", "", "5", "", "", "", "", "10"];
     show(build({ scaffold: { kind: "number_line", parts: 11, labels } }));
 
-    expect(document.querySelectorAll("[data-tick]")).toHaveLength(11);
     expect(screen.getByText("5").style.left).toBe("50%");
     expect(screen.getByText("10").style.left).toBe("100%");
+    expect(screen.getByText("10")).toHaveClass("text-nevo-near-black/60");
     expect(beads()).toHaveLength(0);
   });
 
-  it("puts the marker at each mark's position on the line", () => {
-    show(build({ scaffold: { kind: "number_line", parts: 11, marks: [4] } }));
+  it("ticks only the positions the data labels, in D149's violet pair (D159)", () => {
+    // D159: "labels belong to marks, only where there are marks - not one
+    // per tick". Eleven ticks stood here before, one a position.
+    const labels = ["0", "", "", "", "", "5", "", "", "", "", "10"];
+    show(build({ scaffold: { kind: "number_line", parts: 11, labels } }));
 
-    expect(beads().map((b) => b.style.left)).toEqual(["40%"]);
+    expect(ticks()).toEqual(["0% violet", "50% light", "100% violet"]);
+    const [tick] = document.querySelectorAll("[data-tick]");
+    expect(tick).toHaveClass("w-[3px]", "h-5", "bg-nevo-violet");
+  });
+
+  it("puts the marker, and a tick, at each mark's position on the line", () => {
+    show(build({ scaffold: { kind: "number_line", parts: 11, marks: [4, 7] } }));
+
+    expect(beads().map((b) => b.style.left)).toEqual(["40%", "70%"]);
+    expect(ticks()).toEqual(["40% violet", "70% light"]);
   });
 
   const TAP = (tapCount: number) =>
@@ -887,6 +904,8 @@ describe("D149's array and place value", () => {
     );
     // QUARTERS draws bars, so the only marker is the build's.
     expect(beads().map((b) => b.style.left)).toEqual(["0%"]);
+    // The build carries no marks or labels, so its line has no ticks (D159).
+    expect(ticks()).toEqual([]);
 
     for (let i = 0; i < 3; i++) tap("+1");
 
@@ -1615,6 +1634,30 @@ describe("the equation's tokens and the drawing's ids (B109, B127)", () => {
     expect(
       document.querySelectorAll('[aria-live="polite"] .font-bold'),
     ).toHaveLength(0);
+  });
+
+  it("ticks no position a held-back label marks, and keeps each tick's violet as it arrives", () => {
+    render13(
+      build({
+        scaffold: {
+          kind: "number_line",
+          parts: 3,
+          labels: ["0", "1", "2"],
+          labelIds: ["p0", "p1", "p2"],
+        },
+        steps: [step({ highlights: [{ target: "p1", role: "result" }] })],
+      }),
+    );
+    const ticks = () =>
+      [...document.querySelectorAll<HTMLElement>("[data-tick]")].map(
+        (t) => `${t.style.left} ${t.dataset.tick}`,
+      );
+
+    // On a line, where a held-back label sits is the answer.
+    expect(ticks()).toEqual(["0% violet", "100% violet"]);
+
+    pick("4 and 4");
+    expect(ticks()).toEqual(["0% violet", "50% light", "100% violet"]);
   });
 });
 

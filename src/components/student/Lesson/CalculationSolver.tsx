@@ -1308,16 +1308,16 @@ function ScaffoldCard({
         {scaffold.kind === "number_line" && (
           <NumberLine
             parts={scaffold.parts}
-            points={scaffold.points.filter(shown)}
+            points={scaffold.points}
+            shown={shown}
+            partLabels={scaffold.partLabels}
             // A part's label a `result` still holds back is not drawn (B127).
-            partLabels={scaffold.partLabels.map((label, at) =>
+            heldPart={(at) =>
               names(
                 emphasis.withheld,
                 partKeys(emphasis, scaffold.partLabels, scaffold.partLabelIds, at),
               )
-                ? ""
-                : label,
-            )}
+            }
             emphasis={emphasis}
             reading={reading}
           />
@@ -1742,21 +1742,40 @@ function PlaceValue({
 const along = (position: number, parts: number) =>
   `${parts > 1 ? (position / (parts - 1)) * 100 : 0}%`;
 
-/** D149's track and ticks, a tick at each of the line's `parts` positions. */
-function LineTrack({ parts }: { parts: number }) {
+/** A tick on a line: its position, and whether it is the lighter violet. */
+interface Tick {
+  at: number;
+  light: boolean;
+}
+
+/**
+ * D149's track, with a tick only where the data puts a mark or a label -
+ * D159: "labels belong to marks, only where there are marks - not one per
+ * tick". A tick stood at every one of the line's positions before, as the
+ * sheet drew it until 13 Oct.
+ *
+ * Each is 3 by 20 and they alternate soft violet and light violet, as
+ * several marks on one bar do (D160). The light one is the sheet's own
+ * `#c7c9e5`, solid: the bar's violet/55 would let the track show through
+ * where the tick crosses it.
+ */
+function LineTrack({ parts, ticks = [] }: { parts: number; ticks?: Tick[] }) {
   return (
     <>
       <div
         aria-hidden
         className="absolute inset-x-0 top-[30px] h-1 rounded-full bg-nevo-near-black/20"
       />
-      {Array.from({ length: parts }).map((_, tick) => (
+      {ticks.map(({ at, light }, i) => (
         <span
-          key={tick}
+          key={i}
           aria-hidden
-          data-tick
-          className="absolute top-[22px] h-5 w-0.5 -translate-x-1/2 rounded-full bg-nevo-near-black/30"
-          style={{ left: along(tick, parts) }}
+          data-tick={light ? "light" : "violet"}
+          className={cn(
+            "absolute top-[22px] h-5 w-[3px] -translate-x-1/2 rounded-full",
+            light ? "bg-[#c7c9e5]" : "bg-nevo-violet",
+          )}
+          style={{ left: along(at, parts) }}
         />
       ))}
     </>
@@ -1767,7 +1786,7 @@ function LineTrack({ parts }: { parts: number }) {
 const BEAD =
   "absolute top-[18px] size-[30px] -translate-x-1/2 rounded-full bg-nevo-navy shadow-[0_3px_8px_rgba(0,0,0,0.2)] transition-[left] duration-200";
 
-/** A label under a position, in D149's line-label type. */
+/** A label 6px under its tick, in D149's mark-label type. */
 function LineLabel({
   at,
   parts,
@@ -1782,7 +1801,7 @@ function LineLabel({
   return (
     <span
       className={cn(
-        "absolute top-[46px] -translate-x-1/2 text-xs whitespace-nowrap text-nevo-near-black/55",
+        "absolute top-12 -translate-x-1/2 text-xs whitespace-nowrap text-nevo-near-black/60",
         reading && [READING_BODY, READING_INK],
       )}
       style={{ left: along(at, parts) }}
@@ -1793,53 +1812,68 @@ function LineLabel({
 }
 
 /**
- * D149's number line: a track with a tick at each of its `parts` positions -
- * "cells or positions in one row" - and a navy marker at each mark's
- * position, its label beneath it. With no marks, a part's label sits under
- * its position, as D149 numbers 0, 5 and 10; a blank one leaves its tick
- * unnumbered. No other number is drawn: on a line of quarters the obvious
- * ones would be wrong.
+ * D149's number line: a track of `parts` positions - "cells or positions in
+ * one row" - with a tick and a navy marker at each mark's position, its
+ * label beneath it. With no marks, a part's label sits under a tick at its
+ * position, as D149 numbers 0, 5 and 10; a part with no label has no tick.
+ * No other number is drawn: on a line of quarters the obvious ones would be
+ * wrong.
+ *
+ * The ticks alternate in the payload's order, counted over all it sent, so a
+ * result shown on acceptance does not recolour the ticks after it. One still
+ * held back (B127) has no tick at all: on a line, where it sits is the answer.
  */
 function NumberLine({
   parts,
   points,
+  shown,
   partLabels,
+  heldPart,
   emphasis,
   reading,
 }: {
   parts: number;
   points: ScaffoldQuantity[];
+  shown: (q: ScaffoldQuantity) => boolean;
   partLabels: string[];
+  heldPart: (at: number) => boolean;
   emphasis: Emphasis;
   reading: boolean;
 }) {
+  const marks = points.flatMap((p, mark) => (shown(p) ? [{ p, mark }] : []));
+  const labelled = partLabels
+    .flatMap((label, at) => (label ? [{ label, at }] : []))
+    .map((part, nth) => ({ ...part, nth }))
+    .filter(({ at }) => !heldPart(at));
+  const ticks: Tick[] = [
+    ...marks.map(({ p, mark }) => ({ at: p.count, light: mark % 2 === 1 })),
+    ...labelled.map(({ at, nth }) => ({ at, light: nth % 2 === 1 })),
+  ];
   return (
     <div className="mx-[15px] mb-3">
       <div className="relative h-16">
-        <LineTrack parts={parts} />
-        {points.map((p, i) => (
+        <LineTrack parts={parts} ticks={ticks} />
+        {marks.map(({ p, mark }) => (
           <span
-            key={i}
+            key={mark}
             aria-hidden
             data-bead
             className={cn(BEAD, names(emphasis.ring, markKeys(emphasis, p)) && RING)}
             style={{ left: along(p.count, parts) }}
           />
         ))}
-        {points.map((p, i) =>
+        {marks.map(({ p, mark }) =>
           p.label ? (
-            <LineLabel key={i} at={p.count} parts={parts} reading={reading}>
+            <LineLabel key={mark} at={p.count} parts={parts} reading={reading}>
               {p.label}
             </LineLabel>
           ) : null,
         )}
-        {partLabels.map((label, at) =>
-          label ? (
-            <LineLabel key={at} at={at} parts={parts} reading={reading}>
-              {label}
-            </LineLabel>
-          ) : null,
-        )}
+        {labelled.map(({ label, at }) => (
+          <LineLabel key={at} at={at} parts={parts} reading={reading}>
+            {label}
+          </LineLabel>
+        ))}
       </div>
     </div>
   );
@@ -2202,6 +2236,10 @@ function PlaceValueBuild({
  * (B111) - its first position on a lesson that names none - and moves one
  * position a tap, until the stored count of hops is made. A position the
  * asked step names is ringed.
+ *
+ * NO TICKS: a tick goes only where the data puts a mark or a label (D159),
+ * and the build carries neither - its pieces' labels name them for a
+ * highlight and are never drawn.
  */
 function LineBuild({
   parts,
