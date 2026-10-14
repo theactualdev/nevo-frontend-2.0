@@ -10,9 +10,11 @@ import { useHydrated } from "@/hooks/useHydrated";
 import { useDueReviews } from "@/hooks/useDueReviews";
 import {
   subjectFromSlug,
+  subjectSlug,
   useStudentProgress,
 } from "@/hooks/useStudentProgress";
 import { useSubjectProgress } from "@/hooks/useSubjectProgress";
+import { reviewSessionHref } from "@/lib/lessons/reviewHref";
 import type {
   SessionRow,
   SubjectDetail as SubjectDetailData,
@@ -96,6 +98,10 @@ export function SubjectDetail({
         // actually asked for, so it is the honest label when the live read has
         // no subject by that name.
         name={liveSubject?.name ?? titleFromSlug(asked)}
+        // This page's own address, written the way Progress links to it,
+        // so a review opened from here comes back here (Olayinka, 14 Oct).
+        // Re-encoded from the name: Next may hand the slug over decoded.
+        here={`/student/progress/${subjectSlug(asked)}`}
         reflection={own.reflection}
         concepts={liveSubject?.concepts ?? []}
         /*
@@ -282,6 +288,7 @@ function DetailShell() {
  */
 function LiveSubjectDetail({
   name,
+  here,
   reflection,
   concepts,
   lessons,
@@ -289,6 +296,8 @@ function LiveSubjectDetail({
   failed,
 }: {
   name: string;
+  /** This page's address: where a review opened from it goes back to. */
+  here: string;
   reflection: string | null;
   concepts: { conceptId: string; name: string }[];
   lessons: { lessonId: string; title: string; updatedAt: string }[];
@@ -354,8 +363,10 @@ function LiveSubjectDetail({
                   key={c.conceptId}
                   // The concept travels with the link. Without it the review
                   // session cannot tell the scheduler which concept it was for,
-                  // and the outcome of every review was being discarded.
-                  href={`/student/lessons/${lessonId}/review-session?concept=${encodeURIComponent(c.conceptId)}`}
+                  // and the outcome of every review was being discarded. So
+                  // does this page, which is where the review ends (Olayinka,
+                  // 14 Oct: back returns to where you came from).
+                  href={reviewSessionHref(lessonId, c.conceptId, here)}
                   aria-label={`Take another look at ${c.name}`}
                   className={`${DUE_CHIP} cursor-pointer transition hover:bg-nevo-navy/[0.16] active:scale-[0.98]`}
                 >

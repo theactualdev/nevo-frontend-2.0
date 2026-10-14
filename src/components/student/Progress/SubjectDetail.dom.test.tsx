@@ -113,9 +113,65 @@ describe("SubjectDetail", () => {
     // The concept travels with the link. Without it the review session cannot
     // tell the scheduler which concept it was for, and every review outcome
     // was being discarded at the door.
-    expect(link.getAttribute("href")).toBe(
-      "/student/lessons/lesson-42/review-session?concept=c-frac",
-    );
+    const url = new URL(link.getAttribute("href")!, "http://x");
+    expect(url.pathname).toBe("/student/lessons/lesson-42/review-session");
+    expect(url.searchParams.get("concept")).toBe("c-frac");
+  });
+
+  /*
+   * Olayinka, 14 Oct: back returns to where you came from, and a review is
+   * opened only from here - so the link says so, and the review's ways out
+   * come back to this subject rather than Home.
+   */
+  it("says which subject the review was opened from", async () => {
+    signIn();
+    hooks.useDueReviews.mockReturnValue({
+      due: new Set(["c-frac"]),
+      playable: new Map([["c-frac", "lesson-42"]]),
+      loading: false,
+      failed: false,
+    });
+
+    render(<SubjectDetail subject={null} slug="Mathematics" />);
+
+    const link = await screen.findByRole("link", {
+      name: /take another look at Fractions/i,
+    });
+    const url = new URL(link.getAttribute("href")!, "http://x");
+    expect(url.searchParams.get("back")).toBe("/student/progress/Mathematics");
+  });
+
+  it("names a subject the way Progress links to it, however Next hands the slug over", async () => {
+    signIn();
+    hooks.useStudentProgress.mockReturnValue({
+      subjects: [
+        { slug: "Basic%20Science", name: "Basic Science", concepts: CONCEPTS },
+      ],
+      lessons: [],
+      reflection: null,
+      highlights: [],
+      loading: false,
+      failed: false,
+      live: true,
+    });
+    hooks.useDueReviews.mockReturnValue({
+      due: new Set(["c-frac"]),
+      playable: new Map([["c-frac", "lesson-42"]]),
+      loading: false,
+      failed: false,
+    });
+
+    for (const slug of ["Basic Science", "Basic%20Science"]) {
+      render(<SubjectDetail subject={null} slug={slug} />);
+      const link = await screen.findByRole("link", {
+        name: /take another look at Fractions/i,
+      });
+      const url = new URL(link.getAttribute("href")!, "http://x");
+      expect(url.searchParams.get("back"), slug).toBe(
+        "/student/progress/Basic%20Science",
+      );
+      cleanup();
+    }
   });
 
   it("does not offer a link for a due concept with no lesson behind it", async () => {
