@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { isOpenToStudent, unavailableReason } from "@/lib/lessons/availability";
 import { lessonHref } from "@/lib/lessons/lessonHref";
@@ -131,39 +131,6 @@ const CAUGHT_UP = "You're all caught up. Nice and steady - come back any time.";
 const PICKUP_MAX = 5;
 
 /**
- * The dated eyebrow depends on the viewer's local clock, which only the client
- * knows — computing it during render would mismatch the server HTML on
- * hydration. Resolve it after mount instead. (The greeting itself is fixed:
- * time-of-day greetings were removed by the v1 build lock.)
- */
-function useLocalDate() {
-  const [date, setDate] = useState<string | null>(null);
-  useEffect(() => {
-    // Client-only clock read, once on mount — keeps SSR + hydration in agreement.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDate(homeDate(new Date()));
-  }, []);
-  return date;
-}
-
-/**
- * Nevo Home Frame's eyebrow: "TUESDAY · 3 JULY" - the weekday, a middle dot,
- * then the day before the month (uppercased by the eyebrow's style). It read
- * "SUNDAY 11 OCTOBER", in whatever order and punctuation the device's locale
- * chose. The names stay the device's own; the shape is the frame's.
- */
-export function homeDate(date: Date, locale?: string): string {
-  const parts = new Intl.DateTimeFormat(locale, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  }).formatToParts(date);
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((p) => p.type === type)?.value ?? "";
-  return `${part("weekday")} · ${part("day")} ${part("month")}`;
-}
-
-/**
  * Nevo Home Frame's scroll padding - 8, 20 and 24 round a phone's, 44 on a
  * tablet, 52 on a desktop - around a column of at most 720 (860 on a
  * desktop) centred in what is left. The padding was inside the 720, so on a
@@ -173,17 +140,16 @@ export function homeDate(date: Date, locale?: string): string {
 const HOME_PAGE = "px-5 pt-2 pb-6 sm:px-8 sm:py-6 md:p-11 lg:p-[52px]";
 const HOME_COLUMN = "mx-auto w-full max-w-[720px] lg:max-w-[860px]";
 
-/** The eyebrow and the greeting, the same over every state of the page. */
-function Greeting({ date, name }: { date: string | null; name: string }) {
+/**
+ * The greeting, the same over every state of the page, and the first thing
+ * on it. Nevo Home Frame dropped the dated eyebrow over it ("TUESDAY · 3
+ * JULY") on 13 Oct, so the greeting is first, 8px under the top padding.
+ */
+function Greeting({ name }: { name: string }) {
   return (
-    <>
-      <span className="flex h-4 items-center font-mono text-[11px] tracking-[0.14em] text-nevo-near-black/60 uppercase">
-        {date ?? ""}
-      </span>
-      <h1 className="mt-2 text-[28px] font-semibold leading-[1.12] tracking-[-0.02em] text-nevo-near-black sm:text-[34px]">
-        Welcome back{name ? `, ${name}` : ""}
-      </h1>
-    </>
+    <h1 className="mt-2 text-[28px] font-semibold leading-[1.12] tracking-[-0.02em] text-nevo-near-black sm:text-[34px]">
+      Welcome back{name ? `, ${name}` : ""}
+    </h1>
   );
 }
 
@@ -212,7 +178,6 @@ function timeEstimate(lesson: {
  */
 export function HomeDashboard() {
   const { name: displayName } = useDisplayName();
-  const date = useLocalDate();
   const signedIn = useHasSession();
   const hydrated = useHydrated();
   const { data: live, failed, loading } = useStudentDashboard();
@@ -416,8 +381,7 @@ export function HomeDashboard() {
     return (
       <div className={HOME_PAGE}>
         <div className={HOME_COLUMN}>
-          {/* The eyebrow too: the date is the clock's, not the read's. */}
-          <Greeting date={date} name={displayName} />
+          <Greeting name={displayName} />
           {/* The warm-up does not wait on the lessons read (D18). */}
           <TodaysWarmUpCard />
           <div className="mt-8 rounded-[16px] bg-nevo-cream-elevated p-[22px] shadow-elevation-1">
@@ -457,7 +421,7 @@ export function HomeDashboard() {
       <div className={cn(HOME_COLUMN, nothingSet && TAB_FILL)}>
       {/* Greeting */}
       <div className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-500">
-        <Greeting date={date} name={displayName} />
+        <Greeting name={displayName} />
       </div>
 
       {/* The daily warm-up opens the session (SCRUM-104) - a quick
@@ -669,8 +633,15 @@ function PickUpMark() {
 }
 
 /**
- * 29 Empty States, "Home (No lessons)": its own figure, 290 / 350 / 365 tall,
- * and one line, nothing more.
+ * 29 Empty States, "Home (No lessons)": its own figure and one line, nothing
+ * more. Redrawn on 13 Oct under the greeting and the warm-up card, as Home
+ * stacks it: the figure 190 / 300 / 250 tall (it was 290 / 350 / 365, drawn
+ * alone), the line 22 under it on a phone and 28 from a tablet, and the block
+ * 20 / 24 under the card with nothing below it.
+ *
+ * NOT the frame's `min-height` on the block (260 / 320 / 300). The figure
+ * still gives way on a screen too short for it (`EmptyArt`), and a floor
+ * under the block would stop it and push the line past the bottom again.
  */
 function EmptyState({ line }: { line: string }) {
   return (
@@ -678,10 +649,12 @@ function EmptyState({ line }: { line: string }) {
       art={
         <EmptyArt
           src="/illustrations/empty-home.png"
-          className="h-[290px] md:h-[350px] lg:h-[365px]"
+          className="h-[190px] md:h-[300px] lg:h-[250px]"
         />
       }
       line={line}
+      className="pt-5 pb-0 md:pt-6"
+      lineClassName="mt-[22px] md:mt-7"
     />
   );
 }

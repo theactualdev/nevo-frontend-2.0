@@ -100,6 +100,10 @@ describe("what a live lesson row says", () => {
     const mark = screen.getByRole("img", { name: "In progress" });
     expect(mark).toBeInTheDocument();
     expect(container.innerHTML).not.toMatch(/conic-gradient|55%/);
+    // Nevo Lessons Frame, 13 Oct: a plain violet ring, nothing inside it -
+    // not the centre dot the build used to draw.
+    expect(mark).toBeEmptyDOMElement();
+    expect(mark).toHaveClass("border-2", "border-nevo-violet");
   });
 
   it("fills the in-progress mark to the child's own place, in words aloud", () => {

@@ -44,6 +44,22 @@ describe("DownloadsTab sample marking", () => {
 });
 
 /**
+ * Nevo Downloads Frame, 13 Oct: the bulk control reads "Save all my lessons",
+ * as the signed-in shelf already did. The walkthrough still said "Download
+ * today's lessons".
+ */
+describe("the walkthrough's bulk control", () => {
+  it("says the frame's words", () => {
+    render(<DownloadsTab />);
+
+    expect(
+      screen.getByRole("button", { name: "Save all my lessons" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Download today's lessons/)).toBeNull();
+  });
+});
+
+/**
  * D211, 13 Oct: "The last one is not blocked, it is finished. It still stays
  * pressable and still says so rather than going grey."
  */
@@ -57,7 +73,7 @@ describe("the finished bulk button", () => {
     render(<DownloadsTab />);
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Download today's lessons" }),
+      screen.getByRole("button", { name: "Save all my lessons" }),
     );
     act(() => {
       vi.runAllTimers();
@@ -81,7 +97,7 @@ describe("the finished bulk button", () => {
     vi.useFakeTimers();
     render(<DownloadsTab />);
     fireEvent.click(
-      screen.getByRole("button", { name: "Download today's lessons" }),
+      screen.getByRole("button", { name: "Save all my lessons" }),
     );
     act(() => {
       vi.runAllTimers();
@@ -94,7 +110,7 @@ describe("the finished bulk button", () => {
 
     expect(screen.queryByText("Everything's already saved.")).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Download today's lessons" }),
+      screen.getByRole("button", { name: "Save all my lessons" }),
     ).toBeInTheDocument();
   });
 });
