@@ -131,12 +131,35 @@ describe("a calculation from the payload", () => {
     ).toEqual([["3x - 4"], ["3x"], ["5"]]);
   });
 
-  it("stores every acceptable form the pipeline wrote, answer first", () => {
+  it("takes the stored answer alone, never a step's targets", () => {
     const calc = calcOf(
       algebra({ steps: [step({ answer: "x + 1", targets: ["1 + x", 1.5] })] }),
     );
 
-    expect(calc?.steps[0]).toMatchObject({ accepted: ["x + 1", "1 + x", "1.5"] });
+    expect(calc?.steps[0]).toMatchObject({ accepted: ["x + 1"] });
+  });
+
+  it("marks one option right where backend fills targets with them all", () => {
+    // A step stored without targets arrives with every option's value in
+    // them (`_validated_calculation_variant`). Read as answers, all were right.
+    const calc = calcOf(
+      algebra({
+        steps: [
+          step({
+            input: "choice",
+            expectedInput: "selection",
+            answer: "4",
+            targets: ["1 and 2", "4"],
+            options: [
+              { value: "1 and 2", label: "1 and 2" },
+              { value: "4", label: "4" },
+            ],
+          }),
+        ],
+      }),
+    );
+
+    expect(calc?.steps[0]).toMatchObject({ input: "choice", accepted: ["4"] });
   });
 
   it("opens the Interactive channel, tagged as the payload tags it", () => {
@@ -217,7 +240,7 @@ describe("a calculation from the payload", () => {
     });
   });
 
-  it("builds a choice whose right option is named by a target, not the answer", () => {
+  it("refuses a choice whose only right option is named by a target", () => {
     const calc = calcOf(
       algebra({
         steps: [
@@ -234,7 +257,9 @@ describe("a calculation from the payload", () => {
       }),
     );
 
-    expect(calc?.steps[0]).toMatchObject({ input: "choice", accepted: ["b"] });
+    // No stored answer names an option, so nobody can be right: the
+    // variant is refused and the segment stays text.
+    expect(calc).toBeUndefined();
   });
 
   it("builds the signed-out walkthrough's calculation through this same path", () => {

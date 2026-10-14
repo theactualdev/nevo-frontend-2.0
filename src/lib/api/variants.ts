@@ -272,9 +272,10 @@ export interface CalculationStep {
    * content stored before them reads as what it is: a step that names no
    * input cannot be drawn, and `fromContent` refuses it rather than guessing.
    *
-   * `targets` are further acceptable answers the pipeline wrote down (Lydia
-   * on SCRUM-177: every acceptable form of a step is stored, and the child's
-   * entry is matched against that list - nothing is judged at runtime).
+   * `targets` name what a step points at, NOT further right answers: backend
+   * fills a step with none with every one of its options. Read for nothing
+   * here. Every acceptable form of a step (Lydia on SCRUM-177) is stored as
+   * `accepted` (SCRUM-185), which the response does not carry yet.
    * `assembles` is the equation once this step is accepted (B110).
    */
   input?: CalculationStepEntry;
