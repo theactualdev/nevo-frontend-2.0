@@ -15,6 +15,7 @@ import type {
 } from "@/lib/types";
 import { isStoredAnswer } from "@/lib/lessons/storedAnswer";
 import { cn } from "@/lib/utils";
+import { NO_SOUND, PressedLine } from "./PressedLine";
 import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
 import { revealIn, scrollerOf, type Stretch } from "./revealStep";
 import { useMediaSource, type MediaFailReason } from "./useMediaSource";
@@ -63,6 +64,7 @@ export function CalculationSolver({
   onStepAnswered,
   onPiecePlaced,
   onHintOpened,
+  onAct,
   onReplay,
   onNarrationPlayed,
   onAudioBusy,
@@ -104,6 +106,11 @@ export function CalculationSolver({
   onPiecePlaced?: (stepId: string) => void;
   /** The child opened this step's hint themselves. */
   onHintOpened?: (stepId: string) => void;
+  /**
+   * The child did something in the step: a key, an option, a piece, or the
+   * hint. The host's held-Next line (D211) has done its job by then.
+   */
+  onAct?: () => void;
   /** A finished narration played again from the start (`replay`). */
   onReplay?: () => void;
   /** Narration started for the first time on this calculation. */
@@ -241,12 +248,20 @@ export function CalculationSolver({
   const openHint = () => {
     setHintOpen(true);
     onHintOpened?.(step.stepId);
+    onAct?.();
+  };
+
+  /** What is typed, from the pad, a laptop's keys or delete. */
+  const type = (next: string | ((was: string) => string)) => {
+    setTyped(next);
+    onAct?.();
   };
 
   const place = () => {
     if (step.input !== "tap" || placed >= step.target) return;
     setPlaced(placed + 1);
     onPiecePlaced?.(step.stepId);
+    onAct?.();
   };
 
   /** A piece into one place-value column, until it holds that column's count. */
@@ -258,6 +273,7 @@ export function CalculationSolver({
     next[column] = have + 1;
     setPlacedCols(next);
     onPiecePlaced?.(step.stepId);
+    onAct?.();
   };
 
   const startedNarration = () => {
@@ -394,7 +410,10 @@ export function CalculationSolver({
                     <button
                       key={i}
                       type="button"
-                      onClick={() => setChosen(i)}
+                      onClick={() => {
+                        setChosen(i);
+                        onAct?.();
+                      }}
                       aria-pressed={chosen === i}
                       className={cn(
                         "cursor-pointer rounded-[12px] border-2 bg-nevo-cream-elevated px-[18px] py-4 text-center text-base font-medium text-nevo-near-black shadow-elevation-1 transition-[transform,border-color] active:scale-[0.98] sm:text-[18px]",
@@ -435,7 +454,7 @@ export function CalculationSolver({
                 reading={reading}
                 nudge={nudge}
                 value={typed}
-                onChange={setTyped}
+                onChange={type}
                 onCommit={() => answer(isStoredAnswer(typed, step.accepted))}
               />
             )}
@@ -499,7 +518,7 @@ export function CalculationSolver({
             {step.input === "number" && step.entry === "numeric" && (
               <DockedPad
                 dock={padDock}
-                onKey={(c) => setTyped((t) => t + c)}
+                onKey={(c) => type((t) => t + c)}
               />
             )}
           </>
@@ -1555,6 +1574,9 @@ function HintPill({
  * heavier after a miss; a control that grows when a child gets something
  * wrong is this screen reacting to their difficulty, which is the engine's
  * call to make (B18) and nobody's to show.
+ *
+ * IN THE DARKER VIOLET (D210, 13 Oct). Soft violet is 2.34:1 on cream, which
+ * fails as text; #5b5e8f is the same hue made readable, as text only.
  */
 function HintLink({ onClick }: { onClick: () => void }) {
   return (
@@ -1562,7 +1584,7 @@ function HintLink({ onClick }: { onClick: () => void }) {
       <button
         type="button"
         onClick={onClick}
-        className="min-h-11 cursor-pointer px-2 text-[13px] text-nevo-violet"
+        className="min-h-11 cursor-pointer px-2 text-[13px] text-nevo-violet-text"
       >
         Need a hint?
       </button>
@@ -1597,14 +1619,16 @@ function BuildTray({
         <span className="font-mono text-[10px] tracking-[0.06em] text-nevo-near-black/50 uppercase">
           The total
         </span>
-        <div aria-hidden className="mt-3 flex gap-[5px]">
+        {/* D149's piece, as design landed it on 13 Oct: 46px places with
+            6px between, at every width. They were 17b's bar height plus 6
+            (34 / 40 / 36), 5px apart. */}
+        <div aria-hidden className="mt-3 flex gap-1.5">
           {Array.from({ length: parts }).map((_, i) => (
             <span
               key={i}
               data-build-place
               className={cn(
-                // Frame: barH + 6 per variant (34 / 40 / 36).
-                "h-[34px] flex-1 rounded-md transition-colors duration-200 sm:h-10 lg:h-9",
+                "h-[46px] flex-1 rounded-md transition-colors duration-200",
                 i < placed
                   ? "bg-nevo-navy"
                   : "border-2 border-dashed border-nevo-navy/30 bg-nevo-near-black/[0.05]",
@@ -1909,6 +1933,14 @@ function StepNarration({
   onFailed?: (reason: MediaFailReason) => void;
 }) {
   const media = useMediaSource(clip.src, clip.storagePath, onFailed);
+  /*
+   * PRESSABLE, NOT GREYED (D211). Play on a step whose recording did not load
+   * says so in place, in Lydia's line, for this load of it; a load retried
+   * when the connection returns, and failing again, is said again when
+   * pressed. The step itself is all on screen either way.
+   */
+  const [toldFor, setToldFor] = useState<string | null>(null);
+  const told = media.failed && toldFor === media.key;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [pct, setPct] = useState(0);
@@ -1936,8 +1968,12 @@ function StepNarration({
   };
 
   const toggle = () => {
+    if (media.failed) {
+      setToldFor(media.key);
+      return;
+    }
     const el = audioRef.current;
-    if (media.failed || !el) return;
+    if (!el) return;
     if (playing) {
       el.pause();
       return;
@@ -1987,14 +2023,8 @@ function StepNarration({
       <button
         type="button"
         aria-label={playing ? "Pause narration" : "Play narration"}
-        disabled={media.failed}
         onClick={toggle}
-        className={cn(
-          "flex size-11 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform",
-          media.failed
-            ? "cursor-not-allowed opacity-40"
-            : "cursor-pointer active:scale-[0.98]",
-        )}
+        className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.98]"
       >
         {playing ? (
           <Pause className="size-[18px]" fill="currentColor" strokeWidth={0} />
@@ -2006,7 +2036,16 @@ function StepNarration({
           />
         )}
       </button>
-      {media.failed ? (
+      {/*
+        D211's line takes the failure line's place while it shows, beside
+        the control, so the card grows as little as it can and what is
+        under it barely moves. Its type is the row's own 13px.
+      */}
+      {told ? (
+        <PressedLine className="min-w-0 flex-1 text-[13px] leading-[1.4]">
+          {NO_SOUND}
+        </PressedLine>
+      ) : media.failed ? (
         <span role="status" className="text-[13px] text-nevo-near-black/70">
           {"Couldn't load this recording"}
         </span>

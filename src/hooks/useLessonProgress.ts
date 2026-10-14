@@ -69,6 +69,14 @@ export interface LessonProgressState {
    * where the after-lesson check was left (B49), on the write that leaves it.
    */
   report: (status: LessonStatus, position: Position) => void;
+  /**
+   * Send the completion again, now, where it is still owed - the session
+   * opened first if it never did. Its answer is the only read of the check's
+   * result there is, so this is how a result that could not be read is read
+   * again (D183). `completionFailed` drops while it is in flight and comes
+   * back if it fails again. With nothing owed it does nothing.
+   */
+  resend: () => void;
   /** The completion write did not reach Nevo. */
   completionFailed: boolean;
   /** True once a completion write has landed. */
@@ -103,6 +111,7 @@ type Position = { segment?: number; module?: number; check?: number };
 
 const IDLE: LessonProgressState = {
   report: () => {},
+  resend: () => {},
   completionFailed: false,
   completionSaved: false,
   sessionId: null,
@@ -341,6 +350,17 @@ export function useLessonProgress(
     };
   }, [lessonId, enabled, write, localId, assignmentId]);
 
+  /*
+   * THIS SESSION'S HELD WRITE IS OURS TO SEND while the player is open: on
+   * the connection's return, below, and on Try again (`resend`). Claimed, so
+   * the shell's flush on the same reconnect does not send it a second time;
+   * released when the player closes, when the flush is the only one left.
+   */
+  useEffect(() => {
+    if (!enabled || !issued) return;
+    return claimSlot(lessonId, issued);
+  }, [enabled, lessonId, issued]);
+
   // Back online: send whatever never landed.
   useEffect(() => {
     if (!enabled) return;
@@ -385,9 +405,32 @@ export function useLessonProgress(
     [enabled, write, lessonId, localId, assignmentId],
   );
 
+  /*
+   * ONLY A COMPLETION STILL OWED. A completion written `exited` because an
+   * answer was refused for good is not owed - sending it again as completed
+   * would book a check with no answer behind it (Lydia, 6 Oct) - so there is
+   * nothing to resend, and the lesson comes back on Home as it should.
+   */
+  const resend = useCallback(() => {
+    if (!enabled || !getToken()) return;
+    if (!sessionId.current) {
+      // Held with no session: open one, and the completion goes under it.
+      if (pending.current?.status !== LESSON_STATUS.COMPLETED) return;
+      setCompletionFailed(false);
+      retryOpen.current?.();
+      return;
+    }
+    const held = unsent.current;
+    if (held?.status !== LESSON_STATUS.COMPLETED) return;
+    setCompletionFailed(false);
+    unsent.current = null;
+    write(held.status, held);
+  }, [enabled, write]);
+
   if (!enabled) return IDLE;
   return {
     report,
+    resend,
     completionFailed,
     completionSaved,
     sessionId: issued,

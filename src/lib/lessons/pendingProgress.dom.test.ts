@@ -394,6 +394,47 @@ describe("held progress, replayed", () => {
     expect(pendingProgressFor("lesson-1")).not.toBeNull();
   });
 
+  it("leaves an open player's session position to it, and still sends its answers", async () => {
+    // The player re-sends its own held completion on reconnect and on Try
+    // again (D183); the flush sending it too put the completion up twice.
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockResolvedValue({} as never);
+    const attempt = vi
+      .spyOn(lessonsApi, "saveAttempt")
+      .mockResolvedValue({} as never);
+    signInAs("student-1");
+    holdProgress("lesson-1", {
+      sessionId: "sess-1",
+      status: "completed" as never,
+      segment: 4,
+    });
+    holdAnswer("lesson-1", {
+      sessionId: "sess-1",
+      body: {
+        problemId: "cp-1",
+        source: "assessment",
+        answer: 2,
+        clientAttemptId: "00000001-0000-4000-8000-000000000000",
+      },
+    });
+    const release = claimSlot("lesson-1", "sess-1");
+
+    try {
+      await flushPendingProgress();
+
+      expect(attempt).toHaveBeenCalledTimes(1);
+      expect(save).not.toHaveBeenCalled();
+      expect(pendingProgressFor("lesson-1")?.status).toBe("completed");
+    } finally {
+      // Closed: the flush is the only one left to send it.
+      release();
+    }
+    await flushPendingProgress();
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(pendingProgressFor("lesson-1")).toBeNull();
+  });
+
   it("sends once when two screens ask at the same moment", async () => {
     const save = vi
       .spyOn(lessonsApi, "saveProgress")

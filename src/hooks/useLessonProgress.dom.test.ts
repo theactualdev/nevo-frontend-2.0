@@ -4,6 +4,7 @@ import { useLessonProgress } from "./useLessonProgress";
 import { lessonsApi } from "@/lib/api/lessons";
 import { ApiError } from "@/lib/api/client";
 import {
+  flushPendingProgress,
   holdAnswer,
   holdProgress,
   pendingProgressFor,
@@ -400,5 +401,173 @@ describe("useLessonProgress - a completion and the answers held for it", () => {
         ...answer,
       }),
     );
+  });
+});
+
+describe("useLessonProgress - reading a check's result again (D183)", () => {
+  it("sends a failed completion again, and its answer is the result", async () => {
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockRejectedValueOnce(new ApiError(0, "offline"))
+      .mockResolvedValue({
+        status: "completed",
+        resultState: "landed",
+      } as never);
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+    act(() => result.current.report("completed", { segment: 4 }));
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+
+    act(() => result.current.resend());
+
+    // In flight: no longer failed, not yet saved.
+    expect(result.current.completionFailed).toBe(false);
+    await waitFor(() => expect(result.current.completionSaved).toBe(true));
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save).toHaveBeenLastCalledWith(
+      LESSON,
+      expect.objectContaining({ status: "completed", segmentPosition: 4 }),
+    );
+    expect(result.current.saved).toMatchObject({ resultState: "landed" });
+  });
+
+  it("says it failed again when it does", async () => {
+    vi.spyOn(lessonsApi, "saveProgress").mockRejectedValue(
+      new ApiError(0, "offline"),
+    );
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+    act(() => result.current.report("completed", { segment: 4 }));
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+
+    act(() => result.current.resend());
+
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+    expect(result.current.completionSaved).toBe(false);
+  });
+
+  it("opens the session first when it never opened", async () => {
+    vi.spyOn(lessonsApi, "startSession")
+      .mockRejectedValueOnce(new ApiError(0, "offline"))
+      .mockResolvedValue({ sessionId: "sess-2" } as never);
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockResolvedValue({ status: "completed" } as never);
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+    // Reporting with no session tries the session again, which fails once
+    // more here, so the completion is still owed.
+    vi.mocked(lessonsApi.startSession).mockRejectedValueOnce(
+      new ApiError(0, "offline"),
+    );
+    act(() => result.current.report("completed", { segment: 4 }));
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+    expect(save).not.toHaveBeenCalled();
+
+    act(() => result.current.resend());
+
+    await waitFor(() => expect(result.current.completionSaved).toBe(true));
+    expect(save).toHaveBeenCalledWith(
+      LESSON,
+      expect.objectContaining({ sessionId: "sess-2", status: "completed" }),
+    );
+  });
+
+  it("never sends completed for a check written exited over a refused answer", async () => {
+    vi.spyOn(lessonsApi, "saveAttempt").mockRejectedValue(
+      new ApiError(422, "refused"),
+    );
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockImplementation((_, b) => Promise.resolve({ status: b.status }) as never);
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+    holdAnswer(LESSON, {
+      sessionId: "sess-1",
+      body: {
+        problemId: "cp-1",
+        source: "assessment",
+        answer: 2,
+        clientAttemptId: "00000001-0000-4000-8000-000000000000",
+      },
+    });
+    act(() => result.current.report("completed", { segment: 4 }));
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+
+    act(() => result.current.resend());
+
+    expect(result.current.completionFailed).toBe(true);
+    expect(save.mock.calls.map(([, b]) => b.status)).toEqual(["exited"]);
+  });
+});
+
+describe("useLessonProgress - one owed completion, sent once", () => {
+  /*
+   * After an offline completion, reconnecting put `completed` up twice: the
+   * player's own re-send and the shell's flush of the same held write, both
+   * on the one `online` event - and Try again (D183) can land in the middle.
+   * Each answer is held back here until all three have had their go, as a
+   * slow connection would.
+   */
+  it("goes up once when reconnect, the shell's flush and Try again all meet", async () => {
+    const landing: Array<() => void> = [];
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockRejectedValueOnce(new ApiError(0, "offline"))
+      .mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            landing.push(() =>
+              resolve({ status: "completed", resultState: "landed" } as never),
+            ),
+          ) as never,
+      );
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+    act(() => result.current.report("completed", { segment: 4 }));
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+
+    let shell: Promise<void> = Promise.resolve();
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      // The shell listens for the same event.
+      shell = flushPendingProgress();
+      result.current.resend();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    await act(async () => {
+      landing.splice(0).forEach((land) => land());
+      await shell;
+    });
+
+    await waitFor(() => expect(result.current.completionSaved).toBe(true));
+    const completions = save.mock.calls.filter(
+      ([, b]) => b.status === "completed",
+    );
+    // The one that failed offline, and the one that landed.
+    expect(completions).toHaveLength(2);
+  });
+
+  it("is still the shell's to send once the player has closed", async () => {
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockRejectedValueOnce(new ApiError(0, "offline"))
+      .mockResolvedValue({ status: "completed" } as never);
+    const { result, unmount } = renderHook(() =>
+      useLessonProgress(LESSON, true),
+    );
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+    act(() => result.current.report("completed", { segment: 4 }));
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+
+    unmount();
+    await flushPendingProgress();
+
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save).toHaveBeenLastCalledWith(
+      LESSON,
+      expect.objectContaining({ sessionId: "sess-1", status: "completed" }),
+    );
+    expect(pendingProgressFor(LESSON)).toBeNull();
   });
 });

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { NO_SOUND, PressedLine } from "./PressedLine";
 import { useMediaSource } from "./useMediaSource";
 
 /** 17a's narration-bar silhouette - 20 bars, explicit px heights. */
@@ -26,8 +26,9 @@ const BAR_HEIGHTS = [6, 10, 13, 8, 14, 10, 12, 7, 13, 9, 11, 14, 8, 12, 10, 7, 1
  * refuses to start sound without a tap simply leaves it ready to press.
  *
  * A recording that will not load says so, in the words the lesson's own audio
- * uses, and the control goes quiet. One fresh attempt when the connection
- * returns - see `useMediaSource`.
+ * uses, and the control stays pressable and says so again when pressed
+ * (D211). One fresh attempt when the connection returns - see
+ * `useMediaSource`.
  *
  * THE LABEL IS "LISTEN", THEN "LISTEN AGAIN" (design D95, 6 Oct): "'Listen
  * again' where the child has already heard it, 'Listen' where they have not.
@@ -52,6 +53,13 @@ export function SpokenPrompt({
   // connection comes back.
   const media = useMediaSource(src, undefined);
   const failed = media.failed;
+  /*
+   * PRESSABLE, NOT GREYED (D211). Listen on a prompt that did not load says
+   * so in place, in Lydia's line, for this load of it - a load retried when
+   * the connection returns, and failing again, is said again when pressed.
+   */
+  const [toldFor, setToldFor] = useState<string | null>(null);
+  const told = failed && toldFor === media.key;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [pct, setPct] = useState(0);
@@ -81,8 +89,12 @@ export function SpokenPrompt({
   };
 
   const toggle = () => {
+    if (failed) {
+      setToldFor(media.key);
+      return;
+    }
     const el = audioRef.current;
-    if (failed || !el) return;
+    if (!el) return;
     if (playing) {
       el.pause();
       return;
@@ -132,14 +144,8 @@ export function SpokenPrompt({
       <button
         type="button"
         aria-label={playing ? "Pause" : label}
-        disabled={failed}
         onClick={toggle}
-        className={cn(
-          "flex size-11 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform",
-          failed
-            ? "cursor-not-allowed opacity-40"
-            : "cursor-pointer active:scale-[0.98]",
-        )}
+        className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.98]"
       >
         {playing ? (
           <Pause className="size-[18px]" fill="currentColor" strokeWidth={0} />
@@ -151,7 +157,16 @@ export function SpokenPrompt({
           />
         )}
       </button>
-      {failed ? (
+      {/*
+        D211's line takes the failure line's place while it shows, beside
+        the control, so the card grows as little as it can and what is
+        under it barely moves. Its type is the row's own 13px.
+      */}
+      {told ? (
+        <PressedLine className="min-w-0 flex-1 text-[13px] leading-[1.4]">
+          {NO_SOUND}
+        </PressedLine>
+      ) : failed ? (
         <span role="status" className="text-[13px] text-nevo-near-black/70">
           {"Couldn't load this recording"}
         </span>

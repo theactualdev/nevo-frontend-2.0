@@ -142,3 +142,14 @@ describe("after a miss (D93)", () => {
     expect(screen.getByText("That's it.")).toBeInTheDocument();
   });
 });
+
+describe("after a passed check (D185)", () => {
+  it("says Lydia's line, about the work and not the child", async () => {
+    await openCheck();
+    fireEvent.click(screen.getByRole("button", { name: /Carbon dioxide/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+
+    expect(screen.getByText("That's it. Here's what's next.")).toBeInTheDocument();
+    expect(screen.queryByText(/Nice/)).toBeNull();
+  });
+});

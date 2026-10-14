@@ -53,7 +53,19 @@ describe("the boundary's one action", () => {
   });
 });
 
-describe("the heading names the modules as they were written", () => {
+describe("the heading (D186, 13 Oct)", () => {
+  it("names the finished module as written, with no article and no second title", () => {
+    renderBoundary({
+      finished: { id: "m-1", title: "What plants need", segmentIds: ["s1"] },
+      next: { id: "m-2", title: "Newton's Laws", segmentIds: ["s2"] },
+    });
+
+    // Lydia's own example, verbatim.
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+      /^You've finished What plants need\. Ready for the next part\?$/,
+    );
+  });
+
   it("keeps a title's capitals, so a name in it survives", () => {
     renderBoundary({
       finished: { id: "m-1", title: "Rivers of Lagos", segmentIds: ["s1"] },
@@ -61,7 +73,7 @@ describe("the heading names the modules as they were written", () => {
     });
 
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
-      "You've finished the Rivers of Lagos. Ready for the Newton's Laws section?",
+      /^You've finished Rivers of Lagos\. Ready for the next part\?$/,
     );
   });
 });

@@ -100,6 +100,7 @@ const show = (calc: CalculationSegment = build(), reading = false) => {
     onStepAnswered: vi.fn(),
     onPiecePlaced: vi.fn(),
     onHintOpened: vi.fn(),
+    onAct: vi.fn(),
   };
   render(
     <CalculationSolver calculation={calc} reading={reading} {...props} />,
@@ -311,10 +312,42 @@ describe("the hint", () => {
     expect(screen.queryByRole("button", { name: "Need a hint?" })).toBeNull();
   });
 
+  it("tells the host when the child picks, types, or opens the hint (D211)", () => {
+    const picking = show();
+    tap("4 and 4");
+    expect(picking.onAct).toHaveBeenCalledTimes(1);
+    tap("Need a hint?");
+    expect(picking.onAct).toHaveBeenCalledTimes(2);
+    cleanup();
+
+    const typing = show(
+      build({
+        steps: [
+          step({
+            input: "number",
+            expectedInput: "numeric",
+            options: [],
+            answer: "3",
+          }),
+        ],
+      }),
+    );
+    tap("3");
+    expect(typing.onAct).toHaveBeenCalledTimes(1);
+  });
+
   it("offers no hint on a step that has none", () => {
     show(build({ steps: [QUARTERS.steps[1]] }));
 
     expect(screen.queryByRole("button", { name: "Need a hint?" })).toBeNull();
+  });
+
+  it("is set in the darker violet, never soft violet on cream (D210)", () => {
+    show();
+
+    const link = screen.getByRole("button", { name: "Need a hint?" });
+    expect(link.className.split(" ")).toContain("text-nevo-violet-text");
+    expect(link.className.split(" ")).not.toContain("text-nevo-violet");
   });
 });
 
@@ -636,6 +669,28 @@ describe("building with pieces", () => {
     expect(props.onPiecePlaced).toHaveBeenCalledTimes(3);
     expect(props.onStepAnswered).toHaveBeenCalledWith("b1", true);
     expect(props.onSolved).toHaveBeenCalled();
+  });
+
+  it("tells the host each time the child acts on the step (D211)", () => {
+    const props = show(build({ steps: [BUILD] }));
+    expect(props.onAct).not.toHaveBeenCalled();
+
+    placeOne();
+
+    expect(props.onAct).toHaveBeenCalledTimes(1);
+  });
+
+  it("lays its places at D149's 46px, 6px apart, at every width (design, 13 Oct)", () => {
+    show(build({ steps: [BUILD] }));
+    const places = [...document.querySelectorAll("[data-build-place]")];
+
+    expect(places).toHaveLength(4);
+    for (const place of places) {
+      expect(place.className.split(" ")).toContain("h-[46px]");
+      // One height: no per-breakpoint 34 / 40 / 36 left over.
+      expect(place.className).not.toMatch(/(sm|lg):h-/);
+    }
+    expect(places[0].parentElement?.className.split(" ")).toContain("gap-1.5");
   });
 });
 
@@ -1176,6 +1231,43 @@ describe("the narration layer", () => {
     expect(onNarrationPlayed).toHaveBeenCalledTimes(1);
     expect(onReplay).toHaveBeenCalledTimes(1);
     expect(onAudioBusy.mock.calls).toEqual([["start"], ["end"], ["start"]]);
+  });
+
+  it("keeps Play pressable when the recording did not load, and says so when pressed (D211)", () => {
+    const NO_SOUND = "The sound didn't load. Try again in a moment.";
+    listen({});
+    fireEvent.error(audio()!);
+    const button = screen.getByRole("button", { name: "Play narration" });
+
+    // Not greyed: pressable, and nothing said until it is pressed.
+    expect(button).toBeEnabled();
+    expect(button.className).not.toMatch(/opacity-40|cursor-not-allowed/);
+    expect(screen.queryByText(NO_SOUND)).toBeNull();
+
+    fireEvent.click(button);
+
+    expect(screen.getByText(NO_SOUND)).toBeInTheDocument();
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it("says it in the failure line's place, beside Play, so the card barely grows (D211)", () => {
+    listen({});
+    fireEvent.error(audio()!);
+    const button = screen.getByRole("button", { name: "Play narration" });
+
+    fireEvent.click(button);
+
+    const line = screen.getByText("The sound didn't load. Try again in a moment.");
+    // In the row, not a row of its own under it: a row of its own pushed the
+    // drawing and the options down by about 68px.
+    expect(line.parentElement).toBe(button.parentElement);
+    expect(button.parentElement?.className).not.toContain("flex-wrap");
+    expect(screen.queryByText("Couldn't load this recording")).toBeNull();
+    // The row's own 13px, in the reference's panel.
+    expect(line.className.split(" ")).toEqual(
+      expect.arrayContaining(["text-[13px]", "rounded-[10px]", "bg-nevo-violet/14"]),
+    );
+    expect(line.className.split(" ")).not.toContain("text-sm");
   });
 });
 

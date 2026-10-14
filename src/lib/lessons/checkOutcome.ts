@@ -80,8 +80,9 @@ export function resultStateFrom(
 /**
  * The reroute to follow (SCRUM-178), when the server says nothing landed and
  * has opened the way back through: SCRUM-181's "That version didn't work."
- * and its Start again. Never for `not_attempted` - "a lesson the child never
- * attempted resumes instead" - and never without a place to start from.
+ * and its "Let's try it another way". Never for `not_attempted` - "a lesson
+ * the child never attempted resumes instead" - and never without a place to
+ * start from.
  */
 export function rerouteFrom(
   row: CompletedRow | null | undefined,

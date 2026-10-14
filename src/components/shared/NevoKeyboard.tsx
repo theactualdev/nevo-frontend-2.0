@@ -441,7 +441,8 @@ function PadLayout({
  *
  * Sized as the frame's three variants, at the solver's own breakpoints: a
  * full-width tray on a phone, then 460px (tablet) and 420px (desktop) with
- * rounded top corners. Keys do not move when pressed; the frame draws none.
+ * rounded top corners - 16, the sheet radius, since design reconciled the
+ * frame's 14 on 13 Oct. Keys do not move when pressed; the frame draws none.
  *
  * COMPACT WHERE THE SCREEN IS SHORT. Docked under the lesson's arrows, the
  * frame's tray left a short phone - or any screen at a larger text size -
@@ -470,7 +471,7 @@ const CALC_ROW = "flex justify-center gap-2 sm:gap-2.5";
 
 function CalcLayout({ onKey }: { onKey: (c: string) => void }) {
   return (
-    <div className="nevo-calc-pad mx-auto flex w-full flex-col gap-[var(--calc-gap,10px)] border-t border-nevo-near-black/8 bg-[#e4ddcc] px-2 pt-[var(--calc-pad-t,8px)] pb-[var(--calc-pad-b,14px)] sm:mb-2 sm:max-w-[460px] sm:gap-[var(--calc-gap,12px)] sm:rounded-t-[14px] sm:px-3.5 sm:pt-[var(--calc-pad-t,14px)] sm:pb-[var(--calc-pad-b,20px)] lg:max-w-[420px]">
+    <div className="nevo-calc-pad mx-auto flex w-full flex-col gap-[var(--calc-gap,10px)] border-t border-nevo-near-black/8 bg-[#e4ddcc] px-2 pt-[var(--calc-pad-t,8px)] pb-[var(--calc-pad-b,14px)] sm:mb-2 sm:max-w-[460px] sm:gap-[var(--calc-gap,12px)] sm:rounded-t-[16px] sm:px-3.5 sm:pt-[var(--calc-pad-t,14px)] sm:pb-[var(--calc-pad-b,20px)] lg:max-w-[420px]">
       {CALC_ROWS.map((row) => (
         <div key={row[0]} className={CALC_ROW}>
           {row.map((d) => (
