@@ -53,7 +53,9 @@ describe("subject spellings", () => {
     render(<SubjectSpellings paused={false} />);
     await screen.findByText(/spells 2 subjects/);
     fireEvent.click(within(row(/Maths/)).getByRole("button", { name: "Same" }));
-    await waitFor(() => expect(row(/Maths/)).toHaveTextContent("One subject: Mathematics."));
+    await waitFor(() =>
+      expect(row(/Maths/)).toHaveTextContent("One subject: Mathematics. We kept the fuller spelling."),
+    );
     expect(answer).toHaveBeenCalledWith("q1", true);
     // No claim about which spelling the file used most: the server keeps the fuller one.
     expect(screen.queryByText(/most of your file/)).toBeNull();

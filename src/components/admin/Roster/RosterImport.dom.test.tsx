@@ -311,7 +311,7 @@ describe("OB-02 what Nevo found", () => {
     expect(visibleText(container)).not.toMatch(/Teachers found/i);
   });
 
-  it("gives each found teacher their classes, as D24 draws them (14 Oct)", async () => {
+  it("names each found teacher and nothing more, even when classes are sent (Lydia, 14 Oct)", async () => {
     get.mockResolvedValue({
       ...READ,
       teachersFound: ["Adunni Okafor"],
@@ -325,8 +325,9 @@ describe("OB-02 what Nevo found", () => {
     expect(await screen.findByText("Teachers found")).toBeInTheDocument();
     const list = screen.getByRole("list");
     expect(list).toHaveTextContent("Adunni Okafor");
-    expect(list).toHaveTextContent("JSS 2A · JSS 2B");
-    // The details win over the bare names, and a teacher with no classes has no line.
+    expect(list).toHaveTextContent("Bola Eze");
+    // "Names do that": no class list under anyone.
+    expect(list).not.toHaveTextContent("JSS 2A");
     expect(list.querySelectorAll("li")).toHaveLength(2);
   });
 

@@ -70,12 +70,12 @@ describe("the plans", () => {
     expect(screen.queryByRole("button", { name: /Per term/ })).toBeNull();
   });
 
-  it("asks the relationship manager rather than switching anything", async () => {
+  it("asks the billing team rather than switching anything", async () => {
     render(<PlanOptions current="annual" vatRate="7.50" />);
     fireEvent.click(await screen.findByRole("button", { name: "Ask to switch to Per term" }));
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent(
-        "Asked. Your relationship manager will be in touch.",
+        "Asked. Our billing team will be in touch.",
       ),
     );
     expect(submit).toHaveBeenCalledWith({
