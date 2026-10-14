@@ -391,8 +391,12 @@ function LessonCard({
  * again. D21 allowed the fill back only once the real fraction was on the
  * wire, and B51 put it there: the frame's conic fill now runs to this child's
  * `segmentPosition / segmentCount`, and says "Segment 3 of 10" rather than a
- * number. A row that does not say keeps the plain mark - a centre dot, which
- * no reading turns into a portion.
+ * number. A row that does not say keeps the plain mark.
+ *
+ * THE PLAIN MARK IS THE FRAME'S RING AND NOTHING IN IT. Nevo Lessons Frame,
+ * 13 Oct: the in-progress mark is `border:2px solid #9a9ccb` with no fill, so
+ * the centre dot this drew inside it is gone. Whether the child's real fill
+ * above stays is with design (round 14, Q9).
  */
 function StatusMark({
   status,
@@ -431,10 +435,8 @@ function StatusMark({
       <span
         role="img"
         aria-label="In progress"
-        className="absolute top-3 right-3 flex size-5 items-center justify-center rounded-full border-2 border-nevo-violet"
-      >
-        <span className="size-2 rounded-full bg-nevo-navy" aria-hidden />
-      </span>
+        className="absolute top-3 right-3 size-5 rounded-full border-2 border-nevo-violet"
+      />
     );
   }
   return (
