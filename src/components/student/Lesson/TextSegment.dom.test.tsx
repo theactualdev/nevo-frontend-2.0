@@ -426,8 +426,56 @@ describe("a key term's definition, in place when tapped (design, 9 Oct)", () => 
     const definition = screen.getByText("The green colour in a leaf.");
     expect(chip("chlorophyll")).toHaveAttribute("aria-expanded", "true");
     expect(chip("chlorophyll")).toHaveAttribute("aria-controls", definition.id);
-    // The segment's own body type, not a caption or a tooltip.
-    expect(definition.className).toMatch(/leading-\[1\.75\]/);
+  });
+
+  it("opens in the frame's panel: soft violet, 10px corners, 14px on 1.5", () => {
+    // Lesson Player frame, 13 Oct. It was a bare paragraph in the body type.
+    render(<TextSegment content={terms} density={null} />);
+
+    fireEvent.click(chip("chlorophyll"));
+
+    const panel = screen.getByText("The green colour in a leaf.").className;
+    expect(panel).toMatch(/(^|\s)bg-nevo-violet\/14(\s|$)/);
+    expect(panel).toMatch(/(^|\s)rounded-\[10px\](\s|$)/);
+    expect(panel).toMatch(/(^|\s)px-\[15px\](\s|$)/);
+    expect(panel).toMatch(/(^|\s)py-\[13px\](\s|$)/);
+    expect(panel).toMatch(/(^|\s)text-sm(\s|$)/);
+    expect(panel).toMatch(/(^|\s)leading-\[1\.5\](\s|$)/);
+    expect(panel).toMatch(/(^|\s)text-nevo-near-black(\s|$)/);
+  });
+
+  it("draws a closed term as an outline and the open one in navy (D190)", () => {
+    // "An open key-term chip reads differently from a closed one (navy fill
+    // open, outline closed)." Both were the same violet fill.
+    render(<TextSegment content={terms} density={null} />);
+    const drawn = (name: string) => screen.getByText(name).className;
+    const outline = (c: string) => {
+      expect(c).toMatch(/(^|\s)border-\[1\.5px\](\s|$)/);
+      expect(c).toMatch(/(^|\s)border-nevo-violet\/60(\s|$)/);
+      expect(c).toMatch(/(^|\s)bg-transparent(\s|$)/);
+      expect(c).toMatch(/(^|\s)text-nevo-navy(\s|$)/);
+    };
+
+    outline(drawn("chlorophyll"));
+    outline(drawn("glucose"));
+
+    fireEvent.click(chip("chlorophyll"));
+
+    const open = drawn("chlorophyll");
+    expect(open).toMatch(/(^|\s)bg-nevo-navy(\s|$)/);
+    expect(open).toMatch(/(^|\s)border-nevo-navy(\s|$)/);
+    expect(open).toMatch(/(^|\s)text-nevo-cream(\s|$)/);
+    expect(open).not.toMatch(/bg-transparent|border-nevo-violet/);
+    outline(drawn("glucose"));
+
+    // One open at a time: the next tap moves the fill with it.
+    fireEvent.click(chip("glucose"));
+    outline(drawn("chlorophyll"));
+    expect(drawn("glucose")).toMatch(/(^|\s)bg-nevo-navy(\s|$)/);
+
+    // And a second tap on it closes it back to the outline.
+    fireEvent.click(chip("glucose"));
+    outline(drawn("glucose"));
   });
 
   it("closes on a second tap", () => {
@@ -451,7 +499,7 @@ describe("a key term's definition, in place when tapped (design, 9 Oct)", () => 
     expect(chip("chlorophyll")).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("takes reading support's type and card where it applies", () => {
+  it("takes reading support's type inside the frame's panel, never smaller", () => {
     render(<TextSegment content={terms} density={null} reading />);
 
     fireEvent.click(chip("glucose"));
@@ -459,13 +507,19 @@ describe("a key term's definition, in place when tapped (design, 9 Oct)", () => 
     const definition = screen.getByText("The sugar a plant makes.");
     expect(definition.className).toMatch(/(^|\s)text-\[18px\]/);
     expect(definition.className).toMatch(/(^|\s)leading-\[2\]/);
-    expect(definition.className).toMatch(/bg-\[#e5dfd3\]/);
+    expect(definition.className).not.toMatch(/(^|\s)text-sm(\s|$)/);
+    expect(definition.className).toMatch(/(^|\s)bg-nevo-violet\/14(\s|$)/);
+    expect(definition.className).not.toMatch(/bg-\[#e5dfd3\]/);
   });
 
   it("leaves a term with no definition a plain chip, with nothing to open", () => {
     render(<TextSegment content={terms} density={null} />);
 
     expect(screen.getByText("leaf").closest("button")).toBeNull();
+    // Not drawn as the outline a term that opens has.
+    expect(screen.getByText("leaf").className).not.toMatch(
+      /border-nevo-violet/,
+    );
   });
 
   it("is touched at 44px though drawn at the frame's size", () => {

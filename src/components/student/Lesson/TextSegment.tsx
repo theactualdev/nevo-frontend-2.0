@@ -221,7 +221,7 @@ export function TextSegment({
       )}
 
       {keyTerms && keyTerms.length > 0 && (
-        <KeyTerms terms={keyTerms} className={bodyType} reading={reading} />
+        <KeyTerms terms={keyTerms} reading={reading} />
       )}
 
       {equations && equations.length > 0 && (
@@ -312,25 +312,47 @@ function Paragraphs({ text, className }: { text: string; className: string }) {
  * READING SUPPORT IN THE BOXES. Frame 17's "UDL · reading" sets IN SHORT and
  * the equation at the reading body size, under the column's +0.02em, and keeps
  * each box's own 1.7 line height. They had stayed at 16px beside an 18px body.
- * A definition is drawn in the body's own type, so it has all of it already.
  * The line height is restated because `cn` drops a line height that comes
  * before a later size.
  */
 const BOX_READING = "text-[18px] sm:text-[18px] leading-[1.7] tracking-[0.02em]";
 
-/** The frame's key-term chip: violet, navy text, fully round. */
+/** The frame's key-term chip: fully round, 13px navy, a 1.5px edge. */
 const CHIP =
-  "rounded-full bg-nevo-violet/18 px-3 py-1.5 text-[13px] font-medium text-nevo-navy";
+  "rounded-full border-[1.5px] px-3 py-1.5 text-[13px] font-medium";
+
+/**
+ * OPEN READS DIFFERENTLY FROM CLOSED (D190, 13 Oct): "navy fill open, outline
+ * closed". Both were the same violet fill, so nothing showed which term the
+ * definition under the row belonged to.
+ */
+const CHIP_CLOSED = "border-nevo-violet/60 bg-transparent text-nevo-navy";
+const CHIP_OPEN = "border-nevo-navy bg-nevo-navy text-nevo-cream";
+
+/**
+ * A term with no definition has nothing to open, so it is not drawn as one
+ * that does: no outline, which reads as pressable. The frame draws no such
+ * term; this is the chip as it was, at the same size (Q7, design).
+ */
+const CHIP_PLAIN = "border-transparent bg-nevo-violet/18 text-nevo-navy";
+
+/**
+ * The definition's panel, as the frame draws it under the chips: soft violet,
+ * 10px corners, 14px on 1.5 in near-black. Under reading support the words
+ * take the reading type over it, never smaller (Q8, design).
+ */
+const DEFINITION =
+  "mt-3 rounded-[10px] bg-nevo-violet/14 px-[15px] py-[13px] text-sm leading-[1.5] text-nevo-near-black";
 
 /**
  * The segment's key terms as the frame's chips. Design, 9 Oct: "A definition
  * appears in place when the child taps the term. Not a glossary, not a
  * separate screen, and not permanently expanded."
  *
- * So a term with a definition is a button that opens it right under the
- * chips, in the segment's own body type - reading support's included - and
- * closes it on a second tap. One at a time: opening another closes the first.
- * A term with no definition stays a plain chip with nothing to open.
+ * So a term with a definition is a button that opens it in the frame's panel
+ * right under the chips, and closes it on a second tap. One at a time:
+ * opening another closes the first. A term with no definition stays a plain
+ * chip with nothing to open.
  *
  * Drawn at the frame's size and touched at 44px: the button is the hit area,
  * the inner span is the chip, and the negative margin keeps the row the
@@ -339,11 +361,9 @@ const CHIP =
  */
 function KeyTerms({
   terms,
-  className,
   reading,
 }: {
   terms: { term: string; definition?: string }[];
-  className: string;
   reading: boolean;
 }) {
   const [open, setOpen] = useState<number | null>(null);
@@ -361,14 +381,22 @@ function KeyTerms({
               aria-controls={open === i ? definitionId : undefined}
               onClick={() => setOpen(open === i ? null : i)}
               className={cn(
-                "group -my-1.5 inline-flex h-11 cursor-pointer items-center",
+                "group -my-[5px] inline-flex h-11 cursor-pointer items-center",
                 FOCUS_ON_SHAPE.hit,
               )}
             >
-              <span className={cn(CHIP, FOCUS_ON_SHAPE.shape)}>{term}</span>
+              <span
+                className={cn(
+                  CHIP,
+                  open === i ? CHIP_OPEN : CHIP_CLOSED,
+                  FOCUS_ON_SHAPE.shape,
+                )}
+              >
+                {term}
+              </span>
             </button>
           ) : (
-            <span key={i} className={CHIP}>
+            <span key={i} className={cn(CHIP, CHIP_PLAIN)}>
               {term}
             </span>
           ),
@@ -377,11 +405,7 @@ function KeyTerms({
       {definition && (
         <p
           id={definitionId}
-          className={cn(
-            "mt-3",
-            className,
-            reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4",
-          )}
+          className={cn(DEFINITION, reading && [READING_BODY, READING_INK])}
         >
           {definition}
         </p>

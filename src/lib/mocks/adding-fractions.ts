@@ -156,18 +156,9 @@ export const ADDING_FRACTIONS: Lesson = {
       },
       visual: {
         heading: "See it as a picture",
-        intro: "Two same-size parts join into a bigger part. Follow the arrows.",
-        diagram: {
-          inLabel: "SAME-SIZE PARTS",
-          outLabel: "ADDED TOGETHER",
-          inputs: ["1/5", "1/5"],
-          outputs: ["2/5"],
-        },
       },
       audio: {
         heading: "Listen to this one",
-        intro:
-          "Play it and follow along. You can pause any time, and read the words too.",
         title: "Narrated: Adding fractions",
         durationSec: 40,
         transcript:
@@ -230,8 +221,6 @@ export const ADDING_FRACTIONS: Lesson = {
       },
       audio: {
         heading: "Listen to this one",
-        intro:
-          "Play it and follow along. You can pause any time, and read the words too.",
         title: "Narrated: Where you'll use this",
         durationSec: 28,
         transcript:

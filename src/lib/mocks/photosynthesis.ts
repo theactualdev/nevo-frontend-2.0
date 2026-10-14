@@ -72,24 +72,15 @@ export const PHOTOSYNTHESIS: Lesson = {
       },
       visual: {
         heading: "See it as a picture",
-        intro: "A leaf takes in three things and gives out two. Follow the arrows.",
         art: {
           id: "leaf-photosynthesis",
           alt: "A leaf photosynthesising: sunlight, water and carbon dioxide go in; glucose and oxygen come out",
           caption:
             "Inside the leaf, chloroplasts use sunlight to turn water and carbon dioxide into food.",
         },
-        diagram: {
-          inLabel: "TAKES IN",
-          outLabel: "GIVES OUT",
-          inputs: ["Sunlight", "Water", "Carbon dioxide"],
-          outputs: ["Glucose", "Oxygen"],
-        },
       },
       audio: {
         heading: "Listen to this one",
-        intro:
-          "Play it and follow along. You can pause any time, and read the words too.",
         title: "Narrated: What is photosynthesis?",
         durationSec: 48,
         transcript:
@@ -133,8 +124,6 @@ export const PHOTOSYNTHESIS: Lesson = {
       },
       audio: {
         heading: "Listen to this one",
-        intro:
-          "Play it and follow along. You can pause any time, and read the words too.",
         title: "Narrated: Inside the leaf",
         durationSec: 36,
         transcript:
@@ -212,8 +201,6 @@ export const PHOTOSYNTHESIS: Lesson = {
       },
       audio: {
         heading: "Listen to this one",
-        intro:
-          "Play it and follow along. You can pause any time, and read the words too.",
         title: "Narrated: Why it matters",
         durationSec: 32,
         transcript:

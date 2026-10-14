@@ -537,6 +537,11 @@ export function SocraticPanel({
  * obstruction." So the control says what it does, in words, at 44px. The
  * player decides how long closed lasts - for that hint, on that segment.
  *
+ * THE FRAME'S PANEL (Lesson Player frame, 13 Oct): soft violet, 10px corners,
+ * no accent bar, the key-term definition's panel. The frame draws no Close
+ * here; D29 keeps it. The 44px Close row is mostly its own space, so the
+ * panel's foot keeps only 2px of the frame's 13 under it.
+ *
  * SEEN WHEN IT COMES INTO VIEW, NOT WHEN IT IS DRAWN (B131, 13 Oct):
  * "hint_offered fires when the hint becomes visible, not when the engine
  * response arrives." The card sits under the segment, so under a long one it
@@ -576,7 +581,7 @@ export function HintOverlay({
   return (
     <div
       ref={card}
-      className="mt-4 rounded-[8px] border-l-[3px] border-nevo-violet bg-[#e5dfd3] px-4 pt-3.5 pb-1"
+      className="mt-3 rounded-[10px] bg-nevo-violet/14 px-[15px] pt-[13px] pb-0.5"
     >
       <p className="text-sm leading-[1.5] text-nevo-near-black">{hint}</p>
       <div className="flex justify-end">

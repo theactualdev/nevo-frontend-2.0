@@ -41,9 +41,12 @@ const PICTURE =
  * shrunk to fit it. The surface, corners and shadow are the frame's card as
  * before; the art, the picture and the quiet tile all take the same place, so
  * a picture that fails leaves nothing to jump.
+ *
+ * NO TALLER THAN 420px (D195): "capped so the question stays in view". On a
+ * wide column 3:2 alone would push it below the fold.
  */
 const CARD =
-  "aspect-[3/2] w-full overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1";
+  "aspect-[3/2] max-h-[420px] w-full overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1";
 
 export function VisualSegment({
   content,
