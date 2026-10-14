@@ -1048,6 +1048,8 @@ describe("Home with nothing set, on a short screen", () => {
    * `min-h-0` down the chain) and the figure may shrink (`min-h-0`), drawn
    * whole (`object-contain`). 29 now draws Home's own stack (13 Oct), with
    * the figure at 190 / 300 / 250, and the rule that it gives way stands.
+   * Below 80px it goes rather than sit over the line as a 13px speck: its
+   * box is a size container and the figure hides under that height.
    * jsdom lays nothing out, so the chain is pinned here.
    */
   it("lets the figure shrink so the line stays on screen", async () => {
@@ -1065,14 +1067,21 @@ describe("Home with nothing set, on a short screen", () => {
 
     const block = line.parentElement!;
     const figure = block.querySelector("img")!;
-    expect(figure).toHaveClass(
+    const art = figure.parentElement!;
+    expect(art.parentElement).toBe(block);
+    expect(art).toHaveClass(
       "min-h-0",
-      "object-contain",
+      "[container-type:size]",
       "h-[190px]",
       "md:h-[300px]",
       "lg:h-[250px]",
     );
-    expect(figure).not.toHaveClass("shrink-0");
+    expect(art).not.toHaveClass("shrink-0");
+    expect(figure).toHaveClass(
+      "size-full",
+      "object-contain",
+      "[@container(max-height:80px)]:hidden",
+    );
     expect(line).toHaveClass("shrink-0");
     // Every box from the figure's block up to the page is the screen's
     // height, not its content's.

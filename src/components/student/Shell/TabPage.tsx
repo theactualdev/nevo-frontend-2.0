@@ -83,9 +83,14 @@ export function TabEmpty({
  * width:auto`). The figures are 2:3 cut-outs, so the width follows; the
  * intrinsic size given here only picks the file the optimiser serves.
  *
- * THE FIGURE GIVES WAY, THE WORDS DO NOT. Inside a `TAB_FILL` page it may
- * shrink below its height (`min-h-0`) to keep the line under it on screen,
- * drawn whole (`object-contain`); with the room, it is 29's size exactly.
+ * THE FIGURE GIVES WAY, THE WORDS DO NOT. Inside a `TAB_FILL` page its box
+ * may shrink below its height (`min-h-0`) to keep the line under it on
+ * screen, the figure drawn whole inside it (`object-contain`); with the room,
+ * it is 29's size exactly.
+ *
+ * AND BELOW 80PX IT GOES. On a short phone the box gave way to 13px, and the
+ * figure read as a stray mark over the line. The box is a size container, so
+ * the figure hides once the box is under 80px tall; the line stays put.
  */
 export function EmptyArt({
   src,
@@ -96,12 +101,17 @@ export function EmptyArt({
   className: string;
 }) {
   return (
-    <IllustrationWrapper
-      src={src}
-      alt=""
-      width={244}
-      height={366}
-      className={cn("min-h-0 w-auto object-contain", className)}
-    />
+    <div
+      className={cn("relative min-h-0 w-full [container-type:size]", className)}
+      data-empty-art
+    >
+      <IllustrationWrapper
+        src={src}
+        alt=""
+        width={244}
+        height={366}
+        className="absolute inset-0 size-full object-contain [@container(max-height:80px)]:hidden"
+      />
+    </div>
   );
 }
