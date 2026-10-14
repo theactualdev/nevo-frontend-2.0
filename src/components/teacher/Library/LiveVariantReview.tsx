@@ -13,6 +13,7 @@ import {
   type VariantTab,
 } from "@/lib/mocks/teacherIntelligence";
 import { reasonCopy } from "@/lib/constants/reviewReasons";
+import { isActivity } from "@/lib/api/variants";
 import { cn } from "@/lib/utils";
 
 /**
@@ -271,16 +272,43 @@ function VariantBody({
         </Empty>
       );
     /*
-     * AN ACTIVITY, NOT A QUESTION (backend bb59b37, 13 Oct). This drew the old
-     * question - `v.options.length` - and the activity has no options, so
-     * opening this tab on any lesson read since then threw and took the
-     * review down with it. It now shows what the activity is: its title, what
-     * is needed, the steps in order and the outcome to look for.
+     * TWO FORMS (Teslim, 14 Oct). A lesson parsed since 13 Oct carries an
+     * ACTIVITY; every earlier one carries a QUESTION, and backend keeps both.
+     * This tab drew only the question - `v.options.length` - so an activity,
+     * which has no options, threw and took the review down with it.
      *
-     * No frame draws an activity yet, so this is laid out like the other
-     * tabs and nothing more; the two labels are ours, raised with design.
-     * Read defensively: a field the server left out is left out here.
+     * The question is drawn as it always was. The activity shows its title,
+     * what is needed, the steps in order and the outcome to look for. No frame
+     * draws an activity yet, so it is laid out like the other tabs and
+     * nothing more; its two labels are ours, raised with design. Both read
+     * defensively: a field the server left out is left out here.
      */
+    if (!isActivity(v)) {
+      const options = Array.isArray(v.options) ? v.options : [];
+      return (
+        <div className="flex flex-col gap-2.5">
+          {v.prompt && <Para>{v.prompt}</Para>}
+          {v.instructions && <Para>{v.instructions}</Para>}
+          {options.length > 0 && (
+            <ul className="mt-0.5 flex flex-col gap-1.5">
+              {options.map((o, i) => (
+                <li
+                  key={`${String(o)}-${i}`}
+                  className="rounded-[12px] bg-nevo-cream px-3 py-2 text-[13.5px] leading-[1.5] text-nevo-near-black/72"
+                >
+                  {String(o)}
+                </li>
+              ))}
+            </ul>
+          )}
+          {v.expectedInteraction && (
+            <p className="text-[12.5px] text-nevo-near-black/55">
+              {`Students respond by: ${v.expectedInteraction}.`}
+            </p>
+          )}
+        </div>
+      );
+    }
     const materials = Array.isArray(v.materials) ? v.materials.filter(Boolean) : [];
     const steps = Array.isArray(v.steps) ? v.steps.filter((s) => s?.instruction) : [];
     return (

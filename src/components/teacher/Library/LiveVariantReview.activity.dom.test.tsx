@@ -10,11 +10,11 @@ vi.mock("@/components/shared/IllustrationWrapper", () => ({
 import { LiveVariantReview } from "./LiveVariantReview";
 
 /**
- * The interactive version is an ACTIVITY since backend bb59b37 (13 Oct): a
- * title, what is needed, steps and an outcome - no options, no answer key.
- * The tab drew the old question, read `options.length` off a field that is no
- * longer sent, and threw, taking the whole review down for any lesson read
- * since. These pin that it now shows the activity and survives a thin one.
+ * The interactive version comes in two forms (Teslim, 14 Oct): the ACTIVITY a
+ * lesson parsed since 13 Oct carries (title, materials, steps, outcome) and
+ * the QUESTION every earlier lesson carries (prompt, options, answer key).
+ * The tab drew only the question, read `options.length` off an activity, and
+ * threw, taking the whole review down. These pin both forms.
  */
 
 const open = (interactiveVariant: unknown) => {
@@ -83,6 +83,22 @@ describe("the interactive version, as an activity", () => {
 
     expect(screen.getByText("Draw it.")).toBeInTheDocument();
     expect(screen.queryByText("What’s needed")).not.toBeInTheDocument();
+    expect(screen.queryByText(/By the end/)).not.toBeInTheDocument();
+  });
+
+  it("still draws a question, the form every earlier lesson carries", () => {
+    open({
+      type: "practice_problem",
+      prompt: "Which part of the leaf makes food?",
+      expectedInteraction: "tapping one answer",
+      options: ["The stem", "The chloroplast"],
+      answerKey: "The chloroplast",
+      instructions: null,
+    });
+
+    expect(screen.getByText("Which part of the leaf makes food?")).toBeInTheDocument();
+    expect(screen.getByText("The chloroplast")).toBeInTheDocument();
+    expect(screen.getByText("Students respond by: tapping one answer.")).toBeInTheDocument();
     expect(screen.queryByText(/By the end/)).not.toBeInTheDocument();
   });
 
