@@ -465,8 +465,15 @@ export function calculationFromVariant(
      * nobody had said what it was. Backend has now (B101): it is the solved
      * equation, so standing it in would show the answer before the first
      * step. A problem with no notation shows none until a step assembles one.
+     *
+     * AND NOR DOES ONE THAT IS ONLY THE SOLVED EQUATION. Backend still stands
+     * it in on the server (`expression or fullEquation`), so a lesson stored
+     * without notation arrives with the two the same, and the answer would
+     * show while step 1 is asked. Nothing here can tell that from a lesson
+     * whose two happen to match, so neither shows a line before a step
+     * assembles one: the answer is never shown early (B127).
      */
-    expression: variant.expression?.trim() ?? "",
+    expression: expressionOf(variant),
     fullEquation: variant.fullEquation?.trim() ?? "",
     ...(scaffold ? { scaffold } : {}),
     ...(manipulative ? { manipulative } : {}),
@@ -557,6 +564,15 @@ function keysFor(step: WireCalculationStep): string[] | undefined {
     .map((k) => k.trim())
     .filter((k) => k !== "");
   return [...new Set(keys)];
+}
+
+/** The problem's notation, or none where it is only the solved equation. */
+function expressionOf(variant: {
+  expression?: string | null;
+  fullEquation?: string | null;
+}): string {
+  const expression = variant.expression?.trim() ?? "";
+  return expression === (variant.fullEquation?.trim() ?? "") ? "" : expression;
 }
 
 /** A step's stored answers - its `answer`, then its `targets` - as written. */

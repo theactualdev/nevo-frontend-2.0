@@ -67,7 +67,7 @@ const algebra = (over: Record<string, unknown> = {}) =>
   ({
     type: "co_construction",
     conceptId: null,
-    fullEquation: "5x - 4 = 2x + 11",
+    fullEquation: "x = 5",
     expression: "5x - 4 = 2x + 11",
     answer: "5",
     completionStatement: "You solved for x.",
@@ -260,6 +260,22 @@ describe("a calculation from the payload", () => {
     expect(
       calcOf(algebra({ expression: undefined, fullEquation: "x = 5" })),
     ).toMatchObject({ expression: "", fullEquation: "x = 5" });
+  });
+
+  it("shows no problem that is only the solved equation, as backend stands it in", () => {
+    // Backend sends `expression or fullEquation`: a lesson stored without
+    // notation arrives with the two the same, the answer in both (B127).
+    expect(
+      calcOf(algebra({ expression: "x = 5", fullEquation: "x = 5" })),
+    ).toMatchObject({ expression: "", fullEquation: "x = 5" });
+    expect(
+      calcOf(algebra({ expression: " x = 5 ", fullEquation: "x = 5" })),
+    ).toMatchObject({ expression: "" });
+    // Two that differ are the problem and its solution, carried as given.
+    expect(calcOf(algebra())).toMatchObject({
+      expression: "5x - 4 = 2x + 11",
+      fullEquation: "x = 5",
+    });
   });
 
   it("carries each step's highlights, a role left out reading as active", () => {
