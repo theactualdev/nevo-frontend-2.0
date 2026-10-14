@@ -196,6 +196,35 @@ describe("more than one child", () => {
   });
 });
 
+describe("the route to the data page (Lydia, L6, 14 Oct)", () => {
+  it("is in the bar, for the child on screen", async () => {
+    render(<ParentHome />);
+    await screen.findByRole("heading", { name: "Amara’s week" });
+    expect(screen.getByRole("link", { name: "Your child’s data" })).toHaveAttribute(
+      "href",
+      "/parent-portal/data?child=s-1",
+    );
+  });
+
+  it("follows the child the parent picked", async () => {
+    myChildren.mockResolvedValue([CHILD, SIBLING]);
+    render(<ParentHome />);
+    fireEvent.click(await screen.findByRole("button", { name: "Tunde" }));
+    await screen.findByText("Tunde's topic");
+    expect(screen.getByRole("link", { name: "Your child’s data" })).toHaveAttribute(
+      "href",
+      "/parent-portal/data?child=s-2",
+    );
+  });
+
+  it("is not offered to someone who is not signed in", async () => {
+    getSession.mockReturnValue(null);
+    render(<ParentHome />);
+    await screen.findByRole("link", { name: "Sign in" });
+    expect(screen.queryByRole("link", { name: "Your child’s data" })).not.toBeInTheDocument();
+  });
+});
+
 describe("edges", () => {
   it("says so plainly when the account is linked to no child", async () => {
     myChildren.mockResolvedValue([]);
