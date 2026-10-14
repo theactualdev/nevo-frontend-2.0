@@ -21,12 +21,11 @@ vi.mock("@/lib/api/intelligence", async (importOriginal) => {
 /**
  * The live "Worth your attention" card.
  *
- * THE CARD IS THE ACKNOWLEDGEMENT. Design ruled that a teacher never sees an
- * acknowledge button: tapping the card opens the student's profile and marks
- * the flag seen in the same action, and `useTeacherFlags` filters acknowledged
- * flags out - which is what makes a flag stop asking. If the write silently
- * stopped firing, flags would nag forever with nothing on screen to explain
- * why, so that it fires at all is the thing worth pinning.
+ * THE TAP IS NOT AN ACKNOWLEDGEMENT (Lydia, 13 Oct). A class teacher's tap
+ * means "I have read this"; learning support's acknowledgement means "we have
+ * seen this and are on it", and only a holder makes it. The tap opens the
+ * profile and sends nothing, so that it sends nothing is the thing worth
+ * pinning.
  *
  * Time is frozen. `noticedWhen` reads the clock, and a test that did not fix
  * it would pass all afternoon and fail at midnight.
@@ -69,29 +68,14 @@ describe("LiveFlagCard", () => {
     ).toBeInTheDocument();
   });
 
-  it("acknowledges the flag on the same tap that opens the profile", () => {
-    // One action, per the design ruling - and the flag only stops asking
-    // because this write happens.
+  it("opens the profile and does not acknowledge the flag", () => {
+    // Learning support's acknowledgement is its own act. A teacher's tap
+    // recording it would put "learning support saw this" on a flag nobody
+    // from learning support has seen.
     render(<LiveFlagCard flag={flag()} />);
     fireEvent.click(screen.getByRole("link", { name: /Open Amara Kalu/ }));
 
-    expect(acknowledgeFlag).toHaveBeenCalledWith("flag-1");
-    expect(
-      screen.getByRole("link", { name: /Open Amara Kalu/ }),
-    ).toHaveAttribute("href", "/teacher/students/student-9");
-  });
-
-  it("still opens the profile when the acknowledge write rejects", () => {
-    // Deliberately silent and unawaited: there is no UI for an outcome the
-    // teacher was never told about, and a failed write leaves the flag to be
-    // shown again - the safe direction to fail in. What must NOT happen is an
-    // unhandled rejection or a tap that feels broken.
-    acknowledgeFlag.mockRejectedValueOnce(new Error("500"));
-    render(<LiveFlagCard flag={flag()} />);
-
-    expect(() =>
-      fireEvent.click(screen.getByRole("link", { name: /Open Amara Kalu/ })),
-    ).not.toThrow();
+    expect(acknowledgeFlag).not.toHaveBeenCalled();
     expect(
       screen.getByRole("link", { name: /Open Amara Kalu/ }),
     ).toHaveAttribute("href", "/teacher/students/student-9");

@@ -156,8 +156,9 @@ const REWARD =
 //
 // THE CLASSIFIER RULE IS NOW IN (design, 17 Sep). It was reserved here
 // pending their call, on the grounds that it would flag `band()` in
-// useTeacherHome - which it does, and which is why the allowlist below carries
-// `band` with its reason written out. Design's framing: it is the
+// useTeacherHome - which it did, and the allowlist carried it until Lydia
+// ruled on 13 Oct that the pulse shows nothing until backend sends its own
+// words. `band` is gone and so is its entry. Design's framing: it is the
 // highest-signal rule available, because the mastery percentages and the
 // Demonstrated / Developing tiers are the same error in two registers.
 //
@@ -424,10 +425,6 @@ const SUFFICIENCY_ALLOWED = new Map([
 const sufficiencyHits = new Set();
 
 const CLASSIFIER_ALLOWED = new Map([
-  [
-    "src/hooks/useTeacherHome.ts:band",
-    "Accepted for launch (design, 17 Sep) pending backend serving the cutoffs. The labels are generated FROM the thresholds - \"Above 75%\", not \"Strong\" - so they cannot state an opinion the number does not support. Remove this entry when the engine sends the bands.",
-  ],
   // The two below arrived when admin came into scope (30 Sep). Neither is a
   // label about a person, and neither has a cutoff the engine could own.
   [

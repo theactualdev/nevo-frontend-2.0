@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { Assignment } from "@/lib/api/assignments";
 
-const { applyToAssignments, useTeacherClasses } = vi.hoisted(() => ({
+const { applyToAssignments, cancelAssignments, useTeacherClasses } = vi.hoisted(() => ({
   applyToAssignments: vi.fn(),
+  cancelAssignments: vi.fn(),
   useTeacherClasses: vi.fn(),
 }));
 
-vi.mock("@/lib/api/assignments", () => ({ applyToAssignments }));
+vi.mock("@/lib/api/assignments", () => ({ applyToAssignments, cancelAssignments }));
 vi.mock("@/hooks/useTeacherClasses", () => ({ useTeacherClasses }));
 
 import {
@@ -67,6 +68,7 @@ afterEach(() => {
 
 beforeEach(() => {
   applyToAssignments.mockReset();
+  cancelAssignments.mockReset();
   // THE SHAPE A SIGNED-IN TEACHER ACTUALLY GETS. `useTeacherClasses` returns
   // `classes: []` on the live path and fills only `options`; `classes` is the
   // signed-OUT fixture list. The first version of this mock supplied `classes`,
@@ -85,6 +87,12 @@ beforeEach(() => {
 
 function openConfirm() {
   fireEvent.click(screen.getByRole("button", { name: /Cancel lesson/i }));
+}
+
+/** SCRUM-225: say why, then confirm. Housekeeping unless a test says. */
+function confirmCancel(reason = "Housekeeping") {
+  fireEvent.click(screen.getByRole("radio", { name: reason }));
+  fireEvent.click(screen.getByRole("button", { name: /Yes, cancel it/i }));
 }
 
 describe("what a teacher sees", () => {
@@ -154,19 +162,17 @@ describe("cancelling", () => {
     render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
     openConfirm();
 
-    expect(applyToAssignments).not.toHaveBeenCalled();
+    expect(cancelAssignments).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /Yes, cancel it/i })).toBeInTheDocument();
   });
 
-  it("patches every row in the group to cancelled", async () => {
-    applyToAssignments.mockResolvedValue({ ok: ["a-1", "a-2", "a-3"], failed: [] });
+  it("cancels every row in the group, with the reason given", async () => {
+    cancelAssignments.mockResolvedValue({ ok: ["a-1", "a-2", "a-3"], failed: [] });
     render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
     openConfirm();
-    fireEvent.click(screen.getByRole("button", { name: /Yes, cancel it/i }));
+    confirmCancel();
 
-    expect(applyToAssignments).toHaveBeenCalledWith(["a-1", "a-2", "a-3"], {
-      status: "cancelled",
-    });
+    expect(cancelAssignments).toHaveBeenCalledWith(["a-1", "a-2", "a-3"], "housekeeping");
     expect(await screen.findByText(/Cancelled\. Students will no longer see/i)).toBeInTheDocument();
   });
 
@@ -175,17 +181,17 @@ describe("cancelling", () => {
     openConfirm();
     fireEvent.click(screen.getByRole("button", { name: /Keep it/i }));
 
-    expect(applyToAssignments).not.toHaveBeenCalled();
+    expect(cancelAssignments).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /Cancel lesson/i })).toBeInTheDocument();
   });
 
   it("NEVER reports a partial cancel as a whole one", async () => {
     // The assertion this file exists for. Two of three children lost the
     // lesson; the third still has it, and the teacher has to know.
-    applyToAssignments.mockResolvedValue({ ok: ["a-1", "a-2"], failed: ["a-3"] });
+    cancelAssignments.mockResolvedValue({ ok: ["a-1", "a-2"], failed: ["a-3"] });
     render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
     openConfirm();
-    fireEvent.click(screen.getByRole("button", { name: /Yes, cancel it/i }));
+    confirmCancel();
 
     expect(
       await screen.findByText(/Cancelled for 2 of 3 students\. The rest still have it\./),
@@ -194,22 +200,82 @@ describe("cancelling", () => {
   });
 
   it("offers to retry only the ones that failed", async () => {
-    applyToAssignments.mockResolvedValue({ ok: ["a-1", "a-2"], failed: ["a-3"] });
+    cancelAssignments.mockResolvedValue({ ok: ["a-1", "a-2"], failed: ["a-3"] });
     render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
     openConfirm();
-    fireEvent.click(screen.getByRole("button", { name: /Yes, cancel it/i }));
+    confirmCancel();
 
-    applyToAssignments.mockClear();
+    cancelAssignments.mockClear();
     fireEvent.click(await screen.findByRole("button", { name: /Try the rest/i }));
 
-    expect(applyToAssignments).toHaveBeenCalledWith(["a-3"], { status: "cancelled" });
+    expect(cancelAssignments).toHaveBeenCalledWith(["a-3"], "housekeeping");
+  });
+
+  /*
+   * SCRUM-225 (the D39 ruling): a cancellation carries a reason, and the
+   * reason decides whether the child keeps their reviews of what it taught.
+   * Only the teacher knows which it is, so the confirmation asks.
+   */
+  it("asks why, and will not cancel until a reason is chosen", async () => {
+    cancelAssignments.mockResolvedValue({ ok: ["a-1", "a-2", "a-3"], failed: [] });
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    openConfirm();
+
+    expect(screen.getByRole("group", { name: "Why is this being cancelled?" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Yes, cancel it/i })).toBeDisabled();
+
+    confirmCancel("Wrong class");
+    expect(cancelAssignments).toHaveBeenCalledWith(["a-1", "a-2", "a-3"], "wrong_class");
+  });
+
+  it("offers the ticket's seven reasons, and says what each kind does to reviews", () => {
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    openConfirm();
+
+    for (const r of [
+      "Finished with",
+      "Superseded",
+      "Duplicate",
+      "Housekeeping",
+      "Wrong content",
+      "Wrong class",
+      "Assigned in error",
+    ]) {
+      expect(screen.getByRole("radio", { name: r })).toBeInTheDocument();
+    }
+    expect(screen.getByText("The lesson still counts")).toBeInTheDocument();
+    expect(screen.getByText("Take the lesson back")).toBeInTheDocument();
+    expect(screen.getByText("Students keep their reviews of what it taught.")).toBeInTheDocument();
+    expect(screen.getByText("Their reviews of what it taught are withdrawn.")).toBeInTheDocument();
+  });
+
+  it("asks afresh each time it opens", () => {
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    openConfirm();
+    fireEvent.click(screen.getByRole("radio", { name: "Duplicate" }));
+    fireEvent.click(screen.getByRole("button", { name: /Keep it/i }));
+    openConfirm();
+
+    expect(screen.getByRole("button", { name: /Yes, cancel it/i })).toBeDisabled();
+  });
+
+  it("retries the rest with the same reason", async () => {
+    cancelAssignments.mockResolvedValue({ ok: ["a-1", "a-2"], failed: ["a-3"] });
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    openConfirm();
+    confirmCancel("Assigned in error");
+
+    cancelAssignments.mockClear();
+    fireEvent.click(await screen.findByRole("button", { name: /Try the rest/i }));
+
+    expect(cancelAssignments).toHaveBeenCalledWith(["a-3"], "assigned_in_error");
   });
 
   it("says nothing changed when nothing did", async () => {
-    applyToAssignments.mockResolvedValue({ ok: [], failed: ["a-1", "a-2", "a-3"] });
+    cancelAssignments.mockResolvedValue({ ok: [], failed: ["a-1", "a-2", "a-3"] });
     render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
     openConfirm();
-    fireEvent.click(screen.getByRole("button", { name: /Yes, cancel it/i }));
+    confirmCancel();
 
     expect(await screen.findByText(/Nothing was cancelled/)).toBeInTheDocument();
   });
@@ -413,14 +479,12 @@ describe("a child who has already finished", () => {
   it("is left out of the cancel that goes to the server", async () => {
     // THE ONE THAT MATTERS. Everything else here is about what the teacher
     // reads; this is about what reaches a child's record.
-    applyToAssignments.mockResolvedValue({ ok: ["a-1", "a-2"], failed: [] });
+    cancelAssignments.mockResolvedValue({ ok: ["a-1", "a-2"], failed: [] });
     render(<AssignmentSchedule assignments={CLASS_WITH_ONE_DONE} />);
     openConfirm();
-    fireEvent.click(screen.getByRole("button", { name: /Yes, cancel it/i }));
+    confirmCancel();
 
-    expect(applyToAssignments).toHaveBeenCalledWith(["a-1", "a-2"], {
-      status: "cancelled",
-    });
+    expect(cancelAssignments).toHaveBeenCalledWith(["a-1", "a-2"], "housekeeping");
   });
 
   it("is counted out of the confirmation, and told they keep it", () => {
@@ -522,15 +586,15 @@ describe("finishing a write that only partly landed", () => {
   });
 
   it("still retries a partial cancel as a cancel", async () => {
-    applyToAssignments.mockResolvedValue({ ok: ["a-1", "a-2"], failed: ["a-3"] });
+    cancelAssignments.mockResolvedValue({ ok: ["a-1", "a-2"], failed: ["a-3"] });
     render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
     openConfirm();
-    fireEvent.click(screen.getByRole("button", { name: /Yes, cancel it/i }));
+    confirmCancel();
 
-    applyToAssignments.mockClear();
+    cancelAssignments.mockClear();
     fireEvent.click(await screen.findByRole("button", { name: /Try the rest/i }));
 
-    expect(applyToAssignments).toHaveBeenCalledWith(["a-3"], { status: "cancelled" });
+    expect(cancelAssignments).toHaveBeenCalledWith(["a-3"], "housekeeping");
   });
 
   it("reports the retried date change honestly when it lands", async () => {

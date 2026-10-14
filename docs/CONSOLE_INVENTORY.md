@@ -626,7 +626,9 @@ waiting, so it has moved to list A. Kept here as the record of what was decided:
    worked steps in sequence and the completion statement beneath. **SCRUM-136.**
 2. ~~Pulse band cutoffs~~ → hardcoded is fine for launch since the labels derive from the
    cutoffs. Design is asking backend to serve the threshold so it does not live in the
-   console permanently.
+   console permanently. **Superseded 13 Oct (Lydia):** percentages and the old words are
+   both out, nothing replaces them until backend sends its own words, and a group with
+   nothing usable shows nothing. Home draws no pulse; the cutoffs are deleted.
 3. ~~Help & support~~ → **one screen, not a knowledge base**: support email, WhatsApp
    number, response time.
 4. ~~Consent on the teacher roster~~ → **no consent column, ever**. The ruling rested
