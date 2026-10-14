@@ -12,6 +12,8 @@ export function usePermissions() {
   }
   return {
     scopes: ctx.scopes,
+    /** Senior or standard (13 Oct); null until known. */
+    adminAccessLevel: ctx.adminAccessLevel ?? null,
     /** False until `permissions/me` has answered - scope-filtered UI waits. */
     resolved: ctx.resolved,
     /**
