@@ -18,6 +18,28 @@ import type { SectionType } from "./teacherLibrary";
  * fixtures back the signed-out screens only.
  */
 
+/* ---- C16a Class Learning Pulse (Home, above the lesson list) ---- */
+
+export const PULSE_LABEL = "Class learning pulse";
+export const PULSE_SUBTITLE =
+  "How your class is engaging with lessons this week.";
+
+/**
+ * The walkthrough's pulse. Drawn by the same component as the live one, and
+ * using only words backend can actually send (B-6, 14 Oct), so the sample
+ * never shows a teacher something the live console could not.
+ */
+export const SAMPLE_PULSE = {
+  classId: "sample-jss-2a",
+  className: "JSS 2A",
+  studentCount: 28,
+  tiles: [
+    { head: "Engagement", label: "Steady" },
+    { head: "Comprehension", label: "Mixed" },
+    { head: "Focus", label: "Steady" },
+  ],
+};
+
 /* ---- C16b Student Observations (replaces the plain class-detail roster) ---- */
 
 export interface StudentObservation {

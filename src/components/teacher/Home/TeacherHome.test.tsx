@@ -89,8 +89,19 @@ describe("a signed-in teacher whose reads succeeded", () => {
     });
     useTeacherHome.mockReturnValue({
       // Mock what the hook returns, not what the endpoint sends: the pulse
-      // is the class and its headcount, with the engine's numbers left behind.
-      pulse: [{ classId: "c-1", className: "E2E Probe Class", studentCount: 28 }],
+      // carries the engine's words, with its numbers left behind.
+      pulse: [
+        {
+          classId: "c-1",
+          className: "E2E Probe Class",
+          studentCount: 28,
+          tiles: [
+            { head: "Engagement", label: "Steady" },
+            { head: "Comprehension", label: "May benefit from support" },
+            { head: "Focus", label: "Mixed" },
+          ],
+        },
+      ],
       activity: [
         {
           id: "a-1",
@@ -121,15 +132,16 @@ describe("a signed-in teacher whose reads succeeded", () => {
   });
 
   /*
-   * Lydia, 13 Oct: no invented band and no computed share, and a group with
-   * nothing usable shows nothing rather than a placeholder. The read still
-   * arrives, so this pins that none of it is drawn.
+   * B-6 (Teslim, 14 Oct): the pulse is back, in the engine's own words. Lydia's
+   * 13 Oct condition still holds - no band of ours and no computed share.
    */
-  it("draws no class pulse, and no band or share for one", () => {
-    const { container, queryByText } = render(<TeacherHome />);
+  it("prints the engine's word for each metric, and no band or share of ours", () => {
+    const { container, getByText } = render(<TeacherHome />);
 
-    expect(queryByText(/class learning pulse/i)).not.toBeInTheDocument();
-    expect(container.textContent).not.toMatch(/Above 75%|50 to 75%|Below 50%|Engagement|Comprehension/);
+    expect(getByText(/class learning pulse · E2E Probe Class/i)).toBeInTheDocument();
+    expect(getByText("May benefit from support")).toBeInTheDocument();
+    expect(getByText("Mixed")).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/Above 75%|50 to 75%|Below 50%|\d+%/);
   });
 });
 
@@ -154,8 +166,7 @@ describe("a signed-in teacher whose reads FAILED", () => {
     );
 
     expect(marks.length).toBeGreaterThan(0);
-    // No pulse, sample or otherwise: there is nothing true to draw yet.
-    expect(marks).not.toContain("teacher:home-pulse");
+    expect(marks).toContain("teacher:home-pulse");
     expect(marks).toContain("teacher:home-flags");
     expect(marks).toContain("teacher:home-activity");
   });

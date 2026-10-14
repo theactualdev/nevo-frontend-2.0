@@ -217,9 +217,12 @@ export function RosterRowMenu({
  * A teacher can never un-pause an account - the usual reason for a pause is a
  * parent withdrawing consent - so this asks and does nothing else.
  *
- * THE FRAME'S NOTE FIELD IS NOT HERE. The endpoint takes no body, and a box
- * that quietly drops what a teacher wrote about a named child is worse than
- * no box. Raised with backend.
+ * THE NOTE IS C05's, and it goes with the request now: the endpoint takes an
+ * optional note, up to 2,000 characters, and puts it in the administrators'
+ * notification (B-2, Teslim 14 Oct). Until then the box was left out, because
+ * a box that quietly dropped what a teacher wrote about a named child was
+ * worse than no box. One case still drops it, and says so: an earlier request
+ * that is still open keeps its own note.
  *
  * NOTHING IS CLAIMED THAT DID NOT HAPPEN. `notifiedAdminCount` of zero means
  * no administrator was told, so "Your admin has been notified" would be false.
@@ -233,10 +236,14 @@ export function AskAdminDialog({
   studentId: string;
   firstName: string;
   onCancel: () => void;
-  /** The request stands: newly sent, or an earlier one already did. */
-  onSent: (status: "notified" | "already_notified") => void;
+  /**
+   * The request stands: newly sent, or an earlier one already did. When an
+   * earlier one did, a note typed now was not added to it.
+   */
+  onSent: (status: "notified" | "already_notified", noteDropped: boolean) => void;
 }) {
   const [sending, setSending] = useState(false);
+  const [note, setNote] = useState("");
   const [problem, setProblem] = useState<"failed" | "nobody" | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   useDialogFocus(dialogRef, { onEscape: onCancel });
@@ -246,9 +253,12 @@ export function AskAdminDialog({
     setSending(true);
     setProblem(null);
     try {
-      const res = await studentsApi.requestAdminSupport(studentId);
-      if (res.status === "already_notified") onSent("already_notified");
-      else if (res.notifiedAdminCount > 0) onSent("notified");
+      const typed = note.trim();
+      const res = typed
+        ? await studentsApi.requestAdminSupport(studentId, typed)
+        : await studentsApi.requestAdminSupport(studentId);
+      if (res.status === "already_notified") onSent("already_notified", typed !== "");
+      else if (res.notifiedAdminCount > 0) onSent("notified", false);
       else setProblem("nobody");
     } catch {
       setProblem("failed");
@@ -280,6 +290,21 @@ export function AskAdminDialog({
         <p className="mt-3 text-[15px] leading-[1.6] text-nevo-near-black/68">
           {`We${"’"}ll let your school admin know you${"’"}re asking about this account. They${"’"}ll follow up with you.`}
         </p>
+        {/* C05's note box, in the frame's words. */}
+        <label
+          htmlFor="ask-admin-note"
+          className="mt-[22px] mb-2 block text-[12.5px] font-semibold text-nevo-near-black/60"
+        >
+          Add a note (optional)
+        </label>
+        <textarea
+          id="ask-admin-note"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={2000}
+          placeholder="Anything that would help the admin"
+          className="box-border block min-h-[84px] w-full resize-none rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-3.5 py-3 text-[14.5px] leading-[1.5] text-nevo-near-black outline-none transition-colors placeholder:text-nevo-near-black/42 focus:border-nevo-navy"
+        />
         {problem && (
           <p
             role="alert"

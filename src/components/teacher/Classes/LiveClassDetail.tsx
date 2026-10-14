@@ -66,6 +66,15 @@ import { attentionByStudent, rosterCounts } from "@/components/teacher/shared/su
  * and "Ask an admin about this" all need something the roster read did not
  * carry until 12 Oct.
  */
+/** C05's "12 Sep", or nothing at all when the server gave no date. */
+function shortDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
 export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
   /**
    * TWO TABS, NOT THREE. Design ruled on 16 Sep: the Lessons tab ships because
@@ -87,10 +96,10 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
   const [cleared, setCleared] = useState<Set<string>>(() => new Set());
   const [clearedName, setClearedName] = useState<string | null>(null);
   /**
-   * Deactivated children an admin has been asked about, this visit: the day
-   * it was sent, or "" when an earlier request stood. The roster read carries
-   * no field for it yet, so a reload offers the link again - and sending
-   * again is harmless, because the request is idempotent and says so.
+   * Deactivated children an admin has been asked about THIS VISIT: the day it
+   * was sent, or "" when an earlier request stood. What was asked before this
+   * visit comes from the roster read itself (`adminSupportRequestOpen`, B-3),
+   * so a reload no longer offers the link again while a request is open.
    */
   const [raised, setRaised] = useState<Map<string, string>>(() => new Map());
   const [askFor, setAskFor] = useState<{ studentId: string; firstName: string } | null>(null);
@@ -252,7 +261,13 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                   (student.pinCleared === true || cleared.has(student.studentId));
                 // Then a PIN the child asked for and nobody has cleared yet.
                 const pinAsked = !marker && !pinCleared && student.pinResetRequested === true;
-                const raisedOn = deactivated ? raised.get(student.studentId) : undefined;
+                // This visit's request first, then the server's open one.
+                const raisedOn = deactivated
+                  ? (raised.get(student.studentId) ??
+                    (student.adminSupportRequestOpen === true
+                      ? shortDate(student.adminSupportRequestedAt)
+                      : undefined))
+                  : undefined;
                 // Room on the right for what C05 puts on the row beside the menu.
                 const stripPad = pinAsked
                   ? "pr-[128px] xl:pr-[140px]"
@@ -544,19 +559,24 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
           studentId={askFor.studentId}
           firstName={askFor.firstName}
           onCancel={() => setAskFor(null)}
-          onSent={(status) => {
+          onSent={(status, noteDropped) => {
             setRaised((prev) =>
               new Map(prev).set(
                 askFor.studentId,
-                status === "notified"
-                  ? new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" })
-                  : "",
+                status === "notified" ? shortDate(new Date().toISOString()) : "",
               ),
             );
             setAskFor(null);
             // C05's own confirmation. True for an earlier request too: the
-            // admins were told then.
-            say.show({ kind: "confirm", message: "Your admin has been notified." });
+            // admins were told then. But an earlier request keeps its own
+            // note (backend does not replace it), so a note typed now went
+            // nowhere - and saying only "notified" would hide that.
+            say.show({
+              kind: "confirm",
+              message: noteDropped
+                ? "Your admin was already asked about this account, so your note wasn’t added."
+                : "Your admin has been notified.",
+            });
           }}
         />
       )}

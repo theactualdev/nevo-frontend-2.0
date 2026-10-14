@@ -531,9 +531,13 @@ export const studentsApi = {
    * an account is the administrator's decision. No body: the frame's optional
    * note has nowhere to go yet, so it is not drawn.
    */
-  requestAdminSupport: (studentId: string) =>
+  requestAdminSupport: (studentId: string, note?: string) =>
     api.post<AdminSupportRequest>(
       `/api/v1/students/${studentId}/admin-support-request`,
+      // B-2 (Teslim, 14 Oct): an optional note, up to 2,000 characters, put
+      // in the administrators' notification. No note, no body - the request
+      // without one is still valid.
+      ...(note ? [{ note }] : []),
     ),
 
   /** Step one of two. Reversible, keeps everything, frees the seat. */
