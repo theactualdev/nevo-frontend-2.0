@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { Fragment, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { teamApi, type TeamMember } from "@/lib/api/team";
 import { holderFor, type LearningSupportHolders } from "@/lib/api/learningSupport";
 import { getSession } from "@/lib/auth/session";
 import { LearningSupportLine } from "../LearningSupport/LearningSupportLine";
+import { AdminLevelLine } from "./AdminLevelLine";
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
 import { FOUNDING_LOCK_LINE, SCOPE_CATALOGUE } from "./adminScopes";
@@ -29,6 +30,7 @@ export function ScopeChecklist({
   locked = [],
   lockedReason,
   replace,
+  after,
 }: {
   on: Set<PermissionScope>;
   setOn: Dispatch<SetStateAction<Set<PermissionScope>>>;
@@ -37,17 +39,27 @@ export function ScopeChecklist({
   lockedReason?: string;
   /** A line drawn in one scope's place - D03b's Learning Support, in senco's. */
   replace?: { scope: PermissionScope; line: ReactNode };
+  /** A line drawn after one scope - D03b's administrator level, after Learning Support. */
+  after?: { scope: PermissionScope; line: ReactNode };
 }) {
   const [heldAtOpen] = useState(() => new Set(on));
   return (
     <div className="mt-2.5 flex flex-col gap-2">
       {SCOPE_CATALOGUE.filter((s) => s.grantable !== false || heldAtOpen.has(s.scope)).map((s) => {
-        if (replace?.scope === s.scope) return <div key={s.scope}>{replace.line}</div>;
+        const tail = after?.scope === s.scope ? after.line : null;
+        if (replace?.scope === s.scope) {
+          return (
+            <Fragment key={s.scope}>
+              <div>{replace.line}</div>
+              {tail}
+            </Fragment>
+          );
+        }
         const isLocked = locked.includes(s.scope);
         const checked = isLocked || on.has(s.scope);
         return (
+          <Fragment key={s.scope}>
           <label
-            key={s.scope}
             className="flex cursor-pointer items-center gap-[13px] rounded-[10px] bg-nevo-cream-elevated px-[15px] py-[13px]"
           >
             <input
@@ -85,6 +97,8 @@ export function ScopeChecklist({
               ) : null}
             </span>
           </label>
+          {tail}
+          </Fragment>
         );
       })}
     </div>
@@ -111,6 +125,8 @@ export function EditAccessPanel({
   name,
   ls = null,
   onLs,
+  viewerSenior = false,
+  onLevel,
   onCancel,
   onSaved,
 }: {
@@ -119,6 +135,10 @@ export function EditAccessPanel({
   /** Who holds Learning Support; null keeps the old senco checkbox. */
   ls?: LearningSupportHolders | null;
   onLs?: (next: LearningSupportHolders) => void;
+  /** Whether the person looking is a senior administrator, as the team read says. */
+  viewerSenior?: boolean;
+  /** The member as the server has them, after their level changed. */
+  onLevel?: (next: TeamMember) => void;
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -208,6 +228,25 @@ export function EditAccessPanel({
                         setLsNow(holderFor(next, member.userId) !== null);
                         onLs?.(next);
                       }}
+                    />
+                  ),
+                }
+              : undefined
+          }
+          after={
+            // D03b: the level sits with Learning Support, at the same weight.
+            // Nobody can hold it before they have joined.
+            member.accessLevel && member.status.toLowerCase() !== "invited"
+              ? {
+                  scope: "senco",
+                  line: (
+                    <AdminLevelLine
+                      className="rounded-[10px] bg-nevo-cream-elevated px-[15px] py-[13px]"
+                      person={{ userId: member.userId, name }}
+                      level={member.accessLevel}
+                      you={member.userId === me}
+                      canChange={viewerSenior && member.status.toLowerCase() === "active" && !saving}
+                      onChange={(next) => onLevel?.(next)}
                     />
                   ),
                 }
