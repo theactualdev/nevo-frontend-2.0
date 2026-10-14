@@ -357,6 +357,8 @@ describe("the picture's card (design, 13 Oct)", () => {
     expect(el?.className).toMatch(/\baspect-\[3\/2\]/);
     expect(el?.className).toMatch(/\bw-full\b/);
     expect(el?.className).not.toMatch(/h-\[180px\]|h-\[220px\]/);
+    // D195: "capped so the question stays in view" - the frame's 420px.
+    expect(el?.className).toMatch(/(^|\s)max-h-\[420px\](\s|$)/);
     // The card's surface and corners, as before.
     expect(el?.className).toMatch(/\bbg-nevo-cream-elevated\b/);
   };
