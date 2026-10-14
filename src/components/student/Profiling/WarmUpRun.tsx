@@ -93,6 +93,16 @@ const warmUpDotSeed = (side: number) => 11 + side * 29;
 const PROMPT =
   "text-center text-[16px] leading-[1.5] font-medium text-nevo-near-black sm:text-[18px]";
 
+/**
+ * The frame's `doneBody` and `doneTitle`, which the done, save-failed, saving
+ * and loading states all share: a centred column with the badge's spot over
+ * the title, 19px on a phone and 22px from tablet up.
+ */
+const BADGE_BODY =
+  "flex flex-1 flex-col items-center justify-center gap-[22px] p-7 text-center sm:p-9";
+const BADGE_TITLE =
+  "text-[19px] font-semibold tracking-[-0.01em] text-nevo-navy sm:text-[22px]";
+
 /** Monday 1 Jan 2024, from which school days are counted. */
 const ROTATION_EPOCH = Date.UTC(2024, 0, 1);
 
@@ -138,13 +148,13 @@ export function dimensionForToday(now = new Date()): BaselineDimension {
  * weekday rotation whenever the prompt failed, was unrecognised or was still
  * in flight - and then SUBMIT that run as a measurement the engine never asked
  * for, and swap the task if the answer came late. Now the task waits for the
- * engine, and without an answer the screen shows the nothing-state: no task,
- * and the way back to Home (see `WarmUpNothing`).
+ * engine (`WarmUpLoading`), and when the engine names nothing the screen shows
+ * the nothing-state: no task, and the way back to Home (see `WarmUpNothing`).
  *
  * THE HEADER IS THE RUNNING STATE'S. The frame draws "DAILY WARM-UP" and its
- * ring above a task only: the done state (12) and the save-failed state
- * (D126) have none, and the nothing-state, which no frame draws, has none
- * either. All three kept it.
+ * ring above a task only: the done state (12), the save-failed state (D126)
+ * and the loading state (D169) have none, and the nothing-state, which no
+ * frame draws, has none either. The first three kept it.
  * The rotation is for the signed-out walkthrough only.
  *
  * NOT CONDITIONAL ON LESSONS (D18, 1 Oct). Both of the screen's buttons went
@@ -350,7 +360,7 @@ export function WarmUpRun({
    *
    * NOT WHILE THE PROMPT IS ON ITS WAY. The device memory could say "done"
    * here and the account then say otherwise, and "That's it for today"
-   * followed by a task is worse than the nothing-state, which already covers
+   * followed by a task is worse than the loading state, which already covers
    * the wait. Home's card, which has no such state, does use it there.
    */
   const showDone =
@@ -362,6 +372,16 @@ export function WarmUpRun({
   const unsaved = !withheld && saved === false;
   /** A task is on screen: the only state the frame draws the header in. */
   const running = !showDone && !!dimension && bandSettled && !unheard;
+  /*
+   * STILL ASKING, WHICH IS NOT THE SAME AS TOLD NOTHING (D169, 13 Oct). The
+   * prompt has not answered, or it named a task whose size waits on the band.
+   * Both reads settle when they fail (`useWarmUpPrompt`, `useRosterBand`), so
+   * a failure moves on to the nothing-state or the task rather than holding
+   * this. A prompt that named nothing does not wait for the band: there is no
+   * task for it to size.
+   */
+  const asking =
+    prompt.state === "waiting" || (prompt.state === "ready" && !bandSettled);
 
   const finish = useCallback(() => {
     if (!submitted.current) {
@@ -509,7 +529,7 @@ export function WarmUpRun({
       {running && <WarmUpHeader />}
 
       {showDone ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-[22px] p-7 text-center sm:p-9">
+        <div className={BADGE_BODY}>
           {/*
             The frame's phone sizes below `sm`: a 64px badge with a 32px
             check and a 19px title. Tablet and desktop draw 80px, a 40px
@@ -523,16 +543,14 @@ export function WarmUpRun({
           {unsaved ? (
             <SaveFailedMark />
           ) : sending ? (
-            <SavingMark />
+            <BadgeSpinner testId="warmup-saving-mark" />
           ) : (
             <span className="flex size-16 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop sm:size-20">
               <Check className="size-8 text-nevo-cream sm:size-10" strokeWidth={2.4} />
             </span>
           )}
           <div>
-            <h3 className="text-[19px] font-semibold tracking-[-0.01em] text-nevo-navy sm:text-[22px]">
-              That&apos;s it for today
-            </h3>
+            <h3 className={BADGE_TITLE}>That&apos;s it for today</h3>
             {/*
               NO BODY LINE WHEN IT SAVED (D80, 6 Oct). The frame is the title
               and the button. "Nevo is tuned to how you're doing today. Your
@@ -542,16 +560,35 @@ export function WarmUpRun({
               no apology, no reason, no retry - the warm-up is 45 seconds
               and the child cannot fix it. Only once the write has settled
               and failed, never while it is in flight.
+
+              WHILE IT IS IN FLIGHT, the frame's `saving` line (13 Oct). It
+              says the write is going, not that it went.
             */}
+            {sending && (
+              <p
+                role="status"
+                className="mt-2 text-[14.5px] leading-[1.5] text-nevo-near-black/60 sm:text-[15.5px]"
+              >
+                Saving your warm-up…
+              </p>
+            )}
             {unsaved && (
               <p className="mt-3 max-w-[300px] text-[14.5px] leading-[1.55] text-pretty text-nevo-near-black/70 sm:text-[15.5px]">
                 Today&apos;s warm-up didn&apos;t save. It won&apos;t change your lessons.
               </p>
             )}
           </div>
+          {/*
+            GO ON STAYS WHILE IT SAVES. The frame's `saving` state draws no
+            button; held (Q12), because nothing on the way out has a timeout
+            and a write that stalls would leave the child with nothing to
+            press.
+          */}
           <HomeButton label="Go on" onClick={() => router.push(HOME)} />
         </div>
-      ) : !dimension || !bandSettled || unheard ? (
+      ) : asking ? (
+        <WarmUpLoading onHome={() => router.push(HOME)} />
+      ) : !dimension || unheard ? (
         <WarmUpNothing onHome={() => router.push(HOME)} />
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center px-5 pb-10 sm:px-7">
@@ -636,21 +673,22 @@ function SaveFailedMark() {
 }
 
 /**
- * The working spinner in the badge's spot while the write is in flight: the
- * house `nevoSpin`, a navy ring on a faint navy track, at the size PIN
- * creation's saving state draws it (`Nevo PIN Frame`: 44px, a 3px ring at
- * 18%, 900ms). It stands in a box the badge's size so nothing moves when the
- * badge replaces it.
+ * The working spinner in the badge's spot (`spinBadge`), for the saving and
+ * loading states: a navy ring on a faint navy track, 900ms a turn and still
+ * under reduced motion.
+ *
+ * THE BADGE'S OWN SIZE NOW (13 Oct). It was PIN creation's 44px with a 3px
+ * ring, in a box the badge's size; the warm-up frame draws it 64px on a phone
+ * and 80px from tablet up, with a 4px ring, so nothing moves when the badge
+ * replaces it.
  */
-function SavingMark() {
+function BadgeSpinner({ testId }: { testId: string }) {
   return (
     <span
-      data-testid="warmup-saving-mark"
+      data-testid={testId}
       aria-hidden
-      className="flex size-16 items-center justify-center sm:size-20"
-    >
-      <span className="block size-11 rounded-full border-[3px] border-nevo-navy/18 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:900ms]" />
-    </span>
+      className="block size-16 shrink-0 rounded-full border-4 border-nevo-navy/18 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:900ms] sm:size-20"
+    />
   );
 }
 
@@ -661,10 +699,10 @@ function SavingMark() {
  * read "Start today's lesson", which stopped being true when design sent it
  * Home on 1 Oct, and then "Home" while design named it.
  *
- * The nothing-state's is still "Home" (D79 is open). No frame draws that
- * state; "Home" is the frames' own label for a button that goes there (32
- * Prototype, the lesson summary's second button; 30 Flow Reference, "Back to
- * lessons" / "Home").
+ * The nothing-state's and the loading state's is still "Home" (D79 is open).
+ * No frame draws a button in either; "Home" is the frames' own label for a
+ * button that goes there (32 Prototype, the lesson summary's second button;
+ * 30 Flow Reference, "Back to lessons" / "Home").
  */
 function HomeButton({
   label = "Home",
@@ -685,7 +723,34 @@ function HomeButton({
 }
 
 /**
- * The warm-up with no task: the engine has not named one, or will not.
+ * The warm-up while it asks what today's task is (D169, 13 Oct; `Nevo Warm-Up
+ * Run Frame` `loading`): the working spinner in the badge's spot and "Getting
+ * your warm-up ready" in the done title's type. Before it the wait showed the
+ * nothing-state, which "reads as nothing today" for the first few seconds.
+ * When the task arrives it replaces this; when the engine names none, the
+ * nothing-state does.
+ *
+ * THE WAY HOME STAYS. The frame draws no button here. Nothing on the way in
+ * has a timeout - a read that never answers is waited on rather than raced
+ * and thrown away - so a stalled read would leave the child on a spinner with
+ * nothing to press, on a full-screen route. The nothing-state's Home stays
+ * under it until design says what a stall shows (as Q12 holds "Go on" while
+ * the warm-up saves).
+ */
+function WarmUpLoading({ onHome }: { onHome: () => void }) {
+  return (
+    <div className={BADGE_BODY}>
+      <BadgeSpinner testId="warmup-loading-mark" />
+      <div>
+        <h3 className={BADGE_TITLE}>Getting your warm-up ready</h3>
+      </div>
+      <HomeButton onClick={onHome} />
+    </div>
+  );
+}
+
+/**
+ * The warm-up with no task: the engine named none this screen can run.
  *
  * NOT DRAWN. Rule 5 says render the nothing-state rather than fill the gap,
  * and the gap used to be filled with the weekday rotation's task - run, and
@@ -693,10 +758,8 @@ function HomeButton({
  * is designed, and none is true for every cause), and the done state's own
  * button, labelled "Home" here while D79 is open, because this route is
  * full-screen and a child must never be left on it with nothing to press.
- * Shown while the prompt (or the band) is in flight too: the client has no
- * timeout, so a read that never answers would otherwise be a blank screen for
- * good. When the task arrives it replaces this. And for a P1-3 reading round
- * on a device that cannot speak, which cannot be presented honestly (D81).
+ * And for a P1-3 reading round on a device that cannot speak, which cannot be
+ * presented honestly (D81). The wait before an answer is `WarmUpLoading`'s.
  */
 function WarmUpNothing({ onHome }: { onHome: () => void }) {
   return (
