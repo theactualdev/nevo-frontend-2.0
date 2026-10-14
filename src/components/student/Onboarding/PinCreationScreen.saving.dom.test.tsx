@@ -116,7 +116,7 @@ describe("a save that fails", () => {
       screen.getByRole("heading", { name: "That didn't save" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Your PIN is kept. That's on us - try again.",
+      "That's on us, not you. Try again.",
     );
     expect(filledBoxes()).toBe(0);
     expect(screen.queryByText("Saving your PIN…")).toBeNull();

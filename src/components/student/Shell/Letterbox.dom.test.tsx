@@ -128,6 +128,15 @@ describe("the letterbox's two boxes", () => {
         "background-color": "var(--color-nevo-cream)",
         contain: "layout",
       });
+      // Design's letterboxed frames (13 Oct): a 16px corner, a 1px outline
+      // at 10% near-black, no shadow - clipped, so a screen's own cream does
+      // not square the corners off, but not a scroll box.
+      expect(frame(desk(width))).toMatchObject({
+        "border-radius": "16px",
+        outline: "1px solid rgba(43, 43, 47, 0.1)",
+        overflow: "clip",
+      });
+      expect(frame(desk(width))).not.toHaveProperty("box-shadow");
       expect(css).toMatch(/--color-nevo-near-black: #2b2b2f;/);
     },
   );

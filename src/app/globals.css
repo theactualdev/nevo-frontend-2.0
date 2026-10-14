@@ -620,9 +620,14 @@
  *    themselves to `100dvh`, which is the frame's height only while the frame
  *    is the window's. Cream, as the screens are.
  *
- * NO RADIUS, SHADOW OR INSET YET. Design's letterboxed frames (13 Oct) are not
- * pushed; the boards draw every canvas with the same 16px corner and drop
- * shadow, so they say nothing about this one. Square and flush until they do.
+ * THE FRAME'S CORNER AND EDGE, NOT YET ITS SIZE. Design's letterboxed frames
+ * (13 Oct: the PIN door, 05 Entry and Forgot PIN) draw it with a 16px corner
+ * and a 1px outline at 10% near-black, and NO shadow. `overflow: clip` keeps
+ * a screen's own cream from squaring the corners off, without making the
+ * frame a scroll box, so anything sticky still sticks to the window. The
+ * frames also draw the 768 x 1024 tablet scaled to 0.8 with a little field
+ * above and below it; whether that is the intent is asked of design, so the
+ * frame stays the window's height and flush for now.
  *
  * WHAT IS SIZED BY THE WINDOW SIZES BY THE FRAME. `100dvh` already is the
  * frame's height, and no letterboxed screen sizes by `vw` at this width.
@@ -647,6 +652,9 @@
     width: 768px;
     min-height: 100dvh;
     background-color: var(--color-nevo-cream);
+    border-radius: 16px;
+    outline: 1px solid rgba(43, 43, 47, 0.1);
+    overflow: clip;
     contain: layout;
   }
 

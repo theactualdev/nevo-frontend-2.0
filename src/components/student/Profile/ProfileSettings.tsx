@@ -27,19 +27,15 @@ const TEXT_SIZES = [
 ] as const;
 
 /**
- * 44px TO TAP, THE DRAWING UNCHANGED (13 Oct). Design's landed note:
- * "Profile's text-size buttons, the name's Change link and the switches are
- * all at least 44px." The switch is drawn 30px tall and a text-size segment
- * about 31, so each gets an invisible 44px-tall hit area centred on it, and
- * looks exactly as it did. A segment's reaches 2px either side, which closes
- * the gaps between them without overlapping a neighbour.
- *
- * WAITING ON FRAMES: whether design also widened the segments. Each is
- * 32-36px wide as drawn, and four 44px-wide targets do not fit in the pill
- * without changing its drawing.
+ * 44px AS DRAWN (13 Oct). Design's landed note: "Profile's text-size
+ * buttons, the name's Change link and the switches are all at least 44px."
+ * `Nevo Profile Frame` now draws them so: each text size `min-width:44px;
+ * min-height:44px; padding:0 14px`, which widens the pill to about 194px, and
+ * the switches 64×44 (`Switch size="lg"`). They were drawn at 31px and 30px
+ * with an invisible 44px-tall area to tap.
  */
-const TAP_44_TALL =
-  "relative after:absolute after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']";
+const TEXT_SIZE_BUTTON =
+  "inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-full px-3.5 text-[13px] font-medium transition-colors";
 
 /**
  * Profile & Settings (screen 27). Read-only learning preferences (observed, not
@@ -152,7 +148,7 @@ export function ProfileSettings() {
             savedOnceKept(setReducedMotion(v));
           }}
           aria-label="Reduced motion"
-          className={cn(TAP_44_TALL, "after:inset-x-0")}
+          size="lg"
         />
       </SettingRow>
 
@@ -169,9 +165,7 @@ export function ProfileSettings() {
                   savedOnceKept(setTextSize(size.id));
                 }}
                 className={cn(
-                  "min-w-8 cursor-pointer rounded-full px-2.5 py-1.5 text-[13px] font-medium transition-colors",
-                  TAP_44_TALL,
-                  "after:-inset-x-0.5",
+                  TEXT_SIZE_BUTTON,
                   textSize === size.id
                     ? "bg-nevo-navy text-nevo-cream"
                     : "text-nevo-near-black",
@@ -195,7 +189,7 @@ export function ProfileSettings() {
             savedOnceKept(setHighContrast(v));
           }}
           aria-label="High contrast"
-          className={cn(TAP_44_TALL, "after:inset-x-0")}
+          size="lg"
         />
       </SettingRow>
 
