@@ -185,10 +185,23 @@ describe("D11's subscription card", () => {
       },
     ];
     const { container } = render(<BillingView />);
+    // L1 (Lydia, 14 Oct): "₦150,500 on 30 October 2026", then what it covers.
     await waitFor(() => expect(visibleText(container)).toMatch(/Covers First term 2026\/27/));
     const text = visibleText(container);
-    expect(text).toMatch(/1 student × ₦140,000/);
-    expect(text).toMatch(/includes VAT of ₦10,500/);
+    expect(text).toMatch(/₦150,500 on 30 October 2026/);
+    expect(text).toMatch(/Covers First term 2026\/27 · 1 student · includes ₦10,500 VAT/);
+    expect(text).not.toMatch(/Your students. lessons carry on as normal/);
+  });
+
+  it("says overdue as a fact about a date, and that lessons carry on (L1)", async () => {
+    upcoming.mockResolvedValue(
+      charge({ status: "overdue", amount: "150500.00", dueAt: "2026-10-30T00:00:00Z", daysOverdue: 6 }),
+    );
+    const { container } = render(<BillingView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/was due on 30 October 2026, 6 days ago/));
+    const text = visibleText(container);
+    expect(screen.getByRole("heading", { name: "Overdue" })).toBeInTheDocument();
+    expect(text).toMatch(/Your students. lessons carry on as normal\./);
   });
 
   it("says active once it is paid", async () => {

@@ -15,6 +15,7 @@ import {
   type UpcomingCharge,
 } from "@/lib/api/billing";
 import { formatMoney } from "@/lib/money";
+import { NextCharge } from "./NextCharge";
 import {
   daysPastDue,
   overdueHeadline,
@@ -257,47 +258,27 @@ export function BillingView() {
             }
           />
 
+          {/* L1 (Lydia, 14 Oct): an overdue charge says so in its own
+              heading - a fact about a date, nothing red, no warning icon. */}
           <h2 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
-            Next charge
+            {!upcomingFailed && upcoming?.amount && upcoming.status === "overdue"
+              ? "Overdue"
+              : "Next charge"}
           </h2>
           <div className={cn(CARD, "mt-3 px-6 py-[22px]")}>
             {upcomingFailed ? (
               <ReadFailed what="your next charge" onRetry={load} />
             ) : upcoming?.amount ? (
               <div className="flex flex-wrap items-baseline justify-between gap-4">
-                <div>
-                  <span className="text-[30px] leading-none font-semibold text-nevo-near-black tabular-nums">
-                    {formatMoney(upcoming.amount, subscription.pricing.currency)}
-                  </span>
-                  <p className="m-0 mt-2 text-[13.5px] text-nevo-near-black/62">
-                    Due {longDate(upcoming.dueAt)}
-                    {upcoming.invoiceNumber
-                      ? ` · ${upcoming.invoiceNumber}`
-                      : ""}
-                  </p>
-                  {/* WHAT THIS CHARGE COVERS, from the invoice itself (QA,
-                      10 Oct): its period, and the students and rate it was
-                      raised on - so the amount due is not read against the
-                      annual figure above. Each part only when the invoice
-                      carries it. Interim wording; Lydia's to come. */}
-                  {(() => {
-                    const inv = invoices?.find((i) => i.id === upcoming.invoiceId);
-                    if (!inv) return null;
-                    const covers = [
-                      inv.periodLabel ? `Covers ${inv.periodLabel}` : null,
-                      inv.studentCount != null && inv.perStudentRate
-                        ? `${inv.studentCount} ${inv.studentCount === 1 ? "student" : "students"} × ${formatMoney(inv.perStudentRate, inv.currency)}`
-                        : null,
-                      inv.vatAmount ? `includes VAT of ${formatMoney(inv.vatAmount, inv.currency)}` : null,
-                    ].filter(Boolean);
-                    return covers.length > 0 ? (
-                      <p className="m-0 mt-1 text-[13.5px] text-nevo-near-black/62">
-                        {covers.join(" · ")}
-                      </p>
-                    ) : null;
-                  })()}
-                </div>
-                {upcoming.status && <StatusPill status={upcoming.status} />}
+                <NextCharge
+                  upcoming={upcoming}
+                  invoice={invoices?.find((i) => i.id === upcoming.invoiceId) ?? null}
+                  currency={subscription.pricing.currency}
+                />
+                {/* Overdue is in the heading already; a pill would only say it twice. */}
+                {upcoming.status && upcoming.status !== "overdue" ? (
+                  <StatusPill status={upcoming.status} />
+                ) : null}
               </div>
             ) : (
               <p className="m-0 text-[14.5px] text-nevo-near-black/62">
