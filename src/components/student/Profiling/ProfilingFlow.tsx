@@ -161,7 +161,9 @@ function ProfilingRun({
    */
   const entryBand = bandForRoster(getOnboardingDraft().ageBand);
   const roster = useRosterBand(ownerUserId);
-  const band: AgeBand = roster.band ?? entryBand ?? NO_BAND;
+  /** The server's band, from either read, or null when neither gave one. */
+  const serverBand = roster.band ?? entryBand;
+  const band: AgeBand = serverBand ?? NO_BAND;
   /**
    * The roster has not answered, so the band is not known: nothing to start -
    * not even on the entry lookup's band, which the roster outranks.
@@ -302,7 +304,16 @@ function ProfilingRun({
         onContinue={() => {
           // The device, read once here, goes beside the trials (B76).
           const on = formFactor();
-          capture.record("run_start", { band, formFactor: on });
+          /*
+           * THE BAND ONLY WHEN THE SERVER GAVE ONE (B118, 13 Oct). The run
+           * sent its Primary 4-6 default as the child's `ageBand`, which the
+           * spec rules out: "a client fallback must not be recorded as the
+           * child's band". The warm-up already left its default out.
+           */
+          capture.record("run_start", {
+            ...(serverBand ? { band: serverBand } : {}),
+            formFactor: on,
+          });
           /*
            * THE MOTOR STEP COMES FIRST, on every path into the baseline (08a,
            * D12): after this intro and before the first timed activity. A
