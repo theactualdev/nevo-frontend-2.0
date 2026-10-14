@@ -186,6 +186,12 @@ export interface ProgressWindow {
   endsOn: string;
   state: ProgressWindowState;
   inProgress: boolean;
+  /**
+   * `since_setup` when the school never set its term dates (14 Oct): the
+   * figures then cover everything since the school set up Nevo, not a week.
+   * Absent on an older answer, which was always a week.
+   */
+  kind?: "week" | "since_setup";
 }
 
 /**
@@ -202,8 +208,12 @@ export interface SubjectProgress {
   masteredThisWindow: string[];
   /** Typed because it is sent; D02 draws no line for it yet. */
   stillWorkingOn: string[];
-  /** Typed because it is sent; not rendered - see `portalWeek.ts`. */
+  /** Mastered before this window: the "up from 4 last week". */
   masteredBeforeWindow: number;
+  /** Every topic mastered so far, the server's own total (14 Oct). */
+  masteredSoFar?: number;
+  /** When this child last had a lesson in this subject; null if never (14 Oct). */
+  lastLessonAt?: string | null;
 }
 
 /** D02's portal home for one child (`GET .../subject-progress`). */

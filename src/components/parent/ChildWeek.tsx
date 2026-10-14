@@ -164,6 +164,12 @@ function SubjectCard({ card, when }: { card: CardCopy; when: string }) {
           {card.note}
         </p>
       )}
+      {/* D02a's foot: the running total, or when the last lesson was. */}
+      {card.foot && (
+        <p className="m-0 mt-auto border-t border-nevo-near-black/8 pt-2 text-[12.5px] leading-[1.4] text-nevo-near-black/58">
+          {card.foot}
+        </p>
+      )}
     </div>
   );
 }
