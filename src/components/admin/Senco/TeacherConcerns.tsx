@@ -11,9 +11,9 @@ import { withBack } from "../back";
  * escalation carries a human concern".
  *
  * Each card is the child, their class, who raised it and when, and the
- * teacher's own words in quotes. The two actions D8 draws, plus "Mark as seen":
- * acknowledging is what tells the teacher learning support saw it (SCRUM-247),
- * so the loop needs a way to close. Only a Learning Support holder can, and
+ * teacher's own words in quotes, then D8's three actions: "Start a progress
+ * report", "Open profile" and "Mark as seen" (drawn 14 Oct, design fc0b7ae) -
+ * acknowledging is what tells the teacher learning support saw it. Only a Learning Support holder can, and
  * without the role the controls stay, switched off, beside the screen's one
  * line saying why.
  *
@@ -138,8 +138,11 @@ export function TeacherConcerns({
                     onClick={() => onAcknowledge(e.id)}
                     disabled={acking !== null || lacksRole}
                     aria-describedby={lacksRole ? "ack-needs-learning-support" : undefined}
-                    className="cursor-pointer text-sm font-semibold text-nevo-near-black/55 transition-opacity hover:text-nevo-near-black/80 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-nevo-navy transition-opacity hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50"
                   >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
                     {acking === e.id ? "Marking…" : "Mark as seen"}
                   </button>
                 </div>

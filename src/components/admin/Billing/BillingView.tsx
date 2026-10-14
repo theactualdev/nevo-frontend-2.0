@@ -327,8 +327,8 @@ export function BillingView() {
                       formatMoney(amount, subscription.pricing.currency),
                     longDate,
                   )}{" "}
-                  Our bank details are below, and your relationship manager can
-                  help if something needs sorting out.
+                  Our bank details are below, and our billing team can help if
+                  something needs sorting out.
                 </p>
                 {account ? (
                   <dl className="m-0 mt-4 grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 text-[13.5px]">
@@ -351,7 +351,7 @@ export function BillingView() {
                      school would pay against. */
                   <p className="m-0 mt-3 text-[13px] leading-[1.5] text-nevo-near-black/62">
                     We couldn&rsquo;t load our bank details just now &ndash;
-                    your relationship manager has them.
+                    our billing team has them.
                   </p>
                 )}
               </div>

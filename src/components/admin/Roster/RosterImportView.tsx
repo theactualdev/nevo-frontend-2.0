@@ -60,10 +60,11 @@ import {
  * read shows no list - never a remembered one.
  *
  * ============================================================================
- * "TEACHERS FOUND" (D24). Each teacher with their initials and, since 14 Oct
- * (`teacherDetailsFound`), the classes the file gave them - "JSS 2A · JSS 2B".
- * An older answer carries names only (`teachersFound`), and then the names
- * stand alone. D24's edit pencil is not drawn: no route edits a found teacher.
+ * "TEACHERS FOUND" (D24): each teacher's name and initials, and nothing more.
+ * Lydia and design, 14 Oct: "The administrator is confirming that the right
+ * people were found, and names do that." `teacherDetailsFound` carries each
+ * teacher's classes too; they are not drawn. D24's edit pencil is not drawn
+ * either: no route edits a found teacher.
  */
 
 type Phase = "loading" | "ready" | "failed" | "denied";
@@ -752,11 +753,6 @@ function WhatNevoFound({
                   <span className="truncate text-[14.5px] font-semibold text-nevo-near-black">
                     {t.name}
                   </span>
-                  {t.classes.length > 0 ? (
-                    <span className="truncate text-[13px] text-nevo-near-black/60">
-                      {t.classes.join(" · ")}
-                    </span>
-                  ) : null}
                 </span>
               </li>
             ))}
