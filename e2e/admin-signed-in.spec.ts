@@ -228,6 +228,26 @@ test("Billing renders live invoices with VAT as a percentage", async ({
   expect(text).not.toMatch(/undefined|NaN|Invalid Date/);
 });
 
+test("an issued invoice's PDF is a real PDF, not the page again", async ({ request }) => {
+  /*
+   * QA, 10 Oct (item 5): "pdf" reloaded the billing page, because an empty
+   * `pdfUrl` fell through to a plain link. The seeded invoices have real PDFs
+   * since 12 Oct (backend 974a4f3), and the link only draws when there is one.
+   */
+  const auth = { Authorization: `Bearer ${adminToken}` };
+  const list = await request.get(`${API}/api/billing/invoices`, { headers: auth });
+  expect(list.ok(), `GET /api/billing/invoices answered ${list.status()}`).toBeTruthy();
+  const invoices = (await list.json()) as { id: string; pdfUrl: string | null }[];
+  const withPdf = invoices.find((i) => i.pdfUrl && i.pdfUrl.trim());
+  test.skip(!withPdf, "No invoice in the E2E school carries a PDF yet.");
+  const href = withPdf!.pdfUrl!.startsWith("/") ? `${API}${withPdf!.pdfUrl}` : withPdf!.pdfUrl!;
+  const pdf = await request.get(href, { headers: auth });
+  expect(pdf.status(), `${href} answered ${pdf.status()}`).toBe(200);
+  expect(pdf.headers()["content-type"] ?? "").toMatch(/pdf/i);
+  const head = (await pdf.body()).subarray(0, 5).toString("latin1");
+  expect(head).toBe("%PDF-");
+});
+
 test("no signed-in admin surface renders an invented figure", async ({
   page,
 }) => {
