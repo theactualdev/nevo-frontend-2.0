@@ -201,6 +201,33 @@ describe("a teacher's own lesson reaches the review", () => {
     );
   });
 
+  /*
+   * The header's "We've broken this lesson into sections that flow well" is
+   * only true when Nevo grouped them. Upload test, 15 Oct: a 45-section lesson
+   * with no grouping showed it right above "Nevo didn't propose any sections".
+   */
+  it("says the lesson was broken into sections only when Nevo grouped them", () => {
+    ready();
+
+    uploadOneLesson();
+
+    expect(screen.getByText(/broken this lesson into sections that flow well/)).toBeInTheDocument();
+  });
+
+  it("does not say so above \"Nevo didn't propose any sections\"", () => {
+    ready({
+      structure: {
+        ...STRUCTURE,
+        lessons: [{ ...STRUCTURE.lessons[0], modules: [] }],
+      },
+    });
+
+    uploadOneLesson();
+
+    expect(screen.getByText(/didn.t propose any sections/)).toBeInTheDocument();
+    expect(screen.queryByText(/broken this lesson into sections that flow well/)).not.toBeInTheDocument();
+  });
+
   it("asks the question the frame asks", () => {
     ready();
 

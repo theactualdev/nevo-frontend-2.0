@@ -15,6 +15,7 @@ import {
   type FallbackKind,
 } from "./ParseFallback";
 import { LiveModuleReview } from "./LiveModuleReview";
+import { lessonsOf } from "@/lib/api/uploads";
 import { PARSE_STAGES, ParseProgress, rungFor } from "./ParseProgress";
 import { LONGEST_STAGE, ProcessingStages, stageOf } from "./ProcessingStages";
 import { SectionReview } from "./SectionReview";
@@ -84,9 +85,26 @@ import { MaybeSample, SampleRegion } from "@/components/shared/SampleRegion";
  */
 export function faintPagesLine(pages: number[]): string {
   const many = pages.length > 1;
-  const list = many
-    ? `${pages.slice(0, -1).join(", ")} and ${pages[pages.length - 1]}`
-    : String(pages[0] ?? "");
+  /*
+   * A run of three or more pages in a row is said as a range: "Pages 1 to
+   * 27", not twenty-seven numbers (upload test, 15 Oct). Only runs the server
+   * sent in order are joined - these are its page numbers, not ours to sort.
+   */
+  const items: string[] = [];
+  for (let i = 0; i < pages.length; ) {
+    let j = i;
+    while (j + 1 < pages.length && pages[j + 1] === pages[j] + 1) j += 1;
+    if (j - i >= 2) {
+      items.push(`${pages[i]} to ${pages[j]}`);
+    } else {
+      for (let k = i; k <= j; k += 1) items.push(String(pages[k]));
+    }
+    i = j + 1;
+  }
+  const list =
+    items.length > 1
+      ? `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`
+      : (items[0] ?? "");
   return (
     `${many ? "Pages" : "Page"} ${list} didn\u2019t come through clearly, ` +
     `so nothing from ${many ? "them" : "it"} is in what you see below.`
@@ -274,6 +292,17 @@ export function UploadWizard() {
     staged.uploadId !== null &&
     staged.structure !== null &&
     (staged.status === "ready" || staged.status === "confirmed");
+
+  /*
+   * Did Nevo group the sections into parts? The header's "We've broken this
+   * lesson into sections that flow well" is only true when it did. A 45-section
+   * lesson with no grouping showed that line directly above the review's own
+   * "Nevo didn't propose any sections for this lesson" (upload test, 15 Oct).
+   * Design's module step swaps its intro in that state too.
+   */
+  const proposedParts =
+    staged.structure !== null &&
+    (lessonsOf(staged.structure)[0]?.modules ?? []).length > 0;
 
   /**
    * The unit's tree is ready - the block path's twin of `singleReview`.
@@ -513,7 +542,7 @@ export function UploadWizard() {
             it later.
           </p>
         )}
-        {(singleReview || (phase === "review" && sample)) && (
+        {((singleReview && proposedParts) || (phase === "review" && sample)) && (
           <p className="mt-1.5 max-w-[560px] text-sm leading-[1.55] text-nevo-near-black/62">
             We&rsquo;ve broken this lesson into sections that flow well. Adjust
             anything, rename a section, or keep it as one continuous flow.
