@@ -53,6 +53,7 @@ export function LessonRoute({
   assignmentId,
   review = false,
   reviewConceptId,
+  reviewBack,
 }: {
   lessonId: string;
   /** The assignment this open came from, when it came from one. */
@@ -61,6 +62,12 @@ export function LessonRoute({
   review?: boolean;
   /** Which concept this review is for, from the due-review chip. */
   reviewConceptId?: string;
+  /**
+   * The Subject Detail page this review was opened from, already checked by
+   * `readReviewBack` - see the player. This screen's own states keep their
+   * way back to the lessons.
+   */
+  reviewBack?: string;
 }) {
   // Leaving goes wherever this lesson was opened from - see `useLessonExit`.
   const exitTo = useLessonExit();
@@ -185,6 +192,7 @@ export function LessonRoute({
         partial={partial}
         review={review}
         reviewConceptId={reviewConceptId}
+        reviewBack={reviewBack}
         startAt={rerun ? rerun.at : (resumeAt ?? 0)}
         placeUnknown={rerun ? false : placeUnknown}
         progressRow={rerun ? null : progressRow}
