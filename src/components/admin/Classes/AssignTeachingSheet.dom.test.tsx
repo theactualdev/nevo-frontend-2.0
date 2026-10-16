@@ -26,6 +26,7 @@ const reassign = vi.fn();
 const update = vi.fn();
 const listTeachers = vi.fn();
 const listSubjects = vi.fn();
+const addTeacherSubject = vi.fn();
 
 vi.mock("@/lib/api/classes", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/classes")>();
@@ -50,6 +51,7 @@ vi.mock("@/lib/api/teachers", async (importOriginal) => {
       ...actual.teachersApi,
       list: () => listTeachers(),
       get: (id: string) => getTeacher(id),
+      addSubject: (id: string, name: string) => addTeacherSubject(id, name),
     },
   };
 });
@@ -108,6 +110,7 @@ beforeEach(() => {
   getTeacher.mockRejectedValue(new Error("unread"));
   reassign.mockResolvedValue({});
   update.mockResolvedValue({ id: "c-2c", name: "JSS 2C" });
+  addTeacherSubject.mockResolvedValue([MATHS]);
 });
 
 // A fresh callback can be passed: a successful assign schedules onAssigned a
@@ -367,5 +370,74 @@ describe("D05's Teaches, from the teacher's record (8 Oct)", () => {
     await pickTeacher();
     await waitFor(() => expect(screen.getByRole("option", { name: "Biology" })).toBeInTheDocument());
     expect(screen.queryByRole("radiogroup")).toBeNull();
+  });
+
+  /*
+   * 16 Oct: "assign a teacher doesn't work sometimes". A teacher with no
+   * subjects on record was offered the whole list, and the server refused
+   * every pick (`subject_not_on_teacher`) with nothing to do about it.
+   */
+  it("says a subject the teacher doesn't teach can't be assigned yet, and adds it to them when asked - then it assigns", async () => {
+    getTeacher.mockResolvedValue({ id: "t-bello", name: "Bisi Bello", subjects: [] });
+    const { container } = fromClass(undefined, vi.fn());
+    await pickTeacher();
+    await waitFor(() => expect(screen.getByRole("option", { name: "Mathematics" })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("2 · Subject"), { target: { value: "sub-maths" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Co-teacher/ }));
+
+    expect(said(container)).toMatch(
+      /Bisi Bello doesn't teach Mathematics yet, so it can't be assigned\. Add Mathematics to Bisi Bello's subjects and it's ready\./,
+    );
+    expect(screen.getByRole("button", { name: "Assign Mathematics to 1 class" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Mathematics to Bisi Bello’s subjects" }));
+    expect(said(container)).toMatch(/It joins the subjects they teach\. Nothing else about them changes\./);
+    fireEvent.click(screen.getByRole("button", { name: "Add Mathematics" }));
+
+    await waitFor(() => expect(addTeacherSubject).toHaveBeenCalledWith("t-bello", "Mathematics"));
+    await waitFor(() =>
+      expect(said(container)).toMatch(/Mathematics added to Bisi Bello's subjects\. Your other choices are as you left them\./),
+    );
+    // Their one subject now: D05's "Teaches Mathematics", already the pick.
+    expect(said(container)).toMatch(/Teaches Mathematics/);
+    fireEvent.click(screen.getByRole("button", { name: "Assign Mathematics to 1 class" }));
+    await waitFor(() =>
+      expect(createAssignment).toHaveBeenCalledWith(
+        expect.objectContaining({ teacherId: "t-bello", schoolSubjectId: "sub-maths" }),
+      ),
+    );
+  });
+
+  it("says so in the server's words when the subject can't be added to the teacher", async () => {
+    getTeacher.mockResolvedValue({ id: "t-bello", name: "Bisi Bello", subjects: [] });
+    addTeacherSubject.mockRejectedValue(
+      new ApiError(422, "x", { detail: { code: "bad", message: "A teacher can hold at most 12 subjects." } }),
+    );
+    const { container } = fromClass(undefined, vi.fn());
+    await pickTeacher();
+    await waitFor(() => expect(screen.getByRole("option", { name: "Biology" })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("2 · Subject"), { target: { value: "sub-bio" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add Biology to Bisi Bello’s subjects" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Biology" }));
+    await waitFor(() => expect(said(container)).toMatch(/A teacher can hold at most 12 subjects\./));
+    expect(createAssignment).not.toHaveBeenCalled();
+  });
+});
+
+describe("a teacher who hasn't joined yet (16 Oct)", () => {
+  it("is listed greyed with the reason, and a removed teacher isn't listed at all", async () => {
+    // The server assigns an active teacher only; an invited one was refused
+    // as "The requested teacher was not found."
+    listTeachers.mockResolvedValue([
+      { id: "t-bello", name: "Bisi Bello", email: "b@school.edu.ng", status: "active" },
+      { id: "t-new", name: "Invited Teacher", email: "n@school.edu.ng", status: "invited" },
+      { id: "t-gone", name: "Gone Teacher", email: "g@school.edu.ng", status: "deactivated" },
+    ]);
+    const { container } = fromClass(undefined, vi.fn());
+    const invited = await screen.findByRole("option", { name: "Invited Teacher (invited, not yet joined)" });
+    expect(invited).toBeDisabled();
+    expect(screen.getByRole("option", { name: "Bisi Bello" })).toBeEnabled();
+    expect(screen.queryByRole("option", { name: /Gone Teacher/ })).toBeNull();
+    expect(said(container)).toMatch(/A teacher you've invited can be assigned once they've joined\./);
   });
 });
