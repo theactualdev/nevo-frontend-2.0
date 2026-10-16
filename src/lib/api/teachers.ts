@@ -84,4 +84,12 @@ export const teachersApi = {
    */
   setSubjects: (teacherId: string, names: string[]) =>
     api.put<SchoolSubject[]>(`/api/v1/teachers/${teacherId}/subjects`, names),
+
+  /**
+   * POST /api/v1/teachers/{id}/subjects - add ONE subject to a teacher's list
+   * without replacing it. Answers with their whole list as it now stands.
+   * The assign sheet's "Add Physics to Mr. Obi's subjects".
+   */
+  addSubject: (teacherId: string, name: string) =>
+    api.post<SchoolSubject[]>(`/api/v1/teachers/${teacherId}/subjects`, { name }),
 };

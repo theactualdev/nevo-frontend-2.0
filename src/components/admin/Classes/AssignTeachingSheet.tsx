@@ -52,6 +52,19 @@ import {
  * class right here, confirmed first: "It joins the class's 9 subjects.
  * Nothing else about the class changes."
  *
+ * A TEACHER WHO DOES NOT TEACH IT, the same way (16 Oct). The server refuses
+ * that too (`subject_not_on_teacher`), and a teacher with no subjects on
+ * record - a new one, usually - was offered the school's whole list, so
+ * every pick was refused: the assign "didn't work" with nothing to do about
+ * it. Now a subject they don't hold says so in step 2 and offers to add it
+ * to their subjects in place, confirmed first, as 7c does for a class. D05
+ * draws no zero-subject teacher; this mirrors 7c and is with design.
+ *
+ * ONLY A TEACHER WHO HAS JOINED CAN BE ASSIGNED. The server takes an active
+ * teacher only, and answered an invited one with "The requested teacher was
+ * not found." Invited teachers stay in the list, greyed, so the admin
+ * looking for one finds them and the reason.
+ *
  * MAKING SOMEBODY PRIMARY WHERE A CLASS HAS ONE. The server enforces one
  * primary per class now (409 `primary_teacher_exists`). The old primary is
  * moved to co-teacher IN PLACE - their own assignment reassigned to them with
@@ -128,6 +141,8 @@ export function AssignTeachingSheet({
   /** "Add Biology to JSS 2A?" - which class is asking, and its write. */
   const [adding, setAdding] = useState<{ classId: string; phase: "ask" | "saving" | "failed"; note: string | null } | null>(null);
   const [added, setAdded] = useState<{ subject: string; className: string } | null>(null);
+  /** "Add Physics to Mr. Obi's subjects?" - the teacher's own write. */
+  const [teacherAdd, setTeacherAdd] = useState<{ phase: "ask" | "saving" | "failed"; note: string | null } | null>(null);
   const [phase, setPhase] = useState<"idle" | "assigning" | "settled">("idle");
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
   const latestTeacher = useRef(teacherId);
@@ -192,6 +207,7 @@ export function AssignTeachingSheet({
     setHeld(null);
     setTaught(null);
     setSubjectId("");
+    setTeacherAdd(null);
     if (!id) return;
     readTaught(id);
     classesApi
@@ -219,6 +235,12 @@ export function AssignTeachingSheet({
       : teachers.state === "ready"
         ? teachers.value.find((t) => t.id === teacherId)?.name
         : undefined;
+  /**
+   * Whether the chosen teacher teaches the chosen subject. Null when their
+   * list is unknown - unread, or the read failed - and then the server says.
+   */
+  const holds = subject && taught ? taught.some((name) => subjectNamed([subject], name)) : null;
+  const who = teacherName ?? "this teacher";
 
   /*
    * The classes this write can reach: not archived, not synced from a
@@ -246,6 +268,7 @@ export function AssignTeachingSheet({
   const readsDone = tickedClasses.every((c) => classTeachers[c.id]?.state === "ready");
   const ready =
     Boolean(teacherId && subject && role) &&
+    holds !== false &&
     tickedClasses.length > 0 &&
     // A primary write needs to know who leads each class now.
     (role !== "primary" || readsDone);
@@ -278,6 +301,21 @@ export function AssignTeachingSheet({
         if (!ticked.includes(c.id)) toggle({ ...c, subjects: next });
       })
       .catch((err: unknown) => setAdding({ classId: c.id, phase: "failed", note: reason(err) }));
+  };
+
+  const addSubjectToTeacher = () => {
+    if (!subject || !teacherId) return;
+    const id = teacherId;
+    setTeacherAdd({ phase: "saving", note: null });
+    teachersApi
+      .addSubject(id, subject.name)
+      .then((rows) => {
+        if (latestTeacher.current !== id) return;
+        setTaught(Array.isArray(rows) ? rows.map((r) => r.name) : [...(taught ?? []), subject.name]);
+        setAdded({ subject: subject.displayName, className: `${who}\u2019s subjects` });
+        setTeacherAdd(null);
+      })
+      .catch((err: unknown) => setTeacherAdd({ phase: "failed", note: reason(err) }));
   };
 
   /** One class's write: demote the old primary in place first, if there is one. */
@@ -418,11 +456,14 @@ export function AssignTeachingSheet({
             >
               <option value="">Choose a teacher</option>
               {teachers.state === "ready"
-                ? teachers.value.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))
+                ? teachers.value
+                    // A removed teacher has no console to teach in.
+                    .filter((t) => t.status !== "deactivated")
+                    .map((t) => (
+                      <option key={t.id} value={t.id} disabled={t.status === "invited"}>
+                        {t.status === "invited" ? `${t.name} (invited, not yet joined)` : t.name}
+                      </option>
+                    ))
                 : null}
             </select>
             {teachers.state === "loading" ? (
@@ -434,6 +475,10 @@ export function AssignTeachingSheet({
             ) : teachers.value.length === 0 ? (
               <p className={ASSIGN_HINT}>
                 No staff to assign yet. Invite a teacher first, and they&rsquo;ll appear here.
+              </p>
+            ) : teachers.value.some((t) => t.status === "invited") ? (
+              <p className={ASSIGN_HINT}>
+                A teacher you&rsquo;ve invited can be assigned once they&rsquo;ve joined.
               </p>
             ) : null}
           </>
@@ -477,7 +522,10 @@ export function AssignTeachingSheet({
           <select
             id="assign-subject"
             value={subjectId}
-            onChange={(e) => setSubjectId(e.target.value)}
+            onChange={(e) => {
+              setSubjectId(e.target.value);
+              setTeacherAdd(null);
+            }}
             disabled={phase !== "idle" || subjects.state !== "ready"}
             className={ASSIGN_SELECT}
           >
@@ -493,6 +541,56 @@ export function AssignTeachingSheet({
         )}
         {subjects.state === "failed" ? (
           <ReadFailed className="mt-2" what="your school's subject list" onRetry={loadSubjects} />
+        ) : null}
+        {subject && holds === false ? (
+          teacherAdd && teacherAdd.phase !== "failed" ? (
+            <div className="mt-2.5 rounded-[10px] bg-nevo-cream px-3.5 py-3">
+              <p className="m-0 text-[13.5px] font-semibold text-nevo-near-black">
+                Add {subject.displayName} to {who}&rsquo;s subjects?
+              </p>
+              <p className="m-0 mt-1 text-[13px] leading-[1.5] text-nevo-near-black/62">
+                It joins the subjects they teach. Nothing else about them changes.
+              </p>
+              <div className="mt-2.5 flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={addSubjectToTeacher}
+                  disabled={teacherAdd.phase === "saving"}
+                  className={PRIMARY_BTN}
+                >
+                  {teacherAdd.phase === "saving" ? "Adding…" : `Add ${subject.displayName}`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTeacherAdd(null)}
+                  disabled={teacherAdd.phase === "saving"}
+                  className={GHOST_BTN}
+                >
+                  Not now
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-2">
+              <p className="m-0 text-[13px] leading-[1.5] text-nevo-near-black/62">
+                {who} doesn&rsquo;t teach {subject.displayName} yet, so it can&rsquo;t be
+                assigned. Add {subject.displayName} to {who}&rsquo;s subjects and it&rsquo;s ready.
+              </p>
+              {teacherAdd?.phase === "failed" ? (
+                <p className="m-0 mt-1.5 text-[13px] leading-[1.5] text-nevo-navy">
+                  {teacherAdd.note ?? `${subject.displayName} wasn’t added to ${who}’s subjects. Nothing changed.`}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setTeacherAdd({ phase: "ask", note: null })}
+                disabled={phase !== "idle"}
+                className="mt-1.5 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
+              >
+                Add {subject.displayName} to {who}&rsquo;s subjects
+              </button>
+            </div>
+          )
         ) : null}
       </div>
 
