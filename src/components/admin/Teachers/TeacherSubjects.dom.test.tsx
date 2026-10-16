@@ -44,6 +44,11 @@ const TEACHER: TeacherDetail = {
   subjects: ["Mathematics"],
 };
 
+const pick = async (name: string) => {
+  fireEvent.focus(await screen.findByRole("combobox", { name: "Add a subject" }));
+  fireEvent.click(await screen.findByRole("checkbox", { name }));
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   listSubjects.mockResolvedValue(SUBJECTS);
@@ -59,9 +64,7 @@ describe("Subjects they teach", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save subjects" })).toBeNull();
 
-    fireEvent.change(await screen.findByRole("combobox", { name: "Add a subject" }), {
-      target: { value: "s-fm" },
-    });
+    await pick("Further Mathematics");
     fireEvent.click(screen.getByRole("button", { name: "Save subjects" }));
 
     await waitFor(() =>
@@ -70,15 +73,12 @@ describe("Subjects they teach", () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
   });
 
-  it("only offers subjects they don't already teach", async () => {
+  it("ticks the subjects they already teach", async () => {
     render(<TeacherSubjects teacher={TEACHER} editable onSaved={vi.fn()} />);
-    const add = await screen.findByRole("combobox", { name: "Add a subject" });
-    await waitFor(() => expect(add.querySelectorAll("option").length).toBe(3));
-    expect(Array.from(add.querySelectorAll("option")).map((o) => o.textContent)).toEqual([
-      "Add a subject",
-      "Further Mathematics",
-      "Biology",
-    ]);
+    fireEvent.focus(await screen.findByRole("combobox", { name: "Add a subject" }));
+    expect(await screen.findByRole("checkbox", { name: "Further Mathematics" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Biology" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Mathematics" })).toBeChecked();
   });
 
   it("shows the server's refusal to drop a subject still assigned, and keeps the draft", async () => {
@@ -122,9 +122,7 @@ describe("Subjects they teach", () => {
   it("falls back to its own line when the server gives no reason", async () => {
     setSubjects.mockRejectedValue(new TypeError("Failed to fetch"));
     const { container } = render(<TeacherSubjects teacher={TEACHER} editable onSaved={vi.fn()} />);
-    fireEvent.change(await screen.findByRole("combobox", { name: "Add a subject" }), {
-      target: { value: "s-bio" },
-    });
+    await pick("Biology");
     fireEvent.click(screen.getByRole("button", { name: "Save subjects" }));
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/That didn.t save\. Funmi Adeyemi.s subjects are as they were\./),
