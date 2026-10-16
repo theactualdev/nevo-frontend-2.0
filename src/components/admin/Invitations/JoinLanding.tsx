@@ -41,12 +41,13 @@ import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
  * NO CHILD BRANCH (design, 1 Oct, D5). A child is never sent a link - a child
  * has no email - so no child reaches this page, and it serves teacher
  * invitations only. Children come in through the school code and their
- * Student ID on 05 Entry (SCRUM-208). SCRUM-215 takes the student role out of
- * the invitation machinery on the backend; until it lands
- * `InvitableRole` still carries `student`, so a student link that resolves
- * meets the dead-link panel rather than a door into onboarding that no longer
- * exists. Its words fit: the link is no longer a way in, and the school
- * administrator is who can say what is.
+ * Student ID on 05 Entry (SCRUM-208). SCRUM-215 has taken the student role out
+ * of the invitation machinery on the backend (`InvitableRole` is `teacher`
+ * only), and the console no longer sends or lists student invitations (L2,
+ * 14 Oct). An older student link that still resolves meets the dead-link panel
+ * rather than a door into onboarding that no longer exists. Its words fit: the
+ * link is no longer a way in, and the school administrator is who can say what
+ * is.
  */
 
 /**

@@ -6,7 +6,8 @@ import { InvitationsView } from "./InvitationsView";
 
 /**
  * D19's Class and Invited columns, from `classId` and `createdAt` (9 Oct), and
- * the Students tab now that a child is never sent an invitation.
+ * inviting teachers from the header. There is no Students tab now (L2,
+ * 14 Oct) - see `NoStudentInvites.dom.test.tsx`.
  */
 
 const list = vi.fn<() => Promise<Invitation[]>>();
@@ -75,32 +76,8 @@ describe("D19's Class and Invited columns", () => {
   });
 });
 
-describe("the Students tab, now that children are not invited", () => {
-  async function openStudents() {
-    const tab = await screen.findByRole("tab", { name: "Students" });
-    fireEvent.click(tab);
-  }
-
-  it("sends the admin to Students instead of offering an invite that would be refused", async () => {
-    list.mockResolvedValue([]);
-    const { container } = render(<InvitationsView />);
-    await openStudents();
-    await waitFor(() => expect(visibleText(container)).toMatch(/Children aren.t sent invitations/));
-    expect(screen.getByRole("link", { name: "Go to Students" })).toHaveAttribute("href", "/admin/students");
-    expect(screen.queryByRole("button", { name: /New invite/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Bulk import/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Send first invite" })).toBeNull();
-  });
-
-  it("still lists invitations sent to students earlier", async () => {
-    list.mockResolvedValue([invite({ role: "student", name: "Amara Okafor" })]);
-    const { container } = render(<InvitationsView />);
-    await openStudents();
-    await waitFor(() => expect(visibleText(container)).toMatch(/Amara Okafor/));
-    expect(visibleText(container)).toMatch(/Invitations sent to students earlier are listed below/);
-  });
-
-  it("keeps inviting teachers on the Teachers tab", async () => {
+describe("inviting teachers", () => {
+  it("offers a new invite and a bulk import in the header", async () => {
     list.mockResolvedValue([]);
     render(<InvitationsView />);
     expect(await screen.findByRole("button", { name: /New invite/ })).toBeInTheDocument();

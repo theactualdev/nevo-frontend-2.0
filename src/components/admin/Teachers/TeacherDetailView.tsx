@@ -79,8 +79,9 @@ import {
  * 9d0ff6b). A school's learning support staff are usually teachers, so it is
  * the same permission line as on an administrator's record, under
  * "Permissions". The grant takes a user id, and a teacher's `id` is theirs.
- * D03b also draws "Upload to the shared library" and "Listed in the parent
- * directory" there; nothing stores either yet, so they are with design.
+ * D03b also drew "Upload to the shared library" and "Listed in the parent
+ * directory" there. Lydia dropped both (D1, 14 Oct): nothing stores either,
+ * and "a control that stores nothing is a promise the product does not keep".
  *
  * The Students headcount is summed client-side from each class's
  * `studentCount`, because no teacher-level aggregate exists. (This said

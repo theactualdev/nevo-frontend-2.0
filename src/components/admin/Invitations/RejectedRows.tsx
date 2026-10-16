@@ -51,7 +51,6 @@ export function RejectedRows({
   rejected,
   submitted,
   rowNumberBase,
-  isStudent,
   filename,
 }: {
   /** Rows our own parser refused. Full data, so re-uploadable after a fix. */
@@ -62,7 +61,6 @@ export function RejectedRows({
   submitted: ParsedRow[];
   /** Where the server's `row` counts from. Undefined: it cannot be mapped. */
   rowNumberBase?: number;
-  isStudent: boolean;
   filename: string;
 }) {
   const total = broken.length + rejected.length;
@@ -75,18 +73,14 @@ export function RejectedRows({
    * of rows with no reason is the same dead end as a count.
    */
   const download = () => {
-    const header = isStudent
-      ? "row,reason,name,class,student_email,parentContact"
-      : "row,reason,name,email,class";
+    const header = "row,reason,name,email,class";
+    /*
+     * The same columns, in the same order, as the header. This row used to
+     * put class before email under a header that says the opposite - a
+     * leftover of the student variant, whose template ran name, class, email.
+     */
     const ours = broken.map((r) =>
-      [
-        r.line,
-        r.error ?? "",
-        r.name,
-        r.className,
-        isStudent ? r.email : r.email,
-        ...(isStudent ? [r.parentContact] : []),
-      ]
+      [r.line, r.error ?? "", r.name, r.email, r.className]
         .map((v) => csvEscape(String(v ?? "")))
         .join(","),
     );
@@ -94,14 +88,7 @@ export function RejectedRows({
       const src = sentLine(r, submitted, rowNumberBase);
       // The same columns, in the same order, as the header and our own rows.
       const name = src?.name ?? r.value ?? "";
-      return [
-        src?.line ?? "",
-        r.reason,
-        name,
-        ...(isStudent
-          ? [src?.className ?? "", src?.email ?? "", src?.parentContact ?? ""]
-          : [src?.email ?? "", src?.className ?? ""]),
-      ]
+      return [src?.line ?? "", r.reason, name, src?.email ?? "", src?.className ?? ""]
         .map((v) => csvEscape(String(v)))
         .join(",");
     });

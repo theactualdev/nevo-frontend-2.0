@@ -25,9 +25,9 @@ vi.mock("@/lib/api/classes", () => ({ classesApi: { list: async () => [] } }));
 const invite = (over: Partial<Invitation> = {}): Invitation => ({
   id: Math.random().toString(36).slice(2),
   token: null,
-  role: "student",
-  email: "amara@school.edu.ng",
-  name: "Amara Okafor",
+  role: "teacher",
+  email: "adeyemi.f@school.edu.ng",
+  name: "Folake Adeyemi",
   status: "pending",
   expiresAt: "2099-01-01T00:00:00Z", // far off: InvitationsView judges expiry against today
   consentStatus: null,
@@ -37,7 +37,7 @@ const invite = (over: Partial<Invitation> = {}): Invitation => ({
 
 const many = (n: number, over: Partial<Invitation> = {}) =>
   Array.from({ length: n }, (_, i) =>
-    invite({ name: `Student ${i + 1}`, ...over }),
+    invite({ name: `Teacher ${i + 1}`, ...over }),
   );
 
 function tile(container: HTMLElement, label: string): HTMLElement {
@@ -46,13 +46,6 @@ function tile(container: HTMLElement, label: string): HTMLElement {
   );
   if (!hit) throw new Error(`no ${label} tile`);
   return hit;
-}
-
-function studentTab(container: HTMLElement) {
-  const tab = Array.from(container.querySelectorAll('[role="tab"]')).find(
-    (t) => t.textContent === "Students",
-  )!;
-  fireEvent.click(tab);
 }
 
 describe("the status counters", () => {
@@ -92,39 +85,6 @@ describe("the status counters", () => {
   });
 });
 
-describe("the consent filter", () => {
-  it("finds a withdrawn family whose invitation already joined", async () => {
-    // A status-only filter can never surface these: the invitation is joined,
-    // and it is the PARENT's decision the admin is looking for.
-    list.mockResolvedValue([
-      invite({ name: "Amara Okafor", status: "joined", consentStatus: "withdrawn" }),
-      invite({ name: "Chidi Eze", status: "joined", consentStatus: "confirmed" }),
-    ]);
-    const { container } = render(<InvitationsView />);
-    // Teachers is the landing tab and every row here is a student, so the
-    // first thing to settle is that tab's empty state.
-    await waitFor(() => expect(visibleText(container)).toMatch(/No invites yet/));
-    studentTab(container);
-    await waitFor(() => expect(visibleText(container)).toMatch(/Amara Okafor/));
-
-    const select = container.querySelector("select")!;
-    fireEvent.change(select, { target: { value: "consent_withdrawn" } });
-
-    await waitFor(() => expect(visibleText(container)).not.toMatch(/Chidi Eze/));
-    expect(visibleText(container)).toMatch(/Amara Okafor/);
-  });
-
-  it("is not offered on the teacher tab, which has no parent behind it", async () => {
-    list.mockResolvedValue([invite({ role: "teacher" })]);
-    const { container } = render(<InvitationsView />);
-    await waitFor(() => expect(visibleText(container)).toMatch(/Pending/));
-    const options = Array.from(container.querySelectorAll("option")).map(
-      (o) => o.value,
-    );
-    expect(options).not.toContain("consent_withdrawn");
-  });
-});
-
 describe("pagination", () => {
   it("shows one page of twenty, and says how many there are", async () => {
     list.mockResolvedValue(many(47, { role: "teacher" }));
@@ -133,8 +93,8 @@ describe("pagination", () => {
       expect(visibleText(container)).toMatch(/Showing 1-20 of 47/),
     );
     const text = visibleText(container);
-    expect(text).toMatch(/Student 20/);
-    expect(text).not.toMatch(/Student 21\b/);
+    expect(text).toMatch(/Teacher 20/);
+    expect(text).not.toMatch(/Teacher 21\b/);
     expect(text).toMatch(/Page 1 of 3/);
   });
 
@@ -148,7 +108,7 @@ describe("pagination", () => {
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/Showing 21-40 of 47/),
     );
-    expect(visibleText(container)).toMatch(/Student 21\b/);
+    expect(visibleText(container)).toMatch(/Teacher 21\b/);
   });
 
   it("does not strand a reader on a page a filter has removed", async () => {
