@@ -2,13 +2,9 @@
 
 import { useState } from "react";
 import type { AdminClass } from "@/lib/api/classes";
-import {
-  invitesApi,
-  type Invitation,
-  type InviteRole,
-} from "@/lib/api/invites";
+import { invitesApi, type Invitation } from "@/lib/api/invites";
 import { cn } from "@/lib/utils";
-import { deliveryLine, parentConsentLine } from "./deliveryCopy";
+import { deliveryLine } from "./deliveryCopy";
 import {
   CheckIcon,
   GHOST_BTN,
@@ -19,27 +15,20 @@ import {
 import { splitName } from "./csv";
 
 /**
- * D19's New Invite modal, in its teacher and student variants.
+ * D19's New Invite modal, for a teacher - the only person a school invites.
  *
- * WHAT THE FRAME DRAWS THAT THE API CANNOT CARRY. Three controls are absent
- * rather than decorative, each for the same reason - a field that collects
- * something we then throw away is worse than no field:
+ * THERE IS NO STUDENT VARIANT (Lydia's L2, 14 Oct; SCRUM-215 on the backend).
+ * A child gets no invitation, link or email: they sign in with the school code
+ * and their Student ID, and are added on Students. The student form - its
+ * student email, parent contact and date-of-birth question - went with it,
+ * rather than staying behind as a form nothing opens.
  *
- * 1. DATE OF BIRTH, with its "Students must be under 18" check. `POST
- *    /api/v1/invites` has no DOB field of any kind. Collecting a child's
- *    birth date and discarding it would be the worst version of this: it is
- *    exactly the sort of data a school is entitled to assume we kept for a
- *    reason.
- * 2. PARENT / GUARDIAN NAME as its own input. The body carries a single
- *    `parentContact` string, so the two fields the frame draws collapse into
- *    one, and it is the contact that survives - a name with no way to reach
- *    them sends nothing.
- * 3. THE DELIVERY CHOICE, "Copy link to share manually" vs "Send via email
- *    from Nevo". Nothing on the request expresses it. Rather than show a radio
- *    that changes nothing, the sent state always offers the link and reports
- *    what the backend actually did through `deliveryStatus`.
- *
- * All three are raised with backend.
+ * WHAT THE FRAME DRAWS THAT THE API CANNOT CARRY: THE DELIVERY CHOICE, "Copy
+ * link to share manually" vs "Send via email from Nevo". Nothing on the
+ * request expresses it, and a field that collects something we then throw
+ * away is worse than no field. Rather than show a radio that changes nothing,
+ * the sent state always offers the link and reports what the backend actually
+ * did through `deliveryStatus`. Raised with backend.
  */
 
 const LABEL =
@@ -53,12 +42,10 @@ const HINT = "mt-2 text-[12.5px] leading-[1.5] text-nevo-near-black/55";
 type Phase = "idle" | "sending" | "sent" | "failed";
 
 export function NewInviteModal({
-  role,
   classes,
   onClose,
   onSent,
 }: {
-  role: InviteRole;
   classes: AdminClass[];
   onClose: () => void;
   onSent: () => void;
@@ -66,24 +53,17 @@ export function NewInviteModal({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [classId, setClassId] = useState("");
-  const [parentContact, setParentContact] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [sent, setSent] = useState<Invitation | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const isStudent = role === "student";
-
-  // A teacher needs a way to be reached or a link to be handed; a student's
-  // guardian must be reachable, because the consent request goes to them.
-  const ready = isStudent
-    ? name.trim().length > 0 && parentContact.trim().length > 0
-    : name.trim().length > 0 || email.trim().length > 0;
+  // A teacher needs a way to be reached or a link to be handed.
+  const ready = name.trim().length > 0 || email.trim().length > 0;
 
   const reset = () => {
     setName("");
     setEmail("");
     setClassId("");
-    setParentContact("");
     setSent(null);
     setCopied(false);
     setPhase("idle");
@@ -94,11 +74,10 @@ export function NewInviteModal({
     const { firstName, lastName } = splitName(name);
     invitesApi
       .create({
-        role,
+        role: "teacher",
         firstName: firstName || null,
         lastName,
         email: email.trim() || null,
-        parentContact: isStudent ? parentContact.trim() || null : null,
         classId: classId || null,
       })
       .then((invite) => {
@@ -150,21 +129,6 @@ export function NewInviteModal({
             <CheckIcon size={22} />
           </span>
         </div>
-
-        {isStudent ? (
-          <p className="mt-4 text-center text-[14.5px] leading-[1.6] text-nevo-near-black/72">
-            {parentContact ? (
-              /* Was: "A consent request is on its way to {parentContact}."
-                 Nothing sends one, and the claim came from the contact the
-                 admin had just typed. It reports `consentStatus` off the
-                 create response now - which on a fresh invite is usually
-                 "not sent", said plainly, with no offer to send one. */
-              <>{parentConsentLine(parentContact, sent.name, sent.consentStatus)}</>
-            ) : (
-              "The invitation has been created."
-            )}
-          </p>
-        ) : null}
 
         {joinLink ? (
           <div className="mt-5">
@@ -236,7 +200,7 @@ export function NewInviteModal({
   return (
     <Modal
       busy={phase === "sending"}
-      title={isStudent ? "Invite a student" : "Invite a teacher"}
+      title="Invite a teacher"
       subtitle="You'll get a link to join your school on Nevo, to send on or share"
       onClose={onClose}
       footer={
@@ -275,7 +239,7 @@ export function NewInviteModal({
             id="invite-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={isStudent ? "Chisom Eze" : "Folake Adeyemi"}
+            placeholder="Folake Adeyemi"
             autoComplete="off"
             className={FIELD}
           />
@@ -283,7 +247,7 @@ export function NewInviteModal({
 
         <div>
           <label htmlFor="invite-class" className={LABEL}>
-            {isStudent ? "Class" : "Class assignment"}{" "}
+            Class assignment{" "}
             <span className="font-normal">(optional)</span>
           </label>
           <select
@@ -305,7 +269,7 @@ export function NewInviteModal({
 
         <div>
           <label htmlFor="invite-email" className={LABEL}>
-            {isStudent ? "Student email" : "Email"}{" "}
+            Email{" "}
             <span className="font-normal">(optional)</span>
           </label>
           <input
@@ -313,68 +277,32 @@ export function NewInviteModal({
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder={
-              isStudent ? "chisom.e@school.edu.ng" : "adeyemi.f@school.edu.ng"
-            }
+            placeholder="adeyemi.f@school.edu.ng"
             autoComplete="off"
             className={FIELD}
           />
-          {isStudent ? (
-            <p className={HINT}>
-              Older students sign in with their own email; younger ones use a
-              class code.
-            </p>
-          ) : null}
         </div>
 
-        {!isStudent ? (
-          /*
-           * D24b's "Cost" for a teacher, which an admin asks about before
-           * sending: "No charge". The contract says the same thing in its own
-           * words - the additions quote documents that "the answer for a
-           * teacher is nothing at all" - so this is a statement of the pricing,
-           * not a figure computed or fetched here.
-           */
-          <div>
-            <span className={LABEL}>Cost</span>
-            <div className="rounded-[10px] bg-nevo-navy/[0.06] px-4 py-3">
-              <span className="flex items-center gap-2 text-[14.5px] font-semibold text-nevo-navy">
-                <CheckIcon />
-                No charge
-              </span>
-              <p className="m-0 mt-1 text-[13px] leading-[1.5] text-nevo-near-black/62">
-                Teacher accounts are always free. Only students count towards
-                your bill.
-              </p>
-            </div>
-          </div>
-        ) : null}
-
-        {isStudent ? (
-          <div>
-            <label htmlFor="invite-parent" className={LABEL}>
-              Parent / guardian email
-            </label>
-            <input
-              id="invite-parent"
-              type="email"
-              value={parentContact}
-              onChange={(e) => setParentContact(e.target.value)}
-              placeholder="mrs.eze@email.com"
-              autoComplete="off"
-              className={FIELD}
-            />
-            <p className={HINT}>
-              {/* "will receive a notice" was the same promise as the consent
-                  claim above - nothing sends one, and no screen can currently
-                  tell an admin a parent has been contacted. This says who the
-                  contact is FOR, which is true today. */}
-              Who Nevo contacts about this child&rsquo;s data, and who confirms
-              consent for your school&rsquo;s own records. Required for all
-              students.
+        {/*
+         * D24b's "Cost" for a teacher, which an admin asks about before
+         * sending: "No charge". The contract says the same thing in its own
+         * words - the additions quote documents that "the answer for a
+         * teacher is nothing at all" - so this is a statement of the pricing,
+         * not a figure computed or fetched here.
+         */}
+        <div>
+          <span className={LABEL}>Cost</span>
+          <div className="rounded-[10px] bg-nevo-navy/[0.06] px-4 py-3">
+            <span className="flex items-center gap-2 text-[14.5px] font-semibold text-nevo-navy">
+              <CheckIcon />
+              No charge
+            </span>
+            <p className="m-0 mt-1 text-[13px] leading-[1.5] text-nevo-near-black/62">
+              Teacher accounts are always free. Only students count towards
+              your bill.
             </p>
           </div>
-        ) : null}
+        </div>
       </div>
     </Modal>
   );

@@ -482,8 +482,8 @@ export function ClassDetailView({
             <p className="m-0 text-sm text-nevo-near-black/62">
               Nobody is enrolled in this class yet.
             </p>
-            {/* Was /admin/invitations, which opens on the TEACHERS tab and is
-                a different mechanism - the child accepts a link. Enrolling a
+            {/* Was /admin/invitations, which invites teachers only and is
+                a different mechanism - the invitee accepts a link. Enrolling a
                 student now lives on Students ("Enrol a student", D24b), so
                 this goes there, already narrowed to this class. */}
             {!ssoSourced ? (

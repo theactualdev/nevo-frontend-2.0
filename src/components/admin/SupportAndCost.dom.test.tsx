@@ -48,17 +48,10 @@ describe("inviting a teacher", () => {
 
   it("says what it costs before it is sent: nothing", () => {
     const { container } = render(
-      <NewInviteModal role="teacher" classes={[]} onClose={() => {}} onSent={() => {}} />,
+      <NewInviteModal classes={[]} onClose={() => {}} onSent={() => {}} />,
     );
     const text = visibleText(container);
     expect(text).toMatch(/No charge/);
     expect(text).toMatch(/Teacher accounts are always free\. Only students count towards your bill\./);
-  });
-
-  it("never tells a student invite it is free", () => {
-    const { container } = render(
-      <NewInviteModal role="student" classes={[]} onClose={() => {}} onSent={() => {}} />,
-    );
-    expect(visibleText(container)).not.toMatch(/No charge|always free/);
   });
 });

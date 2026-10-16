@@ -23,7 +23,6 @@ const brokenRow = (over: Partial<ParsedRow> = {}): ParsedRow => ({
   name: "Chisom Eze",
   email: "chisom.e@school.edu.ng",
   className: "JSS 2A",
-  parentContact: "mrs.eze@email.com",
   error: "No class called \"JSS 2A\".",
   classId: null,
   ...over,
@@ -35,8 +34,7 @@ const setup = (props: Partial<React.ComponentProps<typeof RejectedRows>> = {}) =
       broken={[]}
       rejected={[]}
       submitted={[]}
-      isStudent
-      filename="nevo-students-not-imported.csv"
+      filename="nevo-teachers-not-imported.csv"
       {...props}
     />,
   );
@@ -177,6 +175,9 @@ describe("the download", () => {
       );
       expect(created).toHaveBeenCalled();
       expect(blobText[0]).toMatch(/row,reason/);
+      // Our own rows in the header's order - name, email, class.
+      expect(blobText[0]).toMatch(/^row,reason,name,email,class\n/);
+      expect(blobText[0]).toMatch(/,Chisom Eze,chisom\.e@school\.edu\.ng,JSS 2A\n/);
       expect(blobText[0]).toMatch(/No class called/);
       expect(blobText[0]).toMatch(/Already invited\./);
     } finally {

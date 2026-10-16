@@ -63,7 +63,6 @@ async function importFile(container: HTMLElement) {
 function open() {
   return render(
     <BulkImportModal
-      role="teacher"
       classes={[]}
       onClose={() => {}}
       onSent={() => {}}

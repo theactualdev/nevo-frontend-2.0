@@ -1,21 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Invitation } from "@/lib/api/invites";
-import {
-  CONSENT_WITHDRAWN,
-  PAGE_SIZE,
-  matchesStatus,
-  pageWindow,
-  statTiles,
-} from "./inviteFilters";
+import { PAGE_SIZE, matchesStatus, pageWindow, statTiles } from "./inviteFilters";
 
-/**
- * What the invitations list counts, filters and pages.
- *
- * The consent case is the one that matters most: `status` and `consentStatus`
- * are two different facts on every student row, and a withdrawn child's
- * invitation is very often `joined`. Folding them into one would answer the
- * consent question with the invitation's answer.
- */
+/** What the invitations list counts, filters and pages. */
 
 const NOW = Date.parse("2026-09-15T12:00:00Z");
 const FUTURE = "2026-10-01T00:00:00Z";
@@ -24,7 +11,7 @@ const PAST = "2026-09-01T00:00:00Z";
 const inv = (over: Partial<Invitation> = {}): Invitation => ({
   id: Math.random().toString(36).slice(2),
   token: "t",
-  role: "student",
+  role: "teacher",
   email: "a@example.com",
   name: "Amara",
   status: "pending",
@@ -66,28 +53,6 @@ describe("matchesStatus", () => {
   it("selects on the invitation's own status", () => {
     expect(matchesStatus(inv({ status: "joined" }), "joined", NOW)).toBe(true);
     expect(matchesStatus(inv({ status: "joined" }), "pending", NOW)).toBe(false);
-  });
-
-  it("finds a withdrawn family whatever their invitation says", () => {
-    // The point of the filter. A child whose parent withdrew has very often
-    // already joined, so a status-only filter could never surface them.
-    const joinedButWithdrawn = inv({
-      status: "joined",
-      consentStatus: "withdrawn",
-    });
-    expect(matchesStatus(joinedButWithdrawn, CONSENT_WITHDRAWN, NOW)).toBe(true);
-    expect(matchesStatus(inv({ consentStatus: "pending" }), CONSENT_WITHDRAWN, NOW)).toBe(
-      false,
-    );
-    expect(matchesStatus(inv({ consentStatus: null }), CONSENT_WITHDRAWN, NOW)).toBe(
-      false,
-    );
-  });
-
-  it("does not let a consent filter select on invitation status", () => {
-    expect(
-      matchesStatus(inv({ status: "withdrawn" }), CONSENT_WITHDRAWN, NOW),
-    ).toBe(false);
   });
 });
 

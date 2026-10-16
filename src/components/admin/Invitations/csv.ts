@@ -1,8 +1,9 @@
 import type { AdminClass } from "@/lib/api/classes";
-import type { InviteDraft, InviteRole } from "@/lib/api/invites";
+import type { InviteDraft } from "@/lib/api/invites";
 
 /**
- * CSV parsing and validation for D19's bulk import.
+ * CSV parsing and validation for D19's bulk import - of teachers, the only
+ * people a school invites (L2, 14 Oct; SCRUM-215).
  *
  * Validation happens HERE, before anything is sent, because D19's step 2 is a
  * preview: "Checking each row against your classes." An admin sees every
@@ -24,7 +25,6 @@ export interface ParsedRow {
   name: string;
   email: string;
   className: string;
-  parentContact: string;
   /** Null when the row is fine. */
   error: string | null;
   /** Resolved from `className`; null when unmatched or absent. */
@@ -32,31 +32,21 @@ export interface ParsedRow {
 }
 
 /**
- * The downloadable templates.
+ * The downloadable template.
  *
- * **ALREADY COMPLIANT WITH SCRUM-162 (20 Sep), verified 21 Sep - do not "fix"
- * it by adding a phone column.** The ruling asks for `guardian_phone` to be
- * removed and the parent email to become required rather than optional. There
- * has never been a phone column here, and `parseInviteCsv` already rejects a
- * student row whose `parentContact` is missing ("Every student needs a parent
- * or guardian contact") or is not an email ("That parent email doesn't look
- * right"). Both conditions the ruling asks for are met.
- *
- * If a school asks for a phone column, that is the trigger in the ruling to
- * reconsider the whole position - not a change to make here.
+ * There was a student template too, with a parent contact column (SCRUM-162).
+ * It went with the student invite itself (L2, 14 Oct): a school adds its
+ * children on Students, which has its own roster import.
  */
-export const TEMPLATE: Record<InviteRole, string> = {
-  teacher: "name,email,class\nFolake Adeyemi,adeyemi.f@school.edu.ng,JSS 2A\n",
-  student:
-    "name,class,student_email,parentContact\nChisom Eze,JSS 2A,chisom.e@school.edu.ng,mrs.eze@email.com\n",
-};
+export const TEMPLATE =
+  "name,email,class\nFolake Adeyemi,adeyemi.f@school.edu.ng,JSS 2A\n";
 
 /**
  * A small RFC-4180 reader: quoted fields, escaped quotes, and CRLF.
  *
  * Deliberately not a dependency. A roster CSV exported from Excel is the whole
  * input domain here, and the failure mode of a half-correct parser is a
- * mangled name on a child's record.
+ * mangled name on someone's record.
  */
 function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
@@ -106,7 +96,7 @@ function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((c) => c.trim().length > 0));
 }
 
-/** Tolerant header matching - "Parent Email", "parentContact" and "parent" all land. */
+/** Tolerant header matching - "Name", "Full Name" and "full_name" all land. */
 function headerIndex(header: string[], ...names: string[]): number {
   const norm = header.map((h) => h.trim().toLowerCase().replace(/[\s_-]+/g, ""));
   for (const n of names) {
@@ -126,7 +116,6 @@ export interface ParseOutcome {
 
 export function parseInviteCsv(
   text: string,
-  role: InviteRole,
   classes: AdminClass[],
 ): ParseOutcome {
   const table = parseCsv(text);
@@ -148,9 +137,8 @@ export function parseInviteCsv(
   }
 
   const iName = headerIndex(header, "name", "fullname");
-  const iEmail = headerIndex(header, "email", "studentemail");
+  const iEmail = headerIndex(header, "email");
   const iClass = headerIndex(header, "class", "classname");
-  const iParent = headerIndex(header, "parentcontact", "parentemail", "parent");
 
   if (iName === -1) {
     return {
@@ -171,7 +159,6 @@ export function parseInviteCsv(
     const name = at(iName);
     const email = at(iEmail);
     const className = at(iClass);
-    const parentContact = at(iParent);
 
     const matched = className ? byName.get(className.toLowerCase()) : undefined;
 
@@ -182,15 +169,11 @@ export function parseInviteCsv(
       error = "That email doesn't look right.";
     } else if (className && !matched) {
       error = `No class called "${className}".`;
-    } else if (role === "teacher" && !email) {
+    } else if (!email) {
       error = "A teacher needs an email to be invited.";
-    } else if (role === "student" && !parentContact) {
-      error = "Every student needs a parent or guardian contact.";
-    } else if (role === "student" && parentContact && !EMAIL.test(parentContact)) {
-      error = "That parent email doesn't look right.";
     } else {
       // A file that invites the same person twice would send them two links.
-      const key = (email || parentContact || name).toLowerCase();
+      const key = email.toLowerCase();
       if (seen.has(key)) {
         error = "This row repeats one above it.";
       } else {
@@ -203,7 +186,6 @@ export function parseInviteCsv(
       name,
       email,
       className,
-      parentContact,
       classId: matched?.id ?? null,
       error,
     };
@@ -219,14 +201,13 @@ export function splitName(name: string): { firstName: string; lastName: string |
   return { firstName: parts.slice(0, -1).join(" "), lastName: parts[parts.length - 1] };
 }
 
-export function toDraft(row: ParsedRow, role: InviteRole): InviteDraft {
+export function toDraft(row: ParsedRow): InviteDraft {
   const { firstName, lastName } = splitName(row.name);
   return {
-    role,
+    role: "teacher",
     firstName,
     lastName,
     email: row.email || null,
-    parentContact: row.parentContact || null,
     classId: row.classId,
   };
 }

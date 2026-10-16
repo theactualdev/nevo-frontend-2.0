@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
-import { invitesApi, type Invitation, type InviteRole } from "@/lib/api/invites";
+import { invitesApi, type Invitation } from "@/lib/api/invites";
 import { cn } from "@/lib/utils";
 import {
   CARD,
@@ -17,18 +17,11 @@ import {
 import { useSetupGate } from "@/hooks";
 import { BulkImportModal } from "./BulkImportModal";
 import { InviteStatusPill, normaliseStatus } from "./inviteStatus";
-import {
-  CONSENT_WITHDRAWN,
-  PAGE_SIZE,
-  matchesStatus,
-  pageWindow,
-  statTiles,
-} from "./inviteFilters";
+import { PAGE_SIZE, matchesStatus, pageWindow, statTiles } from "./inviteFilters";
 import { NewInviteModal } from "./NewInviteModal";
 import { LinkHandout } from "./LinkHandout";
 import {
   confirmedSent,
-  consentNote,
   unconfirmedResendLead,
   unconfirmedResendToast,
 } from "./deliveryCopy";
@@ -36,12 +29,10 @@ import { inviteeName, joinLink } from "./joinLink";
 import { NoAccess, failureKind } from "../NoAccess";
 
 /**
- * D19 School Invitations (SCRUM-79) - the single home for inviting teachers
- * and students.
+ * D19 School Invitations (SCRUM-79) - the single home for inviting teachers.
  *
- * D6 Teachers and D7 Students both link here rather than carrying their own
- * invite forms; SCRUM-40 is explicit that they must not rebuild one. Anything
- * to do with getting a person onto the platform belongs on this screen.
+ * D6 Teachers links here rather than carrying its own invite form; SCRUM-40
+ * is explicit that it must not rebuild one.
  *
  * The tone is set by the frame and worth keeping: calm status only. Soft
  * violet for pending, navy for joined, muted near-black for expired, and
@@ -56,14 +47,19 @@ import { NoAccess, failureKind } from "../NoAccess";
  *
  * CHILDREN ARE NOT INVITED (design, 1 Oct; SCRUM-215 on the backend, where
  * `InvitableRole` is now `teacher` only). A child has no email and joins with
- * the school code and their Student ID, so every student invite this tab sent
- * was refused. The tab stays, because older student invitations - and the
- * consent each carries - still live here; its buttons go to Students, where a
+ * the school code and their Student ID, so every student invite this screen
+ * sent was refused.
+ *
+ * AND THE STUDENTS TAB IS GONE TOO (Lydia's L2, 14 Oct): "Remove the student
+ * invite path rather than leaving it unreachable. A route that cannot be used
+ * is a route somebody will try to use." It had stayed to list older student
+ * invitations and the consent each carried. Those are no longer listed here,
+ * and a child's consent is shown on Students - not here. What is left is one
+ * quiet line that sends an admin looking for a child to Students, where a
  * child is enrolled and their sign-in details are downloaded.
  */
 
 type Phase = "loading" | "ready" | "failed" | "denied";
-type Tab = InviteRole;
 
 const TOAST_MS = 3000;
 
@@ -110,7 +106,6 @@ export function InvitationsView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [invites, setInvites] = useState<Invitation[]>([]);
   const [classes, setClasses] = useState<AdminClass[]>([]);
-  const [tab, setTab] = useState<Tab>("teacher");
   const [status, setStatus] = useState("");
   /** D19's Class filter. Empty: every class, and invites with none. */
   const [classFilter, setClassFilter] = useState("");
@@ -168,9 +163,13 @@ export function InvitationsView() {
     load();
   }, [load]);
 
-  const forTab = useMemo(
-    () => invites.filter((i) => (i.role ?? "").toLowerCase() === tab),
-    [invites, tab],
+  /*
+   * Teachers only. An older invitation sent to a student can still come back
+   * from the list; it is not shown (L2, 14 Oct).
+   */
+  const teacherInvites = useMemo(
+    () => invites.filter((i) => (i.role ?? "").toLowerCase() === "teacher"),
+    [invites],
   );
 
   const classNames = useMemo(
@@ -180,7 +179,7 @@ export function InvitationsView() {
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return forTab.filter((i) => {
+    return teacherInvites.filter((i) => {
       if (!matchesStatus(i, status, now)) return false;
       if (classFilter && i.classId !== classFilter) return false;
       if (!needle) return true;
@@ -189,9 +188,9 @@ export function InvitationsView() {
         (i.email ?? "").toLowerCase().includes(needle)
       );
     });
-  }, [forTab, search, status, classFilter, now]);
+  }, [teacherInvites, search, status, classFilter, now]);
 
-  const stats = useMemo(() => statTiles(forTab, now), [forTab, now]);
+  const stats = useMemo(() => statTiles(teacherInvites, now), [teacherInvites, now]);
 
   /*
    * Paged. This screen's own bulk import takes five hundred rows in one go and
@@ -205,7 +204,6 @@ export function InvitationsView() {
   const pager = pageWindow(visible.length, page);
   const rows = visible.slice(pager.start, pager.start + PAGE_SIZE);
 
-  const noun = tab === "teacher" ? "teachers" : "students";
   const filtering = Boolean(search.trim() || status || classFilter);
 
   /** Any change to what is being looked at starts again at the top. */
@@ -290,69 +288,31 @@ export function InvitationsView() {
               Invite your school
             </h2>
             <p className="mt-1.5 text-[14.5px] text-nevo-near-black/60">
-              Add teachers and students to start using Nevo
+              Add teachers to start using Nevo
             </p>
           </div>
-          {tab === "teacher" ? (
-            <div className="flex flex-none gap-3">
-              <button
-                type="button"
-                onClick={() => setImporting(true)}
-                disabled={writesPaused}
-                className={GHOST_BTN}
-              >
-                Bulk import
-              </button>
-              <button
-                type="button"
-                onClick={() => setComposing(true)}
-                disabled={writesPaused}
-                className={PRIMARY_BTN}
-              >
-                <PlusIcon />
-                New invite
-              </button>
-            </div>
-          ) : (
-            <Link href="/admin/students" className={cn(PRIMARY_BTN, "flex-none")}>
-              Go to Students
-            </Link>
-          )}
+          <div className="flex flex-none gap-3">
+            <button
+              type="button"
+              onClick={() => setImporting(true)}
+              disabled={writesPaused}
+              className={GHOST_BTN}
+            >
+              Bulk import
+            </button>
+            <button
+              type="button"
+              onClick={() => setComposing(true)}
+              disabled={writesPaused}
+              className={PRIMARY_BTN}
+            >
+              <PlusIcon />
+              New invite
+            </button>
+          </div>
         </div>
 
         <PausedNote className="mt-3" />
-
-        {/* TABS */}
-        <div
-          role="tablist"
-          aria-label="Invitations"
-          className="mt-7 flex gap-1 border-b border-nevo-near-black/10"
-        >
-          {(["teacher", "student"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              role="tab"
-              aria-selected={tab === t}
-              onClick={() => {
-                setTab(t);
-                setPage(1);
-                // The consent filter is offered on the student tab only, so
-                // carrying it to Teachers would hide every row behind a
-                // control that is no longer on screen to clear.
-                if (status === CONSENT_WITHDRAWN) setStatus("");
-              }}
-              className={cn(
-                "-mb-px cursor-pointer border-b-2 px-4 pb-3 pt-2 text-[14.5px] font-semibold transition-colors",
-                tab === t
-                  ? "border-nevo-navy text-nevo-navy"
-                  : "border-transparent text-nevo-near-black/55 hover:text-nevo-near-black/80",
-              )}
-            >
-              {t === "teacher" ? "Teachers" : "Students"}
-            </button>
-          ))}
-        </div>
 
         {phase === "loading" ? <div className={cn(CARD, "mt-6 h-[320px] animate-pulse")} /> : null}
 
@@ -380,22 +340,29 @@ export function InvitationsView() {
           </div>
         ) : null}
 
-        {phase === "ready" && tab === "student" ? (
-          <p className="mt-6 max-w-[64ch] text-[14px] leading-[1.6] text-nevo-near-black/66">
+        {/* The one signpost for an admin who came here to add a child. */}
+        {phase === "ready" ? (
+          <p className="mt-4 max-w-[64ch] text-[14px] leading-[1.6] text-nevo-near-black/66">
             Children aren&rsquo;t sent invitations. They sign in with your school
             code and their Student ID, so there&rsquo;s no link to send. Add them
-            from Students, where you can also download their sign-in details.
-            {forTab.length > 0 ? " Invitations sent to students earlier are listed below." : ""}
+            from{" "}
+            <Link
+              href="/admin/students"
+              className="font-semibold text-nevo-navy hover:opacity-75"
+            >
+              Students
+            </Link>
+            , where you can also download their sign-in details.
           </p>
         ) : null}
 
-        {phase === "ready" && tab === "teacher" && forTab.length === 0 && !filtering ? (
+        {phase === "ready" && teacherInvites.length === 0 && !filtering ? (
           <div className={cn(CARD, "mt-6 px-6 py-16 text-center")}>
             <h3 className="m-0 text-xl font-semibold text-nevo-near-black">
               No invites yet
             </h3>
             <p className="mt-2.5 text-[15px] leading-[1.6] text-nevo-near-black/64">
-              Invite your {noun} to get started.
+              Invite your teachers to get started.
             </p>
             <button
               type="button"
@@ -408,11 +375,11 @@ export function InvitationsView() {
           </div>
         ) : null}
 
-        {phase === "ready" && (forTab.length > 0 || filtering) ? (
+        {phase === "ready" && (teacherInvites.length > 0 || filtering) ? (
           <>
             {/* D19 draws these as the screen's primary filter control, and
                 they were three numbers nobody could press. The first of them
-                counted the whole tab, which is not a subset anything can
+                counted the whole list, which is not a subset anything can
                 select - so the set is now the frame's own Pending / Joined /
                 Expired, and pressing the active one clears back to all. */}
             <div className="mt-6 flex gap-3.5 max-lg:flex-col">
@@ -454,8 +421,8 @@ export function InvitationsView() {
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder={`Search ${noun}`}
-                  aria-label={`Search ${noun}`}
+                  placeholder="Search teachers"
+                  aria-label="Search teachers"
                   className="min-w-0 flex-1 border-none bg-transparent outline-none"
                 />
               </label>
@@ -471,14 +438,6 @@ export function InvitationsView() {
                       {o.label}
                     </option>
                   ))}
-                  {/* Students only: a teacher invite has no parent behind it.
-                      Every student row already carries `consentStatus`, and
-                      until now there was no way to ask the screen which
-                      families had withdrawn - the one question this roster is
-                      most likely to be opened for. */}
-                  {tab === "student" ? (
-                    <option value={CONSENT_WITHDRAWN}>Consent withdrawn</option>
-                  ) : null}
                 </select>
               </label>
               {classes.length > 0 ? (
@@ -586,17 +545,6 @@ export function InvitationsView() {
                                 .join(" · ")}
                             </span>
                           ) : null}
-                          {/* Students only - consent is a fact about a child,
-                              and a teacher invite has no parent behind it. The
-                              note is ABSENT when the invite carried no consent
-                              record at all: older invitations predate the
-                              field, and "we weren't told" must not render as
-                              "nobody has been asked". */}
-                          {tab === "student" && consentNote(invite.consentStatus) ? (
-                            <span className="block text-[12.5px] text-nevo-near-black/55">
-                              {consentNote(invite.consentStatus)}
-                            </span>
-                          ) : null}
                         </span>
                         <span className="min-w-0 truncate text-sm text-nevo-near-black/66 max-lg:hidden">
                           {invite.email ?? "—"}
@@ -616,7 +564,7 @@ export function InvitationsView() {
                             * frame draws them. All three used to show on every
                             * row that had not joined - so an expired invite
                             * offered Revoke, and a revoked one offered a dead
-                            * link to copy and hand to a child.
+                            * link to copy and hand to someone.
                             */}
                           {joined || s === "revoked" ? (
                             <span className="text-[13px] text-nevo-near-black/45">
@@ -772,7 +720,6 @@ export function InvitationsView() {
 
       {composing ? (
         <NewInviteModal
-          role={tab}
           classes={classes}
           onClose={() => setComposing(false)}
           onSent={() => load()}
@@ -781,7 +728,6 @@ export function InvitationsView() {
 
       {importing ? (
         <BulkImportModal
-          role={tab}
           classes={classes}
           onClose={() => setImporting(false)}
           onSent={() => load()}

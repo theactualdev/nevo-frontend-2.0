@@ -7,10 +7,13 @@ import { normaliseStatus } from "./inviteStatus";
  *
  * Pure and separate from the screen because all three used to be decorative:
  * the counters were numbers nobody could press, one of them counted a
- * different quantity from the other two, the consent state the roster now
- * carries could not be filtered on at all, and a screen whose own bulk import
+ * different quantity from the other two, and a screen whose own bulk import
  * takes five hundred rows in one go rendered every one of them in a single
  * list.
+ *
+ * There was a "Consent withdrawn" filter here too, for student invitations.
+ * Those are no longer listed (Lydia's L2, 14 Oct) - a teacher invite has no
+ * parent behind it, and a child's consent is shown on Students.
  */
 
 /** D19: `const pageSize = 20`. */
@@ -33,18 +36,6 @@ const STAT_LABEL: Record<StatKey, string> = {
   expired: "Expired",
 };
 
-/**
- * The consent filter, which is NOT an invitation status.
- *
- * D19 draws "Consent Withdrawn" as a status badge because its fixture folds
- * the two together. The contract does not: `status` is where the invitation
- * has got to and `consentStatus` is where the parent has got to, and a
- * withdrawn child's invitation is very often `joined`. Filtering on it is
- * therefore its own value rather than a fourth status, and it is offered on
- * the student tab only - a teacher invite has no parent behind it.
- */
-export const CONSENT_WITHDRAWN = "consent_withdrawn";
-
 export interface StatTile {
   key: StatKey;
   n: number;
@@ -61,11 +52,8 @@ export function statTiles(rows: Invitation[], now: number): StatTile[] {
 }
 
 /**
- * Whether a row survives the current status filter.
- *
- * `""` is no filter. Everything else is either an invitation status or the
- * consent value above - never both, so a `consent_withdrawn` filter selects on
- * the parent's decision and ignores where the invitation itself has got to.
+ * Whether a row survives the current status filter. `""` is no filter;
+ * anything else is an invitation status.
  */
 export function matchesStatus(
   invite: Invitation,
@@ -73,9 +61,6 @@ export function matchesStatus(
   now: number,
 ): boolean {
   if (!filter) return true;
-  if (filter === CONSENT_WITHDRAWN) {
-    return invite.consentStatus === "withdrawn";
-  }
   return normaliseStatus(invite.status, invite.expiresAt, now) === filter;
 }
 
