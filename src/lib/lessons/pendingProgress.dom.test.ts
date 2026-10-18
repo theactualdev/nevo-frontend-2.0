@@ -516,6 +516,34 @@ describe("answers held for a check (Lydia, 6 Oct)", () => {
     expect(pendingProgressFor("lesson-1")).toBeNull();
   });
 
+  it("sends an answer's time as it was measured, never one taken at sync (Lydia, 17 Oct)", async () => {
+    // The monotonic clock has moved on by the time the connection is back;
+    // the answer took 1.2 seconds, and that is what reaches the server.
+    const now = vi.spyOn(performance, "now").mockReturnValue(900_000);
+    signInAs("student-1");
+    const timed = answer(1);
+    holdAnswer("lesson-1", {
+      ...timed,
+      body: { ...timed.body, responseTimeMs: 1_200, hintCount: 1 },
+    });
+    const { save } = spyWrites();
+
+    try {
+      await flushPendingProgress();
+    } finally {
+      now.mockRestore();
+    }
+
+    expect(save).toHaveBeenCalledWith(
+      "lesson-1",
+      expect.objectContaining({
+        problemId: "cp-1",
+        responseTimeMs: 1_200,
+        hintCount: 1,
+      }),
+    );
+  });
+
   it("keeps the completion back while an answer still cannot be sent", async () => {
     signInAs("student-1");
     holdAnswer("lesson-1", answer(1));
