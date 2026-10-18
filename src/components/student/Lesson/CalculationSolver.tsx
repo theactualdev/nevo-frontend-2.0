@@ -247,7 +247,7 @@ export function CalculationSolver({
     watch.observe(scroller);
     return () => watch.disconnect();
   }, [padStep, step.stepId, live, engineHint, hintOpen, levelHint]);
-  // A build's "That's the total", as it arrives where the tray was.
+  // A build's "That's the total", as it arrives below the spent tray.
   useEffect(() => {
     const block = response.current;
     if (built && block && revealIn(block, BUILT)) systemScrolled.current?.();
@@ -604,10 +604,18 @@ export function CalculationSolver({
                     ringed={piecesRinged(manipulative, emphasis)}
                   />
                 )}
+                {/*
+                  BELOW THE TRAY, A BEAT LATER (Lydia, 17 Oct; D162). The
+                  tray keeps its row once the build is done, so this never
+                  takes the place of the piece just tapped; and it arrives
+                  about 450ms on, unseen and untappable until then, so the
+                  child sees what they built before they can confirm it.
+                  With reduced motion it is there at once, still below.
+                */}
                 {built && (
                   <Button
                     data-reveal="total"
-                    className="mt-[18px] w-full"
+                    className="nevo-arrive-late mt-[18px] w-full"
                     onClick={() => answer(true)}
                   >
                     That&apos;s the total
@@ -2000,32 +2008,69 @@ function BuildTray({
           ))}
         </div>
       </div>
-      {placed < target && (
-        <TapToAdd>
-          {/* D149's fraction tile: 44px tall, at least 72 wide. */}
-          <button
-            type="button"
-            onClick={onPlace}
-            className="flex h-11 min-w-[72px] cursor-pointer items-center justify-center rounded-[12px] border-2 border-nevo-violet bg-nevo-violet/14 px-3.5 text-base font-semibold text-nevo-navy shadow-elevation-1"
-          >
-            + 1/{parts}
-          </button>
-        </TapToAdd>
-      )}
+      <TapToAdd done={placed >= target}>
+        {/* D149's fraction tile: 44px tall, at least 72 wide. */}
+        <button
+          type="button"
+          {...pieceProps(placed < target ? onPlace : undefined)}
+          className={cn(
+            "flex h-11 min-w-[72px] items-center justify-center rounded-[12px] border-2 border-nevo-violet bg-nevo-violet/14 px-3.5 text-base font-semibold text-nevo-navy shadow-elevation-1",
+            placed < target ? "cursor-pointer" : SPENT,
+          )}
+        >
+          + 1/{parts}
+        </button>
+      </TapToAdd>
     </>
   );
 }
 
-/** D149's tray: "Tap to add", then the piece to tap. */
-function TapToAdd({ children }: { children: React.ReactNode }) {
+/**
+ * D149's tray: "Tap to add", then the piece to tap.
+ *
+ * IT STAYS ONCE THE BUILD IS DONE (Lydia, 17 Oct; design's D162). It went
+ * with the last piece, and "That's the total" arrived in its place - under
+ * the finger that had just placed that piece, so a double tap, or one tap
+ * too many, built the answer and submitted it too. Now the tray keeps its
+ * row, its piece spent where it was, and "That's the total" arrives below
+ * it: the child sees what they built, and confirms it with a tap of its own.
+ */
+function TapToAdd({
+  done = false,
+  children,
+}: {
+  /** Every piece is placed: the row is spent, and holds its place. */
+  done?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="mt-4 flex items-center justify-center gap-2.5">
-      <span aria-hidden className="text-xs text-nevo-near-black/55">
+    <div
+      data-tray-done={done || undefined}
+      className="mt-4 flex items-center justify-center gap-2.5"
+    >
+      <span
+        aria-hidden
+        className={cn("text-xs text-nevo-near-black/55", done && "opacity-50")}
+      >
         Tap to add
       </span>
       {children}
     </div>
   );
+}
+
+/**
+ * A SPENT PIECE: one with nothing left to add, dimmed where it was. It is
+ * still the same button, so a child working the tray by keyboard or switch
+ * keeps their place on it - focus is never moved onto "That's the total",
+ * where a held key would commit - but it is marked disabled and does
+ * nothing, however often it is pressed.
+ */
+const SPENT = "cursor-default opacity-50";
+
+/** A tray piece's press: `onPlace` while it has a piece to give, else none. */
+function pieceProps(onPlace: (() => void) | undefined) {
+  return onPlace ? { onClick: onPlace } : { "aria-disabled": true as const };
 }
 
 /**
@@ -2038,8 +2083,10 @@ function TapToAdd({ children }: { children: React.ReactNode }) {
  * for a lesson on tenths they would be wrong. The caption sits inside the
  * button, so the target only grows, and the button's name already says it.
  *
- * Without `onPlace` it is the place a full column's piece leaves: the same
- * box, drawn invisible, so the pieces beside it do not move.
+ * Without `onPlace` it is spent (see `SPENT`): a full column's piece, or the
+ * last piece of a build, kept where it was so nothing beside it or below it
+ * moves, dimmed, and pressing it does nothing. It was drawn invisible
+ * before, and the whole tray went with the build's last piece.
  */
 function TrayPiece({
   shape,
@@ -2077,19 +2124,13 @@ function TrayPiece({
       )}
     </>
   );
-  if (!onPlace) {
-    return (
-      <span aria-hidden data-tray-place className={cn(box, "invisible")}>
-        {inside}
-      </span>
-    );
-  }
   return (
     <button
       type="button"
       aria-label={label}
-      onClick={onPlace}
-      className={cn(box, "cursor-pointer")}
+      data-tray-place={onPlace ? undefined : ""}
+      {...pieceProps(onPlace)}
+      className={cn(box, onPlace ? "cursor-pointer" : SPENT)}
     >
       {inside}
     </button>
@@ -2099,8 +2140,8 @@ function TrayPiece({
 /**
  * An array build (D149): `rows` rows of `parts` empty places, filled in
  * reading order as the child taps the one piece the tray offers. "Nothing
- * marks right or wrong while building", and the tray goes once the stored
- * count is placed, as the bar's does.
+ * marks right or wrong while building", and the tray's piece is spent once
+ * the stored count is placed, as the bar's is (see `TapToAdd`).
  *
  * `round` is the counters build (B112), D149's dots: "Fill the frame with
  * counters: tap to drop a dot into the next empty space" - the same rows and
@@ -2180,15 +2221,13 @@ function ArrayBuild({
           ))}
         </div>
       </div>
-      {placed < target && (
-        <TapToAdd>
-          <TrayPiece
-            shape={round ? "size-[34px] rounded-full" : "size-[34px] rounded-lg"}
-            label="Tap to add"
-            onPlace={onPlace}
-          />
-        </TapToAdd>
-      )}
+      <TapToAdd done={placed >= target}>
+        <TrayPiece
+          shape={round ? "size-[34px] rounded-full" : "size-[34px] rounded-lg"}
+          label="Tap to add"
+          onPlace={placed < target ? onPlace : undefined}
+        />
+      </TapToAdd>
     </>
   );
 }
@@ -2200,8 +2239,9 @@ const COUNTER =
 /**
  * A place-value build (D149): each column's places, as many as the
  * scaffold's mark for it, filled as the child taps that column's piece - a
- * flat, a rod or a unit. A column's piece goes from the tray once it is full,
- * and the build is done when every column is: nothing counts them together.
+ * flat, a rod or a unit. A column's piece is spent in the tray once it is
+ * full, and the build is done when every column is: nothing counts them
+ * together.
  * Each tray piece is named and captioned by its column's label where the
  * payload gives one, and by nothing where it does not (see `TrayPiece`).
  */
@@ -2247,12 +2287,13 @@ function PlaceValueBuild({
         </div>
       </div>
       {/*
-        A FULL COLUMN'S PIECE GOES, AND ITS PLACE STAYS. The tray re-centred
-        when a column filled, so the piece the child was about to tap again
-        moved out from under their finger.
+        A FULL COLUMN'S PIECE IS SPENT WHERE IT IS. The tray re-centred when
+        a column filled, so the piece the child was about to tap again moved
+        out from under their finger; and it went whole with the last column,
+        so "That's the total" arrived under it (Lydia, 17 Oct).
       */}
-      {needed.some(isOpen) && (
-        <TapToAdd>
+      {needed.length > 0 && (
+        <TapToAdd done={!needed.some(isOpen)}>
           {needed.map((i) => (
             <TrayPiece
               key={i}
@@ -2326,18 +2367,19 @@ function LineBuild({
           />
         </div>
       </div>
-      {placed < target && (
-        <TapToAdd>
-          {/* D149's hop tile, 44px tall. */}
-          <button
-            type="button"
-            onClick={onPlace}
-            className="flex h-11 min-w-12 cursor-pointer items-center justify-center rounded-[12px] border-2 border-nevo-violet bg-nevo-violet/14 px-3.5 text-[15px] font-semibold text-nevo-navy shadow-elevation-1"
-          >
-            +1
-          </button>
-        </TapToAdd>
-      )}
+      <TapToAdd done={placed >= target}>
+        {/* D149's hop tile, 44px tall. */}
+        <button
+          type="button"
+          {...pieceProps(placed < target ? onPlace : undefined)}
+          className={cn(
+            "flex h-11 min-w-12 items-center justify-center rounded-[12px] border-2 border-nevo-violet bg-nevo-violet/14 px-3.5 text-[15px] font-semibold text-nevo-navy shadow-elevation-1",
+            placed < target ? "cursor-pointer" : SPENT,
+          )}
+        >
+          +1
+        </button>
+      </TapToAdd>
     </>
   );
 }
