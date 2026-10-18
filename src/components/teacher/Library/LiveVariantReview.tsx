@@ -13,7 +13,8 @@ import {
   type VariantTab,
 } from "@/lib/mocks/teacherIntelligence";
 import { reasonCopy } from "@/lib/constants/reviewReasons";
-import { isActivity } from "@/lib/api/variants";
+import { isActivity, pendingRewrites, type DepthVariantBody } from "@/lib/api/variants";
+import { getSession } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
 /**
@@ -98,15 +99,72 @@ function Para({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** "18 October", the date a rewrite was cleared. */
+function reviewedOn(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? null
+    : d.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
+}
+
+/**
+ * ONE REWRITE - the simpler or the longer version of this section, as a child
+ * would be given it. Backend writes both for every section long enough
+ * (Teslim, 18 Oct: 740 across 24 lessons), and a child is only given one after
+ * a teacher clears it - so the teacher has to be able to read it. This screen
+ * showed neither, so approving a section signed off words nobody had seen.
+ *
+ * Its status says what the server says. Pending: waiting for this teacher.
+ * Approved with a date: when, and "by you" only when the id is this teacher's -
+ * the contract sends an id, not a name. No frame draws this; raised with design.
+ */
+function Rewrite({
+  label,
+  v,
+  cleared,
+}: {
+  label: string;
+  v: DepthVariantBody;
+  /** Cleared on this screen just now, before any re-read. */
+  cleared: boolean;
+}) {
+  const pending = v.reviewStatus === "pending" && !cleared;
+  const on = cleared ? reviewedOn(new Date().toISOString()) : reviewedOn(v.reviewedAt);
+  const byYou = cleared || (v.reviewedBy != null && v.reviewedBy === getSession()?.userId);
+  return (
+    <div className="rounded-[10px] bg-nevo-cream px-3.5 py-3">
+      <h4 className="text-[12px] font-semibold tracking-[0.04em] text-nevo-near-black/50 uppercase">
+        {label}
+      </h4>
+      <p className="mt-1.5 max-w-[68ch] text-[14px] leading-[1.6] whitespace-pre-line text-nevo-near-black/80">
+        {v.body}
+      </p>
+      {pending ? (
+        <p className="mt-2 text-[12.5px] font-medium text-nevo-navy">
+          Waiting for your approval. Students don&rsquo;t get this version until you approve this section.
+        </p>
+      ) : on ? (
+        <p className="mt-2 text-[12.5px] text-nevo-near-black/55">
+          {`Approved on ${on}${byYou ? " by you" : ""}.`}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function VariantBody({
   tab,
   segment,
   approved,
+  rewritesCleared,
 }: {
   tab: VariantTab;
   segment: LessonSegment;
   /** This section has been approved, here or before this screen opened. */
   approved: boolean;
+  /** Its waiting rewrites were approved on this screen just now. */
+  rewritesCleared: boolean;
 }) {
   if (tab === "Text") {
     const v = segment.textVariant;
@@ -126,6 +184,9 @@ function VariantBody({
      */
     const terms = keyTermsOf(v.keyTerms) ?? [];
     const equations = equationsOf(v.equationCallouts) ?? [];
+    const depth = segment.depthVariants;
+    const simpler = depth?.simplified?.body?.trim() ? depth.simplified : null;
+    const longer = depth?.expanded?.body?.trim() ? depth.expanded : null;
     return (
       <div className="flex flex-col gap-2.5">
         <Para>{v.body}</Para>
@@ -179,6 +240,13 @@ function VariantBody({
                 </p>
               </div>
             ))}
+          </div>
+        )}
+        {/* The simpler and the longer version, under the text they rewrite. */}
+        {(simpler || longer) && (
+          <div className="mt-2 flex flex-col gap-2">
+            {simpler && <Rewrite label="Simpler version" v={simpler} cleared={rewritesCleared} />}
+            {longer && <Rewrite label="Longer version" v={longer} cleared={rewritesCleared} />}
           </div>
         )}
       </div>
@@ -452,6 +520,17 @@ export function LiveVariantReview({
    * not have to be.
    */
   const [approved, setApproved] = useState(segment.approved);
+  /*
+   * REWRITES WAITING ON AN APPROVED SECTION (Teslim, 18 Oct). Backend wrote the
+   * simpler and longer versions after many sections were already approved, and
+   * holds them back from children until the section is approved AGAIN - the
+   * same action, which keeps the first approval and stamps the rewrites. So a
+   * section can be approved and still have something waiting, and the button
+   * has to stay for that.
+   */
+  const waitingRewrites = pendingRewrites(segment.depthVariants).length > 0;
+  const [rewritesCleared, setRewritesCleared] = useState(false);
+  const needsApproval = !approved || (waitingRewrites && !rewritesCleared);
   const [counts, setCounts] = useState<{ done: number; total: number } | null>(
     null,
   );
@@ -472,12 +551,13 @@ export function LiveVariantReview({
   } | null>(null);
 
   async function approve() {
-    if (approved || busy) return;
+    if (!needsApproval || busy) return;
     setBusy(true);
     setError(null);
     try {
       const res = await lessonsApi.approveSegment(lessonId, segment.id);
       setApproved(true);
+      setRewritesCleared(true);
       setCounts({ done: res.approvedSegmentCount, total: res.segmentCount });
       if (res.approvedSegmentCount === res.segmentCount) {
         // Best-effort: unknown says less, never more. A failed read leaves
@@ -584,7 +664,12 @@ export function LiveVariantReview({
             {`${tab} variant`}
           </h3>
           <div className="mt-3">
-            <VariantBody tab={tab} segment={segment} approved={approved} />
+            <VariantBody
+              tab={tab}
+              segment={segment}
+              approved={approved}
+              rewritesCleared={rewritesCleared}
+            />
           </div>
         </div>
 
@@ -601,24 +686,50 @@ export function LiveVariantReview({
               : `Reviewing section ${sectionIndex}`}
           </p>
 
-          {approved ? (
-            <span className="inline-flex h-11 items-center gap-2 rounded-[10px] border-[1.5px] border-nevo-navy/25 px-4 text-sm font-medium text-nevo-near-black/70">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M5 12.5l4.5 4.5L19 7.5" />
-              </svg>
-              Approved
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={approve}
-              disabled={busy}
-              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-60 xl:h-[46px] xl:px-[22px] xl:text-[14.5px]"
-            >
-              {busy ? "Approving…" : "Approve this section"}
-            </button>
-          )}
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {!needsApproval ? (
+              <span className="inline-flex h-11 items-center gap-2 rounded-[10px] border-[1.5px] border-nevo-navy/25 px-4 text-sm font-medium text-nevo-near-black/70">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M5 12.5l4.5 4.5L19 7.5" />
+                </svg>
+                Approved
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={approve}
+                disabled={busy}
+                className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-60 xl:h-[46px] xl:px-[22px] xl:text-[14.5px]"
+              >
+                {busy
+                  ? "Approving…"
+                  : approved
+                    ? "Approve the new versions"
+                    : "Approve this section"}
+              </button>
+            )}
+            {/* The next section, once this one has nothing waiting, so a
+                teacher clearing a lesson's rewrites walks it in one line
+                rather than back to the lesson and down the list. */}
+            {!needsApproval && segmentCount !== undefined && sectionIndex < segmentCount && (
+              <Link
+                href={`/teacher/lessons/${lessonId}/variants?section=${sectionIndex + 1}`}
+                className="inline-flex h-11 cursor-pointer items-center gap-1.5 rounded-[10px] px-3 text-sm font-semibold text-nevo-navy transition-[filter] hover:brightness-90"
+              >
+                Next section
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </Link>
+            )}
+          </div>
         </div>
+        {approved && waitingRewrites && !rewritesCleared && (
+          <p className="mt-2.5 text-right text-[13px] leading-[1.5] text-nevo-near-black/62">
+            This section was approved before Nevo wrote its simpler and longer versions. Approve
+            again to let students have them; the first approval stands.
+          </p>
+        )}
 
         {counts && (
           <p className="mt-2.5 text-right text-[13px] text-nevo-near-black/60">

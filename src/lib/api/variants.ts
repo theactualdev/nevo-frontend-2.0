@@ -380,6 +380,17 @@ export interface CalculationVariant {
 /** One rewrite of a segment. `body` defaults to `""` on the wire. */
 export interface DepthVariantBody {
   body: string;
+  /**
+   * WHETHER A TEACHER HAS CLEARED THIS REWRITE (Teslim, 18 Oct). A pending one
+   * is withheld from the child's lesson, offline packages and adaptation until
+   * the section's approve action clears it - which works on a section that was
+   * approved before the rewrite existed, too. Defaults to "approved" on the
+   * wire; optional here for older deploys that did not send it.
+   */
+  reviewStatus?: "approved" | "pending" | (string & {});
+  /** A user id, not a name - so only "by you" can be said of it. */
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
 }
 
 /**
@@ -406,6 +417,16 @@ export interface DepthVariants {
   expanded: DepthVariantBody | null;
   /** Which model wrote them. Never rendered; a child is not told this. */
   model: string | null;
+}
+
+/** Which of a section's rewrites are still waiting for a teacher. */
+export function pendingRewrites(
+  depth: DepthVariants | null | undefined,
+): ("simplified" | "expanded")[] {
+  if (!depth) return [];
+  return (["simplified", "expanded"] as const).filter(
+    (k) => depth[k]?.reviewStatus === "pending",
+  );
 }
 
 export interface SegmentVariants {

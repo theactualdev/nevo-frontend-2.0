@@ -1,5 +1,6 @@
 "use client";
 
+import { pendingRewrites } from "@/lib/api/variants";
 import Link from "next/link";
 import type { Assignment } from "@/lib/api/assignments";
 import { AssignmentSchedule } from "./AssignmentSchedule";
@@ -206,6 +207,13 @@ function SegmentRow({
             Worth a look
           </p>
         )}
+        {/* Teslim, 18 Oct: rewrites waiting on a teacher, approved section or
+            not. Children don't get them until they are cleared. */}
+        {pendingRewrites(segment.depthVariants).length > 0 && (
+          <p className="mt-2 text-[13px] leading-[1.5] text-nevo-navy">
+            Simpler and longer versions waiting for you
+          </p>
+        )}
       </div>
       {progress ? (
         <div className="flex shrink-0 items-center gap-3.5 xl:gap-3">
@@ -364,6 +372,11 @@ export function LiveLessonDetail({
    * here, so the two cannot drift; the breakdown lists only segments that
    * carry an estimate.
    */
+  /** Sections whose simpler or longer version is still waiting (Teslim, 18 Oct). */
+  const rewritesWaiting = segments.filter(
+    (seg) => pendingRewrites(seg.depthVariants).length > 0,
+  ).length;
+
   const durationLine = (() => {
     const total = lesson.estimatedMinutes ?? 0;
     if (!total) return "";
@@ -778,6 +791,11 @@ export function LiveLessonDetail({
             </span>
           )}
         </h3>
+        {rewritesWaiting > 0 && (
+          <p className="mt-2 max-w-[68ch] text-[13.5px] leading-[1.55] text-nevo-near-black/68">
+            {`${rewritesWaiting} ${rewritesWaiting === 1 ? "section has" : "sections have"} a simpler and a longer version waiting for your approval. Students don’t get them until you approve each section in its variant review.`}
+          </p>
+        )}
         {segments.length > 0 && grouped.length > 0 ? (
           <div className="mt-3.5 flex flex-col gap-4 xl:mt-4">
             {grouped.map((g) => (
