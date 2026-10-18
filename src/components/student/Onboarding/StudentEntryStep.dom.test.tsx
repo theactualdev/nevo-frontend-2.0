@@ -49,23 +49,24 @@ import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 
 vi.setConfig({ testTimeout: 30_000 });
 
-const { push, lookup, entrySetPin, authSetPin, myConsentGate } = vi.hoisted(
-  () => ({
+const { push, lookup, entrySetPin, authSetPin, myConsentGate, signOut } =
+  vi.hoisted(() => ({
     push: vi.fn(),
     lookup: vi.fn(),
     entrySetPin: vi.fn(),
     authSetPin: vi.fn(),
     myConsentGate: vi.fn(),
-  }),
-);
+    signOut: vi.fn(),
+  }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
 }));
 vi.mock("@/hooks", () => ({
   useSignals: () => ({ trackEvent: vi.fn(), flush: vi.fn() }),
-  // 00d's Back (D189). A child held here has no session to end.
-  useAuth: () => ({ signOut: vi.fn() }),
+  // 00d's Back (D189), and 00e's (Lydia, 17 Oct). A child held here has no
+  // session to end.
+  useAuth: () => ({ signOut }),
 }));
 vi.mock("@/lib/api/studentEntry", () => ({
   studentEntryApi: { lookup, setPin: entrySetPin },
@@ -120,6 +121,7 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   push.mockReset();
   lookup.mockReset();
+  signOut.mockReset();
   clearOnboardingDraft();
   clearSignInHandoff();
 });
@@ -544,9 +546,16 @@ describe("where a match goes", () => {
       }),
     ).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/soon|consent|parent/i);
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
     expect(push).not.toHaveBeenCalled();
     expect(getOnboardingDraft()).toEqual({});
+    // Lydia, 17 Oct: Back, same as 00d, and nothing else to press - so the
+    // tablet is not held for everyone else. Nobody is signed in to sign out.
+    expect(
+      screen.getAllByRole("button").map((b) => b.getAttribute("aria-label")),
+    ).toEqual(["Back"]);
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(signOut).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("holds a child whose date of birth is in dispute, in place, with the Entry frame's hold (D121)", async () => {
