@@ -291,9 +291,10 @@ interface CalcStepBase {
 /**
  * A step the child answers by picking.
  *
- * `accepted` is every option value the pipeline stored as right - the step's
- * `answer` and its `targets` - so a pick is matched against that list, never
- * reasoned about.
+ * `accepted` is the option value the pipeline stored as right - the step's
+ * `answer`, never its `targets` or its `acceptedAnswers`, either of which can
+ * name another option - so a pick is matched against it, never reasoned
+ * about.
  */
 export interface CalcChoiceStep extends CalcStepBase {
   input: "choice";
@@ -315,6 +316,7 @@ export interface CalcNumberStep extends CalcStepBase {
   input: "number";
   entry: "numeric" | "text";
   keys?: string[];
+  /** The step's `answer`, then every other form in its `acceptedAnswers`. */
   accepted: string[];
   /** "naira", "years", "%" - shown beside the field where the wire gives one. */
   unit?: string;

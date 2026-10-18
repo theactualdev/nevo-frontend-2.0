@@ -286,6 +286,20 @@ export interface CalculationStep {
    */
   answer?: string | number | boolean | null;
   /**
+   * EVERY OTHER FORM THE PIPELINE STORED AS RIGHT (SCRUM-185, in the
+   * response since 18 Oct; at most 30). Lydia on SCRUM-177: one half, 0.5 and
+   * 50% are all written down at upload, and the child's entry is matched
+   * against the list - nothing is worked out at runtime. Lydia, 17 Oct: "0.5"
+   * for "1/2" marked wrong is demo-fatal.
+   *
+   * Read for a NUMBER step only. A choice is answered by tapping an option, so
+   * a form that is not an option cannot be given, and one that is an option
+   * makes a second option right - the `targets` defect. Nothing upstream keeps
+   * a choice step's list off its other options, so it is not read there.
+   * Absent on content stored before it.
+   */
+  acceptedAnswers?: CheckpointScalar[];
+  /**
    * The choices for a `selection` or `drag` step, empty for the other two.
    *
    * Same `{value,label}` type the comprehension checkpoints use, so
@@ -312,8 +326,8 @@ export interface CalculationStep {
    *
    * `targets` name what a step points at, NOT further right answers: backend
    * fills a step with none with every one of its options. Read for nothing
-   * here. Every acceptable form of a step (Lydia on SCRUM-177) is stored as
-   * `accepted` (SCRUM-185), which the response does not carry yet.
+   * here. Every acceptable form of a step (Lydia on SCRUM-177) arrives as
+   * `acceptedAnswers` (SCRUM-185), above.
    * `assembles` is the equation once this step is accepted (B110).
    */
   input?: CalculationStepEntry;

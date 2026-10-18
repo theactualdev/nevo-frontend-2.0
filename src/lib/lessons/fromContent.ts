@@ -402,8 +402,9 @@ function quickCheckFor(segment: ContentSegment): QuickCheck | undefined {
  * payload).
  *
  * THE FRONT END COMPUTES NOTHING HERE. Every step's right answer is the one
- * the pipeline wrote down - `answer`, or the option it names - and the
- * child's entry is matched against it (`isStoredAnswer`). The
+ * the pipeline wrote down - `answer`, or the option it names, and for a typed
+ * step every other form it stored in `acceptedAnswers` - and the child's
+ * entry is matched against that list (`isStoredAnswer`). The
  * drawing is the payload's `scaffold` read as given, and the equation is the
  * payload's own `assembles` and `equationState` strings. Nothing is parsed out
  * of notation and nothing is worked out from it, which is why this no longer
@@ -576,20 +577,45 @@ function expressionOf(variant: {
 }
 
 /**
- * A step's stored answer - its `answer` - as written.
+ * A step's stored answers, as written: its `answer` first, then - for a
+ * number step - every other form in its `acceptedAnswers`, each once.
  *
  * NOT ITS `targets`. They name what a step points at, not what is right:
  * backend fills a step that has none with every one of its options, and uses
  * them as the step's highlights where it sends none. Read as answers, they
- * marked every option of such a choice right. Every acceptable form of a step
- * is stored apart (`accepted`, SCRUM-185) and is not yet in the response;
- * until it is, the one answer is the only one.
+ * marked every option of such a choice right.
+ *
+ * `acceptedAnswers` (SCRUM-185) is where every acceptable form is stored -
+ * "0.5" beside "1/2" (Lydia, 17 Oct). A NUMBER STEP ONLY: a choice is
+ * answered by tapping an option, so a form that is not an option cannot be
+ * given, and one that is an option would make a second option right, the
+ * `targets` defect again. Nothing upstream keeps a choice step's list off its
+ * other options, so a choice keeps its one answer.
+ *
+ * Other forms OF the answer: a step with no `answer` has none, whatever its
+ * list holds - the server marks nothing against a missing key - and is still
+ * the step nobody can be right about.
  */
-function storedAnswers(step: WireCalculationStep): string[] {
-  return [step.answer]
-    .filter((a): a is string | number | boolean => a != null)
-    .map((a) => String(a).trim())
-    .filter((a) => a !== "");
+function storedAnswers(
+  step: WireCalculationStep,
+  { alternatives }: { alternatives: boolean },
+): string[] {
+  const written = (forms: readonly unknown[]) =>
+    forms
+      .filter(
+        (a): a is string | number | boolean =>
+          typeof a === "string" ||
+          typeof a === "number" ||
+          typeof a === "boolean",
+      )
+      .map((a) => String(a).trim())
+      .filter((a) => a !== "");
+  const answer = written([step.answer]);
+  if (answer.length === 0 || !alternatives) return answer;
+  const others = Array.isArray(step.acceptedAnswers)
+    ? written(step.acceptedAnswers)
+    : [];
+  return [...new Set([...answer, ...others])];
 }
 
 /**
@@ -609,7 +635,9 @@ function calcStepFor(
   step: WireCalculationStep,
   manipulative: CalculationSegment["manipulative"],
 ): CalculationStep | undefined {
-  const accepted = storedAnswers(step);
+  const accepted = storedAnswers(step, {
+    alternatives: step.input === "number",
+  });
   const narration = narrationFor(step);
   const tokens = tokensFor(step);
   const base = {
