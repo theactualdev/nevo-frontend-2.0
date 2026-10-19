@@ -94,3 +94,80 @@ describe("an attempt", () => {
     expect(body).not.toHaveProperty("segmentId");
   });
 });
+
+/*
+ * Lydia, 17 Oct: "send the response time with each quick-check answer. Today
+ * the check measures it and drops it." The server will not let a missing or
+ * implausibly short time raise mastery - two instant right taps are not
+ * learned - so the time measured has to reach it, and none is ever made up.
+ */
+describe("an attempt's timing", () => {
+  const pick = { id: "a", label: "A", value: "a" };
+
+  it("carries the response time the check measured", () => {
+    const body = answerFor({
+      questionId: "cp-1",
+      source: "checkpoint",
+      choice: pick,
+      responseTimeMs: 2400,
+    });
+
+    expect(body).toMatchObject({ responseTimeMs: 2400 });
+  });
+
+  it("carries a 0, which is a measurement, not an absence", () => {
+    const body = answerFor({
+      questionId: "cp-1",
+      source: "assessment",
+      choice: pick,
+      responseTimeMs: 0,
+    });
+
+    expect(body).toMatchObject({ responseTimeMs: 0 });
+  });
+
+  it("leaves it out when nothing was measured", () => {
+    const body = answerFor({
+      questionId: "cp-1",
+      source: "checkpoint",
+      choice: pick,
+    });
+
+    expect(body).not.toHaveProperty("responseTimeMs");
+  });
+
+  it.each([
+    ["not a number at all", Number.NaN],
+    ["negative", -5],
+    ["over the contract's hour", 3_600_001],
+  ])("leaves out a time the contract would refuse: %s", (_, ms) => {
+    // The whole answer would be refused over an optional field.
+    const body = answerFor({
+      questionId: "cp-1",
+      source: "checkpoint",
+      choice: pick,
+      responseTimeMs: ms,
+    });
+
+    expect(body).not.toBeNull();
+    expect(body).not.toHaveProperty("responseTimeMs");
+  });
+
+  it("says a hint was on screen only where the player knows one was (B28)", () => {
+    const hinted = answerFor({
+      questionId: "cp-1",
+      source: "checkpoint",
+      choice: pick,
+      hinted: true,
+    });
+    const plain = answerFor({
+      questionId: "cp-1",
+      source: "checkpoint",
+      choice: pick,
+    });
+
+    expect(hinted).toMatchObject({ hintCount: 1 });
+    // Not a 0: the server's own default, and nothing was observed.
+    expect(plain).not.toHaveProperty("hintCount");
+  });
+});

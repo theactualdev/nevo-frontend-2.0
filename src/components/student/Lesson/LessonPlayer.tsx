@@ -2333,7 +2333,9 @@ export function LessonPlayer({
           exitTo(HOME_HREF);
         }}
         onAnswer={({ questionIndex, selectedId, correct, responseTimeMs }) => {
-          // The pick goes up on the attempt, where the server marks it.
+          // The pick goes up on the attempt, where the server marks it - with
+          // the time it took, as the check measured it (Lydia, 17 Oct). No
+          // hint is ever shown on the after-lesson check, so none is sent.
           const checkpointId = lesson.assessment?.questions[questionIndex]?.id;
           saveAttempt(
             answerFor({
@@ -2342,13 +2344,15 @@ export function LessonPlayer({
               choice: lesson.assessment?.questions[questionIndex]?.options.find(
                 (o) => o.id === selectedId,
               ),
+              responseTimeMs,
             }),
           );
           /*
            * THE CATALOGUE'S KEYS, `segmentId` and `questionId`, and nothing it
            * does not declare: correctness is decided on the server against the
            * stored answer, so `correct` - and the pick and its timing beside it
-           * - are not sent here. NO `segmentId`: an after-lesson question
+           * - are not sent here; the pick and its timing ride the attempt
+           * above. NO `segmentId`: an after-lesson question
            * belongs to the lesson, not to any one segment, and naming the last
            * one would put the answer on a segment it was never about - and
            * the catalogue makes it optional for exactly this (9 Oct).
@@ -2978,7 +2982,10 @@ export function LessonPlayer({
             const checkpointId = segment.quickCheck?.id;
             // The catalogue's keys, `source` naming a quick check's answer
             // from the after-lesson check's; the pick goes up on the attempt
-            // below, where the server marks it.
+            // below, where the server marks it - with the time it took as the
+            // sheet measured it, and whether a hint was on screen for it (B28),
+            // so two instant right taps do not count as learned (Lydia, 17
+            // Oct).
             trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
               segmentId: segment.id,
               ...(checkpointId ? { questionId: checkpointId } : {}),
@@ -2992,6 +2999,8 @@ export function LessonPlayer({
                 choice: segment.quickCheck?.options.find(
                   (o) => o.id === answered.selectedId,
                 ),
+                responseTimeMs: answered.responseTimeMs,
+                hinted: hintedSegments.current.has(segment.id),
               }),
               // B94: the server's answer may hand this child off.
               (stored) => handOffFrom(segment.id, stored),
