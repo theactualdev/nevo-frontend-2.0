@@ -340,3 +340,75 @@ describe("instructions that are not densities", () => {
     expect(body()).toBe(baseline);
   });
 });
+
+describe("Simplify loses no content (Lydia, 17 Oct)", () => {
+  /*
+   * "A rewrite must not be able to lose an equation. Simplify loses no
+   * content, which is the whole rule." Checklist 13: "Press Simplify on a
+   * dense segment ... Failure: Content disappears."
+   *
+   * Built as a live lesson is, through `lessonFromContent`, because this is
+   * the path a child presses Simplify on: the key terms and the equation
+   * arrive on `textVariant`, the simpler text on `depthVariants`, and the body
+   * may not repeat the equation (backend, 9 Oct).
+   */
+  const dense = lessonFromContent({
+    id: "photo-4",
+    title: "Photosynthesis",
+    confirmationSummary: null,
+    segments: [
+      {
+        id: "seg-1",
+        segmentKey: "s1",
+        contentType: "explanatory_text",
+        sequenceOrder: 1,
+        title: "Inside a leaf",
+        body: FULL,
+        availableModalities: ["text"],
+        comprehensionCheckpoints: [],
+        textVariant: {
+          body: FULL,
+          keyPoints: ["Light becomes food."],
+          keyTerms: [{ term: "chlorophyll", definition: "The green in a leaf." }],
+          equationCallouts: [
+            { equation: "Carbon dioxide + Water → Glucose + Oxygen", label: "Word equation" },
+          ],
+        },
+        visualVariant: null,
+        audioVariant: null,
+        interactiveVariant: null,
+        calculationVariant: null,
+        depthVariants: { simplified: { body: SHORT }, expanded: null },
+        needsReview: false,
+        reviewReasons: [],
+      },
+    ],
+  } as never);
+
+  it("keeps the key terms and the equation when the child presses Simplify", () => {
+    if (!dense) throw new Error("fixture produced no openable lesson");
+    render(<LessonPlayer lesson={dense} plan={planWith(null)} live />);
+    expect(body()).toContain(FULL);
+
+    fireEvent.click(chip("Simplify")!);
+
+    expect(body()).toContain(SHORT);
+    expect(body()).not.toContain(FULL);
+    expect(screen.getAllByRole("button", { name: "chlorophyll" })).toHaveLength(1);
+    expect(
+      screen.getAllByText("Carbon dioxide + Water → Glucose + Oxygen"),
+    ).toHaveLength(1);
+    expect(screen.getByText("Light becomes food.")).toBeTruthy();
+  });
+
+  it("keeps them when the engine asks for Simplify too", () => {
+    if (!dense) throw new Error("fixture produced no openable lesson");
+    render(<LessonPlayer lesson={dense} plan={planWith("simplify")} live />);
+
+    expect(body()).toContain(SHORT);
+    expect(screen.getAllByRole("button", { name: "chlorophyll" })).toHaveLength(1);
+    expect(
+      screen.getAllByText("Carbon dioxide + Water → Glucose + Oxygen"),
+    ).toHaveLength(1);
+  });
+});
