@@ -35,7 +35,7 @@ import {
  * TO REFRESH IT, from the repo root, then read the diff before committing -
  * a type that turned server-written is a type this client must stop sending:
  *
- *   node -e "fetch('https://nevo-backend-2-0-kn3d.onrender.com/api/signals/catalogue').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(j=>require('fs').writeFileSync('src/lib/api/signals.catalogue.json',JSON.stringify(j,null,2)+'\n'))"
+ *   node -e "fetch('https://api.nevolearning.com/api/signals/catalogue').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(j=>require('fs').writeFileSync('src/lib/api/signals.catalogue.json',JSON.stringify(j,null,2)+'\n'))"
  */
 
 interface CatalogueEntry {
