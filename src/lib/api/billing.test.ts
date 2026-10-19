@@ -54,15 +54,21 @@ describe("invoicePdfPath", () => {
     ).toBe("/api/billing/x.pdf?v=2");
   });
 
-  it("recognises the backend where it lives now, not only where it used to", () => {
-    // The backend moved to Render on 28-29 Sep. A check that knew only
-    // nevolearning.com would have treated every PDF it now serves as a
-    // stranger's link.
+  it("recognises the backend's Render addresses, not only nevolearning.com", () => {
+    // The API answered from Render's -kn3d host from 29 Sep to 17 Oct, so
+    // invoice rows written then may still name it. Its live Render address
+    // serves the same API as api.nevolearning.com. A check that knew only
+    // nevolearning.com would treat those PDFs as a stranger's link.
     expect(
       invoicePdfPath(
         "https://nevo-backend-2-0-kn3d.onrender.com/api/billing/invoices/s1/NEV-2.pdf",
       ),
     ).toBe("/api/billing/invoices/s1/NEV-2.pdf");
+    expect(
+      invoicePdfPath(
+        "https://nevo-backend-2-0.onrender.com/api/billing/invoices/s1/NEV-3.pdf",
+      ),
+    ).toBe("/api/billing/invoices/s1/NEV-3.pdf");
     // Another app on the same hosting provider is still somebody else.
     expect(invoicePdfPath("https://someone-else.onrender.com/x.pdf")).toBeNull();
   });
