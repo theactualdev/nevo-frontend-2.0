@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { dotPairs, type AgeBand, type DotPair } from "@/lib/profiling/bands";
-import type { BaselineCapture } from "@/lib/profiling/capture";
+import { wordsShown, type BaselineCapture } from "@/lib/profiling/capture";
 import { AvatarBubble, ProfilingShell } from "./ProfilingShell";
 import { SettleBadge } from "./GridSpanModule";
 import { TrialButton } from "./PatternFlankerModule";
@@ -185,6 +185,13 @@ const PASSAGE_OPTIONS = [
 ];
 /** The passage says she records each sale because she is saving for the fees. */
 const PASSAGE_ANSWER = 1;
+/**
+ * The words the passage puts on screen, which its trial sends as
+ * `readingWordCount` (Teslim 18 Oct #6). The passage only: the question and
+ * the options are not counted (`wordsShown`). A count, never a speed; the
+ * server derives that.
+ */
+const PASSAGE_WORDS = wordsShown(PASSAGE);
 
 /** One round of 3A, for the daily warm-up. */
 export type WarmUpReading =
@@ -517,6 +524,15 @@ export function SentenceDotModule({
   );
 
   const sentence = sentences[Math.min(trial, sentences.length - 1)];
+  /*
+   * What a READ trial's pick carries besides its answer: its mode, and the
+   * words it put on screen (Teslim 18 Oct #6), counted from the very text
+   * rendered below, so the count is the sentence or passage the child saw.
+   * Not on a heard trial, which is not timed reading. The words-per-minute
+   * is the server's to derive; the device only counts what it showed.
+   */
+  const sentenceRead = { mode, readingWordCount: wordsShown(sentence.text) };
+  const passageRead = { mode, readingWordCount: PASSAGE_WORDS };
   const heard = AUDIO_TRIALS[Math.min(trial, AUDIO_TRIALS.length - 1)];
   const pair = pairs[Math.min(trial, pairs.length - 1)];
   const flipped = largerOnRight[Math.min(trial, largerOnRight.length - 1)];
@@ -590,7 +606,11 @@ export function SentenceDotModule({
                     key={o}
                     type="button"
                     onClick={(e) =>
-                      pick(i, { mode, correct: i === PASSAGE_ANSWER }, e)
+                      pick(
+                        i,
+                        { ...passageRead, correct: i === PASSAGE_ANSWER },
+                        e,
+                      )
                     }
                     className={cn(
                       "flex min-h-12 w-full cursor-pointer items-center rounded-[10px] border-2 px-4 py-3.5 text-left text-[15px] leading-[1.4]",
@@ -605,7 +625,11 @@ export function SentenceDotModule({
                 <button
                   type="button"
                   onClick={(e) =>
-                    pick(PASSAGE_OPTIONS.length, { mode, notSure: true }, e)
+                    pick(
+                      PASSAGE_OPTIONS.length,
+                      { ...passageRead, notSure: true },
+                      e,
+                    )
                   }
                   className="flex min-h-12 w-full cursor-pointer items-center rounded-[10px] border-2 border-nevo-violet bg-nevo-cream px-4 py-3.5 text-left text-sm font-medium text-nevo-violet"
                 >
@@ -632,7 +656,11 @@ export function SentenceDotModule({
                   className={TF_BUTTON}
                   pressed={picked === 0}
                   onClick={(e) =>
-                    pick(0, { mode, correct: sentence.isTrue === true }, e)
+                    pick(
+                      0,
+                      { ...sentenceRead, correct: sentence.isTrue === true },
+                      e,
+                    )
                   }
                 />
                 <TrialButton
@@ -640,7 +668,11 @@ export function SentenceDotModule({
                   className={TF_BUTTON}
                   pressed={picked === 1}
                   onClick={(e) =>
-                    pick(1, { mode, correct: sentence.isTrue === false }, e)
+                    pick(
+                      1,
+                      { ...sentenceRead, correct: sentence.isTrue === false },
+                      e,
+                    )
                   }
                 />
                 <TrialButton
@@ -648,7 +680,9 @@ export function SentenceDotModule({
                   className={TF_BUTTON}
                   soft
                   pressed={picked === 2}
-                  onClick={(e) => pick(2, { mode, notSure: true }, e)}
+                  onClick={(e) =>
+                    pick(2, { ...sentenceRead, notSure: true }, e)
+                  }
                 />
               </div>
             </div>

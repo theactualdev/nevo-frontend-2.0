@@ -30,6 +30,7 @@ import {
   baselineRunContext,
   baselineTrials,
   tapPoint,
+  wordsShown,
 } from "@/lib/profiling/capture";
 import {
   CheckButton,
@@ -972,6 +973,10 @@ function WarmUpTask({
       const reading = warmUpReading(sized);
       // Each pick carries `mode` as the reading activity records it, so the
       // engine can tell a passage read from a sentence read or one heard.
+      // A READ round also carries the words it put on screen, as the
+      // baseline's does (Teslim 18 Oct #6): the passage or the sentence
+      // rendered below, never the question or the options, and nothing for
+      // a sentence heard. A count only; the server derives the speed.
       if (reading.mode === "audio") {
         return (
           <WarmUpHeard
@@ -991,7 +996,11 @@ function WarmUpTask({
           <SingleChoice
             onDone={onDone}
             onPick={(choice, detail) =>
-              pick(choice, { ...detail, mode: "passage" })
+              pick(choice, {
+                ...detail,
+                mode: "passage",
+                readingWordCount: wordsShown(reading.passage),
+              })
             }
             stacked
             options={[...reading.options, "Not sure"]}
@@ -1015,7 +1024,11 @@ function WarmUpTask({
           prompt="True or false?"
           onDone={onDone}
           onPick={(choice, detail) =>
-            pick(choice, { ...detail, mode: "sentence" })
+            pick(choice, {
+              ...detail,
+              mode: "sentence",
+              readingWordCount: wordsShown(reading.text),
+            })
           }
           stacked
           options={["True", "False", "Not sure"]}

@@ -70,6 +70,18 @@ export interface BaselineTrial {
    * contract's false. A "Not sure" is a response, never a skip.
    */
   skipped?: boolean;
+  /**
+   * The words a timed reading put on screen (Teslim 18 Oct #6; the contract
+   * takes a whole number, 1 to 10000): the sentence or the passage, never the
+   * question or the options, counted by `wordsShown`. Sent only on a reading
+   * trial the child read, beside a response time measured for it. Absent on
+   * every other trial, including a sentence heard, as the contract asks
+   * ("Omit when the activity is not timed reading").
+   *
+   * A count of words, not a speed. The server pairs it with `responseTimeMs`
+   * to derive words per minute; the device never does (rule 3).
+   */
+  readingWordCount?: number;
 }
 
 /**

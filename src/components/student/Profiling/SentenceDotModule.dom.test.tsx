@@ -659,3 +659,116 @@ describe("SentenceDotModule — response time starts when the child can answer",
     expect(picks(capture, "reading")[0]).toMatchObject({ beforeOpen: true });
   });
 });
+
+describe("SentenceDotModule — a read trial says how many words it showed", () => {
+  /*
+   * Teslim, 18 Oct #6: "For a timed reading trial, send the number of words
+   * actually displayed as `readingWordCount`." The reading trials sent none,
+   * so the server could derive no reading speed and every child's reading
+   * starting point was the 120 wpm default (Lydia's 17 Oct order of work).
+   *
+   * The counts below are counted by hand from the text on screen: whitespace
+   * apart, punctuation with its word, "mid-morning" and "brother's" one each.
+   */
+  const readingTrials = (capture: BaselineCapture) =>
+    baselineTrials(capture).filter((t) => t.dimension === "reading");
+  /** Answer each sentence in turn, a little while after it appears. */
+  const answerTheSentences = (labels: string[]) => {
+    for (const label of labels) {
+      act(() => void vi.advanceTimersByTime(1500)); // the child reads
+      fireEvent.click(screen.getByText(label));
+      act(() => void vi.advanceTimersByTime(500)); // the pressed beat
+    }
+  };
+
+  it("sends the words of each P4-6 sentence, a 'Not sure' included", () => {
+    const capture = new BaselineCapture("wc-p46");
+    render(
+      <SentenceDotModule band="p46" capture={capture} onComplete={() => {}} />,
+    );
+
+    answerTheSentences(["True", "False", "Not sure"]);
+
+    // "Garri is made from cassava." / "Lagos is the capital of Nigeria." /
+    // "The danfo bus runs from Oshodi to CMS."
+    expect(readingTrials(capture)).toMatchObject([
+      { condition: "sentence", responseTimeMs: 1500, readingWordCount: 5 },
+      { condition: "sentence", responseTimeMs: 1500, readingWordCount: 6 },
+      { response: "not_sure", responseTimeMs: 1500, readingWordCount: 8 },
+    ]);
+  });
+
+  it("sends the words of each JSS sentence", () => {
+    const capture = new BaselineCapture("wc-jss");
+    render(
+      <SentenceDotModule band="jss" capture={capture} onComplete={() => {}} />,
+    );
+
+    answerTheSentences(["True", "True", "True"]);
+
+    expect(readingTrials(capture).map((t) => t.readingWordCount)).toEqual([
+      16, 7, 10,
+    ]);
+  });
+
+  it("sends the passage's words for SS, and not its question's or options'", () => {
+    const capture = new BaselineCapture("wc-ss");
+    render(
+      <SentenceDotModule band="ss" capture={capture} onComplete={() => {}} />,
+    );
+    act(() => void vi.advanceTimersByTime(20_000));
+
+    fireEvent.click(screen.getByText("To track her savings for school fees"));
+
+    // The passage alone is 60. With "Why does Ada keep a notebook?" it would
+    // be 66, and the four options would add 23 more.
+    expect(readingTrials(capture)).toMatchObject([
+      { condition: "passage", responseTimeMs: 20_000, readingWordCount: 60 },
+    ]);
+  });
+
+  it("sends them when SS declines the passage too", () => {
+    const capture = new BaselineCapture("wc-ss-declined");
+    render(
+      <SentenceDotModule band="ss" capture={capture} onComplete={() => {}} />,
+    );
+
+    fireEvent.click(screen.getByText("Not sure"));
+
+    expect(readingTrials(capture)[0]).toMatchObject({
+      response: "not_sure",
+      readingWordCount: 60,
+    });
+  });
+
+  it("sends none for a sentence P1-3 hears, which is not timed reading", () => {
+    giveJsdomAVoice();
+    const capture = new BaselineCapture("wc-p13");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+    act(() => utterances[0].onend?.());
+    act(() => void vi.advanceTimersByTime(700));
+
+    fireEvent.click(screen.getByLabelText("A bus"));
+
+    expect(picks(capture, "reading")[0]).not.toHaveProperty("readingWordCount");
+    expect(readingTrials(capture)[0]).toMatchObject({ responseTimeMs: 700 });
+    expect(readingTrials(capture)[0]).not.toHaveProperty("readingWordCount");
+  });
+
+  it("sends none for a dot trial", () => {
+    const capture = new BaselineCapture("wc-dots");
+    render(
+      <SentenceDotModule band="p46" capture={capture} onComplete={() => {}} />,
+    );
+    answerTheSentences(["True", "True", "True"]);
+    act(() => void vi.advanceTimersByTime(1_000)); // past the reveal
+
+    fireEvent.click(screen.getByRole("button", { name: /Top|Left/ }));
+
+    const [dots] = baselineTrials(capture).filter((t) => t.dimension === "ans");
+    expect(dots.responseTimeMs).not.toBeNull();
+    expect(dots).not.toHaveProperty("readingWordCount");
+  });
+});

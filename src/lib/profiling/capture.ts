@@ -233,6 +233,52 @@ const text = (value: unknown): string | null =>
   value === undefined || value === null ? null : String(value).slice(0, 200);
 
 /**
+ * How many words a reading trial put on screen, for its `readingWordCount`
+ * (Teslim 18 Oct #6: "send the number of words actually displayed").
+ *
+ * THE RULE, kept simple so the server knows exactly what it is given: the
+ * displayed text split on whitespace, counting each piece that holds at least
+ * one letter or digit.
+ *
+ *  - A hyphenated word is one word ("mid-morning"): it has no space in it.
+ *  - A number is one word ("2026", "1,200", "3.5").
+ *  - Punctuation goes with the word it touches ("Nigeria." is one word, and
+ *    so is "brother's"). A mark standing alone between spaces - a spaced
+ *    dash, an ellipsis - is not a word.
+ *
+ * Callers pass ONLY THE TEXT SHOWN FOR READING: the sentence, or the passage.
+ * Not SS's question under the passage, and not the answer options: those are
+ * what the child answers with, not the text being read. Whether the server
+ * wants them counted too is asked (Q-B3).
+ *
+ * A COUNT OF WORDS SHOWN, NOT A READING SPEED. The server pairs it with the
+ * trial's `responseTimeMs` to derive words per minute; nothing on the device
+ * divides one by the other (rule 3: the device computes no score, parameter
+ * or threshold).
+ */
+export function wordsShown(displayed: string): number {
+  return displayed
+    .split(/\s+/)
+    .filter((piece) => /[\p{L}\p{N}]/u.test(piece)).length;
+}
+
+/**
+ * A word count as the contract takes it: a whole number, 1 to 10000. Anything
+ * else goes as nothing, not clamped into a count nobody made, because one
+ * value outside the range refuses the whole run with a 422 (`withRetry` does
+ * not retry a 4xx, and the parked copy is refused identically on every later
+ * flush until it ages out).
+ */
+function wordCount(value: unknown): number | null {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= 10_000
+    ? value
+    : null;
+}
+
+/**
  * The run as `POST /api/baseline/trials` takes it: one `BaselineTrial` per
  * thing the child answered, in the order they answered it (B9, 5 Oct).
  *
@@ -250,7 +296,9 @@ const text = (value: unknown): string | null =>
  *    (the device drew the dots, the server never saw them), and `rtMs` as
  *    the trial runner measured it. A served question names its item in
  *    `probeItemId` and sends the option's value; the server marks it and
- *    ignores whatever `correct` says.
+ *    ignores whatever `correct` says. A sentence or passage READ also
+ *    carries `readingWordCount`, the words it put on screen (`wordsShown`),
+ *    for the server to derive a reading speed from (Teslim 18 Oct #6).
  *  - "NOT SURE" is a decline, never a wrong answer: `response: "not_sure"` and
  *    `correct: null`, so it can never enter an accuracy as a miss.
  *  - A TILE RECALL (working memory): ONE trial per completed recall, not one
@@ -360,8 +408,30 @@ export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
       case "trial_pick": {
         const act = String(p.act);
         const declined = p.notSure === true;
+        const dimension = DIMENSION_OF_ACT[act] ?? act.slice(0, 60);
+        const responseTimeMs = ms(p.rtMs);
+        /*
+         * THE WORDS A TIMED READING PUT ON SCREEN (Teslim 18 Oct #6). The
+         * reading trials sent none, so the server could derive no reading
+         * speed and every child's reading starting point was the 120 wpm
+         * default (Lydia's 17 Oct order of work).
+         *
+         * Only on a reading trial the child READ: a heard sentence (P1-3,
+         * `mode: "audio"`) is not timed reading, and the contract says to
+         * omit it there. Only beside a time measured for that trial, since
+         * the count means nothing without one and no time is invented for
+         * it. Sent on a "Not sure" too: the words were shown and the time
+         * was taken, and whether a declined trial enters a speed is the
+         * server's call (it leaves them out today).
+         */
+        const readingWordCount =
+          dimension === "reading" &&
+          p.mode !== "audio" &&
+          responseTimeMs !== null
+            ? wordCount(p.readingWordCount)
+            : null;
         trials.push({
-          dimension: DIMENSION_OF_ACT[act] ?? act.slice(0, 60),
+          dimension,
           condition: conditionOf(e),
           response: declined
             ? "not_sure"
@@ -370,11 +440,12 @@ export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
               ),
           correct:
             !declined && typeof p.correct === "boolean" ? p.correct : null,
-          responseTimeMs: ms(p.rtMs),
+          responseTimeMs,
           probeItemId:
             typeof p.itemId === "string" && UUID.test(p.itemId)
               ? p.itemId
               : null,
+          ...(readingWordCount === null ? {} : { readingWordCount }),
         });
         break;
       }

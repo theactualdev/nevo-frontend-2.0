@@ -4,6 +4,7 @@ import {
   baselineRunContext,
   baselineTrials,
   tapPoint,
+  wordsShown,
 } from "./capture";
 
 /**
@@ -74,7 +75,7 @@ function aWholeRun() {
   c.record("trial_pick", { module: "pattern_flanker", act: "pattern", choice: 0, rtMs: 640, pair: "same", correct: true });
   c.record("trial_pick", { module: "pattern_flanker", act: "flanker", choice: 1, rtMs: 910, congruency: "incongruent", correct: false });
   // Module 3.
-  pick(c, "reading", { choice: 2, rtMs: 2100, mode: "sentence", notSure: true });
+  pick(c, "reading", { choice: 2, rtMs: 2100, mode: "sentence", notSure: true, readingWordCount: 5 });
   pick(c, "dots", { choice: 0, rtMs: 700, a: 9, b: 6, ratio: 1.5, correct: true });
   c.record("module_end", { module: "sentence_dot" });
   // Module 4, the domain probe, is not presented (SCRUM-175/176).
@@ -107,10 +108,15 @@ describe("baselineTrials - nothing on the wire is a summary", () => {
     const trials = baselineTrials(aWholeRun());
 
     for (const trial of trials) {
-      expect(Object.keys(trial).sort()).toEqual(CONTRACT_KEYS);
+      // A sentence read also says how many words it showed (Teslim 18 Oct
+      // #6). A count of words, never a speed: the server derives that.
+      const read = trial.dimension === "reading" ? ["readingWordCount"] : [];
+      expect(Object.keys(trial).sort()).toEqual(
+        [...CONTRACT_KEYS, ...read].sort(),
+      );
     }
     expect(JSON.stringify(trials)).not.toMatch(
-      /mean|accuracy|span|scored|roundsCompleted|retries|median/i,
+      /mean|accuracy|span|scored|roundsCompleted|retries|median|wpm|perMinute/i,
     );
   });
 
@@ -227,6 +233,123 @@ describe("baselineTrials - a pick", () => {
       null,
       null,
       641,
+    ]);
+  });
+});
+
+describe("wordsShown - how a reading trial's words are counted", () => {
+  /*
+   * The rule the server is told: the displayed text split on whitespace,
+   * each piece with a letter or a digit in it one word.
+   */
+  it("counts the words as displayed, punctuation going with its word", () => {
+    expect(wordsShown("Garri is made from cassava.")).toBe(5);
+    expect(
+      wordsShown(
+        "If you travel from Lagos to Abuja by road, you pass through at least three states.",
+      ),
+    ).toBe(16);
+  });
+
+  it("counts a hyphenated word once, and a number as one word", () => {
+    expect(wordsShown("by mid-morning the lane is crowded")).toBe(6);
+    expect(wordsShown("She sold 1,200 wrappers in 2026, at 3.5 each.")).toBe(9);
+  });
+
+  it("keeps an apostrophe inside its word, and counts no mark standing alone", () => {
+    expect(wordsShown("her younger brother's school fees")).toBe(5);
+    // A spaced dash and an ellipsis, each standing alone.
+    expect(wordsShown("Ada waited — then she left ...")).toBe(5);
+  });
+
+  it("is not moved by line breaks or runs of spaces, and is nothing for no text", () => {
+    expect(wordsShown("  Ada\n keeps   a\tnotebook. ")).toBe(4);
+    expect(wordsShown("")).toBe(0);
+    expect(wordsShown(" \n ")).toBe(0);
+  });
+});
+
+describe("baselineTrials - the words a timed reading showed (Teslim 18 Oct #6)", () => {
+  /*
+   * "For a timed reading trial, send the number of words actually displayed
+   * as `readingWordCount`." None was sent, so the server could derive no
+   * reading speed and every child started from the 120 wpm default. The
+   * contract: an integer, 1 to 10000, "omit when the activity is not timed
+   * reading".
+   */
+  it("sends a sentence's or a passage's words beside the time it was read in", () => {
+    const c = new BaselineCapture("wc1");
+    pick(c, "reading", { choice: 0, rtMs: 1800, mode: "sentence", correct: true, readingWordCount: 5 });
+    pick(c, "reading", { choice: 1, rtMs: 21_000, mode: "passage", correct: true, readingWordCount: 60 });
+
+    expect(baselineTrials(c)).toEqual([
+      { dimension: "reading", condition: "sentence", response: "0", correct: true, responseTimeMs: 1800, probeItemId: null, readingWordCount: 5 },
+      { dimension: "reading", condition: "passage", response: "1", correct: true, responseTimeMs: 21_000, probeItemId: null, readingWordCount: 60 },
+    ]);
+  });
+
+  it("sends them for the warm-up's reading round, which names its act as the dimension", () => {
+    const c = new BaselineCapture("wc2");
+    c.record("trial_pick", { module: "warmup", act: "reading", choice: "True", rtMs: 2400, mode: "sentence", correct: true, readingWordCount: 5 });
+
+    expect(baselineTrials(c)[0]).toMatchObject({ dimension: "reading", readingWordCount: 5 });
+  });
+
+  it("sends them on a 'Not sure' too: the words were shown and the time was taken", () => {
+    const c = new BaselineCapture("wc3");
+    pick(c, "reading", { choice: 2, rtMs: 2000, mode: "sentence", notSure: true, readingWordCount: 8 });
+
+    expect(baselineTrials(c)[0]).toMatchObject({
+      response: "not_sure",
+      correct: null,
+      readingWordCount: 8,
+    });
+  });
+
+  it("sends none for a sentence heard, which is not timed reading", () => {
+    const c = new BaselineCapture("wc4");
+    pick(c, "reading", { choice: 0, rtMs: 700, mode: "audio", correct: true, readingWordCount: 6 });
+
+    expect(baselineTrials(c)[0]).not.toHaveProperty("readingWordCount");
+  });
+
+  it("sends none on a trial that is not reading", () => {
+    const c = new BaselineCapture("wc5");
+    pick(c, "dots", { choice: 0, rtMs: 700, ratio: 1.5, correct: true, readingWordCount: 6 });
+    c.record("trial_pick", { module: "warmup", act: "attention", choice: "Left", rtMs: 600, readingWordCount: 6 });
+
+    for (const trial of baselineTrials(c)) {
+      expect(trial).not.toHaveProperty("readingWordCount");
+    }
+  });
+
+  it("sends none where no time was measured, rather than a count with nothing to pair it with", () => {
+    const c = new BaselineCapture("wc6");
+    pick(c, "reading", { choice: 0, rtMs: null, mode: "sentence", readingWordCount: 5 });
+    // Over the contract's 600000, which goes as no time at all.
+    pick(c, "reading", { choice: 0, rtMs: 900_000, mode: "sentence", readingWordCount: 5 });
+
+    for (const trial of baselineTrials(c)) {
+      expect(trial.responseTimeMs).toBeNull();
+      expect(trial).not.toHaveProperty("readingWordCount");
+    }
+  });
+
+  it("sends none outside the contract's 1 to 10000, rather than a clamped count that would 422 the run", () => {
+    const c = new BaselineCapture("wc7");
+    for (const readingWordCount of [0, -3, 10_001, 2.5, "60", Number.NaN, 1, 10_000]) {
+      pick(c, "reading", { choice: 0, rtMs: 900, mode: "sentence", readingWordCount });
+    }
+
+    expect(baselineTrials(c).map((t) => t.readingWordCount)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      1,
+      10_000,
     ]);
   });
 });
