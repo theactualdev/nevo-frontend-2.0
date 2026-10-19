@@ -97,20 +97,23 @@ vi.mock("./YoureInScreen", () => ({
   ),
 }));
 /*
- * Module 4 in two buttons: it was sat, or it had nothing to ask. The real
- * module, against the real probe contract, is `DomainProbeModule.dom.test`.
+ * Module 4 in three buttons: it was sat, it had nothing to ask, or its read
+ * failed. The real module, against the real probe contract, is
+ * `DomainProbeModule.dom.test`, and in this sequence
+ * `ObservedInteractionSequence.probe.dom.test`.
  */
 vi.mock("@/components/student/Profiling/DomainProbeModule", () => ({
   DomainProbeStep: ({
     onDone,
     stretchFirst,
   }: {
-    onDone: (outcome: "sat" | "absent") => void;
+    onDone: (outcome: "sat" | "absent" | "failed") => void;
     stretchFirst: boolean;
   }) => (
     <div data-stretch-first={String(stretchFirst)}>
       <button onClick={() => onDone("sat")}>after probe</button>
       <button onClick={() => onDone("absent")}>nothing to probe</button>
+      <button onClick={() => onDone("failed")}>probe failed</button>
     </div>
   ),
 }));
@@ -330,6 +333,18 @@ describe("Module 4, the domain probe, as Lydia ruled 17 Oct (SCRUM-244)", () => 
       await screen.findByRole("button", { name: "nothing to probe" }),
     );
 
+    const map = screen.getByRole("progressbar");
+    expect(map).toHaveAttribute("aria-valuemax", "3");
+    expect(map).toHaveAttribute("aria-valuenow", "3");
+  });
+
+  it("maps the three the child did when its read failed, as it did before", async () => {
+    // Not "nothing to ask", but nothing was asked either: Complete fills only
+    // the stops the child reached, and the server's gate brings them back.
+    walkToPin();
+    fireEvent.click(await screen.findByRole("button", { name: "probe failed" }));
+
+    expect(screen.getByText("All set. Nevo is ready for you.")).toBeInTheDocument();
     const map = screen.getByRole("progressbar");
     expect(map).toHaveAttribute("aria-valuemax", "3");
     expect(map).toHaveAttribute("aria-valuenow", "3");

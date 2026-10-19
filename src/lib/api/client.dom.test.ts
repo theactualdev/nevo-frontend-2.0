@@ -630,6 +630,33 @@ describe("a child refused a lesson until onboarding is finished", () => {
     expect(clearSession).not.toHaveBeenCalled();
   });
 
+  it("is sent again on the next load: the latch does not outlive the page", async () => {
+    // Why the continue route keeps its own loop guard (`claimMoveOn`): the
+    // redirect is a full load, every load starts unlatched, so a lesson the
+    // server still refuses after Module 4 had nothing to ask sends the child
+    // back each time. Nothing in here can stop that bounce.
+    as("student");
+    vi.stubGlobal("fetch", replies(GATED, EXPIRED));
+    const first = await freshClient();
+    await expect(first.api.get("/api/v1/lessons/x")).rejects.toThrow();
+    await expect(first.api.get("/api/v1/lessons/x")).rejects.toThrow();
+    expect(clearSession).not.toHaveBeenCalled();
+
+    vi.stubGlobal("fetch", replies(GATED, EXPIRED));
+    const second = await freshClient();
+    await expect(second.api.get("/api/v1/lessons/x")).rejects.toThrow();
+    // Taken again by the 409 on this load, so the 401 after it is held back:
+    // this load was sent to finish onboarding too.
+    await expect(second.api.get("/api/v1/lessons/x")).rejects.toThrow();
+    expect(clearSession).not.toHaveBeenCalled();
+
+    vi.stubGlobal("fetch", replies(EXPIRED));
+    const third = await freshClient();
+    // And a load with no 409 is unlatched: its dead session finds its door.
+    await expect(third.api.get("/api/v1/lessons/x")).rejects.toThrow();
+    expect(clearSession).toHaveBeenCalledTimes(1);
+  });
+
   it("leaves a 409 that is not the gate to the screen that met it", async () => {
     as("student");
     vi.stubGlobal(
