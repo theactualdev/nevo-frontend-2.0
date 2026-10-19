@@ -96,6 +96,46 @@ export function clearOnboardingDraft(): void {
   }
 }
 
+/** How many open screens are using the draft (05 Entry, the sequence). */
+let draftInUse = 0;
+
+/**
+ * Say that this screen is using the draft, for as long as it is open. Returns
+ * the release - the shape of an effect's cleanup.
+ */
+export function claimOnboardingDraft(): () => void {
+  draftInUse += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    draftInUse -= 1;
+  };
+}
+
+/**
+ * A session has ended: the draft goes with it, unless a child is onboarding
+ * on this page right now.
+ *
+ * IT OUTLIVED EVERY CHILD BUT ITS OWN (19 Oct browser-storage audit). It
+ * holds the school code, the Student ID and the first name 05 matched, and
+ * it was cleared only when that child's onboarding finished or the tab
+ * closed - so a child who walked away part way left all three in the tab,
+ * through every later child's sign-in and sign-out.
+ *
+ * NOT FROM A CHILD WHO IS STILL USING IT. A child onboarding has no account,
+ * so no session of their own to end - but a session the last child left on
+ * the device can end under them (it lapses as it is read), and their first
+ * PIN replaces it with their own. Neither is a reason to take their school
+ * code, Student ID, name or consent answer away mid-run: while 05 or the
+ * sequence is open, the draft stays, and that run clears it itself when it
+ * ends, as it always has.
+ */
+export function forgetOnboardingDraft(): void {
+  if (draftInUse > 0) return;
+  clearOnboardingDraft();
+}
+
 /**
  * The pair 05 matched this child on, or null when this run did not start
  * there - a typed URL straight into the sequence. Without it there is nobody

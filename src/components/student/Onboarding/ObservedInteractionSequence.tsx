@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useSignals, type TrackEvent } from "@/hooks";
 import {
+  claimOnboardingDraft,
   clearOnboardingDraft,
   entryIdentityFromDraft,
   rememberOnboardedStudent,
@@ -146,6 +147,15 @@ export function ObservedInteractionSequence() {
       alive.current = false;
     };
   }, []);
+  /*
+   * THE DRAFT IS THIS RUN'S WHILE IT IS OPEN (19 Oct browser-storage audit).
+   * A session ending takes the draft with it, but not from a child still
+   * using it: the last child's session lapsing under this run, or this
+   * child's own first PIN replacing it, must not take the pair their PIN is
+   * stored against, their name, or 05's consent answer. The run clears it
+   * itself at its end.
+   */
+  useEffect(() => claimOnboardingDraft(), []);
 
   /*
    * Deliver this run's parked baseline, and only THEN say so.

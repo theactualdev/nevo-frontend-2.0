@@ -396,6 +396,22 @@ function expireRefusals(owner: string): void {
   if (changed) writeAnswers(owner, store);
 }
 
+/**
+ * Is `owner` still the child signed in here, with a token to send as?
+ *
+ * Asked before EVERY send (19 Oct browser-storage audit). A flush reads the
+ * owner once and then awaits one write after another, and a session can end
+ * between them - a 401 anywhere clears it, then the page leaves. The flush
+ * carried on: the next held answer went up with no Authorization header at
+ * all, a child's answer sent after their session had ended, to be refused.
+ * Now a flush stops at the first send its child's session is no longer there
+ * for, and what it had not sent stays held for them, as it always did.
+ */
+function stillSignedInAs(owner: string): boolean {
+  const session = getSession();
+  return Boolean(session?.token) && session?.userId === owner;
+}
+
 export type HeldAnswers = "sent" | "held" | "refused";
 
 /**
@@ -415,6 +431,11 @@ async function sendAnswers(
   let held = false;
   for (const answer of waiting) {
     const id = answer.body.clientAttemptId;
+    // Their session ended while this ran: what is left stays held for them.
+    if (!stillSignedInAs(owner)) {
+      held = true;
+      break;
+    }
     if (Date.now() - answer.heldAt <= MAX_AGE_MS) {
       try {
         await lessonsApi.saveAttempt(lessonId, { sessionId, ...answer.body });
@@ -476,7 +497,7 @@ async function deliverSlot(
     let sessionId =
       held?.sessionId ?? waiting.find((a) => a.sessionId)?.sessionId ?? null;
     if (!sessionId) {
-      if (mine) return;
+      if (mine || !stillSignedInAs(owner)) return;
       sessionId = (await lessonsApi.startSession(lessonId)).sessionId;
       // Kept under the session from here on, so its answers and its position
       // land in one visit even if they go on different reconnects.
@@ -497,6 +518,7 @@ async function deliverSlot(
       if (answers === "held") return;
       status = LESSON_STATUS.EXITED;
     }
+    if (!stillSignedInAs(owner)) return;
     await lessonsApi.saveProgress(lessonId, {
       sessionId,
       status,

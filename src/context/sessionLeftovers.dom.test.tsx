@@ -18,6 +18,11 @@ import { useAuth } from "@/hooks";
 import { api, authApi } from "@/lib/api";
 import { rememberedChildren } from "@/lib/auth/deviceRoster";
 import {
+  claimOnboardingDraft,
+  getOnboardingDraft,
+  startOnboardingDraft,
+} from "@/lib/auth/onboarding";
+import {
   clearSession,
   getSession,
   rememberProfile,
@@ -296,6 +301,76 @@ describe("raw taps an abandoned baseline run left behind", () => {
     );
     await vi.waitFor(() =>
       expect([...(idb.records(DB)?.keys() ?? [])]).toEqual(["this-week"]),
+    );
+  });
+});
+
+/*
+ * THE ONBOARDING DRAFT A CHILD WALKED AWAY FROM (19 Oct browser-storage
+ * audit): their school code, Student ID and first name, kept in the tab
+ * through every later child's sign-in and sign-out. It goes when a session
+ * ends - unless a child is onboarding on the page right now
+ * (`ObservedInteractionSequence.draft`, `StudentEntryStep`).
+ */
+describe("an onboarding draft nobody is using", () => {
+  const walkedAway = {
+    schoolCode: "K7DQ",
+    admissionNumber: "BGA/2031",
+    name: "Amara",
+    consent: "given" as const,
+  };
+
+  it("goes when a later child signs out in the same tab", async () => {
+    startOnboardingDraft(walkedAway);
+    await aSharedTablet();
+
+    clearSession();
+    await settle();
+
+    expect(getOnboardingDraft()).toEqual({});
+  });
+
+  it("goes when another child's sign-in replaces the session", async () => {
+    startOnboardingDraft(walkedAway);
+    await aSharedTablet();
+
+    signInAs(b);
+    await settle();
+
+    expect(getOnboardingDraft()).toEqual({});
+  });
+
+  it("stays while a child is onboarding on this page, consent answer and all", async () => {
+    startOnboardingDraft(walkedAway);
+    const release = claimOnboardingDraft();
+    await aSharedTablet();
+
+    clearSession();
+    await settle();
+    release();
+
+    expect(getOnboardingDraft()).toEqual(walkedAway);
+  });
+});
+
+/*
+ * THE BARE CHOSEN-NAME KEY builds from 25 Aug wrote (19 Oct browser-storage
+ * audit): one child's name, whoever last renamed themselves here, read by
+ * nothing since names became per account. Retired at sign-out, as the old
+ * single profile is; every account's own name stays.
+ */
+describe("the bare chosen-name key an older build left", () => {
+  it("goes at sign-out, and every account's own name stays", async () => {
+    window.localStorage.setItem("nevo.auth.displayName", "Ada");
+    window.localStorage.setItem("nevo.auth.displayName.child-x", "Bayo");
+    await aSharedTablet();
+
+    clearSession();
+    await settle();
+
+    expect(window.localStorage.getItem("nevo.auth.displayName")).toBeNull();
+    expect(window.localStorage.getItem("nevo.auth.displayName.child-x")).toBe(
+      "Bayo",
     );
   });
 });

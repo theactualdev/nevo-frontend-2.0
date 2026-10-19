@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  claimOnboardingDraft,
   clearOnboardingDraft,
   entryIdentityFromDraft,
+  forgetOnboardingDraft,
+  getOnboardingDraft,
   mergeOnboardingDraft,
   rememberOnboardedStudent,
   startOnboardingDraft,
@@ -148,5 +151,53 @@ describe("entryIdentityFromDraft", () => {
 
     startOnboardingDraft({ schoolCode: "K7DQ", admissionNumber: "   " });
     expect(entryIdentityFromDraft()).toBeNull();
+  });
+});
+
+/*
+ * THE DRAFT OUTLIVED EVERY CHILD BUT ITS OWN (19 Oct browser-storage audit):
+ * a school code, a Student ID and a first name, kept in the tab through
+ * every later child's sign-in and sign-out. A session ending takes it now -
+ * but never from a child still using it on this page.
+ */
+describe("forgetOnboardingDraft - when a session ends", () => {
+  const draft = {
+    schoolCode: "K7DQ",
+    admissionNumber: "BGA/2031",
+    name: "Amara",
+    consent: "given" as const,
+  };
+
+  it("takes a draft no open screen is using", () => {
+    startOnboardingDraft(draft);
+
+    forgetOnboardingDraft();
+
+    expect(getOnboardingDraft()).toEqual({});
+  });
+
+  it("leaves a draft a child is still using, consent answer and all, until their screen closes", () => {
+    startOnboardingDraft(draft);
+    const release = claimOnboardingDraft();
+
+    forgetOnboardingDraft();
+    expect(getOnboardingDraft()).toEqual(draft);
+
+    release();
+    forgetOnboardingDraft();
+    expect(getOnboardingDraft()).toEqual({});
+  });
+
+  it("counts a screen that lets go twice only once", () => {
+    startOnboardingDraft(draft);
+    const first = claimOnboardingDraft();
+    const second = claimOnboardingDraft();
+
+    first();
+    first();
+    forgetOnboardingDraft();
+
+    expect(getOnboardingDraft()).toEqual(draft);
+    second();
   });
 });

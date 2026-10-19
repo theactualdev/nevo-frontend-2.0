@@ -31,6 +31,7 @@ import {
 } from "@/lib/auth/entryHandBack";
 import type { EntryIdentity, EntryPinElsewhere } from "@/lib/auth/firstPin";
 import {
+  claimOnboardingDraft,
   clearOnboardingDraft,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
@@ -178,6 +179,9 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
     peekEntryHandBack() ? "error" : "idle",
   );
   useEffect(() => clearEntryHandBack(), []);
+  // The draft is this screen's while it is open: a session ending under it -
+  // the last child's, lapsing - does not take it (19 Oct).
+  useEffect(() => claimOnboardingDraft(), []);
   /**
    * A lookup we could not run, versus a pair that matched nobody. A child must
    * never be told to re-check what they typed because our request failed.

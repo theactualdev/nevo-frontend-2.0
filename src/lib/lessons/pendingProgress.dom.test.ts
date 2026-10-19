@@ -715,4 +715,78 @@ describe("answers held for a check (Lydia, 6 Oct)", () => {
 
     expect(await sendHeldAnswers("lesson-1", "sess-1")).toBe(outcome);
   });
+
+  /*
+   * NOTHING GOES UP AFTER THE CHILD'S SESSION HAS ENDED (19 Oct
+   * browser-storage audit). A flush read its owner once and awaited one write
+   * after another; a 401 elsewhere cleared the session between two of them,
+   * and the next held answer went up with no Authorization header at all,
+   * just before the page left. It stops at the first send now, and what it
+   * had not sent stays held for the child, as before.
+   */
+  describe("a flush whose child's session ends while it runs", () => {
+    const shelf = "nevo.lesson.pendingAnswers.student-1";
+    const positions = "nevo.lesson.pendingProgress.student-1";
+    const endsAfterFirst = () =>
+      spyWrites(() => {
+        // The first write answers just as a 401 elsewhere ends the session.
+        clearSession();
+        return Promise.resolve({});
+      });
+
+    it("sends no answer after the session has gone, and keeps the rest held", async () => {
+      signInAs("student-1");
+      holdAnswer("lesson-1", answer(1));
+      holdAnswer("lesson-1", answer(2));
+      const { save } = endsAfterFirst();
+
+      await flushPendingProgress();
+
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(calls).toEqual(["attempt cp-1"]);
+      const held = JSON.parse(window.localStorage.getItem(shelf) ?? "{}");
+      expect(Object.keys(held)).toEqual([answer(2).body.clientAttemptId]);
+      expect(held[answer(2).body.clientAttemptId].refusedAt).toBeUndefined();
+    });
+
+    it("sends no position after it either, and keeps the completion held", async () => {
+      signInAs("student-1");
+      holdAnswer("lesson-1", answer(1));
+      holdProgress("lesson-1", completion);
+      const { progress } = endsAfterFirst();
+
+      await flushPendingProgress();
+
+      expect(progress).not.toHaveBeenCalled();
+      const held = JSON.parse(window.localStorage.getItem(positions) ?? "{}");
+      expect(held["lesson-1:sess-1"]?.status).toBe("completed");
+    });
+
+    it("opens no new lesson session for a later visit after it", async () => {
+      signInAs("student-1");
+      const start = vi.spyOn(lessonsApi, "startSession");
+      holdAnswer("lesson-1", answer(1));
+      holdAnswer("lesson-1", answer(2, { sessionId: null, localId: "local-2" }));
+      endsAfterFirst();
+
+      await flushPendingProgress();
+
+      expect(start).not.toHaveBeenCalled();
+      expect(calls).toEqual(["attempt cp-1"]);
+    });
+
+    it("sends nothing for the first child once another has signed in over them", async () => {
+      signInAs("student-1");
+      holdAnswer("lesson-1", answer(1));
+      holdAnswer("lesson-1", answer(2));
+      const { save } = spyWrites(() => {
+        signInAs("student-2");
+        return Promise.resolve({});
+      });
+
+      await flushPendingProgress();
+
+      expect(save).toHaveBeenCalledTimes(1);
+    });
+  });
 });

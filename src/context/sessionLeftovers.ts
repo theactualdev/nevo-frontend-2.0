@@ -1,5 +1,7 @@
 import { forgetReviewAnswers } from "@/components/student/Lesson/reviewStore";
 import { retireLegacyProfile } from "@/lib/auth/deviceRoster";
+import { forgetOnboardingDraft } from "@/lib/auth/onboarding";
+import { retireLegacyDisplayName } from "@/lib/auth/session";
 import type { EndedSession } from "@/lib/auth/sessionEnd";
 import { purgeStoredCaptures } from "@/lib/profiling/capture";
 import { forgetSignals } from "@/lib/signals/outbox";
@@ -16,15 +18,20 @@ import { forgetSignals } from "@/lib/signals/outbox";
  *  - Their after-lesson picks and check-in outcomes in this tab
  *    (`forgetReviewAnswers`).
  *  - The old single remembered profile, once the roster holds it
- *    (`retireLegacyProfile`).
+ *    (`retireLegacyProfile`), and the bare chosen-name key builds from
+ *    25 Aug wrote (`retireLegacyDisplayName`).
  *  - The baseline's raw taps a run left in IndexedDB when it was abandoned
  *    (`purgeStoredCaptures`).
+ *  - The onboarding draft in this tab - a school code, a Student ID and a
+ *    first name - unless a child is onboarding on this page right now
+ *    (`forgetOnboardingDraft`).
  *
  * ONLY THE LEAVING CHILD'S. Every store here is keyed by account, and another
- * child's entries on the same device are not touched. Two exceptions, both
- * copies of something kept elsewhere: the old profile, which the roster
- * holds, and the raw taps, whose run - if one is still going - keeps its
- * stream in memory and writes it again.
+ * child's entries on the same device are not touched. The exceptions are
+ * keyed by nobody: the old profile, which the roster holds; the bare name,
+ * which nothing can say is whose; the raw taps, whose run - if one is still
+ * going - keeps its stream in memory and writes it again; and an onboarding
+ * draft no open screen is using, which is a child who walked away.
  *
  * NOT THEIR WORK. Held answers, held progress and a parked baseline are what
  * the child did, kept until delivered, and they stay exactly as they were
@@ -38,7 +45,9 @@ export function forgetLeavingChild({ userId, token }: EndedSession): void {
     () => forgetSignals(userId, token),
     () => forgetReviewAnswers(userId),
     () => retireLegacyProfile(),
+    () => retireLegacyDisplayName(),
     () => void purgeStoredCaptures(),
+    () => forgetOnboardingDraft(),
   ];
   for (const step of steps) {
     try {

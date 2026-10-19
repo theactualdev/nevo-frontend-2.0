@@ -219,10 +219,27 @@ async function deliver(): Promise<void> {
   write(fresh.filter((b) => b.userId !== session.userId));
 
   const PER = SIGNAL_BATCH.MAX_EVENTS_PER_REQUEST;
-  for (const held of mine) {
+  for (let b = 0; b < mine.length; b += 1) {
+    const held = mine[b];
     for (let i = 0; i < held.events.length; i += PER) {
       // A withdrawal reported while this ran stops the rest of it.
       if (withheld.has(session.userId)) return;
+      /*
+       * SO DOES THE SESSION ENDING (19 Oct browser-storage audit). This read
+       * the session once and sent batch after batch, so a 401 elsewhere left
+       * the rest going up with no Authorization header at all. What this run
+       * had taken out gets the one last try a session's ending gives the rest
+       * of the child's held events (`forgetSignals`), with the token it began
+       * with, and is not held again.
+       */
+      const current = getSession();
+      if (!current?.token || current.userId !== session.userId) {
+        lastTry(held.session, held.events.slice(i), session.token);
+        for (const left of mine.slice(b + 1)) {
+          lastTry(left.session, left.events, session.token);
+        }
+        return;
+      }
       const chunk = held.events.slice(i, i + PER);
       try {
         await signalsApi.submitBatch(held.session, chunk);

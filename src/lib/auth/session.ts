@@ -397,6 +397,24 @@ export function getStoredDisplayName(): string | null {
 }
 
 /**
+ * Delete the bare name key builds from 25 Aug wrote, at sign-out.
+ *
+ * Those builds kept the name a child chose under `nevo.auth.displayName`
+ * itself - one name, for whichever child last renamed themselves on the
+ * tablet. Since it became per account (`.<userId>`, above) nothing reads the
+ * bare key, nothing writes it, and nothing can say whose it was, so it is
+ * not moved anywhere: it goes at every sign-out, as the old single profile
+ * does (19 Oct browser-storage audit). The per-account names are untouched.
+ */
+export function retireLegacyDisplayName(): void {
+  try {
+    window.localStorage.removeItem(DISPLAY_NAME_KEY);
+  } catch {
+    // Unavailable storage holds nothing to retire.
+  }
+}
+
+/**
  * Save the name the signed-in child chose, for THIS child only.
  *
  * Written under the account's id, and into the roster entry that belongs to

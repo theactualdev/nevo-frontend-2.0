@@ -301,3 +301,49 @@ describe("the last try a stream still open makes", () => {
     expect(submitBatch).not.toHaveBeenCalled();
   });
 });
+
+/*
+ * A DELIVERY UNDER WAY WHEN ITS CHILD'S SESSION ENDS (19 Oct browser-storage
+ * audit). It read the session once and sent batch after batch, so a 401
+ * elsewhere left the rest going up with no Authorization header. What it had
+ * taken out gets the one last try a session's ending gives the rest of the
+ * child's held events, with the token it began with, and is not held again.
+ */
+describe("a delivery under way when its child's session ends", () => {
+  it("sends nothing more without their token: the rest gets one last try with it", async () => {
+    holdSignals("ending-1", ENVELOPE, events(150));
+    signInAs("ending-1");
+    submitBatch.mockImplementationOnce(async () => {
+      clearSession();
+      return { acceptedEvents: 100 };
+    });
+
+    await deliverHeldSignals();
+
+    expect(submitBatch).toHaveBeenCalledTimes(2);
+    const [, rest, options] = submitBatch.mock.calls[1]!;
+    expect(rest).toHaveLength(50);
+    expect(options).toMatchObject({ keepalive: true, token: "tok" });
+    expect(held()).toEqual([]);
+  });
+
+  it("sends the first child's nothing as the next child, once another signs in over them", async () => {
+    holdSignals("ending-2", ENVELOPE, events(150));
+    signInAs("ending-2");
+    submitBatch.mockImplementationOnce(async () => {
+      signInAs("someone-else");
+      return { acceptedEvents: 100 };
+    });
+
+    await deliverHeldSignals();
+
+    // The rest goes on the first child's token, named explicitly - not on
+    // whatever session is signed in now, which is the next child's.
+    expect(submitBatch).toHaveBeenCalledTimes(2);
+    expect(submitBatch.mock.calls[1]![2]).toMatchObject({
+      keepalive: true,
+      token: "tok",
+    });
+    expect(held().map((h) => h.userId)).not.toContain("ending-2");
+  });
+});

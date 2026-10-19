@@ -7,6 +7,7 @@ import {
   getStoredDisplayName,
   getToken,
   rememberProfile,
+  retireLegacyDisplayName,
   setSession,
   setStoredDisplayName,
 } from "./session";
@@ -351,5 +352,26 @@ describe("a session ending", () => {
     off();
 
     expect(heard).toEqual([]);
+  });
+});
+
+describe("the bare chosen-name key an older build left (19 Oct)", () => {
+  it("is retired, and every account's own name is left alone", () => {
+    window.localStorage.setItem("nevo.auth.displayName", "Ada");
+    window.localStorage.setItem("nevo.auth.displayName.user-1", "Bayo");
+
+    retireLegacyDisplayName();
+
+    expect(window.localStorage.getItem("nevo.auth.displayName")).toBeNull();
+    expect(window.localStorage.getItem("nevo.auth.displayName.user-1")).toBe(
+      "Bayo",
+    );
+  });
+
+  it("was read by nothing: a signed-in child's name never came from it", () => {
+    window.localStorage.setItem("nevo.auth.displayName", "Ada");
+    setSession(session(future()));
+
+    expect(getStoredDisplayName()).toBeNull();
   });
 });
