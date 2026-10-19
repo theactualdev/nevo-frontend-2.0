@@ -51,10 +51,10 @@ export function ProfilingIntro({
    * **NOTHING PASSES THIS TODAY, SO `false` IS UNREACHABLE HERE. Kept on
    * purpose; decided 24 Sep.**
    *
-   * `ProfilingFlow` is this component's only caller and renders
-   * `mode="complete"` without it, because the trials are now PARKED
-   * (`holdBaseline`) and delivered once an account exists a screen or two
-   * later. That run cannot know whether the write landed, and a screen that
+   * The onboarding sequence is the only caller of `mode="complete"`, after
+   * Module 4, and renders it without this: the baseline's trials are PARKED
+   * (`holdBaseline`) and delivered at the PIN step, and whether onboarding is
+   * finished is the server's gate to say, not this screen's. A screen that
    * cannot know must not claim either answer - so null, which reads settled.
    *
    * The branch stays rather than being deleted because the parking is a
@@ -120,7 +120,9 @@ export function ProfilingIntro({
         >
           {/*
             D171 (13 Oct): "Start my first lesson" was not true, since the
-            learning notice and PIN creation come next.
+            learning notice and PIN creation came next. Since Module 4 moved
+            after the PIN (SCRUM-244) only You're In follows; the label stands
+            until design says otherwise (raised).
           */}
           {complete ? "Let's finish setting up" : "Let's go"}
         </button>

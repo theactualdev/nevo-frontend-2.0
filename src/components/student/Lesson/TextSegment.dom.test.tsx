@@ -355,12 +355,88 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
     expect(screen.getByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toBeInTheDocument();
   });
 
-  it("draws the frame's Simplify view over a simpler text: IN SHORT, no equation", () => {
+  it("keeps the key terms and equations under Simplify, beside IN SHORT", () => {
+    // Lydia, 17 Oct: "A rewrite must not be able to lose an equation.
+    // Simplify loses no content, which is the whole rule." The frame's
+    // Simplify view drew neither, and this followed it.
     render(<TextSegment content={boxes} density={DENSITY.SIMPLIFY} />);
 
+    expect(screen.getByText("Plants feed themselves on light.")).toBeInTheDocument();
     expect(screen.getByText("IN SHORT")).toBeInTheDocument();
-    expect(screen.queryByText(/6CO2/)).toBeNull();
-    expect(screen.queryByText("chlorophyll")).toBeNull();
+    expect(screen.getByRole("button", { name: "chlorophyll" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "glucose" })).toBeInTheDocument();
+    expect(screen.getByText("Word equation")).toBeInTheDocument();
+    expect(screen.getByText("Carbon dioxide + Water → Glucose + Oxygen")).toBeInTheDocument();
+    expect(screen.getByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toBeInTheDocument();
+  });
+
+  it("keeps them under Slower's authored step cards, once and not per step", () => {
+    // Checklist 15, Slower: "Failure: Content is cut to make it shorter."
+    // An authored Slower has its own lead line in the body's place.
+    const stepped = {
+      ...boxes,
+      body: { ...boxes.body, [DENSITY.SLOWER]: "One small step at a time." },
+      slowerSteps: ["A leaf catches light.", "It takes in water.", "It makes sugar."],
+    };
+    render(<TextSegment content={stepped} density={DENSITY.SLOWER} />);
+
+    expect(screen.getByText("It makes sugar.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "chlorophyll" })).toHaveLength(1);
+    expect(screen.getAllByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toHaveLength(1);
+    expect(screen.getAllByText("Word equation")).toHaveLength(1);
+    // After the last step, where the standard view puts them after the body.
+    const lastStep = screen.getByText("It makes sugar.");
+    const chip = screen.getByRole("button", { name: "chlorophyll" });
+    expect(
+      lastStep.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("keeps them under every view, each drawn once", () => {
+    const stepped = {
+      ...boxes,
+      body: { ...boxes.body, [DENSITY.SLOWER]: "One small step at a time." },
+      slowerSteps: ["A leaf catches light.", "It makes sugar."],
+    };
+    const views = [
+      { name: "standard", content: boxes, density: null },
+      { name: "Simplify", content: boxes, density: DENSITY.SIMPLIFY },
+      { name: "Expand", content: boxes, density: DENSITY.EXPAND },
+      { name: "Slower, authored steps", content: stepped, density: DENSITY.SLOWER },
+      {
+        name: "Slower, the server's chunks",
+        content: { ...boxes, readingChunks: CHUNKS },
+        density: DENSITY.SLOWER,
+      },
+    ] as const;
+    for (const view of views) {
+      const { unmount } = render(
+        <TextSegment content={view.content} density={view.density} />,
+      );
+
+      for (const term of ["chlorophyll", "glucose"])
+        expect(screen.getAllByRole("button", { name: term }), view.name).toHaveLength(1);
+      for (const equation of [
+        "Carbon dioxide + Water → Glucose + Oxygen",
+        "6CO2 + 6H2O → C6H12O6 + 6O2",
+      ])
+        expect(screen.getAllByText(equation), view.name).toHaveLength(1);
+      unmount();
+    }
+  });
+
+  it("keeps them once while Slower takes the server's chunks a part at a time", () => {
+    render(
+      <TextSegment
+        content={{ ...boxes, readingChunks: CHUNKS }}
+        density={DENSITY.SLOWER}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Tap to continue" })).toBeInTheDocument();
+    expect(screen.queryByText(CHUNKS[1].text)).toBeNull();
+
+    expect(screen.getAllByRole("button", { name: "chlorophyll" })).toHaveLength(1);
+    expect(screen.getAllByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toHaveLength(1);
   });
 
   it("puts the key terms and the equations under Expand, and not IN SHORT", () => {
@@ -670,19 +746,108 @@ describe("reading support in the boxes (frame 17, UDL · reading)", () => {
   });
 });
 
-describe("a lower-depth session's simpler text, in the standard's place", () => {
-  const lowered = content({
-    body: { default: "Plants feed themselves on light." },
-    keyPoints: ["Plants feed themselves."],
-    keyTerms: [{ term: "chlorophyll", definition: "The green colour in a leaf." }],
-    equations: [{ equation: "6CO2 + 6H2O → C6H12O6 + 6O2" }],
+describe("a key term under Simplify still behaves as it does beside the standard text", () => {
+  const simpler = content({
+    body: { default: BODY, [DENSITY.SIMPLIFY]: "Plants feed themselves on light." },
+    keyTerms: [
+      { term: "chlorophyll", definition: "The green colour in a leaf." },
+      { term: "glucose", definition: "The sugar a plant makes." },
+    ],
+    equations: [{ equation: "Carbon dioxide + Water → Glucose + Oxygen" }],
+  });
+  const chip = (name: string) => screen.getByRole("button", { name });
+
+  it("opens one definition at a time, and closes it on a second tap", () => {
+    render(<TextSegment content={simpler} density={DENSITY.SIMPLIFY} />);
+
+    fireEvent.click(chip("chlorophyll"));
+    expect(screen.getByText("The green colour in a leaf.")).toBeInTheDocument();
+    fireEvent.click(chip("glucose"));
+    expect(screen.queryByText("The green colour in a leaf.")).toBeNull();
+    expect(screen.getByText("The sugar a plant makes.")).toBeInTheDocument();
+    expect(chip("chlorophyll")).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(chip("glucose"));
+    expect(screen.queryByText("The sugar a plant makes.")).toBeNull();
   });
 
-  it("is drawn as Simplify draws it: IN SHORT, no key terms, no equation", () => {
-    render(<TextSegment content={lowered} density={null} simplified />);
+  it("takes reading support in the definition and the equation", () => {
+    render(<TextSegment content={simpler} density={DENSITY.SIMPLIFY} reading />);
 
-    expect(screen.getByText("IN SHORT")).toBeInTheDocument();
-    expect(screen.queryByText("chlorophyll")).toBeNull();
-    expect(screen.queryByText(/6CO2/)).toBeNull();
+    fireEvent.click(chip("glucose"));
+
+    const definition = screen.getByText("The sugar a plant makes.").className;
+    expect(definition).toMatch(/(^|\s)text-\[18px\]/);
+    expect(definition).toMatch(/(^|\s)leading-\[2\]/);
+    const equation = screen.getByText("Carbon dioxide + Water → Glucose + Oxygen").className;
+    expect(equation).toMatch(/(^|\s)text-\[18px\]/);
+    expect(equation).toMatch(/tracking-\[0\.02em\]/);
+  });
+});
+
+describe("an authored callout, under a view with or without its own", () => {
+  /*
+   * The same rule as the equations: a density's callout stood in the
+   * standard view's place, so a reshape with none of its own took the
+   * standard's callout off the screen, and a callout can be an equation.
+   */
+  const RULE = { label: "THE RULE", text: "a/c + b/c = (a + b)/c" };
+  const IN_SHORT = { label: "IN SHORT", text: "Same bottom number → add the tops." };
+  const ruled = (over: Partial<TextContent> = {}) =>
+    content({
+      body: {
+        default: BODY,
+        [DENSITY.SIMPLIFY]: "Same bottom? Add the tops.",
+        [DENSITY.EXPAND]: `${BODY} Much more here.`,
+      },
+      callouts: { default: RULE },
+      ...over,
+    });
+
+  it("keeps the standard view's callout under every reshape", () => {
+    for (const density of [DENSITY.SIMPLIFY, DENSITY.EXPAND, DENSITY.SLOWER]) {
+      const { unmount } = render(<TextSegment content={ruled()} density={density} />);
+
+      expect(screen.getAllByText(RULE.text), density).toHaveLength(1);
+      unmount();
+    }
+  });
+
+  it("draws a view's own callout after it, not in its place", () => {
+    render(
+      <TextSegment
+        content={ruled({ callouts: { default: RULE, [DENSITY.SIMPLIFY]: IN_SHORT } })}
+        density={DENSITY.SIMPLIFY}
+      />,
+    );
+
+    const rule = screen.getByText(RULE.text);
+    const own = screen.getByText(IN_SHORT.text);
+    expect(rule.compareDocumentPosition(own) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("draws a view's own callout alone where the standard view has none", () => {
+    render(
+      <TextSegment
+        content={ruled({ callouts: { [DENSITY.SIMPLIFY]: IN_SHORT } })}
+        density={DENSITY.SIMPLIFY}
+      />,
+    );
+
+    expect(screen.getAllByText(IN_SHORT.text)).toHaveLength(1);
+    expect(screen.queryByText(RULE.text)).toBeNull();
+  });
+
+  it("never draws the same callout twice", () => {
+    for (const density of [null, DENSITY.SIMPLIFY]) {
+      const { unmount } = render(
+        <TextSegment
+          content={ruled({ callouts: { default: RULE, [DENSITY.SIMPLIFY]: { ...RULE } } })}
+          density={density}
+        />,
+      );
+
+      expect(screen.getAllByText(RULE.text), String(density)).toHaveLength(1);
+      unmount();
+    }
   });
 });

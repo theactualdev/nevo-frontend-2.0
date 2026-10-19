@@ -23,8 +23,9 @@ import { cn } from "@/lib/utils";
  * error screens. `pause`: 18 / 21 / 22px - the `Account On Pause` frame.
  * `revoked`: 26px - frame 28a. `door`: 30px - 28c-2, the device that
  * remembers nobody. `form`: 17px, 19px from `sm` - 00c's sign-back-in form.
- * `corner`: 15 / 18 / 19px - the top-left mark on 28d Account Closed and 00e
- * Consent Withdrawn. `bar`: 14px at every size - frame 15's top bar.
+ * `corner`: 15 / 18 / 19px - the top-left mark on 28d Account Closed (00e
+ * Consent Withdrawn drew it too, until its Back gave it 00d's row - Lydia,
+ * 17 Oct). `bar`: 14px at every size - frame 15's top bar.
  */
 export function Wordmark({
   size,

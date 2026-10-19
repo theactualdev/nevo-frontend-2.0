@@ -121,8 +121,7 @@ describe("ProfilingFlow — whose baseline it is", () => {
     render(<ProfilingFlow onDone={onDone} ownerUserId="child-sso" />);
     sitTheWholeRun();
 
-    fireEvent.click(screen.getByRole("button", { name: "Let's finish setting up" }));
-
+    expect(onDone).toHaveBeenCalledTimes(1);
     expect(onDone).toHaveBeenCalledWith(holdBaseline.mock.calls[0][0]);
   });
 });
@@ -155,8 +154,6 @@ describe("ProfilingFlow — what it parks (B9)", () => {
     const onDone = vi.fn();
     render(<ProfilingFlow onDone={onDone} runId="profiling-session-1" />);
     sitTheWholeRun();
-
-    fireEvent.click(screen.getByRole("button", { name: "Let's finish setting up" }));
 
     expect(holdBaseline.mock.calls[0][0]).toBe("profiling-session-1");
     expect(onDone).toHaveBeenCalledWith("profiling-session-1");
@@ -219,45 +216,52 @@ describe("ProfilingFlow — what it tells the signal stream", () => {
   });
 });
 
-describe("ProfilingFlow — the domain probe has nothing to ask (SCRUM-175/176)", () => {
+describe("ProfilingFlow — Module 4 and Complete are the sequence's (SCRUM-244)", () => {
   /*
-   * It asked questions from a bank on this device and marked them against a
-   * key on this device. Backend owns the probe bank now, and nothing can
-   * serve this run from it: the child has no account yet, and no subject id.
-   * So the module is not presented, rather than mimed.
+   * Lydia, 17 Oct: four modules, and Module 4 is the domain probe. The server
+   * asks it and it needs the child's account, which a school-code child does
+   * not have during this run, so the sequence presents it after the PIN, and
+   * Complete after it. This run ends as Module 3 does.
    */
-  it("goes from Module 3 straight to the end, with no pause and no probe", () => {
-    render(<ProfilingFlow onDone={vi.fn()} />);
+  it("ends as Module 3 does: no pause, no probe and no Complete of its own", () => {
+    const onDone = vi.fn();
+    render(<ProfilingFlow onDone={onDone} />);
     fireEvent.click(screen.getByRole("button", { name: /let's go/i }));
     for (const step of ["m1", "pause", "m2", "pause"]) {
       fireEvent.click(screen.getByRole("button", { name: step }));
     }
+    expect(onDone).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "m3" }));
 
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(holdBaseline).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("button", { name: "pause" })).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Let's finish setting up" }),
-    ).toBeInTheDocument();
-    expect(holdBaseline).toHaveBeenCalledTimes(1);
+      screen.queryByRole("button", { name: "Let's finish setting up" }),
+    ).toBeNull();
   });
 
-  it("maps the three modules it presents, and fills all three at the end (design, 9 Oct)", () => {
-    // "A child who will do three sees three segments." It was four whatever
-    // the run held, the fourth filling at the end for a module never shown.
+  it("maps the four modules of onboarding, Module 4 included (design, 9 Oct)", () => {
+    // "A child who will do three sees three segments" - and since 17 Oct a
+    // child does four. It drew three while nothing could serve the probe.
     render(<ProfilingFlow onDone={vi.fn()} />);
-    const map = () => screen.getByRole("progressbar");
+    const map = screen.getByRole("progressbar");
 
-    expect(map()).toHaveAttribute("aria-valuemax", "3");
-    expect(map().lastElementChild!.children).toHaveLength(3);
-
-    sitTheWholeRun();
-
-    expect(map()).toHaveAttribute("aria-valuemax", "3");
-    expect(map()).toHaveAttribute("aria-valuenow", "3");
+    expect(map).toHaveAttribute("aria-valuemax", "4");
+    expect(map.lastElementChild!.children).toHaveLength(4);
   });
 
-  it("marks no start or end for a module it never presented", () => {
+  it("maps as many as the sequence says the child will do", () => {
+    render(<ProfilingFlow onDone={vi.fn()} segments={3} />);
+
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuemax",
+      "3",
+    );
+  });
+
+  it("marks no start or end for the module it does not present", () => {
     const track = vi.fn();
     render(<ProfilingFlow onDone={vi.fn()} track={track} />);
 
@@ -280,12 +284,14 @@ describe("ProfilingFlow — a withdrawn guardian", () => {
     expect(purge.mock.calls.length).toBe(stop.mock.calls.length);
   });
 
-  it("parks nothing at the end", () => {
+  it("parks nothing at the end, and hands on no run", () => {
     consent.withdrawn = true;
-    render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-sso" />);
+    const onDone = vi.fn();
+    render(<ProfilingFlow onDone={onDone} ownerUserId="child-sso" />);
 
     sitTheWholeRun();
 
     expect(holdBaseline).not.toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalledWith(null);
   });
 });

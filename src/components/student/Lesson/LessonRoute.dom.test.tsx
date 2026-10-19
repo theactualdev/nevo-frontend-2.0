@@ -190,6 +190,33 @@ describe("a lesson the teacher called off", () => {
   });
 });
 
+describe("a review opened from Subject Detail (Olayinka, 14 Oct)", () => {
+  const FROM = "/student/progress/maths";
+
+  it("tells the player where it was opened from", () => {
+    state({ lesson: LESSON });
+    render(
+      <LessonRoute lessonId="les-1" review reviewConceptId="c-1" reviewBack={FROM} />,
+    );
+
+    expect(playerProps.value).toMatchObject({ review: true, reviewBack: FROM });
+  });
+
+  it("keeps this screen's own way back to the lessons", () => {
+    // The ruling moves only the review's entry and ending. A review this
+    // screen refuses still offers the way back every state here carries.
+    state({ lesson: LESSON, unavailable: "cancelled", recallWithdrawn: true });
+    render(
+      <LessonRoute lessonId="les-1" review reviewConceptId="c-1" reviewBack={FROM} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to my lessons" }));
+
+    expect(push).toHaveBeenCalledWith("/student/lessons");
+    expect(push).not.toHaveBeenCalledWith(FROM);
+  });
+});
+
 describe("where the child left the lesson's check (B82)", () => {
   // The player opens straight into a check left part way, off this row.
   it("hands the player the dashboard's row for this lesson", () => {
