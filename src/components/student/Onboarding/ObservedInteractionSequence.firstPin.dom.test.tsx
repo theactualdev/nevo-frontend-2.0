@@ -83,6 +83,9 @@ vi.mock("@/components/student/Profiling/ProfilingFlow", () => ({
 vi.mock("./YoureInScreen", () => ({
   YoureInScreen: () => <p>you are in</p>,
 }));
+vi.mock("@/components/student/Profiling/DomainProbeModule", () => ({
+  DomainProbeStep: () => <p>module four</p>,
+}));
 
 const PIN = "1234567".slice(0, STUDENT_PIN_LENGTH);
 
@@ -188,11 +191,12 @@ describe("a first PIN the server stores", () => {
     expect(flushPendingBaseline).toHaveBeenCalledWith("student-9", "run-1");
   });
 
-  it("moves on to You're In, and the tablet remembers them", async () => {
+  it("moves on to Module 4, and the tablet remembers them", async () => {
+    // Module 4 needs the account this PIN has just made (SCRUM-244).
     await choosePin();
     await pastTheBeat();
 
-    expect(screen.getByText("you are in")).toBeInTheDocument();
+    expect(screen.getByText("module four")).toBeInTheDocument();
     expect(getRememberedProfile()).toMatchObject({
       schoolCode: "K7DQ",
       loginIdentifier: "NV-A1B2C3",
@@ -235,6 +239,8 @@ describe("a first PIN the server refuses", () => {
     expect(getSession()).toBeNull();
     expect(getRememberedProfile()).toBeNull();
     expect(screen.queryByText(/you are in/)).toBeNull();
+    // No account, so no Module 4: it is asked on the account's session.
+    expect(screen.queryByText("module four")).toBeNull();
     // Nothing to deliver it on: the baseline stays parked.
     expect(flushPendingBaseline).not.toHaveBeenCalled();
   });
