@@ -648,6 +648,16 @@ describe("bringing the step into view above the docked pad", () => {
     expect(onSystemScroll).toHaveBeenCalledTimes(1);
   });
 
+  it("stops at the held place rather than reaching on to the hint link", () => {
+    // Room for all of it to the hint link: still only as far as the held
+    // place, so the picture above stays in view.
+    rects = { column: [100, 500], prompt: [300, 326], build: [344, 400], tray: [416, 460], total: [478, 530], hint: [546, 590] };
+    inColumn(BUILD_STEP());
+    resized();
+
+    expect(lastMove()).toEqual({ part: "total", how: { block: "end" } });
+  });
+
   it("moves nothing at the last tap, or on a resize while the child builds", () => {
     rects = { column: [100, 400], prompt: [120, 146], build: [160, 300], tray: [316, 360], total: [378, 430], hint: [446, 490] };
     const onSystemScroll = inColumn(BUILD_STEP());

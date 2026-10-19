@@ -705,13 +705,17 @@ const CHECK_LIVE: Stretch[] = [
   ["check", "check"],
 ];
 /**
- * What of a tap step to show as it opens, most first: all of it to the hint
- * link; then the question, the build, the tray and the place "That's the
- * total" will take; then without the question; then the tray and that place
- * alone. None fitting, nothing moves.
+ * What of a tap step to show as it opens, most first: the question, the
+ * build, the tray and the place "That's the total" will take; then without
+ * the question; then the tray and that place alone. None fitting, nothing
+ * moves.
+ *
+ * NOT ON TO THE HINT LINK. Reaching past the held place to "Need a hint?"
+ * scrolled 70px further on a 375x667 phone and took the picture the child
+ * builds from off the top; the link is a scroll away, the picture is what
+ * they work from.
  */
 const TAP_OPEN: Stretch[] = [
-  ["prompt", "hint"],
   ["prompt", "total"],
   ["build", "total"],
   ["tray", "total"],
