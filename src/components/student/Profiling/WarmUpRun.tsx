@@ -239,6 +239,8 @@ export function WarmUpRun({
     else if (consent === "unknown") void capture.hold();
   }, [consent, capture]);
   const started = useRef(false);
+  /** The child this run was started for: the only one its trials are sent as. */
+  const runOwner = useRef<string | null>(null);
   const submitted = useRef(false);
   /** This mount has told the engine its task could not be given. */
   const reported = useRef(false);
@@ -298,6 +300,7 @@ export function WarmUpRun({
     if (consent !== "allowed") return;
     if (warmUpDoneFor(doneToday, getSession()?.userId)) return;
     started.current = true;
+    runOwner.current = getSession()?.userId ?? null;
     capture.record("warmup_start", {
       dimension,
       /*
@@ -415,6 +418,31 @@ export function WarmUpRun({
     (prompt.state === "ready" && (!bandSettled || consent === "pending"));
 
   const finish = useCallback(() => {
+    /*
+     * THE CHILD WHO SAT IT, STILL SIGNED IN (19 Oct browser-storage audit).
+     *
+     * A session can lapse mid-task, and nothing here noticed until the child
+     * answered: the finish then sent the trials with no Authorization at all,
+     * took the refusal as a failure, and parked them with no owner - written
+     * after the sign-out's clean-up, claimable by nobody, kept for a week.
+     *
+     * So the finish asks first. Not the child the run was started for, or no
+     * token to send as: nothing is sent, nothing is parked, the raw stream
+     * goes, and nothing here claims the warm-up was done. Asking is also what
+     * clears a lapsed session, and the shell's lapse watch then takes the
+     * child to the session-ended door, as it does from any screen.
+     */
+    const current = getSession();
+    const owner = runOwner.current;
+    const theirs =
+      Boolean(owner) && Boolean(current?.token) && current?.userId === owner;
+    if (!withdrawn && !theirs) {
+      if (!submitted.current) {
+        submitted.current = true;
+        void capture.stop();
+      }
+      return;
+    }
     if (!submitted.current) {
       submitted.current = true;
       if (withdrawn) {
@@ -503,7 +531,8 @@ export function WarmUpRun({
        * device having no session for the new account, which stopped being true
        * when the invite path began storing one.
        */
-      const owner = getSession()?.userId ?? null;
+      // The run's own child, still signed in: checked at the top of `finish`.
+      const owner = runOwner.current as string;
       /*
        * THE PICK GOES TO ITS OWN ENDPOINT, UNMARKED (B8, 1 Oct).
        * `POST .../recalibrate-prompt/{id}/response` takes `{itemId, value}`

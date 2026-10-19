@@ -63,7 +63,7 @@ beforeEach(() => {
   submit.mockReset();
   submit.mockResolvedValue(true);
   holdBaseline.mockReset();
-  getSession.mockReturnValue({ userId: "child-1" });
+  getSession.mockReturnValue({ userId: "child-1", token: "tok-1" });
   window.localStorage.clear();
 });
 
@@ -167,7 +167,7 @@ describe("a second child on the same tablet", () => {
      * addressed to them.
      */
     markWarmUpDone("child-1");
-    getSession.mockReturnValue({ userId: "child-2" });
+    getSession.mockReturnValue({ userId: "child-2", token: "tok-2" });
 
     render(<WarmUpRun dimension="attention" />);
     await settle();

@@ -212,6 +212,16 @@ export async function flushPendingBaseline(
     return false;
   }
 
+  /*
+   * STILL THEIRS, NOW (19 Oct browser-storage audit). The session was checked
+   * above, and then this waited on the network: a 401 elsewhere in that time
+   * cleared it, and the run went up with no Authorization at all. Asked again
+   * at the send, and every retry asks too (`submitTrials`). Not theirs any
+   * more: nothing is sent, and the trials stay parked for their owner.
+   */
+  const now = getSession();
+  if (!now?.token || now.userId !== expectedUserId) return false;
+
   const ok = await baselineApi.submitTrials(
     pending.sessionId,
     pending.trials,

@@ -23,6 +23,7 @@ import { closeRememberedChild } from "@/lib/auth/deviceRoster";
 import { noteServerClock } from "./serverClock";
 import { isAdminRole } from "@/lib/constants/permissions";
 import { API_ORIGIN } from "./upstream";
+import { purgeStoredCaptures } from "@/lib/profiling/capture";
 
 // Default: the same-origin catch-all proxy (`app/api/backend/[...path]`),
 // which forwards to the FastAPI backend - the backend has no CORS headers, so
@@ -300,6 +301,14 @@ function holdIfWithdrawn(status: number, detail: unknown): void {
   );
   if (!door) return;
   redirecting = true;
+  /*
+   * AND THE BASELINE'S RAW TAPS GO (19 Oct browser-storage audit). A run that
+   * learns of the withdrawal this way never gets to stop its capture - the
+   * page leaves under it - so the stream it last wrote stayed on the device
+   * until a sign-out or the week's sweep. Started here, before the page
+   * goes; 00e finishes it on arrival in case this one does not land.
+   */
+  void purgeStoredCaptures();
   window.location.assign(door);
 }
 

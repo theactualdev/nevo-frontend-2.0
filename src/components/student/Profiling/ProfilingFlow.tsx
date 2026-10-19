@@ -278,6 +278,23 @@ function ProfilingRun({
         return;
       }
       /*
+       * A RUN WITH AN OWNER IS PARKED ONLY FOR THAT CHILD, STILL SIGNED IN
+       * (19 Oct browser-storage audit). An SSO child's, or one finishing
+       * onboarding, is parked under their id and sent for them; with their
+       * session gone by the end - lapsed, or another child's in its place -
+       * nothing is parked and the raw stream goes, rather than leave their
+       * measurements on a tablet they have left. The shell's lapse watch
+       * takes them to the session-ended door. A run with no owner yet is the
+       * one before the account exists, and parks for it as it always has.
+       */
+      if (ownerUserId) {
+        const current = getSession();
+        if (!current?.token || current.userId !== ownerUserId) {
+          void capture.stop();
+          return;
+        }
+      }
+      /*
        * THE TRIALS, NOT A REDUCTION (B9, 5 Oct). This built a feature vector
        * of means, accuracies and the longest span, which is the frontend
        * computing a measure of a child (frontend §3, rule 3). Each answer now

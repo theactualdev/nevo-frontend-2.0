@@ -773,6 +773,29 @@ describe("BaselineCapture — held until consent allows it", () => {
     await vi.waitFor(() => expect(idb.records(DB)?.has("held-3")).toBe(false));
   });
 
+  it("creates no store on the device just to empty it (19 Oct)", async () => {
+    // Held from its start - consent could not be read - and never written.
+    const c = new BaselineCapture("held-5", { held: true });
+
+    await c.hold();
+    await c.stop();
+
+    expect(idb.records(DB)).toBeUndefined();
+  });
+
+  it("still empties a store that is there, and writes to it once allowed", async () => {
+    idb.seed(DB, [["held-6", { capturedAt: Date.now(), events: [] }]]);
+    const c = new BaselineCapture("held-6", { held: true });
+
+    await c.hold();
+    await vi.waitFor(() => expect(idb.records(DB)?.has("held-6")).toBe(false));
+
+    c.allow();
+    c.record("tap", { cell: 1 });
+    await c.persist();
+    await vi.waitFor(() => expect(idb.records(DB)?.has("held-6")).toBe(true));
+  });
+
   it("is not allowed again after a withdrawal has stopped it", async () => {
     const c = new BaselineCapture("held-4", { held: true });
     await c.stop();

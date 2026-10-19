@@ -250,10 +250,24 @@ export class BaselineCapture {
     }
   }
 
-  /** Purge the raw stream everywhere (once its trials have been taken). */
+  /**
+   * Purge the raw stream everywhere (once its trials have been taken).
+   *
+   * Never by creating the store: a run that has written nothing - held from
+   * its start, say, because consent could not be read - opened nothing, and
+   * a purge used to open (and so create) an empty `nevo-baseline` to delete
+   * from (19 Oct). It looks only where something could be.
+   */
   async purge() {
     this.events = [];
-    const db = await this.ensureDb();
+    let db: IDBDatabase | null;
+    if (this.db) {
+      db = await this.db;
+    } else {
+      db = await openIfPresent();
+      // Kept, so a write after an `allow()` does not open a second.
+      if (db) this.db = Promise.resolve(db);
+    }
     if (!db) return;
     try {
       const tx = db.transaction(STORE, "readwrite");

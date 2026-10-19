@@ -13,6 +13,19 @@ vi.mock("./client", () => ({
   ApiError,
 }));
 
+/*
+ * Who is signed in, for the guard every send now passes (19 Oct): trials,
+ * picks and completions go only with a token, and only as the child they
+ * started for.
+ */
+const session = vi.hoisted(() => ({
+  value: { token: "tok", userId: "child-1" } as {
+    token: string;
+    userId: string;
+  } | null,
+}));
+vi.mock("@/lib/auth/session", () => ({ getSession: () => session.value }));
+
 import { baselineApi } from "./baseline";
 
 /**
@@ -29,6 +42,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   post.mockReset();
   post.mockResolvedValue({});
+  session.value = { token: "tok", userId: "child-1" };
 });
 
 afterEach(() => {
@@ -206,6 +220,59 @@ describe("submitTrials (B9)", () => {
     await expect(baselineApi.submitTrials("run-1", [trial])).resolves.toBe(
       false,
     );
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+});
+
+/*
+ * NEVER WITHOUT A TOKEN, NEVER AS SOMEONE ELSE (19 Oct browser-storage
+ * audit). A warm-up's trials went up with no Authorization after a lapse,
+ * and a retry a few seconds on can outlive the session it began in. Every
+ * attempt asks: a token, and the child it started as.
+ */
+describe("a send whose session is not there", () => {
+  const trial = {
+    dimension: "attention",
+    condition: null,
+    response: "left",
+    correct: true,
+    responseTimeMs: 700,
+    probeItemId: null,
+  };
+
+  it("sends nothing at all with no session to send as", async () => {
+    session.value = null;
+
+    await expect(baselineApi.submitTrials("run-1", [trial])).resolves.toBe(
+      false,
+    );
+    await expect(baselineApi.deviceTaskDone("child-1")).resolves.toBe(false);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("does not retry once the session has ended", async () => {
+    post.mockImplementationOnce(async () => {
+      session.value = null;
+      throw new ApiError(503);
+    });
+
+    const landed = baselineApi.submitTrials("run-1", [trial]);
+    await vi.advanceTimersByTimeAsync(5000);
+
+    await expect(landed).resolves.toBe(false);
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry as the next child who signed in", async () => {
+    post.mockImplementationOnce(async () => {
+      session.value = { token: "tok-2", userId: "child-2" };
+      throw new ApiError(503);
+    });
+
+    const landed = baselineApi.submitTrials("run-1", [trial]);
+    await vi.advanceTimersByTimeAsync(5000);
+
+    await expect(landed).resolves.toBe(false);
     expect(post).toHaveBeenCalledTimes(1);
   });
 });

@@ -28,7 +28,14 @@ import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
  */
 
 const { submit } = vi.hoisted(() => ({ submit: vi.fn() }));
-vi.mock("@/lib/api", () => ({ baselineApi: { submitTrials: submit } }));
+// Signed in, so a served pick and a device day go to their own endpoints too.
+vi.mock("@/lib/api", () => ({
+  baselineApi: {
+    submitTrials: submit,
+    answerPrompt: vi.fn(async () => true),
+    deviceTaskDone: vi.fn(async () => true),
+  },
+}));
 const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
 const engine = vi.hoisted(() => ({
@@ -137,6 +144,9 @@ beforeEach(() => {
   roster.value = { band: null, settled: true };
   window.localStorage.clear();
   clearSession();
+  // A warm-up is only ever sat signed in (the route guard), and its trials go
+  // as that child or not at all (19 Oct).
+  signIn();
 });
 
 afterEach(() => {

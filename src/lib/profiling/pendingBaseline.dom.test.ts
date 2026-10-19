@@ -368,3 +368,45 @@ describe("a baseline waiting for its account", () => {
     expect(readPendingBaseline()).toBeNull();
   });
 });
+
+/*
+ * NEVER TOKENLESS (19 Oct browser-storage audit). The flush checks whose
+ * session it is, then waits on the consent read - and a 401 elsewhere in that
+ * time cleared the session, so the parked run went up with no Authorization
+ * at all. It asks again at the send; the run stays parked for its owner.
+ */
+describe("a parked baseline whose child's session ends while it is flushed", () => {
+  it("is not sent once the session has gone, and stays parked for them", async () => {
+    signInAs("child-a");
+    holdBaseline("baseline-run-A", TRIALS, "child-a");
+    vi.spyOn(consentsApi, "myConsentGate").mockImplementation(async () => {
+      // A 401 elsewhere ends the session while this read is out.
+      clearSession();
+      return { status: "granted" } as never;
+    });
+    const submit = vi.spyOn(baselineApi, "submitTrials");
+
+    await expect(flushPendingBaseline("child-a")).resolves.toBe(false);
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(readPendingBaseline()).toMatchObject({
+      sessionId: "baseline-run-A",
+      ownerUserId: "child-a",
+    });
+  });
+
+  it("is not sent as the next child who signed in meanwhile", async () => {
+    signInAs("child-a");
+    holdBaseline("baseline-run-A", TRIALS, "child-a");
+    vi.spyOn(consentsApi, "myConsentGate").mockImplementation(async () => {
+      signInAs("child-b");
+      return { status: "granted" } as never;
+    });
+    const submit = vi.spyOn(baselineApi, "submitTrials");
+
+    await flushPendingBaseline("child-a");
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(readPendingBaseline()?.ownerUserId).toBe("child-a");
+  });
+});
