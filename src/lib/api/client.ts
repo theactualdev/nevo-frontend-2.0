@@ -18,6 +18,7 @@ import {
   pausesInPlace,
 } from "@/lib/auth/accountPause";
 import { withdrawnDoor } from "@/lib/auth/consentHold";
+import { onboardingDoor } from "@/lib/auth/onboardingGate";
 import { closeRememberedChild } from "@/lib/auth/deviceRoster";
 import { noteServerClock } from "./serverClock";
 import { isAdminRole } from "@/lib/constants/permissions";
@@ -302,6 +303,25 @@ function holdIfWithdrawn(status: number, detail: unknown): void {
   window.location.assign(door);
 }
 
+/**
+ * A child the server will not let learn until onboarding is finished
+ * (409 `onboarding_required`, SCRUM-244) goes to finish it, rather than
+ * meeting the lesson's "Something went wrong". The decision is
+ * `onboardingDoor`; this acts on it, once, behind the same latch.
+ */
+function finishOnboardingIfRequired(status: number, detail: unknown): void {
+  if (typeof window === "undefined" || redirecting) return;
+  const door = onboardingDoor(
+    getSession()?.role,
+    status,
+    detail,
+    window.location.pathname,
+  );
+  if (!door) return;
+  redirecting = true;
+  window.location.assign(door);
+}
+
 /** An array repeats the key - see `buildUrl`. */
 type QueryValue =
   string | number | boolean | null | undefined | readonly (string | number)[];
@@ -422,6 +442,7 @@ export async function request<T>(
       handleAuthFailure(path, Boolean(token), detail);
     }
     holdIfWithdrawn(response.status, detail);
+    finishOnboardingIfRequired(response.status, detail);
     throw new ApiError(
       response.status,
       friendlyMessage(response.status),

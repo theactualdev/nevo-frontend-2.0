@@ -252,6 +252,8 @@ describe("leaving the after-lesson check (D36)", () => {
       answer: 2,
       // Its own, so it is never filed twice if it has to go again.
       clientAttemptId: expect.any(String),
+      // As measured (Lydia, 17 Oct) - see "the time each answer took".
+      responseTimeMs: expect.any(Number),
     });
   });
 
@@ -327,6 +329,7 @@ describe("every answer to a check is stored as it is given", () => {
           source: "checkpoint",
           answer: "b",
           clientAttemptId: expect.any(String),
+          responseTimeMs: expect.any(Number),
         },
       ],
       [
@@ -338,6 +341,8 @@ describe("every answer to a check is stored as it is given", () => {
           source: "checkpoint",
           answer: "a",
           clientAttemptId: expect.any(String),
+          // No hint was on screen, so no `hintCount`: the server's own 0.
+          responseTimeMs: expect.any(Number),
         },
       ],
     ]);
@@ -400,6 +405,96 @@ describe("every answer to a check is stored as it is given", () => {
     await waitFor(() => expect(saveAttempt).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
     expect(heldAnswers()).toEqual([]);
+  });
+});
+
+/*
+ * Lydia, 17 Oct: "send the response time with each quick-check answer. Today
+ * the check measures it and drops it." Two instant right answers must not
+ * count as mastered (checklist 3), and the server can only refuse them that
+ * if the time reaches it. The clock is the monotonic one (rule 4).
+ */
+describe("the time each answer took, as it was measured", () => {
+  const clock = { now: 1_000 };
+  let now: { mockRestore: () => void } | undefined;
+  beforeEach(() => {
+    clock.now = 1_000;
+    now = vi.spyOn(performance, "now").mockImplementation(() => clock.now);
+  });
+  afterEach(() => now?.mockRestore());
+
+  it("rides each pick on an inline check, from the sheet opening to the tap", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    const pick = await screen.findByRole("button", { name: /The numerator/ });
+
+    clock.now = 3_400;
+    fireEvent.click(pick);
+
+    expect(saveAttempt).toHaveBeenCalledWith(
+      "lesson-1",
+      expect.objectContaining({ problemId: "cp-inline", responseTimeMs: 2_400 }),
+    );
+  });
+
+  it("rides each answer on the after-lesson check, from the question to the confirm", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    await toAssessment();
+    saveAttempt.mockClear();
+
+    clock.now = 9_000;
+    answer("Two");
+
+    expect(saveAttempt).toHaveBeenCalledWith(
+      "lesson-1",
+      expect.objectContaining({ problemId: "cp-1", responseTimeMs: 8_000 }),
+    );
+  });
+
+  it("is held on the device as it was measured, when it cannot go now", async () => {
+    // Offline from the start: no session, so the answer waits on the device
+    // - with its time, which the queue sends as held (`pendingProgress`).
+    signIn();
+    progress.sessionId = null;
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    const pick = await screen.findByRole("button", { name: /The numerator/ });
+
+    clock.now = 2_200;
+    fireEvent.click(pick);
+
+    expect(saveAttempt).not.toHaveBeenCalled();
+    expect(heldAnswers()).toEqual([
+      expect.objectContaining({
+        body: expect.objectContaining({
+          problemId: "cp-inline",
+          responseTimeMs: 1_200,
+        }),
+      }),
+    ]);
+  });
+
+  it("says a hint was on screen for the check where one was (B28)", async () => {
+    const hinted: AdaptationPlan = {
+      lessonId: "lesson-1",
+      segments: [
+        {
+          segmentId: SEG_1,
+          startModality: "text",
+          adjustment: "offer_hint",
+          hint: "Look at the top.",
+        },
+      ],
+    } as AdaptationPlan;
+    render(<LessonPlayer lesson={LESSON} plan={hinted} live />);
+    next();
+
+    fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
+
+    expect(saveAttempt).toHaveBeenCalledWith(
+      "lesson-1",
+      expect.objectContaining({ problemId: "cp-inline", hintCount: 1 }),
+    );
   });
 });
 

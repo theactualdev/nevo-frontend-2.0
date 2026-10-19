@@ -125,7 +125,9 @@ import { VisualSegment } from "./VisualSegment";
 import type { MediaFailReason } from "./useMediaSource";
 
 // Finishing a lesson goes back to the lessons (frame: "Back to lessons");
-// leaving one part way goes Home (IA: "Leave for now" -> Home Dashboard).
+// leaving one part way goes Home (IA: "Leave for now" -> Home Dashboard). A
+// review's own entry and ending go back to where it was opened from, when
+// that was said - see `reviewBack`.
 const LESSONS_HREF = "/student/lessons";
 const HOME_HREF = "/student/dashboard";
 
@@ -241,6 +243,7 @@ export function LessonPlayer({
   plan,
   review = false,
   reviewConceptId,
+  reviewBack,
   live = false,
   finished = false,
   partial = false,
@@ -314,6 +317,16 @@ export function LessonPlayer({
   /** The concept a review session is for; absent on an ordinary lesson. */
   reviewConceptId?: string;
   /**
+   * The Subject Detail page a review session was opened from, already checked
+   * by `readReviewBack`. Leaving the review's entry screen and its "Done" go
+   * back there (Olayinka, 14 Oct: back returns to where you came from - and
+   * no frame names where a review ends). Absent, they go Home as before.
+   *
+   * Only those two. The in-session "Leave for now" keeps IA 31's Home, as it
+   * does in every lesson, and an ordinary lesson never reads this.
+   */
+  reviewBack?: string;
+  /**
    * The depth this session runs at, where it is known before it opens: the
    * server's reroute that "Let's try it another way" follows. Otherwise the
    * session says so itself when it opens - see `lowerDepth`.
@@ -348,6 +361,8 @@ export function LessonPlayer({
   );
   // Every exit from the lesson - see `useLessonExit`.
   const exitTo = useLessonExit();
+  // Where a review's entry and ending go - see `reviewBack`.
+  const reviewDoneHref = reviewBack || HOME_HREF;
   const total = lesson.segments.length;
 
   const planFor = (segmentId: string) =>
@@ -2253,9 +2268,10 @@ export function LessonPlayer({
         onLeave={() => {
           // D36. Not started is not completed: nothing goes to the scheduler,
           // so the concept stays due, and the lesson's own progress is left
-          // alone as every review leaves it.
+          // alone as every review leaves it. Back to where the review was
+          // opened from (Olayinka, 14 Oct), Home when that was not said.
           setEnding({ completionStatus: "exited", exitPosition: first.id });
-          exitTo(HOME_HREF);
+          exitTo(reviewDoneHref);
         }}
       />
     );
@@ -2317,7 +2333,9 @@ export function LessonPlayer({
           exitTo(HOME_HREF);
         }}
         onAnswer={({ questionIndex, selectedId, correct, responseTimeMs }) => {
-          // The pick goes up on the attempt, where the server marks it.
+          // The pick goes up on the attempt, where the server marks it - with
+          // the time it took, as the check measured it (Lydia, 17 Oct). No
+          // hint is ever shown on the after-lesson check, so none is sent.
           const checkpointId = lesson.assessment?.questions[questionIndex]?.id;
           saveAttempt(
             answerFor({
@@ -2326,13 +2344,15 @@ export function LessonPlayer({
               choice: lesson.assessment?.questions[questionIndex]?.options.find(
                 (o) => o.id === selectedId,
               ),
+              responseTimeMs,
             }),
           );
           /*
            * THE CATALOGUE'S KEYS, `segmentId` and `questionId`, and nothing it
            * does not declare: correctness is decided on the server against the
            * stored answer, so `correct` - and the pick and its timing beside it
-           * - are not sent here. NO `segmentId`: an after-lesson question
+           * - are not sent here; the pick and its timing ride the attempt
+           * above. NO `segmentId`: an after-lesson question
            * belongs to the lesson, not to any one segment, and naming the last
            * one would put the answer on a segment it was never about - and
            * the catalogue makes it optional for exactly this (9 Oct).
@@ -2426,7 +2446,8 @@ export function LessonPlayer({
       const copy = reviewCompletionCopy(reviewRecord);
       return (
         <LessonComplete
-          onDone={() => exitTo(HOME_HREF)}
+          // Back to where the review was opened from (Olayinka, 14 Oct).
+          onDone={() => exitTo(reviewDoneHref)}
           heading={copy.heading}
           headingHeld={copy.held}
           note={
@@ -2828,7 +2849,6 @@ export function LessonPlayer({
                 setClosedHints((prev) => new Set(prev).add(hintKey))
               }
               density={effectiveDensity}
-              simplified={simplified.has(segment.id)}
               reading={readingOn}
               attention={attentionOn}
               onReadProgress={noteReadProgress}
@@ -2962,7 +2982,10 @@ export function LessonPlayer({
             const checkpointId = segment.quickCheck?.id;
             // The catalogue's keys, `source` naming a quick check's answer
             // from the after-lesson check's; the pick goes up on the attempt
-            // below, where the server marks it.
+            // below, where the server marks it - with the time it took as the
+            // sheet measured it, and whether a hint was on screen for it (B28),
+            // so two instant right taps do not count as learned (Lydia, 17
+            // Oct).
             trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
               segmentId: segment.id,
               ...(checkpointId ? { questionId: checkpointId } : {}),
@@ -2976,6 +2999,8 @@ export function LessonPlayer({
                 choice: segment.quickCheck?.options.find(
                   (o) => o.id === answered.selectedId,
                 ),
+                responseTimeMs: answered.responseTimeMs,
+                hinted: hintedSegments.current.has(segment.id),
               }),
               // B94: the server's answer may hand this child off.
               (stored) => handOffFrom(segment.id, stored),
@@ -3101,7 +3126,6 @@ function SegmentBody({
   onEngineHintClosed,
   onSystemScroll,
   density,
-  simplified,
   reading,
   attention,
   onReadProgress,
@@ -3130,8 +3154,6 @@ function SegmentBody({
   /** The solver moved the column itself - see `systemScrolled`. */
   onSystemScroll: () => void;
   density: Density | null;
-  /** A lower-depth session reads this segment's simpler version. */
-  simplified: boolean;
   reading: boolean;
   attention: boolean;
   onReadProgress: (pct: number) => void;
@@ -3162,7 +3184,6 @@ function SegmentBody({
         attention={attention}
         onReadProgress={onReadProgress}
         onChunkSeen={onChunkSeen}
-        simplified={simplified}
       />
     );
   if (modality === MODALITY.VISUAL && segment.visual)

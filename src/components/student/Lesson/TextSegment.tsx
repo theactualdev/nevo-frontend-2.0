@@ -33,9 +33,10 @@ const PAUSE_REVEAL_MS = 4_000;
 /**
  * Text modality (Lesson Player frame 17). One heading + a body that reshapes
  * with the active reading density — the SAME segment, not new content. Simplify
- * strips to the fewest words (+ "IN SHORT" callout); Expand adds depth, key-term
- * chips and the "WORD EQUATION" callout; Slower breaks the idea into small
- * numbered step cards under a lead line.
+ * strips to the fewest words (+ "IN SHORT" callout); Expand adds depth and its
+ * own callout; Slower breaks the idea into small numbered step cards under a
+ * lead line. The key-term chips and the equation boxes stay under every one of
+ * them: a rewrite loses no content (Lydia, 17 Oct - see `keyTerms` below).
  *
  * UDL accommodations (37c) adjust delivery, never diagnose:
  * - `reading`: the body sits on a softer card, larger and airier (18px,
@@ -76,7 +77,6 @@ export function TextSegment({
   attention = false,
   onReadProgress,
   onChunkSeen,
-  simplified = false,
 }: {
   content: TextContent;
   density: Density | null;
@@ -97,37 +97,39 @@ export function TextSegment({
    * Only server chunks report - the on-device split has no ids to name.
    */
   onChunkSeen?: OnChunkSeen;
-  /**
-   * The default text is the segment's simpler version, standing in the
-   * standard text's place for a lower-depth session (`atLowerDepth`).
-   */
-  simplified?: boolean;
 }) {
   const body = (density && content.body[density]) ?? content.body.default;
-  const callout = content.callouts?.[density ?? "default"];
+  const callouts = calloutsFor(content.callouts, density);
   const steps = density === DENSITY.SLOWER ? content.slowerSteps : undefined;
   const expand = density === DENSITY.EXPAND;
   /*
    * WHERE THE PAYLOAD'S BOXES GO (SCRUM-224, D24).
    *
    * KEY TERMS AND EQUATIONS ARE PART OF THE SEGMENT, "rather than a form of
-   * support" (design, 9 Oct), so they sit beside the standard text - in one
-   * block or in parts - as well as under Expand, where the Lesson Player
-   * frame draws them. A reshape (Simplify) draws the frame's own view. For
-   * the equations it is not only placement: backend, 9 Oct, an equation
-   * callout "is not guaranteed to be repeated in body".
+   * support" (design, 9 Oct), so they sit beside the text under EVERY view:
+   * the standard text in one block or in parts, Simplify, Expand, Slower's
+   * step cards or its parts, and a lower-depth session's simpler text. Drawn
+   * once, after the body and any steps, where the standard view and Expand
+   * put them - never once per step or part.
+   *
+   * A REWRITE LOSES NO CONTENT (Lydia, 17 Oct, order of work item 8): "A
+   * rewrite must not be able to lose an equation. Simplify loses no content,
+   * which is the whole rule." And checklist 15, for Slower: "Failure: Content
+   * is cut to make it shorter." That overrules the Lesson Player frame's
+   * Simplify and Slower views, which draw neither box, and the reading this
+   * once had of them: a reshape, or the simpler text a lower-depth session
+   * shows in the standard's place, drew the frame's view and dropped both.
+   * For the equations it was never only placement: backend, 9 Oct, an
+   * equation callout "is not guaranteed to be repeated in body", so the
+   * rewrite took the equation off the screen altogether.
    *
    * Key points are the frame's "IN SHORT", under every view but Expand and
-   * Slower.
-   *
-   * A LOWER-DEPTH SESSION'S TEXT IS NOT THE STANDARD TEXT, though it stands
-   * in its place: it is the simpler version, so it is drawn as Simplify draws
-   * it, without the key terms and equations.
+   * Slower. Lydia's checklist 13 calls them "two to four highlights beside
+   * the body" that "must never be what Simplify returns": Simplify returns
+   * its own rewritten text, and they stay beside it.
    */
-  const besideText =
-    expand || (!simplified && body === content.body.default);
-  const keyTerms = besideText ? content.keyTerms : undefined;
-  const equations = besideText ? content.equations : undefined;
+  const keyTerms = content.keyTerms;
+  const equations = content.equations;
   const keyPoints =
     !expand && density !== DENSITY.SLOWER ? content.keyPoints : undefined;
   /*
@@ -247,8 +249,8 @@ export function TextSegment({
         </div>
       )}
 
-      {callout && (
-        <div className="mt-[22px] rounded-[12px] bg-nevo-violet/8 p-5">
+      {callouts.map((callout, i) => (
+        <div key={i} className="mt-[22px] rounded-[12px] bg-nevo-violet/8 p-5">
           <p className="font-mono text-[11px] tracking-[0.06em] text-nevo-navy uppercase">
             {callout.label}
           </p>
@@ -266,7 +268,7 @@ export function TextSegment({
             </p>
           )}
         </div>
-      )}
+      ))}
 
       {keyPoints && keyPoints.length > 0 && (
         <div className="mt-[22px] rounded-[12px] bg-nevo-violet/8 p-5">
@@ -289,6 +291,36 @@ export function TextSegment({
         </div>
       )}
     </article>
+  );
+}
+
+type Callout = NonNullable<NonNullable<TextContent["callouts"]>["default"]>;
+
+/**
+ * The authored callouts a view draws: the standard view's under every view,
+ * and the view's own after it where it has one.
+ *
+ * THE SAME RULE AS THE KEY TERMS AND EQUATIONS (Lydia, 17 Oct: "Simplify
+ * loses no content"). A density's callout used to stand in the standard's
+ * place, so a reshape took the standard view's callout off the screen with
+ * nothing of its own to put there - and a callout can be an equation. A view's
+ * own callout is what that view adds, as Simplify's "IN SHORT" and Expand's
+ * "WORD EQUATION" are in the authored lessons. One that repeats the standard
+ * view's is drawn once.
+ */
+function calloutsFor(
+  all: TextContent["callouts"],
+  density: Density | null,
+): Callout[] {
+  const standard = all?.default;
+  const own = density ? all?.[density] : undefined;
+  const same =
+    own !== undefined &&
+    standard !== undefined &&
+    own.label === standard.label &&
+    own.text === standard.text;
+  return [standard, same ? undefined : own].filter(
+    (c): c is Callout => c !== undefined,
   );
 }
 

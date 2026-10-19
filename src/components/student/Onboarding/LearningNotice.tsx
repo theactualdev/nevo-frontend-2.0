@@ -41,7 +41,7 @@ import { Button, IllustrationWrapper } from "@/components/shared";
 export function LearningNotice({ onContinue }: { onContinue: () => void }) {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
-      {/* Top bar: wordmark only — the sequence dots are done by now */}
+      {/* Top bar: wordmark only — the notice draws no quest map */}
       <div className="flex h-[60px] shrink-0 items-center px-5 sm:px-8">
         <Image
           src="/brand/nevo-wordmark.png"

@@ -817,6 +817,62 @@ describe("a lesson the child saved for offline", () => {
  * the child had really got to - and the cancelled check, which reads the same
  * response, silently passed.
  */
+describe("a lesson held back until onboarding is finished (SCRUM-244)", () => {
+  /*
+   * Lydia, 17 Oct: all four onboarding modules run before any lesson, and the
+   * server refuses a lesson read with 409 `onboarding_required` until they
+   * have. The client sends the child to finish (`onboardingDoor`); this hook
+   * must not say the read failed meanwhile, or open a saved copy of the very
+   * lesson the server has just refused.
+   */
+  beforeEach(() => window.localStorage.clear());
+  const gated = () =>
+    new ApiError(409, "Something went wrong. Please try again.", {
+      detail: {
+        code: "onboarding_required",
+        message: "Finish getting started before opening a lesson.",
+        missingModules: ["domain_probe"],
+        navigatesTo: "/student/onboarding",
+      },
+    });
+
+  it("is not reported as a failed read, and waits while the child is sent on", async () => {
+    signIn();
+    detail.mockRejectedValue(gated());
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+    await waitFor(() => expect(detail).toHaveBeenCalled());
+    await act(async () => {});
+
+    expect(result.current.failed).toBe(false);
+    expect(result.current.missing).toBe(false);
+    expect(result.current.loading).toBe(true);
+    expect(result.current.lesson).toBeNull();
+  });
+
+  it("does not open the saved copy instead", async () => {
+    signIn();
+    saveLesson("student-1", LIVE_LESSON as never);
+    detail.mockRejectedValue(gated());
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+    await waitFor(() => expect(detail).toHaveBeenCalled());
+    await act(async () => {});
+
+    expect(result.current.lesson).toBeNull();
+    expect(result.current.fromShelf).toBe(false);
+  });
+
+  it("still fails a 409 that is not the gate", async () => {
+    signIn();
+    detail.mockRejectedValue(new ApiError(409, "Conflict"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+  });
+});
+
 describe("a saved place that could not be read", () => {
   beforeEach(() => window.localStorage.clear());
 

@@ -572,6 +572,80 @@ describe("a withdrawn child refused mid-use", () => {
 });
 
 /**
+ * SCRUM-244: a child whose onboarding the server holds unfinished is refused
+ * a lesson with 409 `onboarding_required`, and goes to finish it rather than
+ * meeting the lesson's "Something went wrong". Where is `onboardingDoor`'s,
+ * tested on its own; what can be observed here is that the client acts on it,
+ * behind the same once-only latch, and that the caller still hears why.
+ */
+describe("a child refused a lesson until onboarding is finished", () => {
+  const replies = (...list: [number, unknown][]) => {
+    const fetch = vi.fn();
+    for (const [status, body] of list) {
+      fetch.mockResolvedValueOnce(
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return fetch;
+  };
+  const GATED: [number, unknown] = [
+    409,
+    {
+      detail: {
+        code: "onboarding_required",
+        message: "Finish getting started before opening a lesson.",
+        missingModules: ["domain_probe"],
+        navigatesTo: "/student/onboarding",
+      },
+    },
+  ];
+  const EXPIRED: [number, unknown] = [401, { detail: { code: "session_expired" } }];
+  const as = (role: string) =>
+    getSession.mockReturnValue({
+      token: "tok-live",
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      userId: "u-1",
+      role,
+    });
+
+  afterEach(() => {
+    as("teacher");
+    vi.unstubAllGlobals();
+  });
+
+  it("is sent to finish it, once, and the caller still hears why", async () => {
+    as("student");
+    vi.stubGlobal("fetch", replies(GATED, EXPIRED));
+    const { api, ApiError } = await freshClient();
+
+    const refused = await api.get("/api/v1/lessons/x").catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(ApiError);
+    expect((refused as InstanceType<typeof ApiError>).status).toBe(409);
+
+    // The latch is taken: nothing else on this page sends them anywhere.
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+    expect(clearSession).not.toHaveBeenCalled();
+  });
+
+  it("leaves a 409 that is not the gate to the screen that met it", async () => {
+    as("student");
+    vi.stubGlobal(
+      "fetch",
+      replies([409, { detail: { code: "probe_item_stale" } }], EXPIRED),
+    );
+    const { api } = await freshClient();
+
+    await expect(api.post("/api/v1/probe/s/answer", {})).rejects.toThrow();
+    // No latch: a later dead session still finds its door.
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+    expect(clearSession).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
  * T217. The teacher's expired screen promises "continue where you left off",
  * and the place was dropped here - only the learner door was given it.
  */

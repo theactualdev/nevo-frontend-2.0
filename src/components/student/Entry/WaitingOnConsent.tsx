@@ -5,7 +5,10 @@ import { useAuth } from "@/hooks";
 import { getSession } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
-/** Where 00d's Back goes (D189): the device picker, for whoever is next. */
+/**
+ * Where 00d's Back goes (D189), and 00e's (Lydia, 17 Oct): the device picker,
+ * for whoever is next.
+ */
 export const WAITING_WAY_BACK = "/auth/login";
 
 /**
@@ -76,6 +79,32 @@ export function WaitingOnConsent({
   /** What holds the child. Changes the words only, never the screen. */
   hold?: WaitingHold;
 } = {}) {
+  return (
+    <div className="flex min-h-dvh flex-col bg-nevo-cream">
+      <HoldWayBack />
+
+      <HoldMessage
+        hold={hold}
+        className="min-h-0 flex-1 justify-center px-10"
+      />
+    </div>
+  );
+}
+
+/**
+ * The holds' top row: the age-check hold's Back (D189), then the same cropped
+ * wordmark as the PIN beat and the picker, so the doors do not drift apart.
+ *
+ * 00d's, and since Lydia's ruling of 17 Oct 00e Consent Withdrawn's too:
+ * "Consent Withdrawn: yes, give it Back, same as waiting-on-consent ... A
+ * shared device should not be stuck." One row for both, so the two holds
+ * cannot come to leave differently.
+ *
+ * Back signs a signed-in child out first and then goes to the device picker,
+ * by a hard navigation - see `WaitingOnConsent`. A child held in place on 05
+ * Entry has no session to end, so nobody is signed out.
+ */
+export function HoldWayBack() {
   const { signOut } = useAuth();
   const back = () => {
     if (getSession()) signOut();
@@ -83,35 +112,23 @@ export function WaitingOnConsent({
   };
 
   return (
-    <div className="flex min-h-dvh flex-col bg-nevo-cream">
-      {/* The age-check hold's Back (D189), then the same cropped wordmark as
-          the PIN beat and the picker, so the doors do not drift apart. */}
-      <div className="flex h-[60px] shrink-0 items-center px-4">
-        <button
-          type="button"
-          aria-label="Back"
-          onClick={back}
-          className="flex size-11 cursor-pointer items-center justify-center rounded-[10px] transition-colors hover:bg-nevo-near-black/[0.06] active:bg-nevo-near-black/[0.12]"
-        >
-          <ChevronLeft
-            className="size-6 text-nevo-near-black"
-            strokeWidth={2}
-          />
-        </button>
-        <span className="relative ml-1.5 block h-[15px] w-12 overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/logo-wordmark-purple.png"
-            alt="Nevo"
-            className="absolute block h-[152px] w-[152px] max-w-none -translate-x-[55px] -translate-y-[74px]"
-          />
-        </span>
-      </div>
-
-      <HoldMessage
-        hold={hold}
-        className="min-h-0 flex-1 justify-center px-10"
-      />
+    <div className="flex h-[60px] shrink-0 items-center px-4">
+      <button
+        type="button"
+        aria-label="Back"
+        onClick={back}
+        className="flex size-11 cursor-pointer items-center justify-center rounded-[10px] transition-colors hover:bg-nevo-near-black/[0.06] active:bg-nevo-near-black/[0.12]"
+      >
+        <ChevronLeft className="size-6 text-nevo-near-black" strokeWidth={2} />
+      </button>
+      <span className="relative ml-1.5 block h-[15px] w-12 overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/logo-wordmark-purple.png"
+          alt="Nevo"
+          className="absolute block h-[152px] w-[152px] max-w-none -translate-x-[55px] -translate-y-[74px]"
+        />
+      </span>
     </div>
   );
 }

@@ -96,6 +96,24 @@ vi.mock("./YoureInScreen", () => ({
     <button onClick={onDone}>you are in</button>
   ),
 }));
+/*
+ * Module 4 in two buttons: it was sat, or it had nothing to ask. The real
+ * module, against the real probe contract, is `DomainProbeModule.dom.test`.
+ */
+vi.mock("@/components/student/Profiling/DomainProbeModule", () => ({
+  DomainProbeStep: ({
+    onDone,
+    stretchFirst,
+  }: {
+    onDone: (outcome: "sat" | "absent") => void;
+    stretchFirst: boolean;
+  }) => (
+    <div data-stretch-first={String(stretchFirst)}>
+      <button onClick={() => onDone("sat")}>after probe</button>
+      <button onClick={() => onDone("absent")}>nothing to probe</button>
+    </div>
+  ),
+}));
 
 const future = () => new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
@@ -151,6 +169,8 @@ function walkToPin() {
 
 async function walkToYoureIn() {
   walkToPin();
+  fireEvent.click(await screen.findByRole("button", { name: "after probe" }));
+  fireEvent.click(screen.getByRole("button", { name: "Let's finish setting up" }));
   await screen.findByRole("button", { name: "you are in" });
 }
 
@@ -267,6 +287,55 @@ describe("where the learning notice sits (D10, 1 Oct)", () => {
   });
 });
 
+describe("Module 4, the domain probe, as Lydia ruled 17 Oct (SCRUM-244)", () => {
+  it("runs once the PIN has made the account, before Complete and You're In", async () => {
+    // The server asks it and needs the child's account to: a school-code
+    // child has none until the PIN is stored.
+    render(<ObservedInteractionSequence />);
+    fireEvent.click(screen.getByRole("button", { name: "after transition" }));
+    fireEvent.click(screen.getByRole("button", { name: "after profiling" }));
+    expect(screen.queryByRole("button", { name: "after probe" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.queryByRole("button", { name: "after probe" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "set pin" }));
+
+    const probe = await screen.findByRole("button", { name: "after probe" });
+    expect(getSession()).toMatchObject({ userId: "student-9" });
+    // A module has just ended two screens back: the stretch comes first.
+    expect(probe.parentElement).toHaveAttribute("data-stretch-first", "true");
+    expect(screen.queryByRole("button", { name: "you are in" })).toBeNull();
+
+    fireEvent.click(probe);
+    expect(screen.getByText("All set. Nevo is ready for you.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "you are in" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Let's finish setting up" }));
+
+    expect(screen.getByRole("button", { name: "you are in" })).toBeInTheDocument();
+  });
+
+  it("maps all four on Complete when the child sat it", async () => {
+    walkToPin();
+    fireEvent.click(await screen.findByRole("button", { name: "after probe" }));
+
+    const map = screen.getByRole("progressbar");
+    expect(map).toHaveAttribute("aria-valuemax", "4");
+    expect(map).toHaveAttribute("aria-valuenow", "4");
+  });
+
+  it("maps the three the child did when it had nothing to ask (design, 9 Oct)", async () => {
+    // "A child who will do three sees three segments." Nothing fills a stop
+    // nobody reached.
+    walkToPin();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "nothing to probe" }),
+    );
+
+    const map = screen.getByRole("progressbar");
+    expect(map).toHaveAttribute("aria-valuemax", "3");
+    expect(map).toHaveAttribute("aria-valuenow", "3");
+  });
+});
+
 describe("which of its screens sit in the tablet frame (D207)", () => {
   /*
    * The Transition and the profiling run are pre-login screens, drawn on the
@@ -279,7 +348,7 @@ describe("which of its screens sit in the tablet frame (D207)", () => {
       .getAllByText(name)[0]
       .closest("[data-nevo-letterbox-frame]") !== null;
 
-  it("frames the Transition and the profiling run, and nothing after them", async () => {
+  it("frames the Transition and the profiling run, and nothing else", async () => {
     render(<ObservedInteractionSequence />);
     expect(framed("after transition")).toBe(true);
 
@@ -293,6 +362,13 @@ describe("which of its screens sit in the tablet frame (D207)", () => {
     expect(framed("set pin")).toBe(false);
 
     fireEvent.click(screen.getByRole("button", { name: "set pin" }));
+    // Module 4 and Complete are the profiling run's screens, wherever they fall.
+    await screen.findByRole("button", { name: "after probe" });
+    expect(framed("after probe")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "after probe" }));
+    expect(framed("All set. Nevo is ready for you.")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Let's finish setting up" }));
     await screen.findByRole("button", { name: "you are in" });
     expect(framed("you are in")).toBe(false);
     expect(document.querySelector("[data-nevo-letterbox]")).toBeNull();

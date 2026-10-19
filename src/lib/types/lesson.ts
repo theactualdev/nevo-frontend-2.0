@@ -32,12 +32,18 @@ export interface TextContent {
    */
   slowerSteps?: string[];
   /**
-   * Key terms, as violet chips beside the standard text and under Expand.
+   * Key terms, as violet chips beside the text under every view - Simplify,
+   * Slower and a lower-depth session's simpler text too, since a rewrite
+   * loses no content (Lydia, 17 Oct).
    * A term with a `definition` opens it in place when tapped (design, 9 Oct);
    * the authored demo's terms carry none and stay plain chips.
    */
   keyTerms?: { term: string; definition?: string }[];
-  /** Per-density callout (e.g. Simplify "IN SHORT", Expand "WORD EQUATION"). */
+  /**
+   * Per-density callout (e.g. Simplify "IN SHORT", Expand "WORD EQUATION").
+   * `default` is the standard view's and stays under every view; a density's
+   * own is drawn after it, never in its place.
+   */
   callouts?: Partial<
     Record<Density | "default", { label: string; text: string; sub?: string }>
   >;
@@ -48,7 +54,8 @@ export interface TextContent {
   keyPoints?: string[];
   /**
    * The payload's equation callouts (`TextVariant.equationCallouts`): the
-   * frame's "WORD EQUATION" box, one per equation, under Expand.
+   * frame's "WORD EQUATION" box, one per equation, under every view: "A
+   * rewrite must not be able to lose an equation" (Lydia, 17 Oct).
    */
   equations?: { equation: string; label?: string }[];
   /**
@@ -291,9 +298,10 @@ interface CalcStepBase {
 /**
  * A step the child answers by picking.
  *
- * `accepted` is every option value the pipeline stored as right - the step's
- * `answer` and its `targets` - so a pick is matched against that list, never
- * reasoned about.
+ * `accepted` is the option value the pipeline stored as right - the step's
+ * `answer`, never its `targets` or its `acceptedAnswers`, either of which can
+ * name another option - so a pick is matched against it, never reasoned
+ * about.
  */
 export interface CalcChoiceStep extends CalcStepBase {
   input: "choice";
@@ -315,6 +323,7 @@ export interface CalcNumberStep extends CalcStepBase {
   input: "number";
   entry: "numeric" | "text";
   keys?: string[];
+  /** The step's `answer`, then every other form in its `acceptedAnswers`. */
   accepted: string[];
   /** "naira", "years", "%" - shown beside the field where the wire gives one. */
   unit?: string;

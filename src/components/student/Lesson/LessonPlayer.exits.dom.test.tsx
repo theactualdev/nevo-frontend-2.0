@@ -189,6 +189,91 @@ describe("finishing", () => {
   });
 });
 
+describe("a review opened from Subject Detail", () => {
+  /*
+   * Olayinka, 14 Oct: back returns to where you came from, and in the student
+   * console that applies ONLY to the review session - no frame names where it
+   * ends. Ordinary lessons keep IA 31's destinations, and so does the review's
+   * own in-session "Leave for now".
+   */
+  const FROM = "/student/progress/maths";
+  const begin = () =>
+    fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
+  const toDone = () => {
+    begin();
+    next();
+    next();
+    next();
+  };
+
+  it("goes back there when it is left before it begins", () => {
+    render(
+      <LessonPlayer lesson={LESSON} plan={null} live review reviewBack={FROM} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Leave for now" }));
+
+    expect(push).toHaveBeenCalledWith(FROM);
+    expect(push).toHaveBeenCalledTimes(1);
+    // What leaving the entry already recorded, unchanged: left at the top, and
+    // nothing written against the lesson.
+    expect(signals.ending).toEqual({
+      completionStatus: "exited",
+      exitPosition: "seg-1",
+    });
+    expect(writes()).toEqual([]);
+  });
+
+  it("goes back there when it is done", () => {
+    render(
+      <LessonPlayer lesson={LESSON} plan={null} live review reviewBack={FROM} />,
+    );
+    toDone();
+
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    expect(push).toHaveBeenCalledWith(FROM);
+    expect(push).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes Home from both when it was not said where it was opened from", () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live review />);
+    fireEvent.click(screen.getByRole("button", { name: "Leave for now" }));
+    expect(push).toHaveBeenLastCalledWith("/student/dashboard");
+    cleanup();
+
+    render(<LessonPlayer lesson={LESSON} plan={null} live review />);
+    toDone();
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(push).toHaveBeenLastCalledWith("/student/dashboard");
+  });
+
+  it("still goes Home from 'Leave for now' part way, as IA 31 sends every lesson", () => {
+    render(
+      <LessonPlayer lesson={LESSON} plan={null} live review reviewBack={FROM} />,
+    );
+    begin();
+
+    fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
+    fireEvent.click(screen.getByRole("button", { name: /leave for now/i }));
+
+    expect(push).toHaveBeenCalledWith("/student/dashboard");
+    expect(push).not.toHaveBeenCalledWith(FROM);
+  });
+
+  it("is not where an ordinary lesson goes, even if it were handed one", () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} reviewBack={FROM} />);
+    next();
+    next();
+    next();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to lessons" }));
+
+    expect(push).toHaveBeenCalledWith("/student/lessons");
+    expect(push).not.toHaveBeenCalledWith(FROM);
+  });
+});
+
 describe("a lesson played from a partial saved copy", () => {
   /*
    * Lydia, 6 Oct: a lesson played without its modules, recap and after-lesson

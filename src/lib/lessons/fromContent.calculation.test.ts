@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { calculationFromVariant, lessonFromContent } from "./fromContent";
+import { isStoredAnswer } from "./storedAnswer";
 import { ADD_FIFTHS, ADDING_FRACTIONS } from "@/lib/mocks/adding-fractions";
 import type {
   LessonDetailResponse,
@@ -137,6 +138,73 @@ describe("a calculation from the payload", () => {
     );
 
     expect(calc?.steps[0]).toMatchObject({ accepted: ["x + 1"] });
+  });
+
+  /*
+   * Lydia, 17 Oct: "0.5" for "1/2" marked wrong is demo-fatal. Every form
+   * backend stored arrives in `acceptedAnswers` (SCRUM-185) and is matched,
+   * never worked out - and `targets` still are not answers beside it.
+   */
+  it("accepts on a number step every form backend stores in acceptedAnswers", () => {
+    const calc = calcOf(
+      algebra({
+        steps: [
+          step({
+            expectedInput: "numeric",
+            answer: "1/2",
+            acceptedAnswers: [" 0.5 ", "50%", "1/2", "", 0.5],
+            targets: ["0.25"],
+          }),
+        ],
+      }),
+    );
+    const first = calc?.steps[0];
+    if (first?.input !== "number") throw new Error("not a number step");
+
+    // The answer first, each form once, trimmed, the empty one dropped.
+    expect(first.accepted).toEqual(["1/2", "0.5", "50%"]);
+    expect(isStoredAnswer("0.5", first.accepted)).toBe(true);
+    expect(isStoredAnswer("50%", first.accepted)).toBe(true);
+    // A target is still never a right answer.
+    expect(isStoredAnswer("0.25", first.accepted)).toBe(false);
+    // Matched, not evaluated: a form nobody stored stays wrong.
+    expect(isStoredAnswer("2/4", first.accepted)).toBe(false);
+  });
+
+  it("keeps a choice to its one answer, whatever its acceptedAnswers name", () => {
+    // Nothing upstream keeps a choice step's list off its other options; read
+    // there it would make a second option right, the `targets` defect.
+    const calc = calcOf(
+      algebra({
+        steps: [
+          step({
+            input: "choice",
+            expectedInput: "selection",
+            answer: "1/2",
+            acceptedAnswers: ["2/4"],
+            options: [
+              { value: "1/2", label: "1/2" },
+              { value: "2/4", label: "2/4" },
+            ],
+          }),
+        ],
+      }),
+    );
+
+    expect(calc?.steps[0]).toMatchObject({
+      input: "choice",
+      accepted: ["1/2"],
+    });
+  });
+
+  it("still refuses a number step with no answer, whatever its list holds", () => {
+    const calc = calcOf(
+      algebra({
+        steps: [step({ answer: null, acceptedAnswers: ["0.5"] })],
+      }),
+    );
+
+    expect(calc).toBeUndefined();
   });
 
   it("marks one option right where backend fills targets with them all", () => {

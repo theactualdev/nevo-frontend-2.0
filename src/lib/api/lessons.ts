@@ -602,10 +602,30 @@ export interface LessonQuestionAttemptWrite {
    */
   problemId: string;
   segmentId?: string | null;
-  source?: "checkpoint" | "assessment";
+  /**
+   * "calculation" is on the contract since 18 Oct and sent by nothing yet: a
+   * calculation step is still matched on the device against its stored forms.
+   */
+  source?: "checkpoint" | "assessment" | "calculation";
   answer: CheckpointScalar | CheckpointScalar[];
   /** Ours, for idempotent retries. */
   clientAttemptId?: string | null;
+  /**
+   * "Observed answer time in milliseconds. Missing or implausibly short
+   * timing cannot raise mastery" (18 Oct). A whole number, 0 to an hour,
+   * measured with `performance.now()` from the question being put to the
+   * pick (rule 4) - and, held offline, the time as measured, never one taken
+   * at sync. ABSENT WHEN NOTHING WAS MEASURED: never a stand-in (rule 5).
+   * Lydia, 17 Oct: two instant right answers must not count as mastered, and
+   * the check measured this and dropped it.
+   */
+  responseTimeMs?: number | null;
+  /**
+   * Hints the child had before this answer; the server defaults it to 0.
+   * Sent only where the player knows a hint was on screen for the question
+   * (B28's `after_hint`), as 1 - "at least one" is all it knows.
+   */
+  hintCount?: number;
 }
 
 /** `LessonQuestionAttemptResponse` - one stored answer, marked server-side. */
@@ -615,7 +635,7 @@ export interface LessonQuestionAttempt {
   sessionId: string;
   questionId: string;
   segmentId: string | null;
-  source: "checkpoint" | "assessment";
+  source: "checkpoint" | "assessment" | "calculation";
   attemptNumber: number;
   /** The question as it stood when answered, snapshotted beside the answer. */
   question: ComprehensionCheckpoint;
