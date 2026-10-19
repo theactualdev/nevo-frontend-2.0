@@ -68,7 +68,13 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
    * Route-based rather than state-based: the wizard's steps are URLs, so
    * leaving the flow is what brings the pill back, with no state to reset.
    */
-  const inUpload = pathname.startsWith("/teacher/lessons/upload");
+  /*
+   * C07k's lesson review is the same kind of flow, and its frame draws no
+   * pill: one would sit on the pinned action bar's primary button.
+   */
+  const inUpload =
+    pathname.startsWith("/teacher/lessons/upload") ||
+    /^\/teacher\/lessons\/[^/]+\/review$/.test(pathname);
   /*
    * C19 (design, 12 Oct): on a phone, only the screens drawn for one are
    * laid out for one, and every other shows the shared "needs a bigger
