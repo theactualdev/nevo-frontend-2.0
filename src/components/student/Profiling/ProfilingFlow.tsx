@@ -13,6 +13,7 @@ import {
   type AgeBand,
 } from "@/lib/profiling/bands";
 import { getOnboardingDraft } from "@/lib/auth/onboarding";
+import { ONBOARDING_MODULES } from "@/lib/api/probe";
 import {
   BaselineCapture,
   baselineRunContext,
@@ -28,13 +29,14 @@ import { QuestSegments } from "./QuestMap";
 import { SentenceDotModule } from "./SentenceDotModule";
 import { StretchInterstitial } from "./StretchInterstitial";
 
-/**
- * THE MODULES THIS RUN PRESENTS, in order - and so the quest map's segments
- * (design, 9 Oct): "The quest map shows the number of modules that child will
- * actually do ... A child who will do three sees three segments." Module 4,
- * `domain_probe`, is not in it while nothing can serve the probe (see `m3`).
+/*
+ * FOUR MODULES, as Lydia ruled 17 Oct (SCRUM-244): "Module 4 IS the domain
+ * probe ... All four run before any lesson." This run presents the first
+ * three, and the quest map has a segment for each of the four
+ * (`ONBOARDING_MODULES`); the fourth, `domain_probe`, is asked by the server
+ * and needs the child's account, so the sequence presents it once the
+ * account exists (`DomainProbeModule`) and says how many segments there are.
  */
-const RUN_MODULES = ["grid_span", "pattern_flanker", "sentence_dot"] as const;
 /**
  * The band for a child the server gives none: Primary 4-6, the band the
  * warm-up runs without one (D139). See `band` below for why it is not asked.
@@ -44,8 +46,9 @@ const NO_BAND: AgeBand = AGE_BANDS.P46;
 /**
  * The Baseline Cognitive Profiling flow (SCRUM-104) - onboarding Phase C.
  * Intro → motor-speed step (08a) → M1 Grid Span → stretch → M2
- * Pattern/Flanker → stretch → M3 Sentence/Dot → Complete. M4, the Domain
- * Probe, is not presented: nothing can serve it here (see `m3`, below).
+ * Pattern/Flanker → stretch → M3 Sentence/Dot, and then `onDone`. M4, the
+ * Domain Probe, and the Complete screen after it are the sequence's, since
+ * the probe needs an account this run may not have yet (see `m3`, below).
  * One BaselineCapture spans the run; on completion it becomes one
  * trial per answer, the motor step's taps included, parked to be sent raw for
  * the server to reduce (B9), and the rest of the stream is purged.
@@ -55,9 +58,18 @@ const NO_BAND: AgeBand = AGE_BANDS.P46;
  * child (D153); it drives grid sizes, content and targets, and the shells are
  * shared.
  */
-export function ProfilingFlow(props: Parameters<typeof ProfilingRun>[0]) {
+export function ProfilingFlow({
+  segments = ONBOARDING_MODULES.length,
+  ...props
+}: Parameters<typeof ProfilingRun>[0] & {
+  /**
+   * The quest map's segments: the modules this child will do, of which this
+   * run is the first three. Four unless the caller knows otherwise.
+   */
+  segments?: number;
+}) {
   return (
-    <QuestSegments.Provider value={RUN_MODULES.length}>
+    <QuestSegments.Provider value={segments}>
       <ProfilingRun {...props} />
     </QuestSegments.Provider>
   );
@@ -94,15 +106,19 @@ function ProfilingRun({
    * it at the end of this run, and `StudentShell`'s flush on the next app
    * load does if that fails.
    *
-   * Only the SSO path passes this. Any other "current session" here could be
-   * the previous child's on a shared tablet, which is the exact mistake the
-   * parking exists to prevent.
+   * Only the SSO path passes this, and a signed-in child finishing onboarding
+   * the server says is unfinished (`OnboardingResume`, reached from inside the
+   * signed-in app). Any other "current session" here could be the previous
+   * child's on a shared tablet, which is the exact mistake the parking exists
+   * to prevent.
    */
   ownerUserId?: string | null;
   /**
-   * The whole flow is complete - carry on to the learning notice, which comes
-   * after the baseline (design, 1 Oct, D10: the parent consents, the child is
-   * informed, and the notice explains what the activities just done were for).
+   * Module 3 is done and the run's trials are parked - carry on to the
+   * learning notice, which comes after the baseline (design, 1 Oct, D10: the
+   * parent consents, the child is informed, and the notice explains what the
+   * activities just done were for). Called as Module 3 ends: the Complete
+   * screen follows Module 4 now, and is the sequence's.
    *
    * `runSessionId` is the capture session this run parked its trials under, or
    * null if nothing was parked. The caller hands it back to
@@ -121,7 +137,6 @@ function ProfilingRun({
     | "m2"
     | "stretch2"
     | "m3"
-    | "complete"
   >("intro");
   /*
    * THE BAND IS NEVER GUESSED FROM A FIXTURE.
@@ -208,17 +223,11 @@ function ProfilingRun({
     if (withdrawn) void capture.stop();
   }, [withdrawn, capture]);
   /*
-   * The completion screen's `saved` is left null - "still resolving" - because
-   * that is now literally what it is: the trials are parked and go out when
-   * the account exists, a screen or two later. This run cannot know the answer
-   * any more, and should not pretend to.
-   *
-   * DESIGN RULED ON THE SETTLED COPY, 1 OCT (SCRUM-180). It read "Your
-   * learning space has been personalized", a past-tense claim about a write
-   * this run cannot see. It now reads "Nevo has everything it needs to set up
-   * your learning space.", which is true the moment it is read.
+   * The run ends as Module 3 does, and hands on the run it parked (or null).
+   * The Complete screen, with its `saved` left null, is the sequence's now:
+   * it follows Module 4 (09d, 31 IA: "Module 4 · Domain Probe → completes →
+   * Profiling Complete"), which this run cannot present.
    */
-
   const finishRun = () => {
     if (!submitted.current) {
       submitted.current = true;
@@ -227,7 +236,7 @@ function ProfilingRun({
         // capture goes the same way it always does, and nothing is parked for
         // anyone to deliver, so no "baseline submitted" can follow either.
         void capture.stop();
-        setPhase("complete");
+        onDone(null);
         return;
       }
       /*
@@ -274,8 +283,9 @@ function ProfilingRun({
        * `POST /api/baseline/trials` has succeeded for this run
        * (`ObservedInteractionSequence`), and never if that stream has gone.
        */
+      // Once: a second end must not move the sequence on twice.
+      onDone(parkedRunRef.current);
     }
-    setPhase("complete");
   };
 
   /*
@@ -404,22 +414,17 @@ function ProfilingRun({
   }
 
   /*
-   * MODULE 3 ENDS THE RUN. MODULE 4 HAS NOTHING TO ASK (SCRUM-175/176, 8 Oct).
+   * MODULE 3 ENDS THIS RUN. MODULE 4 IS THE SEQUENCE'S (SCRUM-244).
    *
-   * The Domain Probe asked questions from a bank on this device and marked
-   * them against an answer key on this device - a measure of a child's
-   * knowledge decided on the child's own tablet. Backend now owns a
-   * subject-aware probe bank and marks what it serves, and the frontend's
-   * bank is gone, key and all.
-   *
-   * The spec's one route that serves a child probe items is
-   * `GET /api/v1/probe/{subject_id}/next`, and this run cannot call it: it is
-   * Bearer, and a school-code child has no account until the PIN step, after
-   * this; and nothing a student can read names a subject's id to ask about.
-   * Absence is an instruction (rule 5), so the module is not presented - no
-   * stretch before it, no subject question, no question, no trial and no
-   * `domain_probe` markers - rather than mimed with questions nobody served.
-   * Asked of backend.
+   * The Domain Probe once asked questions from a bank on this device and
+   * marked them against an answer key here (SCRUM-175/176 retired that, 8
+   * Oct). The server owns the bank, serves one item at a time and marks what
+   * it serves (`GET /api/v1/probe/{subject_id}/next`), and it is Bearer: a
+   * school-code child has no account until the PIN step, after this run. So
+   * Module 4 runs once the account exists - after the PIN, before Complete -
+   * as Lydia ruled 17 Oct that all four run before any lesson. Design draws it
+   * straight after Module 3 (31 IA, 32 Prototype); that is raised, not
+   * worked around (`DomainProbeModule`).
    */
   if (phase === "m3") {
     return (
@@ -434,10 +439,5 @@ function ProfilingRun({
     );
   }
 
-  return (
-    <ProfilingIntro
-      mode="complete"
-      onContinue={() => onDone(parkedRunRef.current)}
-    />
-  );
+  return null;
 }

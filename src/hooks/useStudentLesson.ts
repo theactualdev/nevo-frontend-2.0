@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { lessonsApi } from "@/lib/api/lessons";
+import { isOnboardingRequired } from "@/lib/auth/onboardingGate";
 import { getSession, getToken } from "@/lib/auth/session";
 import {
   isPartialCopy,
@@ -295,6 +296,15 @@ export function useStudentLesson(
           setResolved({ id: lessonId, missing: true });
           return;
         }
+        /*
+         * NOT YET, BECAUSE ONBOARDING IS NOT FINISHED (409
+         * `onboarding_required`, SCRUM-244). The client is already sending
+         * the child to finish it (`onboardingDoor`), so this stays loading
+         * for the moment that takes: not "Something went wrong", which is
+         * untrue and asks for a retry, and not the shelf copy below, which
+         * would open the very lesson the server has just refused.
+         */
+        if (isOnboardingRequired(err)) return;
         /*
          * NO CONNECTION, BUT THE CHILD SAVED IT. The lesson they kept when
          * they saved it, through the same builder - so it opens exactly as it

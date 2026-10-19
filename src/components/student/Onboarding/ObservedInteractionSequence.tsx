@@ -23,7 +23,11 @@ import {
 } from "@/lib/profiling/pendingBaseline";
 import { ONBOARDING_SIGNAL_TYPES } from "@/lib/constants";
 import { randomId } from "@/lib/utils";
+import { ONBOARDING_MODULES } from "@/lib/api/probe";
 import { ProfilingFlow } from "@/components/student/Profiling/ProfilingFlow";
+import { DomainProbeStep } from "@/components/student/Profiling/DomainProbeModule";
+import { ProfilingIntro } from "@/components/student/Profiling/ProfilingIntro";
+import { QuestSegments } from "@/components/student/Profiling/QuestMap";
 import { Letterbox } from "@/components/student/Shell/Letterbox";
 import {
   WaitingOnConsent,
@@ -42,9 +46,18 @@ const ENTRY = "/student/onboarding/school";
 
 /**
  * Onboarding Phase C — one continuous experience: a calm transition, the
- * Baseline Cognitive Profiling flow (SCRUM-104 — design retired the Observed
- * Interaction Sequence's four activities and this flow took their slot), the
- * learning notice, PIN Creation, and the "You're In" hand-off into the app.
+ * Baseline Cognitive Profiling flow's first three modules (SCRUM-104 — design
+ * retired the Observed Interaction Sequence's four activities and this flow
+ * took their slot), the learning notice, PIN Creation, Module 4 (the domain
+ * probe), Profiling Complete, and the "You're In" hand-off into the app.
+ *
+ * FOUR MODULES BEFORE ANY LESSON, as Lydia ruled 17 Oct (SCRUM-244): "Module
+ * 4 IS the domain probe ... All four run before any lesson." The server
+ * refuses a lesson until all four are in. Module 4 is asked by the server and
+ * needs the child's account, which the PIN step creates, so it runs after the
+ * PIN rather than straight after Module 3 where design draws it (31 IA, 32
+ * Prototype). Raised with design and backend; Lydia's own order reads "choose
+ * a PIN, four onboarding modules, then Home".
  *
  * THE NOTICE COMES AFTER THE BASELINE, and design settled that on 1 Oct (D10).
  * The parent consents and the child is informed - two mechanisms, and the
@@ -105,6 +118,14 @@ export function ObservedInteractionSequence() {
   const profiling = useSignals(profilingSessionId, undefined, "profiling");
   const [phase, setPhase] = useState<"transition" | "activities">("transition");
   const [index, setIndex] = useState(0);
+  /*
+   * The quest map's segments: the modules this child will do (design, 9 Oct).
+   * Four, until Module 4 turns out to have nothing to ask - then the run was
+   * three, and Complete says so rather than filling a stop nobody reached.
+   * Not knowable earlier for a school-code child: there is no account to ask
+   * with until the PIN step.
+   */
+  const [segments, setSegments] = useState<number>(ONBOARDING_MODULES.length);
   /** Held by the PIN route at the end of the run (B68), in place as 05 holds. */
   const [held, setHeld] = useState<WaitingHold | null>(null);
   /**
@@ -183,10 +204,11 @@ export function ObservedInteractionSequence() {
 
   /*
    * THE TABLET FRAME AT DESKTOP WIDTH (D207) goes on the holds, the
-   * Transition and the profiling run, which are pre-login screens, and not on
-   * the notice, PIN creation or You're In, which are drawn on the signed-in
-   * canvas with desktop compositions. So it is placed per screen here rather
-   * than over the whole route - see `Letterbox`.
+   * Transition and the profiling run - Module 4 and Complete included, which
+   * are its screens wherever they fall - and not on the notice, PIN creation
+   * or You're In, which are drawn on the signed-in canvas with desktop
+   * compositions. So it is placed per screen here rather than over the whole
+   * route - see `Letterbox`.
    */
   // 05's hold for the age check, with its Back, as 05 would show it.
   if (held === "age-check")
@@ -230,6 +252,7 @@ export function ObservedInteractionSequence() {
     return (
       <Letterbox>
         <ProfilingFlow
+          segments={segments}
           track={profiling.trackEvent}
           runId={profilingSessionId}
           ownerUserId={ssoOwner}
@@ -309,6 +332,44 @@ export function ObservedInteractionSequence() {
           advance();
         }}
       />
+    );
+  }
+
+  /*
+   * MODULE 4, NOW THAT THE ACCOUNT EXISTS (SCRUM-244). The server serves and
+   * marks it; this records nothing of its own. With nothing to ask it is not
+   * presented, and the map drops to the three this child did.
+   */
+  if (index === 3) {
+    return (
+      <Letterbox>
+        <QuestSegments.Provider value={segments}>
+          <DomainProbeStep
+            stretchFirst
+            track={profiling.trackEvent}
+            onDone={(outcome) => {
+              if (outcome === "absent") setSegments(ONBOARDING_MODULES.length - 1);
+              advance();
+            }}
+          />
+        </QuestSegments.Provider>
+      </Letterbox>
+    );
+  }
+
+  /*
+   * PROFILING COMPLETE, after Module 4 as design draws it (31 IA: "Module 4 ·
+   * Domain Probe → completes → Profiling Complete"). Its copy claims no write
+   * (SCRUM-180), and its `saved` stays null: the server's gate, not this
+   * screen, says whether onboarding is finished.
+   */
+  if (index === 4) {
+    return (
+      <Letterbox>
+        <QuestSegments.Provider value={segments}>
+          <ProfilingIntro mode="complete" onContinue={advance} />
+        </QuestSegments.Provider>
+      </Letterbox>
     );
   }
 
