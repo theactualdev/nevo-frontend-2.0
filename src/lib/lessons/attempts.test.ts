@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answerFor } from "./attempts";
+import { answerFor, calculationAttemptFor } from "./attempts";
 
 /**
  * One answer, as `POST /attempts` takes it (D36: answers already given are
@@ -169,5 +169,104 @@ describe("an attempt's timing", () => {
     expect(hinted).toMatchObject({ hintCount: 1 });
     // Not a 0: the server's own default, and nothing was observed.
     expect(plain).not.toHaveProperty("hintCount");
+  });
+});
+
+/*
+ * Lydia, 17 Oct: "Answer two things wrong deliberately, let the support rise
+ * on its own." The engine reads its error streak from marked answers alone,
+ * so a calculation step has to be written for a calculation got wrong to
+ * count - as `source: "calculation"`, on its segment.
+ */
+describe("a calculation answer", () => {
+  it("names the step, its segment and the source, and sends what was given", () => {
+    expect(
+      calculationAttemptFor({
+        segmentId: SEGMENT,
+        problemId: "s2",
+        answer: "5",
+        responseTimeMs: 3_000.4,
+      }),
+    ).toEqual({
+      problemId: "s2",
+      segmentId: SEGMENT,
+      source: "calculation",
+      answer: "5",
+      responseTimeMs: 3_000,
+    });
+  });
+
+  it("keeps a number a number", () => {
+    const body = calculationAttemptFor({
+      segmentId: SEGMENT,
+      problemId: "b1",
+      answer: 3,
+    });
+
+    expect(body?.answer).toBe(3);
+  });
+
+  it("is nothing without the segment the server needs it on", () => {
+    // `segmentId` is required for a calculation and `format: uuid`: a
+    // fixture's segment would have the whole answer refused.
+    expect(
+      calculationAttemptFor({ segmentId: "calc-1", problemId: "s1", answer: "a" }),
+    ).toBeNull();
+  });
+
+  it("is nothing with no problem or nothing given", () => {
+    expect(
+      calculationAttemptFor({ segmentId: SEGMENT, problemId: undefined, answer: "a" }),
+    ).toBeNull();
+    for (const answer of [undefined, ""]) {
+      expect(
+        calculationAttemptFor({ segmentId: SEGMENT, problemId: "s1", answer }),
+        String(answer),
+      ).toBeNull();
+    }
+  });
+
+  it("says a hint was on screen only where the solver saw one", () => {
+    const hinted = calculationAttemptFor({
+      segmentId: SEGMENT,
+      problemId: "s1",
+      answer: "a",
+      hinted: true,
+    });
+    const plain = calculationAttemptFor({
+      segmentId: SEGMENT,
+      problemId: "s1",
+      answer: "a",
+    });
+
+    expect(hinted).toMatchObject({ hintCount: 1 });
+    expect(plain).not.toHaveProperty("hintCount");
+  });
+
+  it.each([
+    ["not a number at all", Number.NaN],
+    ["negative", -5],
+    ["over the contract's hour", 3_600_001],
+  ])("leaves out a time the contract would refuse: %s", (_, ms) => {
+    const body = calculationAttemptFor({
+      segmentId: SEGMENT,
+      problemId: "s1",
+      answer: "a",
+      responseTimeMs: ms,
+    });
+
+    expect(body).not.toBeNull();
+    expect(body).not.toHaveProperty("responseTimeMs");
+  });
+
+  it("sends no verdict and no key", () => {
+    const body = calculationAttemptFor({
+      segmentId: SEGMENT,
+      problemId: "s1",
+      answer: "a",
+    });
+
+    expect(Object.keys(body ?? {})).not.toContain("correct");
+    expect(Object.keys(body ?? {})).not.toContain("answerKey");
   });
 });

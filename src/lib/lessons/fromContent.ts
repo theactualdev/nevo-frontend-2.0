@@ -454,9 +454,15 @@ export function calculationFromVariant(
   }
 
   const conceptId = variant.conceptId?.trim();
+  const answer =
+    typeof variant.answer === "string" ? variant.answer.trim() : variant.answer;
   return {
     variant: variant.type?.trim() || "co_construction",
     ...(conceptId ? { conceptId } : {}),
+    // The solved calculation's answer, for the server alone (see the type).
+    ...(answer === undefined || answer === null || answer === ""
+      ? {}
+      : { answer }),
     ...(carriesIds(variant, steps, scaffold, manipulative)
       ? { byId: true as const }
       : {}),
@@ -710,9 +716,38 @@ function calcStepFor(
     if (target < 1 || (places !== undefined && target > places)) {
       return undefined;
     }
-    return { ...base, input: "tap", target };
+    const counted = countedAnswer(step.answer, target);
+    return {
+      ...base,
+      input: "tap",
+      target,
+      ...(counted === undefined ? {} : { counted }),
+    };
   }
 
+  return undefined;
+}
+
+/**
+ * WHAT A FINISHED BUILD IS WRITTEN TO THE SERVER AS - the step's stored
+ * answer, in the type it was stored in, when that answer is the count built.
+ *
+ * The server marks a calculation step against its stored `answer`, and reads
+ * a count only where the answer is that count: 3 or "3" for a build of three.
+ * A number goes up as a number and text as text, because a step that offers
+ * options is matched as text, and 3 is not "3" there. 17b's own bar, three
+ * quarters stored as "3/4", is not a count the server can match, and writing
+ * the three pieces would file a right build as a miss - so it writes nothing,
+ * and nothing here composes "3/4" out of the pieces.
+ */
+function countedAnswer(
+  answer: unknown,
+  target: number,
+): string | number | undefined {
+  if (typeof answer === "number") return answer === target ? answer : undefined;
+  if (typeof answer === "string" && answer.trim() === String(target)) {
+    return answer.trim();
+  }
   return undefined;
 }
 

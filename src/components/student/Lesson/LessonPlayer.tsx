@@ -76,7 +76,7 @@ import {
   type LessonQuestionAttemptWrite,
 } from "@/lib/api/lessons";
 import { schedulerApi } from "@/lib/api/scheduler";
-import { answerFor } from "@/lib/lessons/attempts";
+import { answerFor, calculationAttemptFor } from "@/lib/lessons/attempts";
 import { holdAnswer, retryable } from "@/lib/lessons/pendingProgress";
 import {
   answersBefore,
@@ -101,7 +101,7 @@ import { useLessonProgress } from "@/hooks/useLessonProgress";
 import { AudioSegment } from "./AudioSegment";
 import { BreakOfferPill } from "./BreakOfferPill";
 import { BreakScreen } from "./BreakScreen";
-import { CalculationSolver } from "./CalculationSolver";
+import { CalculationSolver, type StepGiven } from "./CalculationSolver";
 import { FeedbackStrip } from "./FeedbackStrip";
 import { InteractiveSegment } from "./InteractiveSegment";
 import { LeaveLessonDialog } from "./LeaveLessonDialog";
@@ -2863,19 +2863,55 @@ export function LessonPlayer({
                   reason,
                 })
               }
-              onCalcSolved={() => {
+              onCalcSolved={(solved) => {
                 setSolvedCalcs((prev) => new Set(prev).add(segment.id));
                 // Solving the calculation is the centrepiece interaction of
                 // 17b and emitted NOTHING - the local set was the only trace.
                 trackEvent(SIGNAL_EVENT_TYPES.CALCULATION_COMPLETE, {
                   segmentId: segment.id,
                 });
+                /*
+                 * THE SOLVED CALCULATION IS AN ANSWER OF ITS OWN, keyed on the
+                 * segment: the one calculation answer support fades on, judged
+                 * by the server from the steps' answers beside it - so it goes
+                 * after them, once the last step's has landed or been held.
+                 */
+                const completion = calculationAttemptFor({
+                  segmentId: segment.id,
+                  problemId: segment.id,
+                  answer: segment.calculation?.answer,
+                  responseTimeMs: solved.responseTimeMs,
+                });
+                if (!live || !completion) return;
+                void Promise.allSettled(attemptWrites.current).then(() =>
+                  saveAttempt(completion),
+                );
               }}
+              onCalcGiven={(given) =>
+                /*
+                 * EVERY STEP THE CHILD COMMITS IS WRITTEN, each wrong try its
+                 * own answer, for the server to mark: the engine's error
+                 * streak - what offers a hint and opens the Socratic panel -
+                 * is read from marked answers alone, so a calculation got
+                 * wrong could never make support rise (Lydia, 17 Oct). In
+                 * addition to the step's signal below, never in the child's
+                 * way, and nothing the server says back changes the solver.
+                 */
+                saveAttempt(
+                  calculationAttemptFor({
+                    segmentId: segment.id,
+                    problemId: given.stepId,
+                    answer: given.answer,
+                    responseTimeMs: given.responseTimeMs,
+                    hinted: given.hinted,
+                  }),
+                )
+              }
               onCalcStep={(stepId, correct) => {
                 // The catalogue's keys, exactly: which step, never whether it
-                // was right. The match against the stored answers feeds the
-                // error streak the engine reads (`consecutiveErrors`) - that
-                // is where correctness is declared, not on this event.
+                // was right. Correctness is the server's, on the answer
+                // written above (`onCalcGiven`), and the error streak the
+                // engine reads is taken from those marked answers.
                 trackEvent(SIGNAL_EVENT_TYPES.CALCULATION_STEP_RESPONSE, {
                   segmentId: segment.id,
                   stepId,
@@ -3121,6 +3157,7 @@ function SegmentBody({
   onMediaFailed,
   onCalcSolved,
   onCalcStep,
+  onCalcGiven,
   onPiecePlaced,
   onCalcHint,
   onCalcHintShown,
@@ -3150,8 +3187,10 @@ function SegmentBody({
   onAudioBusy: (phase: BusyPhase) => void;
   /** A picture or recording would not load (B12). */
   onMediaFailed: (channel: "image" | "audio", reason: MediaFailReason) => void;
-  onCalcSolved: () => void;
+  onCalcSolved: (solved: { responseTimeMs?: number }) => void;
   onCalcStep: (stepId: string, correct: boolean) => void;
+  /** What the child gave on a committed step, for the server to mark. */
+  onCalcGiven: (given: StepGiven) => void;
   onPiecePlaced: (stepId: string) => void;
   /** The child opened a calculation step's hint themselves. */
   onCalcHint: () => void;
@@ -3208,6 +3247,7 @@ function SegmentBody({
           reading={reading}
           onSolved={onCalcSolved}
           onStepAnswered={onCalcStep}
+          onStepGiven={onCalcGiven}
           onPiecePlaced={onPiecePlaced}
           onHintOpened={onCalcHint}
           onHintShown={onCalcHintShown}
