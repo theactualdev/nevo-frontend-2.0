@@ -697,6 +697,34 @@ html[data-reduced-motion="true"] *::after {
   scroll-behavior: auto !important;
 }
 
+/* D162's beat: a calculation build's "That's the total" arrives about 450ms
+ * after the last piece, below the spent tray (Lydia, 17 Oct). `visibility`
+ * keeps it out of a tap and out of focus while it waits, so a double tap on
+ * the tray cannot reach it. With reduced motion, the OS's or the student's
+ * own, it is there at once: the neutralisations above shorten an animation,
+ * not its delay. */
+.nevo-arrive-late {
+  animation: nevo-arrive-late 220ms ease-out 450ms both;
+}
+@keyframes nevo-arrive-late {
+  from {
+    opacity: 0;
+    visibility: hidden;
+  }
+  to {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nevo-arrive-late {
+    animation: none !important;
+  }
+}
+html[data-reduced-motion="true"] .nevo-arrive-late {
+  animation: none !important;
+}
+
 /* Text Size — the content zoom that scales the app's fixed-px type. Keyed off
  * the root attribute rather than set inline from React state, so the boot
  * script in <head> can apply it before the first paint (rule 6). The numbers

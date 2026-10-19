@@ -624,19 +624,66 @@ describe("bringing the step into view above the docked pad", () => {
     expect(scrolled).not.toHaveBeenCalled();
   });
 
-  it("brings That's the total into view as it arrives", () => {
-    rects = { column: [100, 400], prompt: [300, 326], total: [380, 432] };
-    const onSystemScroll = inColumn(
-      build({
-        steps: [
-          step({ stepId: "b1", prompt: "Build the total.", expectedInput: "drag", input: "tap", options: [], tapCount: 2 }),
-        ],
-      }),
-    );
-    for (let i = 0; i < 2; i++) placeOne();
+  /*
+   * A BUILD MOVES ONLY AS IT OPENS (Lydia, 17 Oct). On-screen QA of the
+   * first fix: brought into view at the last tap, the column rose by "That's
+   * the total" and its gap, 70px, and put it exactly where the tray had
+   * been, under the finger - a stray tap 221ms later committed.
+   */
+  const BUILD_STEP = () =>
+    build({
+      steps: [
+        step({ stepId: "b1", prompt: "Build the total.", expectedInput: "drag", input: "tap", options: [], tapCount: 2 }),
+      ],
+    });
+
+  it("brings a build into view as it opens, with the place That's the total will take", () => {
+    // Too short for all of it to the hint link; the question, the build,
+    // the tray and the held place fit.
+    rects = { column: [100, 340], prompt: [300, 326], build: [344, 400], tray: [416, 460], total: [478, 530], hint: [546, 590] };
+    const onSystemScroll = inColumn(BUILD_STEP());
+    resized();
 
     expect(lastMove()).toEqual({ part: "total", how: { block: "end" } });
-    expect(onSystemScroll).toHaveBeenCalled();
+    expect(onSystemScroll).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops at the held place rather than reaching on to the hint link", () => {
+    // Room for all of it to the hint link: still only as far as the held
+    // place, so the picture above stays in view.
+    rects = { column: [100, 500], prompt: [300, 326], build: [344, 400], tray: [416, 460], total: [478, 530], hint: [546, 590] };
+    inColumn(BUILD_STEP());
+    resized();
+
+    expect(lastMove()).toEqual({ part: "total", how: { block: "end" } });
+  });
+
+  it("moves nothing at the last tap, or on a resize while the child builds", () => {
+    rects = { column: [100, 400], prompt: [120, 146], build: [160, 300], tray: [316, 360], total: [378, 430], hint: [446, 490] };
+    const onSystemScroll = inColumn(BUILD_STEP());
+    resized();
+    scrolled.mockReset();
+    onSystemScroll.mockReset();
+
+    placeOne();
+    resized();
+    placeOne();
+    resized();
+
+    expect(scrolled).not.toHaveBeenCalled();
+    expect(onSystemScroll).not.toHaveBeenCalled();
+  });
+
+  it("leaves the held place below the fold where the tray and it do not fit together", () => {
+    // 100px of column: the tray and the place below it take 114.
+    rects = { column: [100, 200], prompt: [120, 146], build: [160, 300], tray: [316, 360], total: [378, 430], hint: [446, 490] };
+    const onSystemScroll = inColumn(BUILD_STEP());
+    resized();
+    for (let i = 0; i < 2; i++) placeOne();
+    resized();
+
+    expect(scrolled).not.toHaveBeenCalled();
+    expect(onSystemScroll).not.toHaveBeenCalled();
   });
 });
 
@@ -673,8 +720,11 @@ describe("building with pieces", () => {
     const props = show(build({ steps: [BUILD] }));
 
     for (let i = 0; i < 3; i++) placeOne();
-    // The piece goes once the stored count is placed.
-    expect(screen.queryByRole("button", { name: "+ 1/4" })).toBeNull();
+    // The piece is spent once the stored count is placed (Lydia, 17 Oct).
+    expect(screen.getByRole("button", { name: "+ 1/4" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     tap("That's the total");
 
     expect(props.onPiecePlaced).toHaveBeenCalledTimes(3);
@@ -702,6 +752,204 @@ describe("building with pieces", () => {
       expect(place.className).not.toMatch(/(sm|lg):h-/);
     }
     expect(places[0].parentElement?.className.split(" ")).toContain("gap-1.5");
+  });
+});
+
+describe("the last piece cannot also submit the build (Lydia, 17 Oct; D162)", () => {
+  /*
+   * "'That's the total' appears exactly where the last piece's button was,
+   * so building the answer also submits it." The tray went with the last
+   * piece and the commit took its row, under the finger that had just
+   * tapped. jsdom lays nothing out, so "where the piece was" is the row
+   * after the build's card - the one the tray held.
+   */
+  const TAP = (tapCount: number) =>
+    step({
+      stepId: "a1",
+      prompt: "Build the total.",
+      expectedInput: "drag",
+      input: "tap",
+      options: [],
+      tapCount,
+    });
+  /** The build's card: "The total", and the places the pieces go into. */
+  const card = () => screen.getByText("The total").parentElement!;
+  /** A tap where `piece` was, on whatever now holds the tray's row. */
+  const tapWhereItWas = (piece: HTMLElement) => {
+    const there = card().nextElementSibling as HTMLElement;
+    fireEvent.click(
+      there.contains(piece)
+        ? piece
+        : there.matches("button")
+          ? there
+          : (there.querySelector("button") ?? there),
+    );
+  };
+
+  it.each([
+    ["a fraction bar", { kind: "fraction_bar", parts: 4, rows: 1, labels: [] }, "+ 1/4", 3],
+    ["an array", { kind: "array", parts: 3, rows: 2 }, "Tap to add", 4],
+    ["counters", { kind: "counters", parts: 5, rows: 2 }, "Tap to add", 3],
+    ["a number line", { kind: "number_line", parts: 5 }, "+1", 3],
+  ] as const)(
+    "%s: a fast second tap, or a double tap, where the last piece was submits nothing",
+    (_, manipulative, piece, count) => {
+      const props = show(build({ manipulative, steps: [TAP(count)] }));
+      const tile = screen.getByRole("button", { name: piece });
+      const tray = tile.parentElement!;
+      for (let i = 0; i < count; i++) fireEvent.click(tile);
+
+      // One tap too many on the spot the finger is on...
+      tapWhereItWas(tile);
+      expect(props.onStepAnswered).not.toHaveBeenCalled();
+      expect(props.onSolved).not.toHaveBeenCalled();
+      // ...and a double tap there.
+      tapWhereItWas(tile);
+      tapWhereItWas(tile);
+
+      expect(props.onStepAnswered).not.toHaveBeenCalled();
+      expect(props.onSolved).not.toHaveBeenCalled();
+      expect(props.onPiecePlaced).toHaveBeenCalledTimes(count);
+      // The piece is still there, spent; the row is the tray's still.
+      expect(tile).toBeInTheDocument();
+      expect(tile).toHaveAttribute("aria-disabled", "true");
+      expect(card().nextElementSibling).toBe(tray);
+      expect(tray).toHaveAttribute("data-tray-done");
+    },
+  );
+
+  it.each([
+    ["a fraction bar", { kind: "fraction_bar", parts: 4, rows: 1, labels: [] }, "+ 1/4", 3],
+    ["an array", { kind: "array", parts: 3, rows: 2 }, "Tap to add", 4],
+    ["counters", { kind: "counters", parts: 5, rows: 2 }, "Tap to add", 3],
+    ["a number line", { kind: "number_line", parts: 5 }, "+1", 3],
+  ] as const)(
+    "%s: That's the total arrives below the tray, not in its place, and commits when pressed",
+    (_, manipulative, piece, count) => {
+      const props = show(build({ manipulative, steps: [TAP(count)] }));
+      const tile = screen.getByRole("button", { name: piece });
+      for (let i = 0; i < count; i++) fireEvent.click(tile);
+
+      const total = screen.getByRole("button", { name: "That's the total" });
+      const tray = tile.parentElement!;
+      expect(tray.contains(total)).toBe(false);
+      expect(total).not.toBe(card().nextElementSibling);
+      expect(
+        tray.compareDocumentPosition(total) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      // D162's beat: unseen and untappable for about 450ms (globals.css).
+      expect(total).toHaveClass("nevo-arrive-late");
+
+      tap("That's the total");
+      expect(props.onStepAnswered).toHaveBeenCalledWith("a1", true);
+      expect(props.onSolved).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  /** Everything holding That's the total's place, seen or not. */
+  const totalPlaces = () => [
+    ...document.querySelectorAll<HTMLElement>('[data-reveal="total"]'),
+  ];
+
+  it.each([
+    ["a fraction bar", { kind: "fraction_bar", parts: 4, rows: 1, labels: [] }, "+ 1/4", 3],
+    ["an array", { kind: "array", parts: 3, rows: 2 }, "Tap to add", 4],
+    ["counters", { kind: "counters", parts: 5, rows: 2 }, "Tap to add", 3],
+    ["a number line", { kind: "number_line", parts: 5 }, "+1", 3],
+  ] as const)(
+    "%s: holds That's the total's place from the step's start, and the button takes it rather than being added",
+    (_, manipulative, piece, count) => {
+      const props = show(build({ manipulative, steps: [TAP(count)] }));
+      const tile = screen.getByRole("button", { name: piece });
+
+      // Before any piece: the place, as the button itself - so exactly its
+      // size and gap - unseen, inert, and out of the accessibility tree.
+      const [place] = totalPlaces();
+      expect(totalPlaces()).toHaveLength(1);
+      expect(place).toHaveAttribute("data-slot", "button");
+      expect(place).toHaveClass("mt-[18px]", "w-full", "invisible");
+      expect(place).toHaveAttribute("aria-hidden", "true");
+      expect(place).toHaveAttribute("inert");
+      expect(place).toHaveAttribute("tabindex", "-1");
+      expect(screen.queryByRole("button", { name: "That's the total" })).toBeNull();
+      expect(tile.parentElement!.nextElementSibling).toBe(place);
+      // Pressing the place does nothing.
+      fireEvent.click(place);
+      expect(props.onStepAnswered).not.toHaveBeenCalled();
+
+      for (let i = 0; i < count; i++) fireEvent.click(tile);
+
+      const total = screen.getByRole("button", { name: "That's the total" });
+      expect(total).toBe(place);
+      expect(totalPlaces()).toHaveLength(1);
+      expect(total).toHaveClass("mt-[18px]", "w-full", "nevo-arrive-late");
+      expect(total).not.toHaveClass("invisible");
+      expect(total).not.toHaveAttribute("aria-hidden");
+      expect(total).not.toHaveAttribute("inert");
+      expect(total).not.toHaveAttribute("tabindex");
+    },
+  );
+
+  it("place value: a tap where the last column's piece was submits nothing, and That's the total still does", () => {
+    const props = show(
+      build({
+        scaffold: {
+          kind: "place_value",
+          parts: 1,
+          marks: [1, 2, 0],
+          labels: ["Hundreds", "Tens", "Ones"],
+        },
+        manipulative: { kind: "place_value", parts: 1 },
+        steps: [TAP(3)],
+      }),
+    );
+    const hundreds = screen.getByRole("button", { name: "Tap to add, Hundreds" });
+    const tray = hundreds.parentElement!;
+    // That's the total's place, held under the tray from the start.
+    const [place] = totalPlaces();
+    expect(tray.nextElementSibling).toBe(place);
+    expect(place).toHaveAttribute("aria-hidden", "true");
+    tap("Tap to add, Tens");
+    tap("Tap to add, Tens");
+    fireEvent.click(hundreds);
+
+    tapWhereItWas(hundreds);
+    expect(props.onStepAnswered).not.toHaveBeenCalled();
+    tapWhereItWas(hundreds);
+    expect(props.onStepAnswered).not.toHaveBeenCalled();
+    expect(props.onSolved).not.toHaveBeenCalled();
+    expect(hundreds).toBeInTheDocument();
+    expect(hundreds).toHaveAttribute("aria-disabled", "true");
+    expect(card().nextElementSibling).toBe(tray);
+
+    const total = screen.getByRole("button", { name: "That's the total" });
+    expect(tray.contains(total)).toBe(false);
+    expect(total).toBe(place);
+    expect(totalPlaces()).toHaveLength(1);
+    tap("That's the total");
+    expect(props.onStepAnswered).toHaveBeenCalledWith("a1", true);
+  });
+
+  it("keeps a keyboard's focus on the spent piece, never moving it onto That's the total", () => {
+    // A held Enter, or a switch pressed once too often, would commit there.
+    const props = show(
+      build({ manipulative: { kind: "fraction_bar", parts: 4, rows: 1, labels: [] }, steps: [TAP(2)] }),
+    );
+    const tile = screen.getByRole("button", { name: "+ 1/4" });
+    tile.focus();
+    // Enter and Space on a focused button are its click.
+    fireEvent.click(document.activeElement!);
+    fireEvent.click(document.activeElement!);
+
+    expect(document.activeElement).toBe(tile);
+    expect(document.activeElement).not.toBe(
+      screen.getByRole("button", { name: "That's the total" }),
+    );
+    fireEvent.click(document.activeElement!);
+    fireEvent.keyDown(document.activeElement!, { key: "Enter" });
+    fireEvent.keyDown(document.activeElement!, { key: " " });
+    expect(props.onStepAnswered).not.toHaveBeenCalled();
+    expect(props.onPiecePlaced).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -903,7 +1151,10 @@ describe("D149's array and place value", () => {
 
     expect(filled()).toEqual([3, 1]);
     expect(props.onPiecePlaced).toHaveBeenCalledTimes(4);
-    expect(screen.queryByRole("button", { name: "Tap to add" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Tap to add" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     tap("That's the total");
     expect(props.onStepAnswered).toHaveBeenCalledWith("a1", true);
     expect(props.onSolved).toHaveBeenCalled();
@@ -922,7 +1173,10 @@ describe("D149's array and place value", () => {
 
     expect(beads().map((b) => b.style.left)).toEqual(["75%"]);
     expect(props.onPiecePlaced).toHaveBeenCalledTimes(3);
-    expect(screen.queryByRole("button", { name: "+1" })).toBeNull();
+    expect(screen.getByRole("button", { name: "+1" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     tap("That's the total");
     expect(props.onStepAnswered).toHaveBeenCalledWith("a1", true);
   });
@@ -956,9 +1210,12 @@ describe("D149's array and place value", () => {
 
     tap("Tap to add, Tens");
     tap("Tap to add, Tens");
-    expect(screen.queryByRole("button", { name: "Tap to add, Tens" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Tap to add, Tens" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     expect(screen.queryByRole("button", { name: "That's the total" })).toBeNull();
-    // Tens' piece is gone and its place kept, so Hundreds' has not moved.
+    // Tens' piece is spent where it was, so Hundreds' has not moved.
     const tray = screen.getByRole("button", { name: "Tap to add, Hundreds" })
       .parentElement!;
     expect(
@@ -1006,10 +1263,11 @@ describe("D149's array and place value", () => {
 
     tap("Tap to add, Tens");
     tap("Tap to add, Tens");
-    // The full column's place keeps its caption's room, unseen, so the
-    // Hundreds piece beside it does not move.
+    // The full column's piece keeps its caption, spent, so the Hundreds
+    // piece beside it does not move.
     const kept = document.querySelector("[data-tray-place]");
-    expect(kept).toHaveClass("invisible");
+    expect(kept).toHaveClass("opacity-50");
+    expect(kept).toHaveAttribute("aria-disabled", "true");
     expect(kept).toHaveTextContent("Tens");
   });
 
@@ -1765,7 +2023,10 @@ describe("the builds B111 and B112 open", () => {
     for (let i = 0; i < 3; i++) tap("Tap to add");
 
     expect(filled()).toBe(3);
-    expect(screen.queryByRole("button", { name: "Tap to add" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Tap to add" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     tap("That's the total");
     expect(props.onStepAnswered).toHaveBeenCalledWith("a1", true);
   });
