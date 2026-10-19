@@ -21,12 +21,16 @@ interface Event {
   payload?: Record<string, unknown>;
 }
 
-const submitBatch = vi.fn(
-  async (_envelope: Envelope, _events: Event[]) => ({
-    sessionId: "s",
-    acceptedEvents: _events.length,
-  }),
-);
+/** With the options a send carries: `keepalive`, and a last try's token. */
+type SubmitBatch = (
+  envelope: Envelope,
+  events: Event[],
+  options?: Record<string, unknown>,
+) => Promise<{ sessionId: string; acceptedEvents: number }>;
+const submitBatch = vi.fn<SubmitBatch>(async (_envelope, events) => ({
+  sessionId: "s",
+  acceptedEvents: events.length,
+}));
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
@@ -51,6 +55,7 @@ const { useSignals } = await import("./useSignals");
 const { ApiError } = await import("@/lib/api");
 const { clearSession, setSession } = await import("@/lib/auth/session");
 const { holdSignals } = await import("@/lib/signals/outbox");
+const { announceSessionEnd } = await import("@/lib/auth/sessionEnd");
 
 /**
  * These tests encode a defect that destroyed real data silently.
@@ -349,24 +354,56 @@ describe("signals that outlive their screen", () => {
     expect(entry?.events.some((e) => e.payload?.last === true)).toBe(true);
   });
 
-  it("keeps what a dying session could not send, for the same child", async () => {
+  /*
+   * A SESSION ENDING IS THE STREAM'S LAST CHANCE (19 Oct browser-storage
+   * audit). What a dying session could not send was kept on the tablet for
+   * the same child's next sign-in. It gets one try now, with the token that
+   * session held, and none of it is written back onto the device.
+   */
+  it("gives what a dying session could not send one last try, and keeps none of it", async () => {
     signIn();
     const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
     act(() => result.current.trackEvent("time_on_segment", { first: true }));
     await act(async () => {
       result.current.flush();
     });
+    submitBatch.mockClear();
 
-    // A 401 elsewhere: the token is cleared and the page is leaving.
+    // A 401 elsewhere: the session ends, and then the page leaves.
     act(() => result.current.trackEvent("time_on_segment", { stranded: true }));
     clearSession();
+    await act(async () => {});
     act(() => {
       window.dispatchEvent(new Event("pagehide"));
     });
 
-    const [entry] = held();
-    expect(entry?.userId).toBe("user-1");
-    expect(entry?.events.some((e) => e.payload?.stranded === true)).toBe(true);
+    expect(submitBatch).toHaveBeenCalledTimes(1);
+    const [, events, options] = submitBatch.mock.calls[0];
+    expect(events.some((e) => e.payload?.stranded === true)).toBe(true);
+    expect(options).toMatchObject({ keepalive: true, token: "tok-test" });
+    expect(held()).toEqual([]);
+  });
+
+  it("makes no try at another child's session ending", async () => {
+    signIn();
+    const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    act(() => result.current.trackEvent("time_on_segment", { first: true }));
+    await act(async () => {
+      result.current.flush();
+    });
+    submitBatch.mockClear();
+    act(() => result.current.trackEvent("time_on_segment", { mine: true }));
+
+    act(() =>
+      announceSessionEnd({ userId: "user-2", role: "student", token: "tok-2" }),
+    );
+
+    expect(submitBatch).not.toHaveBeenCalled();
+    // Still this stream's, for its own child's next send.
+    await act(async () => {
+      result.current.flush();
+    });
+    expect(submitBatch.mock.calls[0][2]).not.toMatchObject({ token: "tok-2" });
   });
 
   it("holds a batch the server refused with 401, rather than dropping it", async () => {

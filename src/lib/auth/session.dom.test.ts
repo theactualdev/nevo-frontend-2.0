@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { rememberedChildren } from "./deviceRoster";
 import {
   clearSession,
   getRememberedProfile,
@@ -9,6 +10,7 @@ import {
   setSession,
   setStoredDisplayName,
 } from "./session";
+import { onSessionEnd, type EndedSession } from "./sessionEnd";
 
 /**
  * The session store decides who the app thinks you are, so its edges are
@@ -67,7 +69,7 @@ describe("session store", () => {
     expect(getToken()).toBeUndefined();
   });
 
-  it("keeps the remembered device profile across sign-out", () => {
+  it("keeps the device's memory of the child across sign-out", () => {
     rememberProfile({
       schoolCode: "NEVO-BGA4827",
       loginIdentifier: "amara.k7",
@@ -77,13 +79,16 @@ describe("session store", () => {
     setSession(session(future()));
     clearSession();
 
-    // Signing out is not forgetting the device.
-    expect(getRememberedProfile()).toEqual({
-      schoolCode: "NEVO-BGA4827",
-      loginIdentifier: "amara.k7",
-      displayName: "Amara",
-      initials: "AK",
-    });
+    // Signing out is not forgetting the device. The roster is that memory:
+    // the old single-profile copy goes at sign-out (19 Oct) - see
+    // `sessionLeftovers.dom.test.ts`.
+    expect(rememberedChildren()).toEqual([
+      expect.objectContaining({
+        schoolCode: "NEVO-BGA4827",
+        loginIdentifier: "amara.k7",
+        displayName: "Amara",
+      }),
+    ]);
   });
 
   it("reports no remembered profile on a device that has none", () => {
@@ -248,5 +253,103 @@ describe("a page load that finds the role cookie but no session", () => {
     const fresh = await freshLoad();
 
     expect(fresh.arrivedWithoutSession()).toBe(false);
+  });
+});
+
+/*
+ * A SESSION ENDING IS ANNOUNCED (19 Oct browser-storage audit). What a child
+ * leaves on a shared tablet is let go of when their session ends, and every
+ * way it ends comes through the session store: Sign out, a door's Back, a
+ * lapse, a 401, a closed account - `clearSession` - and the next child signed
+ * in over a session nobody ended - `setSession`.
+ */
+describe("a session ending", () => {
+  const settle = () => new Promise<void>((r) => queueMicrotask(r));
+  /** Listen from here on: an earlier test's ending, still in flight, is not this one's. */
+  const listen = async () => {
+    await settle();
+    const heard: EndedSession[] = [];
+    const off = onSessionEnd((ended) => heard.push(ended));
+    return { heard, off };
+  };
+
+  it("is announced on sign-out, with whose it was and the token it held", async () => {
+    setSession(session(future()));
+    const { heard, off } = await listen();
+
+    clearSession();
+    await settle();
+    off();
+
+    expect(heard).toEqual([
+      { userId: "user-1", role: "teacher", token: "tok-abc" },
+    ]);
+  });
+
+  it("is announced when a session lapses as it is read", async () => {
+    setSession(session(past()));
+    const { heard, off } = await listen();
+
+    getSession();
+    await settle();
+    off();
+
+    expect(heard.map((e) => e.userId)).toEqual(["user-1"]);
+  });
+
+  it("is announced for a session read from storage before anything else read it", async () => {
+    // A fresh page: the sign-out is the first thing to touch the session.
+    window.localStorage.setItem(
+      "nevo.auth.session",
+      JSON.stringify(session(future())),
+    );
+    await settle();
+    await settle();
+    vi.resetModules();
+    const fresh = await import("./session");
+    const { onSessionEnd: listenFresh } = await import("./sessionEnd");
+    const heard: string[] = [];
+    const off = listenFresh((e) => heard.push(e.userId));
+
+    fresh.clearSession();
+    await settle();
+    off();
+
+    expect(heard).toEqual(["user-1"]);
+  });
+
+  it("is announced for the last child when the next one signs in over them", async () => {
+    setSession(session(future()));
+    const { heard, off } = await listen();
+
+    setSession({ ...session(future()), userId: "user-2", token: "tok-2" });
+    await settle();
+    off();
+
+    expect(heard).toEqual([
+      { userId: "user-1", role: "teacher", token: "tok-abc" },
+    ]);
+  });
+
+  it("is not announced for a token refresh, which is the same account", async () => {
+    setSession(session(future()));
+    const { heard, off } = await listen();
+
+    setSession({ ...session(future()), token: "tok-refreshed" });
+    await settle();
+    off();
+
+    expect(heard).toEqual([]);
+  });
+
+  it("is not announced when nobody was signed in", async () => {
+    clearSession();
+    const { heard, off } = await listen();
+
+    clearSession();
+    await settle();
+    off();
+
+    expect(heard).toEqual([]);
   });
 });

@@ -14,10 +14,12 @@ import {
   SIGNAL_EVENT_TYPES,
   type SignalEventType,
 } from "@/lib/constants";
+import { onSessionEnd } from "@/lib/auth/sessionEnd";
 import {
   deliverHeldSignals,
   holdSignals,
   installSignalDelivery,
+  lastTry,
   withholdSignals,
 } from "@/lib/signals/outbox";
 import { useConsentGate } from "./useConsentGate";
@@ -415,7 +417,23 @@ export function useSignals(
     };
     document.addEventListener("visibilitychange", onHidden);
     window.addEventListener("pagehide", onPageHide);
+    /*
+     * THE SESSION ENDING IS THIS STREAM'S LAST CHANCE (19 Oct browser-storage
+     * audit). What its child left unsent gets one try with the token their
+     * session held, and then it is gone: the queue empties, and the outbox
+     * holds nothing more for them on this page (`forgetSignals`), so the
+     * pagehide that follows cannot write it back onto a shared tablet. Only
+     * if it is that child's stream - the one it last sent for.
+     */
+    const offEnd = onSessionEnd(({ userId, token }) => {
+      if (owner.current !== userId) return;
+      const env = envelope();
+      const batch = queue.current;
+      queue.current = [];
+      if (!stopped.current && env) lastTry(env, batch, token);
+    });
     return () => {
+      offEnd();
       clearInterval(id);
       document.removeEventListener("visibilitychange", onHidden);
       window.removeEventListener("pagehide", onPageHide);
@@ -438,7 +456,7 @@ export function useSignals(
         if (!alive.current) persist();
       });
     };
-  }, [flush, send, persist]);
+  }, [flush, send, persist, envelope]);
 
   return { trackEvent, flush };
 }

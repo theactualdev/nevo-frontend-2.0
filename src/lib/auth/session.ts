@@ -13,6 +13,7 @@
 
 import { deviceClockSkewMs } from "@/lib/api/serverClock";
 import { rememberChild, rememberedChildren } from "./deviceRoster";
+import { announceSessionEnd } from "./sessionEnd";
 
 const SESSION_KEY = "nevo.auth.session";
 const PROFILE_KEY = "nevo.auth.profile";
@@ -206,6 +207,16 @@ export function getToken(): string | undefined {
 
 export function setSession(incoming: StoredSession): void {
   hydrate();
+  /*
+   * ANOTHER ACCOUNT'S SESSION, REPLACED WITHOUT A SIGN-OUT, HAS ENDED TOO.
+   * The onboarding routes let a signed-in child through, so the next child's
+   * first PIN can be stored over a session the last child never ended. That
+   * is the last child's session ending as surely as Sign out, and what they
+   * left behind goes the same way (19 Oct browser-storage audit). A token
+   * refresh is the same account, and ends nothing.
+   */
+  const replaced =
+    session && session.userId !== incoming.userId ? session : null;
   // A token refresh is the same account and does not say how it signed in.
   const method =
     incoming.method ??
@@ -220,9 +231,20 @@ export function setSession(incoming: StoredSession): void {
     // Private mode etc. - the in-memory session still works for this tab.
   }
   announceSessionChange();
+  if (replaced) announceEnded(replaced);
 }
 
+/**
+ * End the session on this device: Sign out, a door's Back, a lapse (here, from
+ * `getSession`, or a 401 in `client.ts`), a closed or paused account. Every one
+ * of them comes through here, so this is where the ending is announced, and
+ * what the child left behind lets go of them (`sessionEnd`).
+ */
 export function clearSession(): void {
+  // Who is leaving, read before they are gone: a sign-out can come before
+  // anything on the page has read the session.
+  hydrate();
+  const ended = session;
   hydrated = true;
   session = null;
   deleteRoleCookie();
@@ -232,6 +254,19 @@ export function clearSession(): void {
     // ignore
   }
   announceSessionChange();
+  if (ended) announceEnded(ended);
+}
+
+/**
+ * Deferred a microtask, as `announceSessionChange` is and for the same
+ * reason: a session can end while it is being read, during a render. A
+ * microtask still runs before a navigation that follows the sign-out can
+ * unload the page.
+ */
+function announceEnded(ended: StoredSession): void {
+  if (typeof window === "undefined" || !ended.userId) return;
+  const { userId, role, token } = ended;
+  queueMicrotask(() => announceSessionEnd({ userId, role, token }));
 }
 
 const SESSION_EVENT = "nevo:session-change";
@@ -321,6 +356,11 @@ export function getRememberedProfile(): RememberedProfile | null {
  * The legacy key is still written because `getRememberedProfile` still backs
  * `setStoredDisplayName`. It no longer picks a door: sign-out and Forgot PIN
  * both go to `/auth/login`, which handles a device that remembers nobody.
+ *
+ * AND IT GOES WHEN THE SESSION DOES (19 Oct browser-storage audit). Nothing
+ * reads it for anything the roster does not already hold, so it is deleted
+ * at every sign-out, once the roster has it (`retireLegacyProfile`). Only for
+ * the length of a session does a device keep this second copy.
  */
 export function rememberProfile(profile: RememberedProfile): void {
   try {

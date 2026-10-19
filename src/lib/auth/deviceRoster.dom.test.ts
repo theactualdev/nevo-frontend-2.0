@@ -7,6 +7,7 @@ import {
   pickerEntries,
   rememberChild,
   rememberedChildren,
+  retireLegacyProfile,
 } from "./deviceRoster";
 
 /**
@@ -410,5 +411,59 @@ describe("a child whose account closed", () => {
       "E",
       "F",
     ]);
+  });
+});
+
+/*
+ * THE OLD SINGLE PROFILE GOES AT SIGN-OUT (19 Oct browser-storage audit). It
+ * names one child, with their school code and login identifier, and nothing
+ * reads it for anything the roster does not hold - so a sign-out leaves one
+ * copy of who uses the tablet, not two. Never before the roster has it.
+ */
+describe("the old single remembered profile, at sign-out", () => {
+  const legacy = {
+    schoolCode: "NEVO-1",
+    loginIdentifier: "ada.o",
+    displayName: "Ada",
+    initials: "AO",
+  };
+
+  it("is deleted, and the roster still remembers the child", () => {
+    rememberChild(child("ada.o", "Ada"));
+    window.localStorage.setItem(LEGACY, JSON.stringify(legacy));
+
+    retireLegacyProfile();
+
+    expect(window.localStorage.getItem(LEGACY)).toBeNull();
+    expect(pickerEntries().map((e) => e.name)).toEqual(["Ada"]);
+  });
+
+  it("is folded into the roster first on a device from before the roster", () => {
+    window.localStorage.setItem(LEGACY, JSON.stringify(legacy));
+
+    retireLegacyProfile();
+
+    expect(window.localStorage.getItem(LEGACY)).toBeNull();
+    expect(childById(pickerEntries()[0].id)?.loginIdentifier).toBe("ada.o");
+  });
+
+  it("is kept when the roster cannot take it, rather than forget the child", () => {
+    window.localStorage.setItem(LEGACY, JSON.stringify(legacy));
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("refused");
+    });
+
+    retireLegacyProfile();
+
+    expect(window.localStorage.getItem(LEGACY)).not.toBeNull();
+  });
+
+  it("is kept when the roster cannot be read", () => {
+    window.localStorage.setItem(KEY, "{not json");
+    window.localStorage.setItem(LEGACY, JSON.stringify(legacy));
+
+    retireLegacyProfile();
+
+    expect(window.localStorage.getItem(LEGACY)).not.toBeNull();
   });
 });
