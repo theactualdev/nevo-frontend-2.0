@@ -14,6 +14,7 @@ vi.mock("./client", () => ({
 }));
 
 import { baselineApi } from "./baseline";
+import { BaselineCapture, baselineTrials } from "@/lib/profiling/capture";
 
 /**
  * Where the warm-up's pick goes (B8, 1 Oct).
@@ -177,6 +178,28 @@ describe("submitTrials (B9)", () => {
     await baselineApi.submitTrials("run-1", [trial]);
 
     expect(wire()).toEqual({ sessionId: "run-1", trials: [trial] });
+  });
+
+  /*
+   * TESLIM, 18 OCT #6: "For a timed reading trial, send the number of words
+   * actually displayed as `readingWordCount`." Asserted from the capture to
+   * the wire, because the screens' tests mock this function and the
+   * capture's tests stop at the trial: only here is it seen in the body.
+   */
+  it("carries a read trial's word count from the capture into the body, and no other trial's", async () => {
+    const capture = new BaselineCapture("run-1");
+    capture.record("trial_pick", { module: "sentence_dot", act: "reading", choice: 1, rtMs: 21_000, mode: "passage", correct: true, readingWordCount: 60 });
+    capture.record("trial_pick", { module: "sentence_dot", act: "dots", choice: 0, rtMs: 700, ratio: 1.5, correct: true });
+
+    await baselineApi.submitTrials("run-1", baselineTrials(capture));
+
+    const [read, dots] = wire().trials as Record<string, unknown>[];
+    expect(read).toMatchObject({
+      dimension: "reading",
+      responseTimeMs: 21_000,
+      readingWordCount: 60,
+    });
+    expect(dots).not.toHaveProperty("readingWordCount");
   });
 
   it("no longer sends a reduced vector to /submit", async () => {
