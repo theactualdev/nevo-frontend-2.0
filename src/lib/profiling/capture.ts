@@ -9,6 +9,10 @@ import { contractAgeBand, type BaselineDimension } from "./bands";
  * for the server to reduce (B9), and the raw stream is purged. The device
  * computes no mean, accuracy or span. What a trial has no field for - tap
  * coordinates above all - never leaves the device, and goes with the purge.
+ *
+ * A run that never reaches its purge - abandoned part way - goes at the next
+ * sign-out, or a week after it was written (19 Oct browser-storage audit;
+ * `purgeStoredCaptures`, `sweepStoredCaptures`).
  */
 
 export interface CaptureEvent {
@@ -22,6 +26,24 @@ export interface CaptureEvent {
 const DB_NAME = "nevo-baseline";
 const STORE = "streams";
 
+/**
+ * How long a run's raw stream may sit on the device: the week its parked
+ * trials get (`pendingBaseline`), on the same `Date.now()` clock. A wall
+ * clock, not `performance.now()`: this is how long the tablet keeps
+ * something, which nothing measures a child by, and it has to hold across
+ * page loads.
+ */
+const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * One run's raw stream as it is stored: the events, and when they were
+ * written. A record from before 19 Oct is a bare array, with no date.
+ */
+interface StoredStream {
+  capturedAt: number;
+  events: CaptureEvent[];
+}
+
 function openDb(): Promise<IDBDatabase | null> {
   return new Promise((resolve) => {
     if (typeof indexedDB === "undefined") return resolve(null);
@@ -33,6 +55,85 @@ function openDb(): Promise<IDBDatabase | null> {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => resolve(null);
   });
+}
+
+/**
+ * The store, only if this device already has it. Opening is creating, and a
+ * sweep on a device that never ran a baseline must not leave a database
+ * behind. A browser that cannot list its databases is opened anyway.
+ */
+async function openIfPresent(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === "undefined") return null;
+  try {
+    if (typeof indexedDB.databases === "function") {
+      const all = await indexedDB.databases();
+      if (!all.some((d) => d.name === DB_NAME)) return null;
+    }
+  } catch {
+    // It could not say: open it and look.
+  }
+  return openDb();
+}
+
+/** Delete every stored stream `keep` says no to, then let the store go. */
+function sweepWith(
+  db: IDBDatabase,
+  keep: (stored: unknown) => boolean,
+): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      db.close();
+      resolve();
+    };
+    try {
+      const tx = db.transaction(STORE, "readwrite");
+      const cursor = tx.objectStore(STORE).openCursor();
+      cursor.onsuccess = () => {
+        const at = cursor.result;
+        if (!at) return;
+        if (!keep(at.value)) at.delete();
+        at.continue();
+      };
+      tx.oncomplete = done;
+      tx.onerror = done;
+      tx.onabort = done;
+    } catch {
+      done();
+    }
+  });
+}
+
+/**
+ * Raw streams older than a week go, the same rule as the parked trials
+ * (19 Oct browser-storage audit).
+ *
+ * A RUN ABANDONED PART WAY THROUGH ONBOARDING KEPT ITS TAPS FOR GOOD - the
+ * coordinates of every touch, on a shared tablet - when no later run came to
+ * sweep it (`persist`, below). Run when the app loads (`AuthProvider`), so a
+ * device nobody onboards on again still lets them go. An undated record is
+ * from before this rule and goes too: nothing ever reads a stream back.
+ */
+export async function sweepStoredCaptures(): Promise<void> {
+  const db = await openIfPresent();
+  if (!db) return;
+  const now = Date.now();
+  await sweepWith(db, (stored) => {
+    const at = (stored as Partial<StoredStream> | null)?.capturedAt;
+    return typeof at === "number" && now - at <= MAX_AGE_MS;
+  });
+}
+
+/**
+ * Every stored stream goes, at a sign-out (19 Oct browser-storage audit).
+ *
+ * The device's copy only: a run still going in another tab keeps its stream
+ * in memory, which is the one its trials are taken from, and writes it again
+ * at its next module's end.
+ */
+export async function purgeStoredCaptures(): Promise<void> {
+  const db = await openIfPresent();
+  if (!db) return;
+  await sweepWith(db, () => false);
 }
 
 /**
@@ -87,7 +188,13 @@ export class BaselineCapture {
     try {
       const tx = db.transaction(STORE, "readwrite");
       const store = tx.objectStore(STORE);
-      store.put(this.events, this.sessionId);
+      // Dated, so a stream nobody comes back for goes after a week
+      // (`sweepStoredCaptures`).
+      const stored: StoredStream = {
+        capturedAt: Date.now(),
+        events: this.events,
+      };
+      store.put(stored, this.sessionId);
       /*
        * SWEEP EVERY OTHER RUN'S RECORD WHILE WE ARE HERE.
        *

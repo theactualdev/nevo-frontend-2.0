@@ -26,6 +26,7 @@ import {
 import { holdAnswer, holdProgress } from "@/lib/lessons/pendingProgress";
 import { holdBaseline } from "@/lib/profiling/pendingBaseline";
 import { holdSignals } from "@/lib/signals/outbox";
+import { fakeIndexedDb } from "@/test/fakeIndexedDb";
 
 /**
  * WHAT A CHILD LEAVES ON A SHARED TABLET GOES WHEN THEIR SESSION DOES (19 Oct
@@ -253,5 +254,48 @@ describe("what a sign-out leaves alone: the child's work", () => {
     await settle();
 
     expect(work.map((k) => window.localStorage.getItem(k))).toEqual(before);
+  });
+});
+
+/*
+ * THE BASELINE'S RAW TAPS, left in IndexedDB by a run nobody finished - the
+ * coordinates of every touch (19 Oct browser-storage audit). They go at a
+ * sign-out, and a week after they were written whoever opens the app next.
+ */
+describe("raw taps an abandoned baseline run left behind", () => {
+  const DB = "nevo-baseline";
+  const DAY = 24 * 60 * 60 * 1000;
+  const run = (daysAgo: number) => ({
+    capturedAt: Date.now() - daysAgo * DAY,
+    events: [{ kind: "tap", t: 1, payload: { x: 120, y: 340 } }],
+  });
+
+  it("go when a session ends", async () => {
+    const idb = fakeIndexedDb();
+    vi.stubGlobal("indexedDB", idb.factory);
+    idb.seed(DB, [["abandoned", run(1)]]);
+    await aSharedTablet();
+
+    clearSession();
+
+    await vi.waitFor(() => expect(idb.records(DB)?.size).toBe(0));
+  });
+
+  it("go a week on, when the app is next opened", async () => {
+    const idb = fakeIndexedDb();
+    vi.stubGlobal("indexedDB", idb.factory);
+    idb.seed(DB, [
+      ["abandoned", run(8)],
+      ["this-week", run(2)],
+    ]);
+
+    render(
+      <AuthProvider>
+        <p>app</p>
+      </AuthProvider>,
+    );
+    await vi.waitFor(() =>
+      expect([...(idb.records(DB)?.keys() ?? [])]).toEqual(["this-week"]),
+    );
   });
 });

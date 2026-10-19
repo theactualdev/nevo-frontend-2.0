@@ -1,6 +1,7 @@
 import { forgetReviewAnswers } from "@/components/student/Lesson/reviewStore";
 import { retireLegacyProfile } from "@/lib/auth/deviceRoster";
 import type { EndedSession } from "@/lib/auth/sessionEnd";
+import { purgeStoredCaptures } from "@/lib/profiling/capture";
 import { forgetSignals } from "@/lib/signals/outbox";
 
 /**
@@ -16,10 +17,14 @@ import { forgetSignals } from "@/lib/signals/outbox";
  *    (`forgetReviewAnswers`).
  *  - The old single remembered profile, once the roster holds it
  *    (`retireLegacyProfile`).
+ *  - The baseline's raw taps a run left in IndexedDB when it was abandoned
+ *    (`purgeStoredCaptures`).
  *
  * ONLY THE LEAVING CHILD'S. Every store here is keyed by account, and another
- * child's entries on the same device are not touched; the old profile is the
- * one exception, because it is a copy of what the roster keeps.
+ * child's entries on the same device are not touched. Two exceptions, both
+ * copies of something kept elsewhere: the old profile, which the roster
+ * holds, and the raw taps, whose run - if one is still going - keeps its
+ * stream in memory and writes it again.
  *
  * NOT THEIR WORK. Held answers, held progress and a parked baseline are what
  * the child did, kept until delivered, and they stay exactly as they were
@@ -33,6 +38,7 @@ export function forgetLeavingChild({ userId, token }: EndedSession): void {
     () => forgetSignals(userId, token),
     () => forgetReviewAnswers(userId),
     () => retireLegacyProfile(),
+    () => void purgeStoredCaptures(),
   ];
   for (const step of steps) {
     try {

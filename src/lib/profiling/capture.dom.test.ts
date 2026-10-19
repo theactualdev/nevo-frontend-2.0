@@ -1,8 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fakeIndexedDb } from "@/test/fakeIndexedDb";
 import {
   BaselineCapture,
   baselineRunContext,
   baselineTrials,
+  purgeStoredCaptures,
+  sweepStoredCaptures,
   tapPoint,
 } from "./capture";
 
@@ -628,5 +631,91 @@ describe("tapPoint — where the finger landed", () => {
 
   it("records nothing when there was no event", () => {
     expect(tapPoint(undefined)).toEqual({});
+  });
+});
+
+/*
+ * THE RAW TAPS A RUN LEAVES BEHIND (19 Oct browser-storage audit). A run
+ * abandoned part way through onboarding kept its stream - the coordinates of
+ * every touch - in IndexedDB with no time limit, unless a later run came to
+ * sweep it. They go a week after they were written, the same week and the
+ * same `Date.now()` clock as the parked trials, and at every sign-out.
+ */
+describe("raw streams left on the device", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const DB = "nevo-baseline";
+  let idb: ReturnType<typeof fakeIndexedDb>;
+
+  beforeEach(() => {
+    idb = fakeIndexedDb();
+    vi.stubGlobal("indexedDB", idb.factory);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const tap = { kind: "tap", t: 1, payload: { x: 120, y: 340 } };
+  const stored = (daysAgo: number) => ({
+    capturedAt: Date.now() - daysAgo * DAY,
+    events: [tap],
+  });
+
+  it("are written with the time they were written", async () => {
+    const c = new BaselineCapture("run-now");
+    c.record("tap", { cell: 3, x: 120, y: 340 });
+
+    await c.persist();
+
+    const record = await vi.waitFor(() => {
+      const r = idb.records(DB)?.get("run-now");
+      expect(r).toBeDefined();
+      return r as { capturedAt: number; events: unknown[] };
+    });
+    expect(Math.abs(record.capturedAt - Date.now())).toBeLessThan(5_000);
+    expect(record.events).toHaveLength(1);
+  });
+
+  it("go a week after they were written, and a younger one stays", async () => {
+    idb.seed(DB, [
+      ["abandoned", stored(8)],
+      ["recent", stored(6)],
+    ]);
+
+    await sweepStoredCaptures();
+
+    expect([...(idb.records(DB)?.keys() ?? [])]).toEqual(["recent"]);
+  });
+
+  it("go when they carry no date, as every one written before this rule does", async () => {
+    idb.seed(DB, [["undated", [tap]]]);
+
+    await sweepStoredCaptures();
+
+    expect(idb.records(DB)?.size).toBe(0);
+  });
+
+  it("all go at a sign-out, whatever their age", async () => {
+    idb.seed(DB, [
+      ["abandoned", stored(3)],
+      ["today", stored(0)],
+    ]);
+
+    await purgeStoredCaptures();
+
+    expect(idb.records(DB)?.size).toBe(0);
+  });
+
+  it("are looked for without creating a store on a device that never had one", async () => {
+    await sweepStoredCaptures();
+    await purgeStoredCaptures();
+
+    expect(idb.records(DB)).toBeUndefined();
+  });
+
+  it("are nothing to look for where the device has no IndexedDB at all", async () => {
+    vi.stubGlobal("indexedDB", undefined);
+
+    await expect(sweepStoredCaptures()).resolves.toBeUndefined();
+    await expect(purgeStoredCaptures()).resolves.toBeUndefined();
   });
 });

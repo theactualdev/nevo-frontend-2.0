@@ -12,6 +12,7 @@ import { ApiError, authApi } from "@/lib/api";
 import { clearSession, getSession } from "@/lib/auth/session";
 import { onSessionEnd } from "@/lib/auth/sessionEnd";
 import type { UserRole } from "@/lib/constants";
+import { sweepStoredCaptures } from "@/lib/profiling/capture";
 import {
   endEphemeralSession,
   setEphemeralStudent,
@@ -65,6 +66,13 @@ export const AuthContext = createContext<AuthContextValue | undefined>(
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<AuthStatus>("loading");
+
+  // A baseline run abandoned part way left its raw taps on the device; a
+  // week on, they go, whoever opens the app next (19 Oct browser-storage
+  // audit). Once per page, here because this is mounted on every one.
+  useEffect(() => {
+    void sweepStoredCaptures();
+  }, []);
 
   // Hydrate from the live backend: a stored Bearer token is validated against
   // GET /auth/session on mount; a rejected/expired token clears quietly.
