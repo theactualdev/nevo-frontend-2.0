@@ -90,3 +90,42 @@ export function onboardingDoor(
   if (pathname.startsWith("/student/onboarding")) return null;
   return onboardingPath(refusal(detail).navigatesTo);
 }
+
+const MOVED_ON = "nevo:onboarding:moved-on-without-probe";
+
+/**
+ * THE LOOP GUARD, for a Module 4 with nothing to ask.
+ *
+ * Olayinka, 19 Oct: "an unavailable probe moves the child on, never to a dead
+ * end", under Teslim's 19 Oct no-question-bank exception. So the continue
+ * route sends such a child Home rather than leaving them on a screen to
+ * dismiss. But until the server applies the exception, its gate still refuses
+ * their lessons with 409 `onboarding_required`, and that refusal sends them
+ * straight back to the continue route - Home, lesson, refused, continue, Home,
+ * for ever. The client's latch cannot stop it: `client.ts` leaves with
+ * `location.assign`, a full load, and every load starts unlatched.
+ *
+ * So the move on is taken ONCE PER TAB PER CHILD, in `sessionStorage`, which
+ * survives those loads and dies with the tab. True the first time, and the
+ * caller moves the child on; false every time after - and whenever it cannot
+ * be recorded, since a move that cannot be counted is one that could loop -
+ * and the caller stays on its calm nothing-state, Home offered, not taken.
+ *
+ * IT DECIDES NOTHING ABOUT ONBOARDING. It is not a completion, a placement or
+ * a pass: no lesson opens because of it, every 409 still sends the child to
+ * the continue route, and that route still asks the server's readiness on
+ * every arrival. It only chooses which of two screens with no claim in them
+ * the child is left on.
+ */
+export function claimMoveOn(userId: string | null | undefined): boolean {
+  if (!userId || typeof window === "undefined") return false;
+  const key = `${MOVED_ON}:${userId}`;
+  try {
+    const store = window.sessionStorage;
+    if (store.getItem(key) !== null) return false;
+    store.setItem(key, "1");
+    return store.getItem(key) !== null;
+  } catch {
+    return false;
+  }
+}

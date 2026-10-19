@@ -10,6 +10,7 @@ import {
 import { DomainProbeModule, DomainProbeStep } from "./DomainProbeModule";
 import { QuestSegments } from "./QuestMap";
 import { ApiError } from "@/lib/api/client";
+import type { ProbeOpenings } from "@/lib/api/probePlan";
 import catalogue from "@/lib/api/signals.catalogue.json";
 import { clearSession, setSession } from "@/lib/auth/session";
 
@@ -20,8 +21,12 @@ import { clearSession, setSession } from "@/lib/auth/session";
  * The server serves one item at a time and marks what it serves; this screen
  * shows the item, sends the pick, and shows whatever comes back. It must never
  * say right or wrong, never count, and never show what the probe concluded.
- * And with nothing to ask it is not presented - it does not invent a
- * completion the server never recorded.
+ *
+ * And whether it runs at all is found out FIRST, as Teslim's 19 Oct
+ * no-question-bank exception and Olayinka's ruling the same day need ("an
+ * unavailable probe moves the child on, never to a dead end"): with nothing
+ * to ask it is not presented - no stretch, no quest map stop - and it does not
+ * invent a completion the server never recorded.
  */
 
 const { readiness, next, answer, myDashboard } = vi.hoisted(() => ({
@@ -93,8 +98,26 @@ const Q2 = {
   asked: 4,
   maxQuestions: 8,
 };
+const QE = {
+  subjectId: "sub-eng",
+  itemId: "item-e",
+  question: "Which word names a colour?",
+  options: [
+    { value: "opt-red", label: "Red" },
+    { value: "opt-run", label: "Run" },
+  ],
+  asked: 1,
+  maxQuestions: 8,
+};
 const FINISHED = { finished: true, subjectId: "sub-maths", entryPoint: 0.62, asked: 6 };
 const EMPTY = { finished: true, noItems: true, subjectId: "sub-maths" };
+
+/** What the plan hands the module: a subject and the first item it read. */
+const MATHS_FIRST: ProbeOpenings = [{ subject: MATHS, item: Q1 }];
+const BOTH: ProbeOpenings = [
+  { subject: MATHS, item: Q1 },
+  { subject: ENGLISH, item: QE },
+];
 
 const signIn = () =>
   setSession({
@@ -107,6 +130,7 @@ const signIn = () =>
 const onDone = vi.fn();
 const track = vi.fn();
 
+/** The module, handed what to ask. */
 function renderModule(
   props: Partial<Parameters<typeof DomainProbeModule>[0]> = {},
 ) {
@@ -114,6 +138,23 @@ function renderModule(
     <QuestSegments.Provider value={4}>
       <DomainProbeModule
         band="p46"
+        openings={MATHS_FIRST}
+        stretchFirst={false}
+        onDone={onDone}
+        track={track}
+        {...props}
+      />
+    </QuestSegments.Provider>,
+  );
+}
+
+/** The step, which finds out for itself what there is to ask. */
+function renderStep(
+  props: Partial<Parameters<typeof DomainProbeStep>[0]> = {},
+) {
+  return render(
+    <QuestSegments.Provider value={4}>
+      <DomainProbeStep
         stretchFirst={false}
         onDone={onDone}
         track={track}
@@ -140,6 +181,11 @@ beforeEach(() => {
   signIn();
   readiness.mockResolvedValue(ready([MATHS]));
   next.mockResolvedValue(Q1);
+  myDashboard.mockResolvedValue({
+    student: { id: "student-1", ageBand: "upper_primary" },
+    assignments: [],
+    recentProgress: [],
+  });
 });
 
 afterEach(() => {
@@ -149,16 +195,15 @@ afterEach(() => {
 });
 
 describe("one item at a time, from the server", () => {
-  it("asks the server's item for the first subject that has items", async () => {
-    readiness.mockResolvedValue(ready([ART, MATHS, ENGLISH]));
+  it("shows the first item as the plan read it, and asks for it no second time", async () => {
     renderModule();
 
-    expect(await screen.findByText("Which animal lives in water?")).toBeInTheDocument();
-    expect(next).toHaveBeenCalledTimes(1);
-    expect(next).toHaveBeenCalledWith("sub-maths");
+    expect(screen.getByText("Which animal lives in water?")).toBeInTheDocument();
     for (const label of ["Fish", "Cat", "Bird"]) {
       expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
     }
+    await act(async () => {});
+    expect(next).not.toHaveBeenCalled();
   });
 
   it("sends the option's value, fills the pick, and shows the next item it is given", async () => {
@@ -227,11 +272,15 @@ describe("one item at a time, from the server", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Cat" }));
 
-    await waitFor(() => expect(next).toHaveBeenCalledTimes(2));
-    expect(await screen.findByRole("button", { name: "Cat" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
+    await waitFor(() => expect(next).toHaveBeenCalledWith("sub-maths"));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Cat" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      ),
     );
+    // Once: the re-ask. The first item came with the plan.
+    expect(next).toHaveBeenCalledTimes(1);
     expect(onDone).not.toHaveBeenCalled();
   });
 });
@@ -287,53 +336,73 @@ describe("its markers on the profiling stream", () => {
       expect(Object.keys(payload).sort()).toEqual([...(declared ?? [])].sort());
     }
   });
+
+  it("marks the start when the first question shows, not at the stretch", async () => {
+    renderModule({ stretchFirst: true });
+
+    fireEvent.click(screen.getByRole("button", { name: "take a breath" }));
+    await screen.findByText("Which animal lives in water?");
+
+    expect(track.mock.calls).toEqual([
+      ["baseline_module_start", { moduleId: "domain_probe" }],
+    ]);
+  });
 });
 
 describe("which subject (JSS and SS choose first, 09d)", () => {
-  it("asks a JSS child to choose when more than one subject has items", async () => {
-    readiness.mockResolvedValue(ready([MATHS, ART, ENGLISH]));
-    renderModule({ band: "jss" });
+  it("asks a JSS child to choose when more than one subject has an item, and shows the one it read", async () => {
+    renderModule({ band: "jss", openings: BOTH });
 
     expect(
-      await screen.findByText("Which subject would you like to start with?"),
+      screen.getByText("Which subject would you like to start with?"),
     ).toBeInTheDocument();
-    // Only the subjects with something to ask.
-    expect(screen.getByRole("button", { name: "Mathematics" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "English" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Art" })).toBeNull();
-    expect(next).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "English" }));
 
-    expect(next).toHaveBeenCalledWith("sub-eng");
-    expect(await screen.findByText("Which animal lives in water?")).toBeInTheDocument();
+    expect(await screen.findByText("Which word names a colour?")).toBeInTheDocument();
+    expect(next).not.toHaveBeenCalled();
   });
 
-  it("asks an SS child too", async () => {
-    readiness.mockResolvedValue(ready([MATHS, ENGLISH]));
-    renderModule({ band: "ss" });
+  it("asks an SS child too", () => {
+    renderModule({ band: "ss", openings: BOTH });
 
     expect(
-      await screen.findByText("Which subject would you like to start with?"),
+      screen.getByText("Which subject would you like to start with?"),
     ).toBeInTheDocument();
   });
 
-  it("does not offer a choice of one", async () => {
-    readiness.mockResolvedValue(ready([MATHS, ART]));
+  it("does not offer a choice of one", () => {
     renderModule({ band: "jss" });
 
-    expect(await screen.findByText("Which animal lives in water?")).toBeInTheDocument();
+    expect(screen.getByText("Which animal lives in water?")).toBeInTheDocument();
     expect(screen.queryByText(/which subject/i)).toBeNull();
-    expect(next).toHaveBeenCalledWith("sub-maths");
   });
 
-  it("asks a Primary child no choice, which the frame does not draw", async () => {
-    readiness.mockResolvedValue(ready([MATHS, ENGLISH]));
-    renderModule({ band: "p13" });
+  it("asks a Primary child no choice, which the frame does not draw", () => {
+    renderModule({ band: "p13", openings: BOTH });
 
-    expect(await screen.findByText("Which animal lives in water?")).toBeInTheDocument();
+    expect(screen.getByText("Which animal lives in water?")).toBeInTheDocument();
     expect(screen.queryByText(/which subject/i)).toBeNull();
-    expect(next).toHaveBeenCalledWith("sub-maths");
+  });
+
+  it("offers only the subjects that answered with an item", async () => {
+    // Art has none by readiness; Mathematics says so when asked. A child who
+    // chose either would have been chosen into a dead end.
+    myDashboard.mockResolvedValue({
+      student: { id: "student-1", ageBand: "junior_secondary" },
+      assignments: [],
+      recentProgress: [],
+    });
+    readiness.mockResolvedValue(ready([MATHS, ART, ENGLISH]));
+    next.mockImplementation(async (id: string) =>
+      id === "sub-eng" ? QE : EMPTY,
+    );
+    renderStep();
+
+    // One left, so no grid of one: straight to its item, as read.
+    expect(await screen.findByText("Which word names a colour?")).toBeInTheDocument();
+    expect(screen.queryByText(/which subject/i)).toBeNull();
+    expect(next.mock.calls).toEqual([["sub-maths"], ["sub-eng"]]);
   });
 
   it("takes the band from the roster for the child signed in", async () => {
@@ -343,33 +412,75 @@ describe("which subject (JSS and SS choose first, 09d)", () => {
       recentProgress: [],
     });
     readiness.mockResolvedValue(ready([MATHS, ENGLISH]));
-    render(
-      <QuestSegments.Provider value={4}>
-        <DomainProbeStep stretchFirst={false} onDone={onDone} />
-      </QuestSegments.Provider>,
-    );
+    next.mockImplementation(async (id: string) => (id === "sub-eng" ? QE : Q1));
+    renderStep();
 
     expect(
       await screen.findByText("Which subject would you like to start with?"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mathematics" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "English" })).toBeInTheDocument();
+  });
+});
+
+describe("whether it runs is found out first (Olayinka, 19 Oct)", () => {
+  it("reads the first item before the stretch, and shows that item after it", async () => {
+    renderStep({ stretchFirst: true });
+
+    const stretch = await screen.findByRole("button", { name: "take a breath" });
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledWith("sub-maths");
+    fireEvent.click(stretch);
+
+    expect(await screen.findByText("Which animal lives in water?")).toBeInTheDocument();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it("draws no quest map while it finds out", async () => {
+    const reading = deferred<Record<string, unknown>>();
+    const first = deferred<typeof Q1>();
+    readiness.mockReturnValue(reading.promise);
+    next.mockReturnValue(first.promise);
+    renderStep();
+
+    await waitFor(() => expect(readiness).toHaveBeenCalled());
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    await act(async () => reading.resolve(ready([MATHS])));
+    expect(next).toHaveBeenCalled();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+
+    await act(async () => first.resolve(Q1));
+    expect(await screen.findByText("Which animal lives in water?")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuemax", "4");
+  });
+
+  it("starts from what the caller already read, reading nothing itself", async () => {
+    renderStep({ openings: [{ subject: ENGLISH, item: QE }] });
+
+    expect(await screen.findByText("Which word names a colour?")).toBeInTheDocument();
+    expect(readiness).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
   });
 });
 
 describe("with nothing to ask, it is not presented (rule 5)", () => {
   it("presents nothing when no subject has items, and claims nothing done", async () => {
     readiness.mockResolvedValue(ready([ART, { ...MATHS, probeAvailable: false }]));
-    renderModule();
+    renderStep({ stretchFirst: true });
 
     await waitFor(() => expect(onDone).toHaveBeenCalledWith("absent"));
     expect(next).not.toHaveBeenCalled();
     expect(track).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
   });
 
-  it("presents nothing when the subject answers with no items", async () => {
+  it("goes on without the stretch when the subject answers with no items", async () => {
     next.mockResolvedValue(EMPTY);
-    renderModule();
+    renderStep({ stretchFirst: true });
 
     await waitFor(() => expect(onDone).toHaveBeenCalledWith("absent"));
+    expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
     expect(track).not.toHaveBeenCalled();
   });
 
@@ -377,33 +488,47 @@ describe("with nothing to ask, it is not presented (rule 5)", () => {
     // `next` answering "finished" records nothing on the server (only an
     // answer that finishes the probe does), so neither does this.
     next.mockResolvedValue(FINISHED);
-    renderModule();
+    renderStep({ stretchFirst: true });
 
     await waitFor(() => expect(onDone).toHaveBeenCalledWith("absent"));
+    expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
     expect(track).not.toHaveBeenCalled();
-  });
-
-  it("presents nothing when readiness cannot be read", async () => {
-    readiness.mockRejectedValue(new ApiError(0, "offline"));
-    renderModule();
-
-    await waitFor(() => expect(onDone).toHaveBeenCalledWith("absent"));
-    expect(next).not.toHaveBeenCalled();
   });
 
   it("asks nothing of a child the server already has it for", async () => {
     readiness.mockResolvedValue(ready([MATHS], true));
-    renderModule();
+    renderStep({ stretchFirst: true });
 
     await waitFor(() => expect(onDone).toHaveBeenCalledWith("sat"));
     expect(next).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
+  });
+});
+
+describe("a read that fails is not 'nothing to ask'", () => {
+  it("says it failed when readiness cannot be read", async () => {
+    readiness.mockRejectedValue(new ApiError(0, "offline"));
+    renderStep({ stretchFirst: true });
+
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith("failed"));
+    expect(next).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
+  });
+
+  it("says it failed when the first item cannot be read", async () => {
+    next.mockRejectedValue(new ApiError(0, "offline"));
+    renderStep({ stretchFirst: true });
+
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith("failed"));
+    expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
+    expect(track).not.toHaveBeenCalled();
   });
 });
 
 describe("the signed-out walkthrough", () => {
   it("calls nothing at all", async () => {
     clearSession();
-    renderModule();
+    renderStep();
 
     await waitFor(() => expect(onDone).toHaveBeenCalledWith("absent"));
     expect(readiness).not.toHaveBeenCalled();
@@ -413,22 +538,24 @@ describe("the signed-out walkthrough", () => {
 });
 
 describe("the stretch before it", () => {
-  it("comes first when a module has just ended, and the first item after", async () => {
+  it("comes first when a module has just ended, and the first item after", () => {
     renderModule({ stretchFirst: true });
 
-    const stretch = await screen.findByRole("button", { name: "take a breath" });
-    expect(next).not.toHaveBeenCalled();
-    fireEvent.click(stretch);
+    expect(screen.queryByText("Which animal lives in water?")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "take a breath" }));
 
-    expect(next).toHaveBeenCalledWith("sub-maths");
-    expect(await screen.findByText("Which animal lives in water?")).toBeInTheDocument();
+    expect(screen.getByText("Which animal lives in water?")).toBeInTheDocument();
+    expect(next).not.toHaveBeenCalled();
   });
 
-  it("is not shown when there is nothing to ask", async () => {
-    readiness.mockResolvedValue(ready([ART]));
-    renderModule({ stretchFirst: true });
+  it("comes before the choice, for a child who chooses", () => {
+    renderModule({ stretchFirst: true, band: "jss", openings: BOTH });
 
-    await waitFor(() => expect(onDone).toHaveBeenCalledWith("absent"));
-    expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
+    expect(screen.queryByText(/which subject/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "take a breath" }));
+
+    expect(
+      screen.getByText("Which subject would you like to start with?"),
+    ).toBeInTheDocument();
   });
 });

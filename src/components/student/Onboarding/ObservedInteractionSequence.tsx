@@ -123,7 +123,8 @@ export function ObservedInteractionSequence() {
    * Four, until Module 4 turns out to have nothing to ask - then the run was
    * three, and Complete says so rather than filling a stop nobody reached.
    * Not knowable earlier for a school-code child: there is no account to ask
-   * with until the PIN step.
+   * with until the PIN step. From then it is known before Module 4 draws
+   * anything, so its fourth stop never shows for a module that does not run.
    */
   const [segments, setSegments] = useState<number>(ONBOARDING_MODULES.length);
   /** Held by the PIN route at the end of the run (B68), in place as 05 holds. */
@@ -337,8 +338,16 @@ export function ObservedInteractionSequence() {
 
   /*
    * MODULE 4, NOW THAT THE ACCOUNT EXISTS (SCRUM-244). The server serves and
-   * marks it; this records nothing of its own. With nothing to ask it is not
-   * presented, and the map drops to the three this child did.
+   * marks it; this records nothing of its own.
+   *
+   * WITH NOTHING TO ASK IT MOVES THE CHILD ON (Olayinka, 19 Oct; Teslim's 19
+   * Oct no-question-bank exception): whether it will run is read before any
+   * of it is drawn, so a child it will not run for goes straight to Complete -
+   * no stretch first, no fourth stop on the map while it is read - and
+   * Complete maps the three they did. No placement and no completion is
+   * written or assumed here; the server's gate says what comes next. A read
+   * that fails does the same, as it did: Complete with the three done, and
+   * the gate brings the child back to finish (`OnboardingResume`).
    */
   if (index === 3) {
     return (
@@ -348,7 +357,7 @@ export function ObservedInteractionSequence() {
             stretchFirst
             track={profiling.trackEvent}
             onDone={(outcome) => {
-              if (outcome === "absent") setSegments(ONBOARDING_MODULES.length - 1);
+              if (outcome !== "sat") setSegments(ONBOARDING_MODULES.length - 1);
               advance();
             }}
           />
