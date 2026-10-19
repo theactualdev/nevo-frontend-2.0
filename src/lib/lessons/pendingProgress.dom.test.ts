@@ -589,6 +589,62 @@ describe("answers held for a check (Lydia, 6 Oct)", () => {
     expect(calls).toEqual(["attempt cp-1", "progress exited"]);
   });
 
+  /*
+   * KEPT FOR GOOD UNTIL 19 OCT (browser-storage audit). A refusal was swept
+   * only when its own visit came round again, and the flush visits only what
+   * it can still send - so a refusal with nothing else left in its visit sat
+   * on the tablet for ever. The week now runs for every refusal on the shelf.
+   */
+  describe("a refusal with nothing left to send beside it", () => {
+    const shelf = "nevo.lesson.pendingAnswers.student-1";
+    const DAY = 24 * 60 * 60 * 1000;
+    /** Refuse one answer, with no position in its visit, then age the refusal. */
+    const refusedDaysAgo = async (days: number) => {
+      signInAs("student-1");
+      holdAnswer("lesson-1", answer(1));
+      spyWrites(() => Promise.reject(new ApiError(422, "refused")));
+      await flushPendingProgress();
+      const raw = JSON.parse(window.localStorage.getItem(shelf) ?? "{}");
+      const id = answer(1).body.clientAttemptId;
+      expect(raw[id].refusedAt).toEqual(expect.any(Number));
+      raw[id].refusedAt = Date.now() - days * DAY;
+      window.localStorage.setItem(shelf, JSON.stringify(raw));
+    };
+
+    it("is forgotten once it is more than a week old", async () => {
+      await refusedDaysAgo(8);
+
+      await flushPendingProgress();
+
+      expect(window.localStorage.getItem(shelf)).toBeNull();
+      expect(holdsAnswers("lesson-1", "sess-1")).toBe(false);
+    });
+
+    it("is kept inside its week, still holding back its visit's completion", async () => {
+      await refusedDaysAgo(6);
+
+      await flushPendingProgress();
+      expect(holdsAnswers("lesson-1", "sess-1")).toBe(true);
+
+      holdProgress("lesson-1", completion);
+      await flushPendingProgress();
+      expect(calls).toContain("progress exited");
+    });
+
+    it("is forgotten on the child's own shelf only", async () => {
+      await refusedDaysAgo(8);
+      // Another child signed in: their flush reads their own shelf, and the
+      // first child's stays as it is until they are back.
+      signInAs("student-2");
+      await flushPendingProgress();
+      expect(window.localStorage.getItem(shelf)).not.toBeNull();
+
+      signInAs("student-1");
+      await flushPendingProgress();
+      expect(window.localStorage.getItem(shelf)).toBeNull();
+    });
+  });
+
   it("opens one session for a visit that never had one, for both", async () => {
     // A lesson played from Downloads with no connection never opened one.
     signInAs("student-1");

@@ -365,6 +365,37 @@ export function settleAnswers(lessonId: string, sessionId: string): void {
   if (owner) settle(owner, slotFor(lessonId, sessionId));
 }
 
+/**
+ * Forget every refusal this child holds that is more than a week old, across
+ * the whole shelf.
+ *
+ * KEPT FOR GOOD UNTIL 19 OCT (browser-storage audit). A refusal was forgotten
+ * only when its own visit came round again: by `settle`, once its completion
+ * went as `exited`, or by the week's check in `sendAnswers`. But the flush
+ * visits only what it can still send - a refusal is never sent - so a visit
+ * with nothing else left in it was never visited again, and an answer the
+ * server refused stayed on a shared tablet with nothing that would ever
+ * remove it. Now every flush sweeps the shelf, on the same week and the same
+ * `Date.now()` clock as every other entry here.
+ *
+ * A WEEK FROM THE REFUSAL, as the refusal's own note has always said. Its one
+ * job is to send its visit's completion as `exited`, and that visit's
+ * position is held after the answers in it were given: a week from the
+ * ANSWER could forget the refusal while the completion it holds back is still
+ * waiting to go.
+ */
+function expireRefusals(owner: string): void {
+  const now = Date.now();
+  const store = readAnswers(owner);
+  let changed = false;
+  for (const [id, a] of Object.entries(store)) {
+    if (a.refusedAt === undefined || now - a.refusedAt <= MAX_AGE_MS) continue;
+    delete store[id];
+    changed = true;
+  }
+  if (changed) writeAnswers(owner, store);
+}
+
 export type HeldAnswers = "sent" | "held" | "refused";
 
 /**
@@ -407,17 +438,8 @@ async function sendAnswers(
     }
   }
   // A refusal is forgotten a week after it was made, like everything here.
-  const now = Date.now();
-  const left = answersIn(owner, slot);
-  const stale = left.filter(
-    (a) => a.refusedAt !== undefined && now - a.refusedAt > MAX_AGE_MS,
-  );
-  if (stale.length > 0) {
-    const store = readAnswers(owner);
-    for (const a of stale) delete store[a.body.clientAttemptId];
-    writeAnswers(owner, store);
-  }
-  if (left.some((a) => a.refusedAt !== undefined && !stale.includes(a))) {
+  expireRefusals(owner);
+  if (answersIn(owner, slot).some((a) => a.refusedAt !== undefined)) {
     return "refused";
   }
   return held ? "held" : "sent";
@@ -501,6 +523,9 @@ async function flushOnce(): Promise<void> {
   const session = getSession();
   if (!session?.token || !session.userId) return;
   const owner = session.userId;
+  // First, what has outlived its week - including refusals, which nothing
+  // below would ever visit again.
+  expireRefusals(owner);
 
   // Every visit holding a position or an answer to send, by lesson, with the
   // moment its oldest was held.
