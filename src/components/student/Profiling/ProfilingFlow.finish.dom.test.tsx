@@ -8,6 +8,11 @@ import {
   mergeOnboardingDraft,
 } from "@/lib/auth/onboarding";
 
+// The run sends a child with no consent answer to a hold (19 Oct).
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
 /**
  * What the end of the baseline does with what it measured.
  *

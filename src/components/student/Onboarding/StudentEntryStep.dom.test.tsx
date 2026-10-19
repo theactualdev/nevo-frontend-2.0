@@ -469,6 +469,9 @@ describe("where a match goes", () => {
       // The server's band (9 Oct), not the age or the year group: the
       // device bands nothing itself.
       ageBand: "junior_secondary",
+      // The lookup's consent answer, the only one there is before the
+      // account exists: the baseline captures on it and nothing else (19 Oct).
+      consent: "given",
     });
   });
 

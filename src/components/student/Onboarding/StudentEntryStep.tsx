@@ -321,6 +321,10 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
           admissionNumber: matchedNumber,
           name: state.firstName,
           ...(state.ageBand ? { ageBand: state.ageBand } : {}),
+          // The lookup's own answer, restated: `entryRoute` sends only a
+          // `given` child here, and the baseline captures on nothing else
+          // before an account exists to ask with (19 Oct).
+          ...(state.consentState === "given" ? { consent: "given" as const } : {}),
         });
         if (route === "first-run") {
           router.push(FIRST_RUN);

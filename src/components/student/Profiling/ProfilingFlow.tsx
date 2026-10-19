@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useConsentGate } from "@/hooks/useConsentGate";
+import { consentAnswer, type ConsentAnswer } from "@/lib/auth/consentAnswer";
 import { useRosterBand } from "@/hooks/useRosterBand";
+import { UNCHECKED_ROUTE } from "@/lib/auth/consentHold";
+import { withNext } from "@/lib/auth/nextPath";
+import { getSession } from "@/lib/auth/session";
 import { formFactor } from "@/hooks/useSignals";
 import { holdBaseline } from "@/lib/profiling/pendingBaseline";
 import { ONBOARDING_SIGNAL_TYPES } from "@/lib/constants";
@@ -42,6 +47,9 @@ import { StretchInterstitial } from "./StretchInterstitial";
  * warm-up runs without one (D139). See `band` below for why it is not asked.
  */
 const NO_BAND: AgeBand = AGE_BANDS.P46;
+
+/** 05 Entry: where consent is read for a child with no account yet. */
+const ENTRY = "/student/onboarding/school";
 
 /**
  * The Baseline Cognitive Profiling flow (SCRUM-104) - onboarding Phase C.
@@ -184,44 +192,74 @@ function ProfilingRun({
    * not even on the entry lookup's band, which the roster outranks.
    */
   const bandPending = !roster.settled;
+  /** Held until consent is read as allowing it: see `consent`, below. */
   const [capture] = useState(
-    () => new BaselineCapture(runId ?? `baseline-${randomId()}`),
+    () =>
+      new BaselineCapture(runId ?? `baseline-${randomId()}`, { held: true }),
   );
   /** The device this run is on, read when it starts; the motor step's samples carry it. */
   const [device, setDevice] = useState<FormFactor | null>(null);
   const submitted = useRef(false);
+  const router = useRouter();
   /*
-   * A WITHDRAWN GUARDIAN STOPS THE MEASUREMENT.
+   * NOTHING IS CAPTURED UNTIL CONSENT IS KNOWN TO ALLOW IT (19 Oct
+   * browser-storage audit; rule 5, absence is an instruction).
    *
-   * This run never asked. An SSO child is signed in throughout the sequence,
-   * so the answer was knowable and was not sought: their baseline was
-   * captured, reduced and parked whatever their guardian had said. Withdrawal
-   * is the one consent state the frontend is entitled to act on, so this is
-   * the gap that mattered most.
+   * The run used to capture from its first tap and stop only on a withdrawal,
+   * and a read that failed was read as "not withdrawn" - so a device that
+   * could not say whether it was allowed kept a child's taps and where they
+   * landed. The capture is constructed held now, and allowed only by an
+   * answer. Whose answer:
    *
-   * `withdrawn` is false until the read answers, and false if it fails - a
-   * flaky network is not a withdrawal. So there is a window, early in the run,
-   * where the raw stream is still accumulating on the device. The effect below
-   * empties it the moment the answer arrives, and `finishRun` derives nothing
-   * and parks nothing. Blocking the whole run behind a consent read would
-   * delay every child for a state almost none of them are in.
+   *  - A child with no account yet - everyone but SSO, until the PIN step:
+   *    05 Entry's lookup, which matched them with consent given and said so
+   *    in the draft (`consent`). There is no session to ask with, and any
+   *    session the device holds may be the last child's.
+   *  - A child who is signed in and owns this run - SSO, or finishing
+   *    onboarding (`OnboardingResume`) - or anyone 05 did not send: the
+   *    consent gate, for the session there is.
    *
-   * STOPPED, NOT JUST EMPTIED. This purged once and the capture carried on:
-   * every module after the withdrawal recorded again and wrote its stream
-   * back to IndexedDB at its end, where it sat on a shared tablet until some
-   * later run's sweep. `stop()` purges and then refuses every later record
-   * and write for the rest of the run.
-   *
-   * WHAT THE CHILD SEES IS NOT DECIDED HERE. It is drawn now - 00e, Consent
-   * Withdrawn (D117) - and every door sends a withdrawn child there
-   * (`studentDestination`), as does the server's refusal of one from wherever
-   * they are (B7, B44; `withdrawnDoor`). This covers the moments before
-   * either: the run keeps its own screens, and records nothing.
+   * WHAT THE CHILD SEES, with no new copy:
+   *  - Still asking: the intro's own wait. "Let's go" stays pressable and
+   *    says "Nearly ready." (D211), as it does while the band loads.
+   *  - No answer to be had - the read failed, or nobody to read for: the
+   *    holds a door uses for exactly that, so a child is never left on a
+   *    screen that cannot start. Signed in, the unchecked hold (D69: "a check
+   *    that cannot complete must not leave the door open"), whose Try again
+   *    reads consent again and brings them back here, and whose Back goes to
+   *    the door. Not signed in, 05 Entry, which is where consent is read for
+   *    a child with no account. Whatever had been captured is let go first.
+   *  - A withdrawal stops the run's capture for good, as before, and the run
+   *    keeps its screens: 00e is where the doors and the server's refusals
+   *    send a withdrawn child (`studentDestination`, `withdrawnDoor`), and
+   *    `finishRun` parks nothing.
    */
-  const { withdrawn } = useConsentGate();
+  const gate = useConsentGate();
+  const consent: ConsentAnswer = gate.withdrawn
+    ? "withdrawn"
+    : !ownerUserId && getOnboardingDraft().consent === "given"
+      ? "allowed"
+      : consentAnswer(gate);
+  const withdrawn = consent === "withdrawn";
   useEffect(() => {
-    if (withdrawn) void capture.stop();
-  }, [withdrawn, capture]);
+    if (consent === "withdrawn") void capture.stop();
+    else if (consent === "allowed") capture.allow();
+    else if (consent === "unknown") void capture.hold();
+  }, [consent, capture]);
+  /** Sent to a hold already: once is the whole of it. */
+  const leaving = useRef(false);
+  useEffect(() => {
+    if (consent !== "unknown" || leaving.current) return;
+    leaving.current = true;
+    router.replace(
+      getSession()
+        ? withNext(
+            UNCHECKED_ROUTE,
+            `${window.location.pathname}${window.location.search}`,
+          )
+        : ENTRY,
+    );
+  }, [consent, router]);
   /*
    * The run ends as Module 3 does, and hands on the run it parked (or null).
    * The Complete screen, with its `saved` left null, is the sequence's now:
@@ -309,7 +347,8 @@ function ProfilingRun({
   if (phase === "intro") {
     return (
       <ProfilingIntro
-        waiting={bandPending}
+        // Nothing starts on a guessed band, nor before consent allows it.
+        waiting={bandPending || consent === "pending" || consent === "unknown"}
         mode="intro"
         onContinue={() => {
           // The device, read once here, goes beside the trials (B76).

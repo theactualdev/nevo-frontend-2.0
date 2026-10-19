@@ -37,6 +37,17 @@ export interface OnboardingDraft {
    * of the pair their first PIN is stored against - see `bindFirstPin`.
    */
   admissionNumber?: string;
+  /**
+   * The entry lookup's consent answer for this child, as 05 read it: `given`,
+   * or not here at all.
+   *
+   * THE ONLY CONSENT READ THERE IS BEFORE THE ACCOUNT EXISTS. The baseline is
+   * sat before the PIN step creates one, so there is no session to ask the
+   * consent gate with, and the run used to capture regardless (19 Oct
+   * browser-storage audit). It captures on this, and only this, now. Absent
+   * is not given: a run with no answer holds (`ProfilingFlow`).
+   */
+  consent?: "given";
 }
 
 export function getOnboardingDraft(): OnboardingDraft {

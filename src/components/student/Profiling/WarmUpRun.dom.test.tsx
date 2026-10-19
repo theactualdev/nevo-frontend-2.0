@@ -2,6 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { WarmUpRun } from "./WarmUpRun";
 
+// Consent answered and allowing the run: these tests are about something
+// else. What a run does without an answer is pinned in its `.consent` test.
+vi.mock("@/hooks/useConsentGate", () => ({
+  useConsentGate: () => ({ withdrawn: false, known: true, unreadable: false }),
+}));
+
 /**
  * The daily warm-up captured everything and submitted almost none of it.
  *

@@ -719,3 +719,67 @@ describe("raw streams left on the device", () => {
     await expect(purgeStoredCaptures()).resolves.toBeUndefined();
   });
 });
+
+/*
+ * HELD UNTIL CONSENT ALLOWS IT (19 Oct browser-storage audit; rule 5). Both
+ * runs construct their capture held, and nothing a child does is kept -
+ * in memory or on the device - until an answer allows it. Losing the answer
+ * lets go of what was kept.
+ */
+describe("BaselineCapture — held until consent allows it", () => {
+  const DB = "nevo-baseline";
+  let idb: ReturnType<typeof fakeIndexedDb>;
+
+  beforeEach(() => {
+    idb = fakeIndexedDb();
+    vi.stubGlobal("indexedDB", idb.factory);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("records nothing, and writes nothing, while held", async () => {
+    const c = new BaselineCapture("held-1", { held: true });
+
+    c.record("tap", { cell: 3, x: 120, y: 340 });
+    await c.persist();
+
+    expect(c.stream).toHaveLength(0);
+    expect(idb.records(DB)).toBeUndefined();
+  });
+
+  it("records from the moment it is allowed, and not before", () => {
+    const c = new BaselineCapture("held-2", { held: true });
+    c.record("tap", { cell: 1 });
+
+    c.allow();
+    c.record("tap", { cell: 2 });
+
+    expect(c.stream.map((e) => e.payload?.cell)).toEqual([2]);
+  });
+
+  it("lets go of what it kept, here and on the device, when held again", async () => {
+    const c = new BaselineCapture("held-3", { held: true });
+    c.allow();
+    c.record("tap", { cell: 4 });
+    await c.persist();
+    await vi.waitFor(() => expect(idb.records(DB)?.has("held-3")).toBe(true));
+
+    await c.hold();
+    c.record("tap", { cell: 5 });
+    await c.persist();
+
+    expect(c.stream).toHaveLength(0);
+    await vi.waitFor(() => expect(idb.records(DB)?.has("held-3")).toBe(false));
+  });
+
+  it("is not allowed again after a withdrawal has stopped it", async () => {
+    const c = new BaselineCapture("held-4", { held: true });
+    await c.stop();
+
+    c.allow();
+    c.record("tap", { cell: 6 });
+
+    expect(c.stream).toHaveLength(0);
+  });
+});

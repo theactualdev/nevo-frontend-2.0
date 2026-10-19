@@ -146,11 +146,22 @@ export class BaselineCapture {
   private db: Promise<IDBDatabase | null> | null = null;
   /** Set by `stop()`; nothing is recorded or written after it. */
   private stopped = false;
+  /**
+   * Waiting on consent: nothing is recorded or written until `allow()`.
+   *
+   * NOT KNOWING IS NOT PERMISSION (19 Oct browser-storage audit). The runs
+   * captured from their first tap and only stopped on a withdrawal, so a
+   * device that could not read consent - offline, the read failing - kept a
+   * child's taps and their coordinates as though it had been told yes. Both
+   * runs now construct theirs held (`ProfilingFlow`, `WarmUpRun`).
+   */
+  private held: boolean;
   readonly sessionId: string;
 
   /** Construction is pure (safe in a state initializer); the DB opens lazily. */
-  constructor(sessionId: string) {
+  constructor(sessionId: string, options: { held?: boolean } = {}) {
     this.sessionId = sessionId;
+    this.held = options.held ?? false;
   }
 
   private ensureDb() {
@@ -158,8 +169,22 @@ export class BaselineCapture {
     return this.db;
   }
 
+  /** Consent read as allowed: record from now on, unless stopped. */
+  allow() {
+    this.held = false;
+  }
+
+  /**
+   * Consent cannot be known (any more): record and write nothing, and let go
+   * of what was kept - in memory and on the device - until `allow()`.
+   */
+  async hold() {
+    this.held = true;
+    await this.purge();
+  }
+
   record(kind: string, payload?: Record<string, unknown>) {
-    if (this.stopped) return;
+    if (this.stopped || this.held) return;
     this.events.push({ kind, t: performance.now(), payload });
   }
 
@@ -180,11 +205,11 @@ export class BaselineCapture {
 
   /** Snapshot the raw stream into IndexedDB (ephemeral, purged on submit). */
   async persist() {
-    if (this.stopped) return;
+    if (this.stopped || this.held) return;
     const db = await this.ensureDb();
-    // A stop can land while the database is opening. Writing after it would
-    // put back the key `stop()` has just deleted.
-    if (!db || this.stopped) return;
+    // A stop or a hold can land while the database is opening. Writing after
+    // it would put back the key it has just deleted.
+    if (!db || this.stopped || this.held) return;
     try {
       const tx = db.transaction(STORE, "readwrite");
       const store = tx.objectStore(STORE);
