@@ -19,6 +19,8 @@ import { api, authApi } from "@/lib/api";
 import { rememberedChildren } from "@/lib/auth/deviceRoster";
 import {
   claimOnboardingDraft,
+  endSessionForNewChild,
+  endSessionNotThisRuns,
   getOnboardingDraft,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
@@ -262,7 +264,8 @@ describe("what a sign-out leaves alone: the child's work", () => {
     const work = [
       `nevo.lesson.pendingAnswers.${a}`,
       `nevo.lesson.pendingProgress.${a}`,
-      "nevo.baseline.pending",
+      // Parked on the child's own shelf (19 Oct).
+      `nevo.baseline.pending.${a}`,
     ];
     const before = work.map((k) => window.localStorage.getItem(k));
     expect(before.every(Boolean)).toBe(true);
@@ -384,5 +387,116 @@ describe("the bare chosen-name key an older build left", () => {
     expect(window.localStorage.getItem("nevo.auth.displayName.child-x")).toBe(
       "Bayo",
     );
+  });
+});
+
+/*
+ * A SESSION ENDED FOR A NEW CHILD LEAVES THAT CHILD'S DRAFT (19 Oct, a
+ * regression in aa7b2db). The sequence and 05 end a stored session as they
+ * first render, and claim the draft only after; the ending's clean-up ran in
+ * between and took the draft - so a child sent straight to the sequence was
+ * bounced to an empty 05. Asserted here with the clean-up running BEFORE any
+ * screen has claimed the draft, which is the order a browser runs them in.
+ */
+describe("a session ended for a new child who is starting", () => {
+  const tobi = {
+    schoolCode: "K7DQ",
+    admissionNumber: "BGA/2031",
+    name: "Tobi",
+    consent: "given" as const,
+  };
+
+  it("leaves the draft the sequence is about to use, and the rest still goes", async () => {
+    await aSharedTablet();
+    startOnboardingDraft(tobi);
+
+    endSessionNotThisRuns();
+    await settle();
+
+    expect(getSession()).toBeNull();
+    expect(getOnboardingDraft()).toEqual(tobi);
+    expect(heldFor()).not.toContain(a);
+  });
+
+  it("leaves it on 05 the same way", async () => {
+    await aSharedTablet();
+    startOnboardingDraft(tobi);
+
+    endSessionForNewChild();
+    await settle();
+
+    expect(getOnboardingDraft()).toEqual(tobi);
+  });
+
+  it("spares it once: a later ordinary sign-out takes a draft nobody is using", async () => {
+    await aSharedTablet();
+    startOnboardingDraft(tobi);
+    endSessionNotThisRuns();
+    await settle();
+
+    signInAs(a);
+    await settle();
+    clearSession();
+    await settle();
+
+    expect(getOnboardingDraft()).toEqual({});
+  });
+});
+
+/*
+ * A CHILD THE DEVICE DOES NOT REMEMBER KEEPS NOTHING OF THEIR OWN ON IT (19
+ * Oct). The chosen name and the accessibility settings are kept per account
+ * for the next sign-in - which only a remembered child has. An SSO child is
+ * never on the picker, so theirs stayed for nobody.
+ */
+describe("per-child settings at sign-out", () => {
+  const sso = (userId: string) =>
+    setSession({
+      token: `tok-${userId}`,
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      userId,
+      role: "student",
+      method: "sso",
+    });
+
+  it("go for a child the device does not remember", async () => {
+    sso("sso-child");
+    await settle();
+    window.localStorage.setItem("nevo.auth.displayName.sso-child", "Sade");
+    window.localStorage.setItem("nevo:a11y:sso-child", '{"textSize":"l"}');
+
+    clearSession();
+    await settle();
+
+    expect(window.localStorage.getItem("nevo.auth.displayName.sso-child")).toBeNull();
+    expect(window.localStorage.getItem("nevo:a11y:sso-child")).toBeNull();
+  });
+
+  it("stay for a child the device remembers, for their next sign-in", async () => {
+    await aSharedTablet();
+    window.localStorage.setItem(`nevo.auth.displayName.${a}`, "Ada");
+    window.localStorage.setItem(`nevo:a11y:${a}`, '{"textSize":"l"}');
+
+    clearSession();
+    await settle();
+
+    expect(window.localStorage.getItem(`nevo.auth.displayName.${a}`)).toBe("Ada");
+    expect(window.localStorage.getItem(`nevo:a11y:${a}`)).not.toBeNull();
+  });
+
+  it("stay for a teacher, whose settings are theirs to keep", async () => {
+    setSession({
+      token: "tok-t",
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      userId: "teacher-1",
+      role: "teacher",
+    });
+    await settle();
+    window.localStorage.setItem("nevo:a11y:teacher-1", '{"textSize":"l"}');
+
+    clearSession();
+    await settle();
+
+    expect(window.localStorage.getItem("nevo:a11y:teacher-1")).not.toBeNull();
   });
 });

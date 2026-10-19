@@ -1,10 +1,37 @@
 import { forgetReviewAnswers } from "@/components/student/Lesson/reviewStore";
-import { retireLegacyProfile } from "@/lib/auth/deviceRoster";
+import {
+  rememberedChildren,
+  retireLegacyProfile,
+} from "@/lib/auth/deviceRoster";
 import { forgetOnboardingDraft } from "@/lib/auth/onboarding";
-import { retireLegacyDisplayName } from "@/lib/auth/session";
+import { DISPLAY_NAME_KEY, retireLegacyDisplayName } from "@/lib/auth/session";
 import type { EndedSession } from "@/lib/auth/sessionEnd";
 import { purgeStoredCaptures } from "@/lib/profiling/capture";
 import { forgetSignals } from "@/lib/signals/outbox";
+import { USER_ROLES } from "@/lib/constants/permissions";
+import { A11Y_STORAGE_KEY } from "./accessibilityBoot";
+
+/**
+ * A child this device does not remember keeps nothing of their own on it
+ * (19 Oct browser-storage audit).
+ *
+ * The name a child chose and their accessibility settings are kept per
+ * account so the next sign-in greets them by it and opens at their text
+ * size - which is for a child the device remembers (28c's roster). A child
+ * it does not - an SSO child, who signs in through their provider and is
+ * never on the picker, or one whose entry has aged out - left both behind
+ * for nobody. Children only: a teacher's settings are theirs to keep.
+ */
+function forgetIfNotRemembered(userId: string, role: string): void {
+  if (role !== USER_ROLES.STUDENT) return;
+  if (rememberedChildren().some((c) => c.userId === userId)) return;
+  try {
+    window.localStorage.removeItem(`${DISPLAY_NAME_KEY}.${userId}`);
+    window.localStorage.removeItem(`${A11Y_STORAGE_KEY}:${userId}`);
+  } catch {
+    // Unavailable storage holds nothing to forget.
+  }
+}
 
 /**
  * What a child leaves on a shared tablet, let go of when their session ends
@@ -25,6 +52,8 @@ import { forgetSignals } from "@/lib/signals/outbox";
  *  - The onboarding draft in this tab - a school code, a Student ID and a
  *    first name - unless a child is onboarding on this page right now
  *    (`forgetOnboardingDraft`).
+ *  - For a child the device does not remember, the name they chose and
+ *    their accessibility settings (`forgetIfNotRemembered`).
  *
  * ONLY THE LEAVING CHILD'S. Every store here is keyed by account, and another
  * child's entries on the same device are not touched. The exceptions are
@@ -40,14 +69,19 @@ import { forgetSignals } from "@/lib/signals/outbox";
  *
  * Each step on its own: one store failing must not keep the next one's.
  */
-export function forgetLeavingChild({ userId, token }: EndedSession): void {
+export function forgetLeavingChild({
+  userId,
+  token,
+  role,
+}: EndedSession): void {
   const steps = [
     () => forgetSignals(userId, token),
     () => forgetReviewAnswers(userId),
     () => retireLegacyProfile(),
     () => retireLegacyDisplayName(),
     () => void purgeStoredCaptures(),
-    () => forgetOnboardingDraft(),
+    () => forgetOnboardingDraft(userId),
+    () => forgetIfNotRemembered(userId, role),
   ];
   for (const step of steps) {
     try {

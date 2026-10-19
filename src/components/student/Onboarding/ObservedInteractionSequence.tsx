@@ -9,6 +9,7 @@ import {
   endSessionNotThisRuns,
   entryIdentityFromDraft,
   mergeOnboardingDraft,
+  ownAccountRunResumes,
   rememberOnboardedStudent,
 } from "@/lib/auth/onboarding";
 import {
@@ -46,6 +47,8 @@ import { YoureInScreen } from "./YoureInScreen";
 const SIGN_BACK_IN = "/auth/sign-in";
 /** 05 Entry, for a pair the PIN route no longer finds. */
 const ENTRY = "/student/onboarding/school";
+/** Finishing onboarding for a child who has an account (`OnboardingResume`). */
+const CONTINUE = "/student/onboarding/continue";
 
 /**
  * Onboarding Phase C — one continuous experience: a calm transition, the
@@ -81,8 +84,26 @@ export function ObservedInteractionSequence() {
    * the last child. An SSO child's own session, and the one this run's first
    * PIN made, are kept. During the first render, ahead of every hook below.
    */
-  useState(endSessionNotThisRuns);
+  /*
+   * AND A RUN ALREADY PAST ITS PIN RESUMES (19 Oct). The PIN made the
+   * child's account and signed them in; a reload during Module 4, Complete
+   * or You're In started the sequence again from its transition - or, since
+   * aa7b2db, ended their own new session. The draft keeps the account the
+   * PIN made until You're In, so a reload finds it, keeps the session, and
+   * hands the child to the resume for a signed-in child, which asks the
+   * server what is left.
+   */
+  const [resumes] = useState(() => {
+    endSessionNotThisRuns();
+    return ownAccountRunResumes();
+  });
   const router = useRouter();
+  useEffect(() => {
+    if (!resumes) return;
+    // Its work is done: the resume needs none of it.
+    clearOnboardingDraft();
+    router.replace(CONTINUE);
+  }, [resumes, router]);
   const { user } = useAuth();
   const isSso = user?.method === "sso";
   /*
@@ -184,8 +205,8 @@ export function ObservedInteractionSequence() {
    * vector, which is gone.
    */
   const deliverBaseline = async (owner: string, run: string | null) => {
-    const parked = readPendingBaseline();
-    const ours = run !== null && parked?.sessionId === run;
+    // This run's own parked trials, on their own shelf since 19 Oct.
+    const ours = run !== null && readPendingBaseline({ run })?.sessionId === run;
     const ok = await flushPendingBaseline(owner, run);
     if (ok && ours && alive.current) {
       profiling.trackEvent(ONBOARDING_SIGNAL_TYPES.BASELINE_SUBMITTED);
@@ -232,6 +253,8 @@ export function ObservedInteractionSequence() {
    * route - see `Letterbox`.
    */
   // 05's hold for the age check, with its Back, as 05 would show it.
+  // On the way to the resume: nothing of a run that is already past this.
+  if (resumes) return null;
   if (held === "age-check")
     return (
       <Letterbox>
@@ -351,7 +374,10 @@ export function ObservedInteractionSequence() {
            * help implies something has gone wrong at the exact moment nothing
            * has." It matters at the next sign-in, not this one.
            */
-          if (!isSso) rememberOnboardedStudent(identifierRef.current);
+          // The draft stays until You're In: a reload before then resumes.
+          if (!isSso) {
+            rememberOnboardedStudent(identifierRef.current, { keepDraft: true });
+          }
           advance();
         }}
       />
@@ -440,6 +466,8 @@ function YoureInStep({
          * read, since a check that cannot complete does not open the door
          * (D69).
          */
+        // The run is over: the draft goes now, and not before (19 Oct).
+        clearOnboardingDraft();
         void enterFirstLesson(firstLesson, go);
       }}
       track={track}

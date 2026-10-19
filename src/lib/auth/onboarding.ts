@@ -125,7 +125,8 @@ export function clearOnboardingDraft(): void {
  * here: 05 itself sends them to sign in (`entryRoute`'s `sign-in`).
  */
 export function endSessionForNewChild(): void {
-  if (getSession()) clearSession();
+  const session = getSession();
+  if (session) endForNewChild(session.userId);
 }
 
 /**
@@ -137,7 +138,38 @@ export function endSessionNotThisRuns(): void {
   const session = getSession();
   if (!session || session.method === "sso") return;
   if (getOnboardingDraft().userId === session.userId) return;
+  endForNewChild(session.userId);
+}
+
+/**
+ * Sessions ended here for a child who is starting: their ending does not take
+ * the draft that child is using (`forgetOnboardingDraft`).
+ *
+ * THE DRAFT WENT WITH THE SESSION IT WAS ENDED FOR (19 Oct). The ending is
+ * announced a moment later, and the clean-up it runs found no screen holding
+ * the draft yet - the sequence claims it after its first render, which is
+ * where the session is ended - so a child sent straight to the sequence lost
+ * their school code, Student ID, name and 05's consent answer, and was sent
+ * back to an empty 05. Marked before the session ends, so the order cannot
+ * matter.
+ */
+const endedForNewChild = new Set<string>();
+
+function endForNewChild(userId: string): void {
+  endedForNewChild.add(userId);
   clearSession();
+}
+
+/**
+ * Has this run's first PIN already made the child's account, and are they
+ * signed in on it? Then the run is past its PIN, and a reload resumes it
+ * from what the server holds (`OnboardingResume`) rather than starting the
+ * baseline again.
+ */
+export function ownAccountRunResumes(): boolean {
+  const session = getSession();
+  const own = getOnboardingDraft().userId;
+  return Boolean(session?.token && own && session.userId === own);
 }
 
 /** How many open screens are using the draft (05 Entry, the sequence). */
@@ -175,7 +207,9 @@ export function claimOnboardingDraft(): () => void {
  * sequence is open, the draft stays, and that run clears it itself when it
  * ends, as it always has.
  */
-export function forgetOnboardingDraft(): void {
+export function forgetOnboardingDraft(endedUserId?: string): void {
+  // Ended FOR the child using it: theirs to keep (`endForNewChild`).
+  if (endedUserId && endedForNewChild.delete(endedUserId)) return;
   if (draftInUse > 0) return;
   clearOnboardingDraft();
 }
@@ -222,7 +256,18 @@ function initialsOf(name: string): string {
  */
 export function rememberOnboardedStudent(
   loginIdentifier: string | null | undefined,
+  /**
+   * Leave the draft for the run to clear at its own end (19 Oct). The
+   * sequence's PIN comes before Module 4, Complete and You're In, and the
+   * draft carries what a reload there needs - the account the PIN made -
+   * so it is cleared on You're In, not here. A cleared child's new PIN ends
+   * its flow, and clears it here.
+   */
+  options: { keepDraft?: boolean } = {},
 ): boolean {
+  const done = () => {
+    if (!options.keepDraft) clearOnboardingDraft();
+  };
   const draft = getOnboardingDraft();
   const name = draft.name?.trim();
   const identifier = loginIdentifier?.trim();
@@ -238,7 +283,7 @@ export function rememberOnboardedStudent(
    * to prevent, and it was left open for one of the three fields.
    */
   if (!name || !identifier || !schoolCode) {
-    clearOnboardingDraft();
+    done();
     return false;
   }
   const userId = getSession()?.userId;
@@ -250,6 +295,6 @@ export function rememberOnboardedStudent(
     // Account creation has just stored the session this child now owns.
     ...(userId ? { userId } : {}),
   });
-  clearOnboardingDraft();
+  done();
   return true;
 }

@@ -17,7 +17,7 @@ import { announceSessionEnd } from "./sessionEnd";
 
 const SESSION_KEY = "nevo.auth.session";
 /** Prefix for the name a child chose, stored per account (`.<userId>`). */
-const DISPLAY_NAME_KEY = "nevo.auth.displayName";
+export const DISPLAY_NAME_KEY = "nevo.auth.displayName";
 
 /**
  * Role mirror for the route guard (`src/proxy.ts`). localStorage is never

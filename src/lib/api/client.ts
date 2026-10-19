@@ -158,6 +158,34 @@ async function getAuthToken(): Promise<string | undefined> {
 }
 
 /**
+ * THE DOORS NEVER CARRY A STORED SESSION'S TOKEN (19 Oct browser-storage
+ * audit).
+ *
+ * Every request carried whatever session the device held, the doors
+ * included: with one child's session still on a shared tablet, the next
+ * child's PIN sign-in went up with the first child's Authorization, as did
+ * 05 Entry's lookup, a first or new PIN, and a request for a PIN to be
+ * cleared. None of these is anybody's yet - they are how an account is
+ * found or entered - so none is sent as anybody. Named by path here, once,
+ * so no caller can forget: sign-in (PIN and password), the PIN-reset and
+ * password-reset requests, the SSO callback, and 05's two routes.
+ */
+const ANONYMOUS_PATHS = [
+  "/api/v1/auth/login/",
+  "/api/v1/auth/pin/reset",
+  "/api/v1/auth/forgot-password",
+  "/api/v1/auth/password-reset/complete",
+  "/api/v1/auth/sso/callback",
+  "/api/v1/student-entry/",
+];
+
+/** Is this a door, sent as nobody whoever is signed in? */
+export function isAnonymousPath(path: string): boolean {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return ANONYMOUS_PATHS.some((door) => p.startsWith(door));
+}
+
+/**
  * A 401/403 on a request we DID send a token with means the session died
  * mid-use. Clear it and send the person to their door - otherwise the
  * console quietly degrades to sample data while they still believe they're
@@ -392,7 +420,7 @@ export async function request<T>(
 ): Promise<T> {
   const { body, params, headers, baseUrl, ...rest } = options;
   const url = buildUrl(path, params, baseUrl);
-  const token = await getAuthToken();
+  const token = isAnonymousPath(path) ? undefined : await getAuthToken();
 
   // FormData carries its own multipart boundary, which only the browser can
   // generate - so it must be passed through untouched and its Content-Type

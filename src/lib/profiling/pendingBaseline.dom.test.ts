@@ -254,11 +254,11 @@ describe("a baseline waiting for its account", () => {
 
   it("stops being worth sending after a week", () => {
     holdBaseline("sess-1", TRIALS);
-    const raw = JSON.parse(
-      window.localStorage.getItem("nevo.baseline.pending") ?? "{}",
-    );
+    // An ownerless run is parked under its own run id (19 Oct).
+    const key = "nevo.baseline.pending.run.sess-1";
+    const raw = JSON.parse(window.localStorage.getItem(key) ?? "{}");
     window.localStorage.setItem(
-      "nevo.baseline.pending",
+      key,
       JSON.stringify({
         ...raw,
         capturedAt: Date.now() - 8 * 24 * 60 * 60 * 1000,
@@ -408,5 +408,104 @@ describe("a parked baseline whose child's session ends while it is flushed", () 
 
     expect(submit).not.toHaveBeenCalled();
     expect(readPendingBaseline()?.ownerUserId).toBe("child-a");
+  });
+});
+
+/*
+ * ONE SLOT PER OWNER, AND AN OWNERLESS RUN UNDER ITS OWN RUN ID (19 Oct
+ * browser-storage audit). There was one slot for the device: Tobi's
+ * finished pre-account run overwrote Amara's parked warm-up, and her trials
+ * were gone. Who may send each is unchanged - its owner, or the run that
+ * parked it - and so is the week.
+ */
+describe("parked runs on a shared tablet", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it("never overwrite another child's: a new child's pre-account run leaves Amara's", () => {
+    holdBaseline("warmup-amara", TRIALS, "amara");
+    holdBaseline("run-tobi", TRIALS, null);
+
+    expect(readPendingBaseline({ owner: "amara" })?.sessionId).toBe(
+      "warmup-amara",
+    );
+    expect(readPendingBaseline({ run: "run-tobi" })?.ownerUserId).toBeNull();
+  });
+
+  it("go only to whom each belongs", async () => {
+    const submit = vi.spyOn(baselineApi, "submitTrials").mockResolvedValue(true);
+    holdBaseline("warmup-amara", TRIALS, "amara");
+    holdBaseline("run-tobi", TRIALS, null);
+    signInAs("amara");
+
+    await expect(flushPendingBaseline("amara")).resolves.toBe(true);
+
+    expect(submit.mock.calls.map(([run]) => run)).toEqual(["warmup-amara"]);
+    expect(readPendingBaseline({ run: "run-tobi" })).not.toBeNull();
+  });
+
+  it("become their owner's once the run that parked them proves it, so a failed send is not stranded", async () => {
+    const submit = vi
+      .spyOn(baselineApi, "submitTrials")
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    holdBaseline("run-tobi", TRIALS, null);
+    signInAs("tobi");
+
+    // The PIN step: the run proves it with its id, and the send fails.
+    await expect(flushPendingBaseline("tobi", "run-tobi")).resolves.toBe(false);
+    expect(readPendingBaseline({ owner: "tobi" })?.sessionId).toBe("run-tobi");
+
+    // Any later student screen, with no run id to prove anything with.
+    await expect(flushPendingBaseline("tobi")).resolves.toBe(true);
+    expect(submit).toHaveBeenCalledTimes(2);
+    expect(readPendingBaseline()).toBeNull();
+  });
+
+  it("each go after a week, on the same clock", () => {
+    holdBaseline("warmup-amara", TRIALS, "amara");
+    holdBaseline("run-tobi", TRIALS, null);
+    const key = "nevo.baseline.pending.amara";
+    const raw = JSON.parse(window.localStorage.getItem(key) ?? "{}");
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({ ...raw, capturedAt: Date.now() - 8 * DAY }),
+    );
+
+    expect(readPendingBaseline({ owner: "amara" })).toBeNull();
+    expect(window.localStorage.getItem(key)).toBeNull();
+    expect(readPendingBaseline({ run: "run-tobi" })).not.toBeNull();
+  });
+
+  it("move a run from the old single slot onto its owner's shelf", () => {
+    window.localStorage.setItem(
+      "nevo.baseline.pending",
+      JSON.stringify({
+        sessionId: "warmup-amara",
+        trials: TRIALS,
+        capturedAt: Date.now(),
+        ownerUserId: "amara",
+        context: {},
+      }),
+    );
+
+    expect(readPendingBaseline({ owner: "amara" })?.sessionId).toBe(
+      "warmup-amara",
+    );
+    expect(window.localStorage.getItem("nevo.baseline.pending")).toBeNull();
+    expect(window.localStorage.getItem("nevo.baseline.pending.amara")).not.toBeNull();
+  });
+
+  it("are deleted for a withdrawn child only, never another's", async () => {
+    vi.spyOn(consentsApi, "myConsentGate").mockResolvedValue({
+      status: "withdrawn",
+    } as never);
+    holdBaseline("warmup-amara", TRIALS, "amara");
+    holdBaseline("warmup-kofi", TRIALS, "kofi");
+    signInAs("amara");
+
+    await flushPendingBaseline("amara");
+
+    expect(readPendingBaseline({ owner: "amara" })).toBeNull();
+    expect(readPendingBaseline({ owner: "kofi" })).not.toBeNull();
   });
 });
