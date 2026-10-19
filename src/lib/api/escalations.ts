@@ -64,11 +64,12 @@ export interface Escalation {
 }
 
 /**
- * `GET /api/v1/escalations` answers the school's newest 100, seen ones
- * included, and takes no paging. A full page may have left older open ones
- * behind, so it is not a total and the all-clear may not be said on it.
+ * One page of `GET /api/v1/escalations?openOnly=true` (14 Oct: `openOnly`,
+ * `limit`, `offset`). Read to a short page, so the open ones are all of them
+ * and "none are waiting" can be said. Before 14 Oct the route answered the
+ * newest 100, seen ones included, with no paging.
  */
-export const ESCALATION_PAGE = 100;
+const OPEN_PAGE = 100;
 
 export const escalationsApi = {
   /** Raise a concern with the SENCo. 201 on success; 422 on a rejected body. */
@@ -77,6 +78,24 @@ export const escalationsApi = {
 
   /** The SENCo/admin inbox. Not called from the teacher console - see above. */
   list: () => api.get<Escalation[]>("/api/v1/escalations"),
+
+  /**
+   * Every concern nobody has marked as seen, page by page. `complete` is false
+   * when the pages ran out before a short one came back - then the list is a
+   * floor, and neither a count nor the all-clear may be said on it.
+   */
+  allOpen: async (maxPages = 10): Promise<{ open: Escalation[]; complete: boolean }> => {
+    const open: Escalation[] = [];
+    for (let page = 0; page < maxPages; page += 1) {
+      const batch = await api.get<Escalation[]>("/api/v1/escalations", {
+        params: { openOnly: true, limit: OPEN_PAGE, offset: page * OPEN_PAGE },
+      });
+      if (!Array.isArray(batch)) return { open, complete: false };
+      open.push(...batch);
+      if (batch.length < OPEN_PAGE) return { open, complete: true };
+    }
+    return { open, complete: false };
+  },
 
   /**
    * Mark a concern as seen. Learning Support holders only (403

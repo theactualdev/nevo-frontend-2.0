@@ -73,17 +73,29 @@ export function PauseBars({ className }: { className?: string }) {
  */
 export type PauseWayBack = { href: string } | { onBack: () => void };
 
-/**
- * The doors' quiet line, as "Not you? Go back" draws it. 28d's "Someone else
- * using this device?" takes it too, so the two account screens' one way out
- * looks the same.
- */
 /** One of the frame's two bars, at its three sizes. */
 const PAUSE_BAR =
   "block h-[54px] w-[15px] rounded-full bg-nevo-navy sm:h-[66px] sm:w-[18px] lg:h-[70px] lg:w-[19px]";
 
+/**
+ * The account screens' one way out, as both frames draw it since 13 Oct: an
+ * underlined line in the darker violet, regular weight, no fill. 28d's
+ * "Someone else using this device?" takes it too, so the two look the same.
+ * It was the doors' 46px navy line with a hover fill.
+ *
+ * 44px TO TAP, THE DRAWING UNCHANGED: the frames draw a line of text about
+ * 20px tall, so it carries an invisible 44px-tall hit area centred on it, and
+ * keeps the frames' own margin above it. The size and the margin are each
+ * frame's, and the two frames differ, so each screen adds its own.
+ */
 export const WAY_BACK =
-  "mt-9 inline-flex h-[46px] cursor-pointer items-center rounded-[10px] px-[18px] text-base font-medium text-nevo-navy transition-[background] hover:bg-nevo-navy/8 sm:mt-10";
+  "relative cursor-pointer text-nevo-violet-text underline underline-offset-[3px] after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']";
+
+/** `Account On Pause`: 15px, 24px down on a phone; 16px, 26 down from a tablet. */
+const PAUSE_WAY_BACK = cn(
+  WAY_BACK,
+  "mt-6 text-[15px] sm:mt-[26px] sm:text-base",
+);
 
 export function AccountOnPauseView({
   className,
@@ -123,11 +135,15 @@ export function AccountOnPauseView({
 
       {back &&
         ("href" in back ? (
-          <a href={back.href} className={WAY_BACK}>
+          <a href={back.href} className={PAUSE_WAY_BACK}>
             Back to sign in
           </a>
         ) : (
-          <button type="button" onClick={back.onBack} className={WAY_BACK}>
+          <button
+            type="button"
+            onClick={back.onBack}
+            className={PAUSE_WAY_BACK}
+          >
             Back to sign in
           </button>
         ))}

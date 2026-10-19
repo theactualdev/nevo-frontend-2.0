@@ -909,10 +909,13 @@ const piecesRinged = (
   );
 };
 
-/** The drawing of a named token: the ring, the weight, the result's box. */
+/**
+ * The drawing of a named token: the ring (the solver frame's `eqTokenStyle`,
+ * 3px out), the weight, the result's box.
+ */
 const tokenClass = (ring: boolean, bold: boolean, box: boolean) =>
   cn(
-    ring && "rounded-md outline-2 outline-offset-4 outline-nevo-violet",
+    ring && "rounded-md outline-2 outline-offset-3 outline-nevo-violet",
     bold && "font-bold",
     box &&
       "inline-block rounded-[10px] border-2 border-dashed border-nevo-navy/40 px-2",
@@ -925,8 +928,14 @@ const tokenClass = (ring: boolean, bold: boolean, box: boolean) =>
  * frame's dashed box around the "?" still to find. The text is unchanged,
  * but for its minus signs: see `minusSigns`.
  *
+ * THE ANSWER, ONCE ACCEPTED, IS SET AT 700 (D204: "700 weight covers ... the
+ * calculation answer"). Which token is the answer is the payload's to say: a
+ * `result` an accepted step named (B127), and nothing this screen picks out.
+ *
  * The flat string of a lesson stored before equation tokens: its words are
- * matched only there (see `keysOf`).
+ * matched only there (see `keysOf`). So `fullEquation` on a lesson with ids,
+ * a flat string carrying none, has no token a result can name, and its
+ * answer keeps the line's weight.
  */
 function Notation({ line, emphasis }: { line: string; emphasis: Emphasis }) {
   return (
@@ -935,7 +944,8 @@ function Notation({ line, emphasis }: { line: string; emphasis: Emphasis }) {
         // Named by the token as written; only its drawing changes.
         const keys = keysOf(emphasis, [], [token]);
         const ring = names(emphasis.ring, keys);
-        const bold = names(emphasis.navy, keys);
+        const bold =
+          names(emphasis.navy, keys) || names(emphasis.revealed, keys);
         const box = names(emphasis.result, keys);
         const shown = minusSigns(token);
         // A token nothing names stays plain text.
@@ -958,6 +968,7 @@ function Notation({ line, emphasis }: { line: string; emphasis: Emphasis }) {
  * the payload hides until acceptance is the frame's dashed box with its "?",
  * the place the answer goes - and so is any token a later step's `result`
  * still holds back. Its text is not on the page until the step is accepted.
+ * Then, named by an accepted step's `result`, it is the answer, at 700.
  */
 function TokenNotation({
   tokens,
@@ -973,9 +984,11 @@ function TokenNotation({
       {tokens.map((t, i) => {
         const keys = [t.id];
         const ring = names(emphasis.ring, keys);
-        const bold = names(emphasis.navy, keys);
         const held =
           (!accepted && t.hidden) || names(emphasis.withheld, keys);
+        const bold =
+          names(emphasis.navy, keys) ||
+          (!held && names(emphasis.revealed, keys));
         const box = held || names(emphasis.result, keys);
         return (
           <span key={i}>
@@ -1303,16 +1316,16 @@ function ScaffoldCard({
         {scaffold.kind === "number_line" && (
           <NumberLine
             parts={scaffold.parts}
-            points={scaffold.points.filter(shown)}
+            points={scaffold.points}
+            shown={shown}
+            partLabels={scaffold.partLabels}
             // A part's label a `result` still holds back is not drawn (B127).
-            partLabels={scaffold.partLabels.map((label, at) =>
+            heldPart={(at) =>
               names(
                 emphasis.withheld,
                 partKeys(emphasis, scaffold.partLabels, scaffold.partLabelIds, at),
               )
-                ? ""
-                : label,
-            )}
+            }
             emphasis={emphasis}
             reading={reading}
           />
@@ -1390,8 +1403,13 @@ function fillOf(kind: CellScaffold["kind"], mark: number, several: boolean) {
  * 17b's fraction bars and D149's array, from the payload's `rows`, `parts`,
  * marks and labels (see `scaffoldFor`). What the asked step names changes in
  * place: a ring in violet, a bar's cells to navy, and a result - kept back
- * until it is accepted - that fills in navy, a bar to itself below a rule.
- * Nothing turns navy because the solve finished.
+ * until it is accepted - that arrives as a bar to itself below a rule, its
+ * label in navy. Nothing turns navy because the solve finished.
+ *
+ * A RESULT ARRIVES IN SOFT VIOLET, NOT NAVY (D164: "the moment the child is
+ * right the bars return to Soft Violet"; the solver frame's `mkBar` draws
+ * its result row unemphasised). It stayed navy for good once accepted, which
+ * held the step's emphasis after the step was over.
  *
  * A label sits where its mark is: at the start of a bar that is its mark's
  * own (17b), under its cells where one bar carries several marks, and a
@@ -1425,8 +1443,11 @@ function CellRows({
       ? `repeat(${parts}, minmax(0, 1fr))`
       : `repeat(${parts}, minmax(0, 40px))`,
   };
-  /** D149: 5px between a bar's cells, 10 between squares, 8 between dots. */
-  const gap = bar ? "gap-[5px]" : dots ? "justify-center gap-2" : "justify-center gap-2.5";
+  /**
+   * 6px between a bar's cells (the solver frame, 13 Oct; D167), 10 between
+   * squares and 8 between dots (D149).
+   */
+  const gap = bar ? "gap-1.5" : dots ? "justify-center gap-2" : "justify-center gap-2.5";
   const labelClass = (strong: boolean) =>
     cn(
       "text-sm transition-colors sm:text-[15px]",
@@ -1501,9 +1522,7 @@ function CellRows({
                 const navy =
                   bar &&
                   filled &&
-                  (names(emphasis.navy, keys) ||
-                    names(emphasis.revealed, keys) ||
-                    names(emphasis.navy, part(col)));
+                  (names(emphasis.navy, keys) || names(emphasis.navy, part(col)));
                 const fill =
                   mark == null
                     ? ""
@@ -1731,21 +1750,40 @@ function PlaceValue({
 const along = (position: number, parts: number) =>
   `${parts > 1 ? (position / (parts - 1)) * 100 : 0}%`;
 
-/** D149's track and ticks, a tick at each of the line's `parts` positions. */
-function LineTrack({ parts }: { parts: number }) {
+/** A tick on a line: its position, and whether it is the lighter violet. */
+interface Tick {
+  at: number;
+  light: boolean;
+}
+
+/**
+ * D149's track, with a tick only where the data puts a mark or a label -
+ * D159: "labels belong to marks, only where there are marks - not one per
+ * tick". A tick stood at every one of the line's positions before, as the
+ * sheet drew it until 13 Oct.
+ *
+ * Each is 3 by 20 and they alternate soft violet and light violet, as
+ * several marks on one bar do (D160). The light one is the sheet's own
+ * `#c7c9e5`, solid: the bar's violet/55 would let the track show through
+ * where the tick crosses it.
+ */
+function LineTrack({ parts, ticks = [] }: { parts: number; ticks?: Tick[] }) {
   return (
     <>
       <div
         aria-hidden
         className="absolute inset-x-0 top-[30px] h-1 rounded-full bg-nevo-near-black/20"
       />
-      {Array.from({ length: parts }).map((_, tick) => (
+      {ticks.map(({ at, light }, i) => (
         <span
-          key={tick}
+          key={i}
           aria-hidden
-          data-tick
-          className="absolute top-[22px] h-5 w-0.5 -translate-x-1/2 rounded-full bg-nevo-near-black/30"
-          style={{ left: along(tick, parts) }}
+          data-tick={light ? "light" : "violet"}
+          className={cn(
+            "absolute top-[22px] h-5 w-[3px] -translate-x-1/2 rounded-full",
+            light ? "bg-[#c7c9e5]" : "bg-nevo-violet",
+          )}
+          style={{ left: along(at, parts) }}
         />
       ))}
     </>
@@ -1756,7 +1794,7 @@ function LineTrack({ parts }: { parts: number }) {
 const BEAD =
   "absolute top-[18px] size-[30px] -translate-x-1/2 rounded-full bg-nevo-navy shadow-[0_3px_8px_rgba(0,0,0,0.2)] transition-[left] duration-200";
 
-/** A label under a position, in D149's line-label type. */
+/** A label 6px under its tick, in D149's mark-label type. */
 function LineLabel({
   at,
   parts,
@@ -1771,7 +1809,7 @@ function LineLabel({
   return (
     <span
       className={cn(
-        "absolute top-[46px] -translate-x-1/2 text-xs whitespace-nowrap text-nevo-near-black/55",
+        "absolute top-12 -translate-x-1/2 text-xs whitespace-nowrap text-nevo-near-black/60",
         reading && [READING_BODY, READING_INK],
       )}
       style={{ left: along(at, parts) }}
@@ -1782,53 +1820,68 @@ function LineLabel({
 }
 
 /**
- * D149's number line: a track with a tick at each of its `parts` positions -
- * "cells or positions in one row" - and a navy marker at each mark's
- * position, its label beneath it. With no marks, a part's label sits under
- * its position, as D149 numbers 0, 5 and 10; a blank one leaves its tick
- * unnumbered. No other number is drawn: on a line of quarters the obvious
- * ones would be wrong.
+ * D149's number line: a track of `parts` positions - "cells or positions in
+ * one row" - with a tick and a navy marker at each mark's position, its
+ * label beneath it. With no marks, a part's label sits under a tick at its
+ * position, as D149 numbers 0, 5 and 10; a part with no label has no tick.
+ * No other number is drawn: on a line of quarters the obvious ones would be
+ * wrong.
+ *
+ * The ticks alternate in the payload's order, counted over all it sent, so a
+ * result shown on acceptance does not recolour the ticks after it. One still
+ * held back (B127) has no tick at all: on a line, where it sits is the answer.
  */
 function NumberLine({
   parts,
   points,
+  shown,
   partLabels,
+  heldPart,
   emphasis,
   reading,
 }: {
   parts: number;
   points: ScaffoldQuantity[];
+  shown: (q: ScaffoldQuantity) => boolean;
   partLabels: string[];
+  heldPart: (at: number) => boolean;
   emphasis: Emphasis;
   reading: boolean;
 }) {
+  const marks = points.flatMap((p, mark) => (shown(p) ? [{ p, mark }] : []));
+  const labelled = partLabels
+    .flatMap((label, at) => (label ? [{ label, at }] : []))
+    .map((part, nth) => ({ ...part, nth }))
+    .filter(({ at }) => !heldPart(at));
+  const ticks: Tick[] = [
+    ...marks.map(({ p, mark }) => ({ at: p.count, light: mark % 2 === 1 })),
+    ...labelled.map(({ at, nth }) => ({ at, light: nth % 2 === 1 })),
+  ];
   return (
     <div className="mx-[15px] mb-3">
       <div className="relative h-16">
-        <LineTrack parts={parts} />
-        {points.map((p, i) => (
+        <LineTrack parts={parts} ticks={ticks} />
+        {marks.map(({ p, mark }) => (
           <span
-            key={i}
+            key={mark}
             aria-hidden
             data-bead
             className={cn(BEAD, names(emphasis.ring, markKeys(emphasis, p)) && RING)}
             style={{ left: along(p.count, parts) }}
           />
         ))}
-        {points.map((p, i) =>
+        {marks.map(({ p, mark }) =>
           p.label ? (
-            <LineLabel key={i} at={p.count} parts={parts} reading={reading}>
+            <LineLabel key={mark} at={p.count} parts={parts} reading={reading}>
               {p.label}
             </LineLabel>
           ) : null,
         )}
-        {partLabels.map((label, at) =>
-          label ? (
-            <LineLabel key={at} at={at} parts={parts} reading={reading}>
-              {label}
-            </LineLabel>
-          ) : null,
-        )}
+        {labelled.map(({ label, at }) => (
+          <LineLabel key={at} at={at} parts={parts} reading={reading}>
+            {label}
+          </LineLabel>
+        ))}
       </div>
     </div>
   );
@@ -1975,29 +2028,70 @@ function TapToAdd({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** D149's tray piece, at its own size, in a 44px target. */
+/**
+ * D149's tray piece, at its own size, in a 44px target - and its caption 5px
+ * under it, where the payload names its column (D149's `trayTileCap`).
+ *
+ * THE CAPTION IS THE PAYLOAD'S LABEL, AS GIVEN, OR NOTHING. D149 captions
+ * "Hundred", "Ten" and "One"; those are this screen's words for a payload
+ * that names its columns "Hundreds", "Tens" and "Ones", or names none, and
+ * for a lesson on tenths they would be wrong. The caption sits inside the
+ * button, so the target only grows, and the button's name already says it.
+ *
+ * Without `onPlace` it is the place a full column's piece leaves: the same
+ * box, drawn invisible, so the pieces beside it do not move.
+ */
 function TrayPiece({
   shape,
   label,
+  caption,
+  reading = false,
   onPlace,
 }: {
   shape: string;
   label: string;
-  onPlace: () => void;
+  caption?: string;
+  reading?: boolean;
+  onPlace?: () => void;
 }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onPlace}
-      className="flex size-11 cursor-pointer items-center justify-center"
-    >
+  const box =
+    "flex min-h-11 min-w-11 shrink-0 flex-col items-center justify-center gap-[5px]";
+  const inside = (
+    <>
       <span
         className={cn(
           "box-border border-2 border-nevo-violet bg-nevo-violet/18 shadow-elevation-1",
           shape,
         )}
       />
+      {caption && (
+        <span
+          data-tray-caption
+          className={cn(
+            "text-[10px] font-medium text-nevo-near-black/60",
+            reading && [READING_BODY, READING_INK],
+          )}
+        >
+          {caption}
+        </span>
+      )}
+    </>
+  );
+  if (!onPlace) {
+    return (
+      <span aria-hidden data-tray-place className={cn(box, "invisible")}>
+        {inside}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onPlace}
+      className={cn(box, "cursor-pointer")}
+    >
+      {inside}
     </button>
   );
 }
@@ -2108,7 +2202,8 @@ const COUNTER =
  * scaffold's mark for it, filled as the child taps that column's piece - a
  * flat, a rod or a unit. A column's piece goes from the tray once it is full,
  * and the build is done when every column is: nothing counts them together.
- * Each tray piece is named by its column's label where the payload gives one.
+ * Each tray piece is named and captioned by its column's label where the
+ * payload gives one, and by nothing where it does not (see `TrayPiece`).
  */
 function PlaceValueBuild({
   columns,
@@ -2158,27 +2253,20 @@ function PlaceValueBuild({
       */}
       {needed.some(isOpen) && (
         <TapToAdd>
-          {needed.map((i) =>
-            isOpen(i) ? (
-              <TrayPiece
-                key={i}
-                shape={PIECES[i].tile}
-                label={
-                  columns[i].label
-                    ? `Tap to add, ${columns[i].label}`
-                    : "Tap to add"
-                }
-                onPlace={() => onPlace(i)}
-              />
-            ) : (
-              <span
-                key={i}
-                aria-hidden
-                data-tray-place
-                className="size-11 shrink-0"
-              />
-            ),
-          )}
+          {needed.map((i) => (
+            <TrayPiece
+              key={i}
+              shape={PIECES[i].tile}
+              label={
+                columns[i].label
+                  ? `Tap to add, ${columns[i].label}`
+                  : "Tap to add"
+              }
+              caption={columns[i].label}
+              reading={reading}
+              onPlace={isOpen(i) ? () => onPlace(i) : undefined}
+            />
+          ))}
         </TapToAdd>
       )}
     </>
@@ -2191,6 +2279,10 @@ function PlaceValueBuild({
  * (B111) - its first position on a lesson that names none - and moves one
  * position a tap, until the stored count of hops is made. A position the
  * asked step names is ringed.
+ *
+ * NO TICKS: a tick goes only where the data puts a mark or a label (D159),
+ * and the build carries neither - its pieces' labels name them for a
+ * highlight and are never drawn.
  */
 function LineBuild({
   parts,

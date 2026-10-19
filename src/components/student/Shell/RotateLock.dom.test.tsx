@@ -153,6 +153,16 @@ describe("RotateLock", () => {
  * the screen and both buttons sat below the fold.
  */
 describe("a tablet that does not turn", () => {
+  /** The frame's two steps: say the device does not turn, then keep going. */
+  function takeTheWayThrough() {
+    act(() =>
+      screen
+        .getByRole("button", { name: /my device doesn.t turn/i })
+        .click(),
+    );
+    act(() => screen.getByRole("button", { name: "Keep going" }).click());
+  }
+
   it("offers a way through, and the app is live again once taken", async () => {
     render(<Lesson />);
     turn("sideways");
@@ -160,25 +170,56 @@ describe("a tablet that does not turn", () => {
     // Held, as before.
     expect(app()?.hasAttribute("inert")).toBe(true);
 
-    const through = screen.getByRole("button", {
-      name: /my device doesn.t turn/i,
-    });
-    act(() => through.click());
+    takeTheWayThrough();
 
     // The prompt is gone and the lesson is usable, still sideways.
     expect(screen.queryByRole("button", { name: /my device doesn.t turn/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
     expect(app()?.hasAttribute("inert")).toBe(false);
     expect(screen.getByRole("button", { name: "Next" })).toBeInTheDocument();
   });
 
-  it("does not ask again on the next lesson", () => {
+  it("answers first, and lets the child through only on Keep going", () => {
+    /*
+     * Nevo Rotate Prompt, 13 Oct: "My device doesn't turn" shows "That's all
+     * right. You can keep going just as you are." and a "Keep going" button,
+     * and Keep going is what dismisses. One tap used to let the child straight
+     * through.
+     */
     render(<Lesson />);
     turn("sideways");
+
     act(() =>
       screen
         .getByRole("button", { name: /my device doesn.t turn/i })
         .click(),
     );
+
+    // Still held: nothing has been decided for the child yet.
+    expect(app()?.hasAttribute("inert")).toBe(true);
+    const prompt = screen.getByRole("status");
+    expect(prompt).toHaveTextContent(
+      "That's all right. You can keep going just as you are.",
+    );
+    // The link has given way to the answer, as the frame draws it.
+    expect(
+      within(prompt).queryByRole("button", { name: /my device doesn.t turn/i }),
+    ).toBeNull();
+    // The pressed link is gone, so focus goes to the way on rather than the
+    // body - a keyboard or switch child is not left nowhere.
+    const keepGoing = within(prompt).getByRole("button", { name: "Keep going" });
+    expect(document.activeElement).toBe(keepGoing);
+
+    act(() => keepGoing.click());
+
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(app()?.hasAttribute("inert")).toBe(false);
+  });
+
+  it("does not ask again on the next lesson", () => {
+    render(<Lesson />);
+    turn("sideways");
+    takeTheWayThrough();
 
     // A fresh mount, the same device, still sideways. Asking again is the same
     // wall arriving more often, and the child has already answered.
@@ -284,17 +325,28 @@ describe("the prompt's words", () => {
     expect(
       within(prompt).getByRole("heading", { name: "Turn your device upright" }),
     ).toBeInTheDocument();
+    // Nevo Rotate Prompt, 13 Oct: "Rotate and we'll", no longer "Rotate your
+    // device and we'll".
     expect(prompt).toHaveTextContent(
-      "Nevo is designed to stand tall. Rotate your device and we'll pick up right where you were.",
+      "Nevo is designed to stand tall. Rotate and we'll pick up right where you were.",
     );
     expect(
       within(prompt).getByRole("button", { name: "My device doesn't turn" }),
     ).toBeInTheDocument();
 
     // The labels a screen reader speaks, as well as the words on screen.
-    const labels = [...prompt.querySelectorAll("[aria-label]")]
-      .map((el) => el.getAttribute("aria-label"))
-      .join(" ");
-    expect(`${prompt.textContent} ${labels}`).not.toMatch(/tablet/i);
+    const spoken = () =>
+      `${prompt.textContent} ${[...prompt.querySelectorAll("[aria-label]")]
+        .map((el) => el.getAttribute("aria-label"))
+        .join(" ")}`;
+    expect(spoken()).not.toMatch(/tablet/i);
+
+    // And the second step's.
+    act(() =>
+      within(prompt)
+        .getByRole("button", { name: "My device doesn't turn" })
+        .click(),
+    );
+    expect(spoken()).not.toMatch(/tablet/i);
   });
 });

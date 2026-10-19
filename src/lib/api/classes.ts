@@ -140,6 +140,15 @@ export interface ClassStudent {
   pinCleared?: boolean;
   pinClearedAt?: string | null;
   /**
+   * An "Ask an admin" request about this child that no administrator has read
+   * or archived yet (B-3, Teslim 14 Oct), and when the earliest of them was
+   * sent. Server-held, so the row's "Request sent" survives a reload. It
+   * clears when every administrator notification is read or archived, which
+   * is not the same as the matter being settled.
+   */
+  adminSupportRequestOpen?: boolean;
+  adminSupportRequestedAt?: string | null;
+  /**
    * DROPPED ON THE FLOOR UNTIL 10 SEP.
    *
    * `ClassStudentResponse.consent` is REQUIRED in the contract - the same

@@ -113,7 +113,7 @@ export function PlanOptions({
               {!isCurrent ? (
                 <div className="mt-auto pt-4">
                   <p className="m-0 text-[13px] leading-[1.5] text-nevo-near-black/58">
-                    Switching is arranged with your relationship manager.
+                    Switching is arranged with our billing team.
                   </p>
                   {asked === "sent" ? (
                     <p
@@ -123,7 +123,7 @@ export function PlanOptions({
                       <span className="flex size-[20px] flex-none items-center justify-center rounded-full bg-nevo-navy text-nevo-cream">
                         <CheckIcon size={11} />
                       </span>
-                      Asked. Your relationship manager will be in touch.
+                      Asked. Our billing team will be in touch.
                     </p>
                   ) : (
                     <>

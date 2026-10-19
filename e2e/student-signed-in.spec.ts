@@ -141,7 +141,7 @@ const STUDENT_ADMISSION = process.env.E2E_STUDENT_ADMISSION;
 /** Who clears the probe's PIN, when set. See "Who clears it" above. */
 const TEACHER_EMAIL = process.env.E2E_TEACHER_EMAIL;
 const TEACHER_PASSWORD = process.env.E2E_TEACHER_PASSWORD;
-const API = process.env.E2E_API_BASE ?? "https://nevo-backend-2-0-kn3d.onrender.com";
+const API = process.env.E2E_API_BASE ?? "https://api.nevolearning.com";
 
 /** Mirrors `lib/auth/session.ts`. Changing either without the other breaks this. */
 const SESSION_KEY = "nevo.auth.session";
@@ -916,12 +916,17 @@ test.describe("a signed-in student", () => {
     /*
      * THE ONE FIXED WAIT IN THIS FILE, and it guards two absences that no
      * element can announce. The engine's answer has just arrived; what the
-     * page does with it comes a moment later. When the engine names no task
-     * the screen does not change at all - the nothing-state was already up -
-     * so there is nothing to wait FOR, only things that must not happen: a
-     * task the engine never named appearing in its place (the weekday
-     * rotation used to fill exactly this gap, and submit it), and a write.
+     * page does with it comes a moment later. The wait itself has its own
+     * screen now (D169, "Getting your warm-up ready"), so the page is gated
+     * on that leaving; but when the engine names no task, what replaces it is
+     * the nothing-state, and the things that must not happen after that have
+     * nothing to wait FOR: a task the engine never named appearing in its
+     * place (the weekday rotation used to fill exactly this gap, and submit
+     * it), and a write.
      */
+    await expect(page.getByText("Getting your warm-up ready")).toHaveCount(0, {
+      timeout: LIVE_MS,
+    });
     await page.waitForTimeout(1_000);
 
     // The header belongs to a run (12, D126): it heads a task, and the done

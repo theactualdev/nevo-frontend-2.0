@@ -181,7 +181,7 @@ describe("a deactivated child", () => {
     expect(screen.queryByRole("button", { name: "Clear PIN" })).not.toBeInTheDocument();
   });
 
-  it("offers to ask an admin, and the dialog asks nothing it cannot send", () => {
+  it("offers to ask an admin, with C05's optional note", () => {
     deactivated();
     render(<LiveClassDetail klass={klass} />);
     openAsk();
@@ -190,8 +190,68 @@ describe("a deactivated child", () => {
     expect(dialog).toHaveTextContent(
       "We’ll let your school admin know you’re asking about this account. They’ll follow up with you.",
     );
-    // The frame's note field has nowhere to go: the endpoint takes no body.
-    expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
+    const box = within(dialog).getByRole("textbox", { name: "Add a note (optional)" });
+    expect(box).toHaveAttribute("placeholder", "Anything that would help the admin");
+    expect(box).toHaveAttribute("maxlength", "2000");
+  });
+
+  // B-2 (Teslim, 14 Oct): the note goes in the administrators' notification.
+  it("sends the note with the request, trimmed", async () => {
+    deactivated();
+    requestAdminSupport.mockResolvedValue({ studentId: "s-1", status: "notified", notifiedAdminCount: 1 });
+    render(<LiveClassDetail klass={klass} />);
+    openAsk();
+    fireEvent.change(screen.getByRole("textbox", { name: "Add a note (optional)" }), {
+      target: { value: "  Her mum called the school on Monday.  " },
+    });
+    await send();
+
+    expect(requestAdminSupport).toHaveBeenCalledWith("s-1", "Her mum called the school on Monday.");
+  });
+
+  it("says the note was not added when an earlier request still stands", async () => {
+    deactivated();
+    requestAdminSupport.mockResolvedValue({ studentId: "s-1", status: "already_notified", notifiedAdminCount: 0 });
+    render(<LiveClassDetail klass={klass} />);
+    openAsk();
+    fireEvent.change(screen.getByRole("textbox", { name: "Add a note (optional)" }), {
+      target: { value: "Anything" },
+    });
+    await send();
+
+    expect(show).toHaveBeenCalledWith({
+      kind: "confirm",
+      message: "Your admin was already asked about this account, so your note wasn’t added.",
+    });
+  });
+
+  // B-3 (Teslim, 14 Oct): the roster says a request is open, so it survives a reload.
+  it("shows an open request from the roster read, dated, with no way to ask twice", () => {
+    roster(
+      row({
+        status: "deactivated",
+        adminSupportRequestOpen: true,
+        adminSupportRequestedAt: "2026-09-12T10:00:00Z",
+      }),
+    );
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByText("Request sent").parentElement!.textContent).toMatch(/12 Sep/);
+    expect(screen.queryByRole("button", { name: /^Ask an admin/ })).not.toBeInTheDocument();
+  });
+
+  it("dates nothing the roster did not date", () => {
+    roster(row({ status: "deactivated", adminSupportRequestOpen: true, adminSupportRequestedAt: null }));
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByText("Request sent").parentElement!.textContent).not.toMatch(/·/);
+  });
+
+  it("offers to ask again once every admin has read or archived the last request", () => {
+    roster(row({ status: "deactivated", adminSupportRequestOpen: false, adminSupportRequestedAt: null }));
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByRole("button", { name: /^Ask an admin/ })).toBeInTheDocument();
   });
 
   it("sends the request, says the admin was told, and marks the row", async () => {

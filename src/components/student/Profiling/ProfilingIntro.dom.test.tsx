@@ -78,11 +78,17 @@ describe("the intro's words (D13, 1 Oct)", () => {
     render(<ProfilingIntro mode="intro" onContinue={() => {}} />);
 
     expect(document.body.textContent).not.toMatch(/test|score|ability/i);
+  });
+
+  it("is the frame's one sentence, with no line about activities (13 Oct)", () => {
+    // The 13 Oct frame deletes "You'll do four quick activities." whole; the
+    // build had kept it less its number.
+    render(<ProfilingIntro mode="intro" onContinue={() => {}} />);
+
     expect(
-      screen.getByText(
-        "You'll do quick activities. This just helps Nevo work better for you.",
-      ),
+      screen.getByText("This just helps Nevo work better for you."),
     ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/activities/i);
   });
 
   it("states no number of activities (design, 9 Oct)", () => {

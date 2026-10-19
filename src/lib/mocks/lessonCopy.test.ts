@@ -30,3 +30,28 @@ describe("the walkthrough's quick checks", () => {
     }
   });
 });
+
+/**
+ * NOTHING SENDS A PICTURE'S OR A RECORDING'S INTRO LINE, NOR THE "TAKES IN /
+ * GIVES OUT" CARD (D187, 13 Oct): "remove them from the frame now (the front
+ * end invents nothing)". A signed-in child never sees them, so the
+ * walkthrough a visitor reads does not either.
+ */
+describe("the walkthrough's pictures and recordings", () => {
+  const segments = [PHOTOSYNTHESIS, ADDING_FRACTIONS].flatMap((lesson) =>
+    lesson.segments.map((s) => [`${lesson.id}/${s.id}`, s] as const),
+  );
+
+  it("has pictures and recordings to look at", () => {
+    expect(segments.filter(([, s]) => s.visual).length).toBeGreaterThanOrEqual(2);
+    expect(segments.filter(([, s]) => s.audio).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("carry no intro line and no in-and-out card", () => {
+    for (const [where, s] of segments) {
+      expect(s.visual?.intro, where).toBeUndefined();
+      expect(s.visual?.diagram, where).toBeUndefined();
+      expect(s.audio?.intro, where).toBeUndefined();
+    }
+  });
+});

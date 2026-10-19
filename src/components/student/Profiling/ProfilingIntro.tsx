@@ -108,11 +108,10 @@ export function ProfilingIntro({
             : // The frame's line less "No tests, no scores.": words the
               // architecture keeps from a child, and design ruled the line
               // reworded on 1 Oct (D13) without giving words. Removed, not
-              // replaced. AND LESS ITS NUMBER (design, 9 Oct): "The intro
-              // drops the number entirely ... nothing states a quantity the
-              // backend did not give it." The frame still says "four"; only
-              // the number is gone.
-              "You'll do quick activities. This just helps Nevo work better for you."}
+              // replaced. The 13 Oct frame deletes "You'll do four quick
+              // activities." whole, where 9 Oct had dropped only its number
+              // ("nothing states a quantity the backend did not give it").
+              "This just helps Nevo work better for you."}
         </p>
         <button
           type="button"

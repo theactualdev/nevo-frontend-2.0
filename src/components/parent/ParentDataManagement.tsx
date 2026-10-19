@@ -84,6 +84,26 @@ const SECTIONS: { heading: string; body: (child: string) => string }[] = [
 ];
 
 /**
+ * What the page says about a child and their school. A tokenised link's
+ * invitation is one; a signed-in parent's reads make another (`ParentMyData`,
+ * 14 Oct), so the page's words are one set, held exactly as counsel last
+ * worded them.
+ */
+export type DataSubject = Pick<
+  ParentInvitation,
+  "studentFirstName" | "schoolName" | "schoolPhone" | "schoolEmail" | "status" | "decidedAt"
+> & {
+  /** Named only on a tokenised link, which can be forwarded. */
+  parentName?: string | null;
+};
+
+/** Exercise one right; the page says what came back. */
+export type ExerciseRight = (
+  right: ParentRightType,
+  reason?: string,
+) => Promise<{ requestId: string; reasonRecorded: boolean }>;
+
+/**
  * The invitation arrives as a PROP, read once by `ParentPortal`. This screen
  * used to fetch it itself, which was right when it was the only parent screen
  * and wrong as soon as D01b joined it: two components reading the same record
@@ -93,9 +113,13 @@ const SECTIONS: { heading: string; body: (child: string) => string }[] = [
 export function ParentDataManagement({
   token,
   invitation,
+  act,
 }: {
-  token: string;
-  invitation: ParentInvitation;
+  /** The tokenised link's, when the page was opened from one. */
+  token?: string;
+  invitation: DataSubject;
+  /** A signed-in parent's own routes; without it, the link's. */
+  act?: ExerciseRight;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -107,7 +131,9 @@ export function ParentDataManagement({
     const withReason = right === "object" ? reason : undefined;
     setPhase("sending");
     try {
-      const res = await parentApi.exerciseRight(token, right, withReason);
+      const res = act
+        ? await act(right, withReason)
+        : await parentApi.exerciseRight(token ?? "", right, withReason);
       setOutcome({
         right,
         requestId: res.requestId,
@@ -116,7 +142,8 @@ export function ParentDataManagement({
       });
       setPhase("done");
     } catch (e) {
-      setPhase(e instanceof ApiError && e.status === 404 ? "gone" : "failed");
+      // "This link is no longer active" is about a link; signed in, there is none.
+      setPhase(!act && e instanceof ApiError && e.status === 404 ? "gone" : "failed");
     }
   }
 
@@ -443,7 +470,7 @@ function withdrawalSentence(decidedAt: string | null): string {
     : "You withdrew consent, so they can no longer access Nevo.";
 }
 
-function schoolPhrase(inv: ParentInvitation | null): string {
+function schoolPhrase(inv: DataSubject | null): string {
   return inv?.schoolName ?? "your child’s school";
 }
 
@@ -455,7 +482,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Footer({ school }: { school: ParentInvitation | null }) {
+function Footer({ school }: { school: DataSubject | null }) {
   // The school's own contact details are shown ONLY when they exist. They come
   // from the billing contact and are null for most schools, and a "call your
   // school" line with nothing after it is worse than not offering the route.

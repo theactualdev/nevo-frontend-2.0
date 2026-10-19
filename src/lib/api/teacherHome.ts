@@ -16,10 +16,22 @@ export interface ClassPulseRow {
   classId: string;
   className: string;
   studentCount: number;
-  /** 0-1, or null where there is not enough yet to say. */
+  /**
+   * The engine's numbers. Never read: the console prints the labels below,
+   * and turning these into words would be a cutoff of ours (Lydia, 13 Oct).
+   */
   engagement: number | null;
   comprehension: number | null;
   focus: number | null;
+  /**
+   * The engine's own word for each, with backend owning the boundaries (B-6,
+   * Teslim 14 Oct). One of "Steady", "Mixed", "May benefit from support" or
+   * "Still gathering a picture". Optional here only so an older deploy that
+   * does not send them draws nothing rather than crashing.
+   */
+  engagementLabel?: string | null;
+  comprehensionLabel?: string | null;
+  focusLabel?: string | null;
 }
 
 export interface ActivityRow {

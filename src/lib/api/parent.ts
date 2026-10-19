@@ -163,6 +163,32 @@ export interface ParentCodeSent {
   expiresAt: string;
 }
 
+/** One consent a signed-in parent holds for one child (`ConsentHeld`). */
+export interface ConsentHeld {
+  consentType: ConsentType;
+  status: ConsentStatus;
+  decidedAt: string | null;
+  /** Whether withdrawing this one suspends the child's account. */
+  stopsAccess: boolean;
+}
+
+/** `GET /api/v1/parents/me/consents`: what a signed-in parent agreed to, per child. */
+export interface ChildConsents {
+  studentId: string;
+  studentFirstName: string | null;
+  consents: ConsentHeld[];
+}
+
+/** What a signed-in parent's right came back as (`RightOutcome`). */
+export interface RightOutcome {
+  requestId: string;
+  requestType: ParentRightType;
+  studentId: string;
+  effect: string;
+  withdrawnTypes?: ConsentType[];
+  recordedAt: string;
+}
+
 /** One child a signed-in parent is linked to. */
 export interface ParentChild {
   studentId: string;
@@ -186,6 +212,12 @@ export interface ProgressWindow {
   endsOn: string;
   state: ProgressWindowState;
   inProgress: boolean;
+  /**
+   * `since_setup` when the school never set its term dates (14 Oct): the
+   * figures then cover everything since the school set up Nevo, not a week.
+   * Absent on an older answer, which was always a week.
+   */
+  kind?: "week" | "since_setup";
 }
 
 /**
@@ -202,8 +234,12 @@ export interface SubjectProgress {
   masteredThisWindow: string[];
   /** Typed because it is sent; D02 draws no line for it yet. */
   stillWorkingOn: string[];
-  /** Typed because it is sent; not rendered - see `portalWeek.ts`. */
+  /** Mastered before this window: the "up from 4 last week". */
   masteredBeforeWindow: number;
+  /** Every topic mastered so far, the server's own total (14 Oct). */
+  masteredSoFar?: number;
+  /** When this child last had a lesson in this subject; null if never (14 Oct). */
+  lastLessonAt?: string | null;
 }
 
 /** D02's portal home for one child (`GET .../subject-progress`). */
@@ -328,6 +364,15 @@ export const parentApi = {
 
   /** The signed-in parent's own children. 403 for any non-parent role. */
   myChildren: () => api.get<ParentChild[]>("/api/v1/parents/me/children"),
+
+  /** D01c for a signed-in parent (L6, 14 Oct): the same three rights, per child. */
+  myConsents: () => api.get<ChildConsents[]>("/api/v1/parents/me/consents"),
+  myWithdraw: (studentId: string, reason?: string) =>
+    api.post<RightOutcome>("/api/v1/parents/me/consents/withdraw", reason ? { studentId, reason } : { studentId }),
+  myObjection: (studentId: string, reason?: string) =>
+    api.post<RightOutcome>("/api/v1/parents/me/objections", reason ? { studentId, reason } : { studentId }),
+  myDataRequest: (studentId: string) =>
+    api.post<RightOutcome>("/api/v1/parents/me/data-requests", { studentId }),
 
   /**
    * D02's portal home: this week, by subject, for one child.

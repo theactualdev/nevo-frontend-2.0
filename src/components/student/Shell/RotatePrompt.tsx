@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
 /**
  * Rotate Prompt (`Nevo Rotate Prompt` frame) - the portrait-lock overlay (v1).
  * Flow reference 30: "Portrait only (v1) - calm rotate prompt if held landscape."
@@ -22,6 +26,24 @@ export function RotatePrompt({
    */
   onContinue?: () => void;
 }) {
+  /**
+   * The frame's two steps (13 Oct): "My device doesn't turn" answers first,
+   * "That's all right. You can keep going just as you are.", and "Keep going"
+   * is what lets the child through. One tap no longer dismisses the prompt.
+   */
+  const [stuck, setStuck] = useState(false);
+  const keepGoing = useRef<HTMLButtonElement>(null);
+
+  /*
+   * The link a keyboard or switch child just pressed is gone, replaced by the
+   * line and the button. Focus follows to "Keep going" rather than falling to
+   * the body - and focusing it scrolls it into view on a landscape phone short
+   * enough to put it below the fold.
+   */
+  useEffect(() => {
+    if (stuck) keepGoing.current?.focus();
+  }, [stuck]);
+
   return (
     <div
       ref={ref}
@@ -82,8 +104,8 @@ export function RotatePrompt({
         Turn your device upright
       </h2>
       <p className="mt-3 max-w-[280px] text-[15px] leading-[1.55] text-nevo-near-black/66 md:max-w-[360px] md:text-[17px]">
-        Nevo is designed to stand tall. Rotate your device and we&apos;ll pick
-        up right where you were.
+        Nevo is designed to stand tall. Rotate and we&apos;ll pick up right
+        where you were.
       </p>
       {/*
         THE WAY THROUGH. A tablet on a wheelchair tray, a stand, or one with
@@ -96,16 +118,35 @@ export function RotatePrompt({
         option it is. It is a button and not a link because nothing navigates.
         Quiet is not faint, though: it is the only way through for a mounted
         tablet, and `nevo-violet` text read at 2.34:1, so it is the violet
-        made for text.
+        made for text (the frame's #5b5e8f).
+
+        The frame's 14px link, 24 or 28 under the line, inside a 44px hit
+        area: the margin is the frame's less the 12px the taller box puts
+        above the text, so the words sit where the frame draws them.
       */}
-      {onContinue && (
+      {onContinue && !stuck && (
         <button
           type="button"
-          onClick={onContinue}
-          className="mt-7 shrink-0 cursor-pointer rounded-[10px] px-4 py-2.5 text-[15px] font-medium text-nevo-violet-text underline decoration-nevo-violet-text/40 underline-offset-4 transition hover:decoration-nevo-violet-text md:text-base [@media(max-height:460px)]:mt-4"
+          onClick={() => setStuck(true)}
+          className="mt-3 inline-flex min-h-11 shrink-0 cursor-pointer items-center rounded-[10px] px-3 text-[14px] leading-5 text-nevo-violet-text underline underline-offset-[3px] md:mt-4 [@media(max-height:460px)]:mt-1"
         >
           My device doesn&apos;t turn
         </button>
+      )}
+      {onContinue && stuck && (
+        <>
+          <p className="mt-6 max-w-[280px] text-[15px] leading-[1.55] text-nevo-near-black/66 md:mt-7 md:max-w-[360px] md:text-[17px] [@media(max-height:460px)]:mt-4">
+            That&apos;s all right. You can keep going just as you are.
+          </p>
+          <button
+            ref={keepGoing}
+            type="button"
+            onClick={onContinue}
+            className="mt-4 h-12 shrink-0 cursor-pointer rounded-[10px] bg-nevo-navy px-7 text-[15px] font-medium text-nevo-cream transition-transform active:scale-[0.98]"
+          >
+            Keep going
+          </button>
+        </>
       )}
     </div>
   );

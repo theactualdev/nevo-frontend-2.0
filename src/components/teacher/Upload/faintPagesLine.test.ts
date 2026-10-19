@@ -31,6 +31,21 @@ describe("the faint-pages line", () => {
     expect(faintPagesLine([12, 4])).toContain("Pages 12 and 4 ");
   });
 
+  it("says a run of three or more as a range, not every number", () => {
+    // Upload test, 15 Oct: twenty-seven numbers in one sentence.
+    const all = Array.from({ length: 27 }, (_, i) => i + 1);
+    expect(faintPagesLine(all)).toContain("Pages 1 to 27 ");
+    expect(faintPagesLine(all)).toContain("nothing from them");
+  });
+
+  it("mixes ranges and single pages, keeping two in a row as two", () => {
+    expect(faintPagesLine([3, 4, 5, 9, 11, 12])).toContain("Pages 3 to 5, 9, 11 and 12 ");
+  });
+
+  it("joins only runs the server sent in order", () => {
+    expect(faintPagesLine([5, 4, 3])).toContain("Pages 5, 4 and 3 ");
+  });
+
   it("says what it means for the unit, not just which pages", () => {
     // A teacher who reads only the first half must still learn that the tree
     // below is incomplete.

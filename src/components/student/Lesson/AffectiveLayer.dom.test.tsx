@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { SocraticPanel, type PanelPrompt } from "./AffectiveLayer";
+import { HintOverlay, SocraticPanel, type PanelPrompt } from "./AffectiveLayer";
 
 /**
  * SCRUM-241: THE PANEL'S TWO ENDINGS, and it is told which (frame 38 §4, 38a).
@@ -169,5 +169,19 @@ describe("the pill's focus ring", () => {
     expect(drawn).not.toBe(hit);
     expect(drawn.className).toMatch(/rounded-\[20px\]/);
     expect(drawn.className).toMatch(/group-focus-visible:outline-2/);
+  });
+});
+
+describe("the offered hint's panel (Lesson Player frame, 13 Oct)", () => {
+  it("is the frame's soft violet panel with no accent bar, and keeps its labelled Close", () => {
+    render(<HintOverlay hint="Start with the leaf." onClose={() => {}} />);
+
+    const panel = screen.getByText("Start with the leaf.").parentElement;
+    const c = panel?.className ?? "";
+    expect(c).toMatch(/(^|\s)bg-nevo-violet\/14(\s|$)/);
+    expect(c).toMatch(/(^|\s)rounded-\[10px\](\s|$)/);
+    expect(c).not.toMatch(/border-l|bg-\[#e5dfd3\]/);
+    // D29: a labelled control, not the frame's nothing or a faint X.
+    expect(screen.getByRole("button", { name: "Close hint" }).textContent).toBe("Close");
   });
 });

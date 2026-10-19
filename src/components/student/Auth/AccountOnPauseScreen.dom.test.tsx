@@ -48,6 +48,33 @@ describe("AccountOnPauseScreen", () => {
     expect(document.body.textContent?.toLowerCase()).not.toContain("try again");
   });
 
+  it("draws the way back as the frame's underlined violet line, 44px to tap", () => {
+    // `Account On Pause`, 13 Oct: `color:#5b5e8f; text-decoration:underline;
+    // text-underline-offset:3px`, no fill, 15px 24px down on a phone, 16px
+    // 26px down from a tablet. It was a 46px navy line with a hover fill.
+    render(<AccountOnPauseScreen back={{ href: "/auth/login" }} />);
+    const classes = screen
+      .getByRole("link", { name: "Back to sign in" })
+      .className.split(/\s+/);
+
+    for (const drawn of [
+      "text-nevo-violet-text",
+      "underline",
+      "underline-offset-[3px]",
+      "mt-6",
+      "text-[15px]",
+      "sm:mt-[26px]",
+      "sm:text-base",
+    ]) {
+      expect(classes).toContain(drawn);
+    }
+    expect(classes.join(" ")).not.toMatch(/(^|\s)(hover:)?bg-|font-medium/);
+    // The line is drawn about 20px tall: an invisible 44px area to tap.
+    for (const hit of ["relative", "after:absolute", "after:h-11"]) {
+      expect(classes).toContain(hit);
+    }
+  });
+
   it("names no reason", () => {
     // Backend deliberately sends no cause and we would not want one. A parent
     // withdrawing consent, a safeguarding hold and an unpaid invoice are not

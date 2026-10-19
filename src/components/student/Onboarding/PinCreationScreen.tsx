@@ -81,11 +81,13 @@ export function pinReducer(state: PinState, action: PinAction): PinState {
  * draws its own steps around the same reducer and rows, and a second copy of
  * these is how the two would drift.
  *
- * `PIN_NOT_SAVED_COPY` is Change PIN's line, and only its: design's 13 Oct
+ * `PIN_NOT_SAVED_COPY` is the failed save's line on both: design's 13 Oct
  * note, "Change PIN's failed save now reads 'That's on us, not you. Try
- * again.' and the false claim that the PIN was kept is gone." It said "Your
- * teacher can help", which no teacher can for a write that failed on our side.
- * PIN Creation has frame 15's own state (D61) - see `PIN_SAVE_FAILED_COPY`.
+ * again.' and the false claim that the PIN was kept is gone." Change PIN said
+ * "Your teacher can help", which no teacher can for a write that failed on
+ * our side. PIN Creation said "Your PIN is kept. That's on us - try again.",
+ * until the PIN frame's `saveFailed` took the same words (13 Oct). It still
+ * draws them in its own state (D61), under "That didn't save".
  */
 export const PIN_MISMATCH_COPY = "Those didn't match - let's try once more";
 export const PIN_NOT_SAVED_COPY = "That's on us, not you. Try again.";
@@ -93,8 +95,6 @@ export const PIN_NOT_SAVED_COPY = "That's on us, not you. Try again.";
 /** Frame 15's saving and didn't-save states (D61), verbatim. */
 export const PIN_SAVING_COPY = "Saving your PIN…";
 export const PIN_SAVE_FAILED_HEADING = "That didn't save";
-export const PIN_SAVE_FAILED_COPY =
-  "Your PIN is kept. That's on us - try again.";
 
 /**
  * PIN Creation (UI/UX spec) — the last onboarding step before "You're In".
@@ -129,8 +129,9 @@ export const PIN_SAVE_FAILED_COPY =
  *
  * A RATE LIMIT IS D154's PAUSE, not "That didn't save" (9 Oct: it "holds
  * everywhere a child enters a PIN"). It was the not-saved state with D68's
- * wait line under it. Now: "Let's take a moment", the rows HELD - dimmed,
- * empty, inert - and the note under them; no refresh mark, no failure. The
+ * wait line under it. Now: "Let's take a moment", ONE row HELD - dimmed,
+ * empty, inert, as the PIN frame's `throttled` draws it since 13 Oct; it
+ * was both - and the note under it; no refresh mark, no failure. The
  * frame raises "Forgot PIN?" as its way out, which means nothing to a child
  * choosing one, so this keeps frame 15's "Try again", which sends the kept
  * PIN once more: with no timer to end the pause, it is the only way on.
@@ -408,7 +409,7 @@ export function PinCreationScreen({
                 : saving
                   ? PIN_SAVING_COPY
                   : failed
-                    ? PIN_SAVE_FAILED_COPY
+                    ? PIN_NOT_SAVED_COPY
                     : "You'll use this to log in next time"}
             </p>
           )}
@@ -416,9 +417,8 @@ export function PinCreationScreen({
 
         {throttled && (
           <>
-            {/* Both rows, as this screen draws them, held. */}
+            {/* One row, held: the PIN frame's `throttled` draws one. */}
             <HeldPinBoxes boxClassName="size-12" className="mt-10 gap-3" />
-            <HeldPinBoxes boxClassName="size-12" className="mt-[60px] gap-3" />
             <ThrottleNote />
           </>
         )}

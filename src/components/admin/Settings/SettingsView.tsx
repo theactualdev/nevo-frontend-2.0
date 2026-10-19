@@ -79,7 +79,7 @@ function SuperHeading({ id, children }: { id: string; children: string }) {
 }
 
 export function SettingsView() {
-  const { hasScope, resolved, status, refresh } = usePermissions();
+  const { hasScope, resolved, status, refresh, adminAccessLevel } = usePermissions();
   /*
    * Three states, not two - the lesson from the in-flight sweep. `false` is
    * also what `hasScope` says before the read has answered, so gating on it
@@ -134,7 +134,7 @@ export function SettingsView() {
         {showSchool ? (
           <>
             <SuperHeading id="settings-school">Your school</SuperHeading>
-            <SchoolSettings />
+            <SchoolSettings accessLevel={adminAccessLevel} />
           </>
         ) : null}
 

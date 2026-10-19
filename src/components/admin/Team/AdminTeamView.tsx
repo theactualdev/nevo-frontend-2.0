@@ -21,6 +21,7 @@ import { schoolApi } from "@/lib/api/school";
 import { NoAccess, failureKind } from "../NoAccess";
 import { getSession } from "@/lib/auth/session";
 import { EditAccessPanel, ScopeChecklist } from "./EditAccess";
+import { AdminLevelLine } from "./AdminLevelLine";
 import { useSupportEmail } from "../SupportEmail";
 import type { LearningSupportHolders } from "@/lib/api/learningSupport";
 import { useLearningSupport } from "../LearningSupport/useLearningSupport";
@@ -130,6 +131,7 @@ export function AdminTeamView() {
   const [school, setSchool] = useState<string | null>(null);
   /** Who holds Learning Support; null asserts nothing about anyone. */
   const { holders: ls, setHolders: setLs } = useLearningSupport();
+  const [me] = useState(() => getSession()?.userId ?? null);
 
   useEffect(() => {
     schoolApi
@@ -238,6 +240,14 @@ export function AdminTeamView() {
           member={editing}
           name={displayName(editing)}
           ls={ls}
+          // The viewer's own level, from the same team read - the server's
+          // word, and the server refuses anyone else (403) regardless.
+          viewerSenior={team.some((m) => m.userId === me && m.accessLevel === "senior")}
+          onLevel={(next) => {
+            // Only the level: the sheet's ticked areas stay as the admin left them.
+            setEditing((was) => (was ? { ...was, accessLevel: next.accessLevel ?? was.accessLevel } : was));
+            fetchTeam();
+          }}
           onLs={(next) => {
             setLs(next);
             // The senco scope moved with the role: the row's pills re-read.
@@ -417,6 +427,17 @@ function MemberRow({
             me={me}
             canGive={false}
             canRemove={false}
+            onChange={() => {}}
+          />
+        ) : null}
+        {/* D03b: your own level is status only too - nobody promotes themselves. */}
+        {you && m.accessLevel ? (
+          <AdminLevelLine
+            className="mt-1.5 max-w-[460px] rounded-[10px] bg-nevo-cream px-[15px] py-[11px]"
+            person={{ userId: m.userId, name }}
+            level={m.accessLevel}
+            you
+            canChange={false}
             onChange={() => {}}
           />
         ) : null}

@@ -302,14 +302,30 @@ describe("WarmUpRun — the dot task has no fixed answer", () => {
 });
 
 describe("WarmUpRun — the done state claims no save", () => {
-  it("says nothing about saving while the write is still in flight", async () => {
+  it("says it is saving while the write is in flight, and claims no save (13 Oct)", async () => {
     submit.mockReturnValue(new Promise(() => {}));
     await sitTheTileTask();
     await settle();
 
     expect(screen.getByText("That's it for today")).toBeTruthy();
+    // The frame's `saving` line: the write is going, not gone.
+    const line = screen.getByText("Saving your warm-up…");
+    expect(line.className).toContain("mt-2");
+    expect(line.className).toContain("text-[14.5px]");
+    expect(line.className).toContain("sm:text-[15.5px]");
+    expect(line.className).toContain("leading-[1.5]");
+    expect(line.className).toContain("text-nevo-near-black/60");
     expect(document.body.textContent).not.toMatch(/saved|didn't save|couldn't save/i);
     expect(screen.queryByTestId("warmup-save-failed-mark")).toBeNull();
+  });
+
+  it("keeps Go on while it saves (Q12 holds the frame's hiding of it)", async () => {
+    submit.mockReturnValue(new Promise(() => {}));
+    await sitTheTileTask();
+    await settle();
+
+    expect(screen.getByText("Saving your warm-up…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go on" })).toBeInTheDocument();
   });
 
   it("holds the working spinner in the badge spot while the write is in flight, never the check", async () => {
@@ -323,14 +339,16 @@ describe("WarmUpRun — the done state claims no save", () => {
     const spot = title.parentElement!.previousElementSibling!;
     expect(spot).toBe(screen.getByTestId("warmup-saving-mark"));
     expect(spot.querySelector("svg")).toBeNull();
-    // The badge's own size, so nothing moves when the badge replaces it.
+    // The frame's `spinBadge` is the badge's own size, so nothing moves when
+    // the badge replaces it, with a 4px ring. It was 44px with a 3px ring.
     expect(spot.className).toMatch(/(^| )size-16( |$)/);
     expect(spot.className).toContain("sm:size-20");
+    expect(spot.className).toMatch(/(^| )border-4( |$)/);
+    expect(spot.className).not.toContain("size-11");
     // The house spinner: a navy ring on a faint navy track.
-    const ring = spot.firstElementChild!;
-    expect(ring.className).toContain("border-nevo-navy/18");
-    expect(ring.className).toContain("border-t-nevo-navy");
-    expect(ring.className).toContain("motion-safe:animate-spin");
+    expect(spot.className).toContain("border-nevo-navy/18");
+    expect(spot.className).toContain("border-t-nevo-navy");
+    expect(spot.className).toContain("motion-safe:animate-spin");
   });
 
   it("swaps the spinner for the check once the write lands", async () => {
@@ -343,6 +361,7 @@ describe("WarmUpRun — the done state claims no save", () => {
     await act(async () => land(true));
 
     expect(screen.queryByTestId("warmup-saving-mark")).toBeNull();
+    expect(screen.queryByText("Saving your warm-up…")).toBeNull();
     const badge = screen.getByText("That's it for today").parentElement!
       .previousElementSibling!;
     expect(badge.className).toContain("bg-nevo-navy");
@@ -359,6 +378,7 @@ describe("WarmUpRun — the done state claims no save", () => {
     await act(async () => land(false));
 
     expect(screen.queryByTestId("warmup-saving-mark")).toBeNull();
+    expect(screen.queryByText("Saving your warm-up…")).toBeNull();
     expect(screen.getByTestId("warmup-save-failed-mark")).toBeInTheDocument();
     expect(document.querySelector("svg.lucide-check")).toBeNull();
   });
@@ -429,11 +449,11 @@ describe("WarmUpRun — the header is the running state's", () => {
     expect(screen.queryByTestId("warmup-ring")).toBeNull();
   });
 
-  it("is not over the nothing-state either", () => {
-    // No task pinned, and the engine's prompt is still on its way.
+  it("is not over the loading state either", () => {
+    // No task pinned, and the engine's prompt is still on its way (D169).
     render(<WarmUpRun />);
 
-    expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
+    expect(screen.getByText("Getting your warm-up ready")).toBeInTheDocument();
     expect(header()).toBeNull();
     expect(screen.queryByTestId("warmup-ring")).toBeNull();
   });

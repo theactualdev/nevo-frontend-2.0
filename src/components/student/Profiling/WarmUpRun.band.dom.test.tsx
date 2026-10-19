@@ -269,7 +269,8 @@ describe("the tile task, by band", () => {
     render(<WarmUpRun dimension="wmc" />);
     await wait(6000);
 
-    // Only the nothing-state's way Home.
+    // The loading state (D169), and only its way Home.
+    expect(screen.getByText("Getting your warm-up ready")).toBeInTheDocument();
     expect(screen.getAllByRole("button")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
     expect(screen.queryByText("Watch the tiles")).toBeNull();
@@ -398,6 +399,8 @@ describe("the reading task for Primary 1-3 is heard (D81)", () => {
     expect(screen.getAllByRole("button")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Garri|True or false/);
+    // Nothing to give is not still asking.
+    expect(screen.queryByText("Getting your warm-up ready")).toBeNull();
   });
 
   /*

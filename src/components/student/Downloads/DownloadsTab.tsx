@@ -105,10 +105,12 @@ export function DownloadsTab() {
       <div className="max-w-[640px]">
       <h1 className={TAB_TITLE}>Downloads</h1>
 
-      {/* Finished, not blocked, so never grey (D211): see `BulkSaveButton`. */}
+      {/* Finished, not blocked, so never grey (D211): see `BulkSaveButton`.
+          The frame's label, the same as the signed-in shelf's (Nevo Downloads
+          Frame, 13 Oct). */}
       <BulkSaveButton
         finished={allDone}
-        label="Download today's lessons"
+        label="Save all my lessons"
         onSave={downloadAll}
       />
 

@@ -161,6 +161,9 @@ export interface LessonClass {
 export type SegmentReviewReason =
   | "deterministic_parse_used"
   | "fewer_than_two_modalities"
+  // Teslim, 14 Oct: a section that should carry an activity and came back
+  // without a complete one. Its interactive version is dropped.
+  | "interactive_activity_missing"
   | "audio_generation_failed"
   | "calculation_audio_generation_failed"
   | "visual_generation_failed"

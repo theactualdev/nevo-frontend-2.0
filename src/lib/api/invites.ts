@@ -2,16 +2,17 @@ import { api } from "./client";
 import type { ConsentStatus } from "./consents";
 
 /**
- * School invitations (D19 · SCRUM-79) - the single home for inviting teachers
- * and students. D6 Teachers and D7 Students both defer here rather than
- * carrying their own invite forms.
+ * School invitations (D19 · SCRUM-79) - the single home for inviting
+ * teachers. D6 Teachers defers here rather than carrying its own invite form.
+ * Children are not invited at all: they are added on Students and sign in
+ * with the school code and their Student ID.
  *
  * The join half of this module is PUBLIC: `lookupJoin` and `acceptJoin` are
- * what the invite link lands on, with no session at all. They are the only
- * calls in the admin surface a parent or child will ever make.
+ * what the invite link lands on, with no session at all.
  */
 
-export type InviteRole = "teacher" | "student";
+/** Teachers only: children get no invitations (Lydia's L2, 14 Oct; SCRUM-215). */
+export type InviteRole = "teacher";
 
 /**
  * Whether the invitation email actually went out - the spec's own words:
@@ -51,6 +52,11 @@ export interface Invitation {
    * withdrawn`, nullable, and the null case is a real one: it means the
    * invitation has no consent record at all, which is NOT the same as
    * `not_sent`. Both fall back to a no-claim sentence for that reason.
+   *
+   * Still declared because it is still on the wire, but no invitation screen
+   * reads it now: only a student invite carried a parent, and the Invitations
+   * screen no longer lists those (L2, 14 Oct). A child's consent is shown on
+   * Students.
    */
   consentStatus: ConsentStatus | null;
 }
@@ -58,19 +64,14 @@ export interface Invitation {
 /**
  * One row of an invite request.
  *
- * `parentContact` is a SINGLE string, which is why D19's separate
- * "Parent / guardian name" and "Parent / guardian email" fields collapse into
- * one on the way out - see `NewInviteModal`.
- *
- * There is no date-of-birth field anywhere on this body, so D19's student DOB
- * input and its under-18 check have nowhere to go.
+ * The body also takes a `parentContact`, which only a student invite ever
+ * filled. Students are not invited (L2, 14 Oct), so it is not sent.
  */
 export interface InviteDraft {
   role: InviteRole;
   firstName?: string | null;
   lastName?: string | null;
   email?: string | null;
-  parentContact?: string | null;
   classId?: string | null;
 }
 

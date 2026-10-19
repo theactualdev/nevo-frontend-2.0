@@ -24,6 +24,13 @@ export interface SchoolSubject {
   removable?: boolean | null;
 }
 
+/** One of Nevo's own subjects (`GET /api/v1/subjects/canonical`). The same in every school. */
+export interface CanonicalSubject {
+  id: string;
+  slug: string;
+  displayName: string;
+}
+
 /**
  * "Maths and Mathematics, same subject or different?" - one pair of spellings
  * the school's files used, still waiting on an answer. Until it is answered
@@ -39,6 +46,13 @@ export interface SpellingQuestion {
 export const subjectsApi = {
   /** GET /api/v1/subjects - what this school can put on a class or a teacher. */
   list: () => api.get<SchoolSubject[]>("/api/v1/subjects"),
+
+  /**
+   * GET /api/v1/subjects/canonical - Nevo's list, for the picker. A school
+   * puts one on a class or a teacher by name; the server makes it the
+   * school's on Save.
+   */
+  canonical: () => api.get<CanonicalSubject[]>("/api/v1/subjects/canonical"),
 
   /** GET /api/v1/subjects/spelling-questions - every pair still open. */
   spellingQuestions: () =>

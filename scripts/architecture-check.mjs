@@ -224,7 +224,7 @@ function sufficiencyVerdict(node, src) {
   // A row count, or a bare numeric comparison, inside the verdict.
   return /\.length\s*(===|!==|==|!=|>=|<=|>|<)\s*\d/.test(text) ||
     /\d\s*(===|!==|==|!=|>=|<=|>|<)\s*\w+\.length/.test(text) ||
-    /\w+\s*(>=|<=|>|<)\s*\d/.test(text);
+    /\b\w+\s*(>=|<=|>|<)\s*\d/.test(text);
 }
 
 /**
@@ -445,6 +445,10 @@ const CLASSIFIER_ALLOWED = new Map([
   [
     "src/components/teacher/Upload/BulkIngestion.tsx:resultsLine",
     "`reading > 0`, `refused > 0` and `look === 0` ask whether any of a teacher's UPLOADED FILES is still being read, was refused, or stopped - the server's own statuses counted, nothing measured about anyone - and `n === 1` is \"file\"/\"files\" grammar. About a batch of documents, not a child. Permanent: there is no cutoff to own.",
+  ],
+  [
+    "src/components/teacher/Upload/UploadWizard.tsx:faintPagesLine",
+    "`j - i >= 2` decides whether page numbers the SERVER sent, in a row, are written as a range (\"Pages 1 to 27\") or listed one by one - typesetting a document's page numbers, and `pages.length > 1` is \"Page\"/\"Pages\" grammar. About an uploaded file, not a child. Permanent: there is no cutoff to own.",
   ],
 ]);
 const allowlistHits = new Set();

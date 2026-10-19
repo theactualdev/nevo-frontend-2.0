@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { AccountClosedScreen } from "./AccountClosedScreen";
-import { AccountOnPauseScreen } from "./AccountOnPauseScreen";
+import { WAY_BACK } from "./AccountOnPauseScreen";
 
 /**
  * 28d Account Closed (D116). Round 5 drew the closed state as the pause screen
@@ -58,17 +58,17 @@ describe("AccountClosedScreen", () => {
     expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 
-  it("draws the line as the doors' quiet one, under the body", () => {
-    const { unmount } = render(
-      <AccountOnPauseScreen back={{ href: "/auth/login" }} />,
-    );
-    const doorLine = screen.getByRole("link").className;
-    unmount();
-
+  it("draws the line as the pause screen's underlined violet one, at 28d's sizes, under the body", () => {
     render(<AccountClosedScreen toPicker={TO_PICKER} />);
     const line = screen.getByRole("link");
+    const classes = line.className.split(/\s+/);
 
-    expect(line.className).toBe(doorLine);
+    // The one way-out style both account screens share (13 Oct).
+    for (const shared of WAY_BACK.split(/\s+/)) expect(classes).toContain(shared);
+    // 28d's `ctaStyle`: 24px down, a pixel under the body, 15 then 17.
+    for (const own of ["mt-6", "text-[15px]", "sm:text-[17px]"]) {
+      expect(classes).toContain(own);
+    }
     // After the body, in the same column, not above it or in a corner.
     const ask = screen.getByText(/If you're not sure why/);
     expect(ask.parentElement).toBe(line.parentElement);

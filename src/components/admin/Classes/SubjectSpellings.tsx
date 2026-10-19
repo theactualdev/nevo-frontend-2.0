@@ -17,9 +17,10 @@ import { CARD } from "../Roster/primitives";
  * One card, every open pair on it, Same or Different on each. An answered pair
  * stays on the card saying what it settled.
  *
- * D05 says the kept spelling is "the spelling most of your file uses". The
- * server keeps the FULLER spelling ("the fuller spelling surviving") and says
- * nothing about frequency, so that reason is left off.
+ * The outcome names the mechanism the server really uses: it keeps the FULLER
+ * spelling ("the fuller spelling surviving"). D05 once said "the spelling most
+ * of your file uses"; design and Lydia corrected it on 14 Oct to "We kept the
+ * fuller spelling."
  *
  * Absent when nothing is waiting, and when the read fails: the card is a
  * question, not a status, and the subjects are safely one until it's asked.
@@ -142,6 +143,7 @@ function Settled({ same, q }: { same: boolean; q: SpellingQuestion }) {
         {same ? (
           <>
             One subject: <strong className="font-semibold text-nevo-near-black">{q.keptName}</strong>.
+            {" "}We kept the fuller spelling.
           </>
         ) : (
           <>

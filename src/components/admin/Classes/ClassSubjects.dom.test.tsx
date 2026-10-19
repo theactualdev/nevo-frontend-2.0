@@ -55,6 +55,11 @@ const KLASS: AdminClass = {
   archivedAt: null,
 };
 
+const pick = async (name: string) => {
+  fireEvent.focus(await screen.findByRole("combobox", { name: "Add a subject" }));
+  fireEvent.click(await screen.findByRole("checkbox", { name }));
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   listSubjects.mockResolvedValue(SUBJECTS);
@@ -70,9 +75,7 @@ describe("Subjects this class takes", () => {
     expect(await screen.findByRole("button", { name: "Remove English Language" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save subjects" })).toBeNull();
 
-    fireEvent.change(await screen.findByRole("combobox", { name: "Add a subject" }), {
-      target: { value: "s-bio" },
-    });
+    await pick("Biology");
     fireEvent.click(screen.getByRole("button", { name: "Remove Mathematics" }));
     fireEvent.click(screen.getByRole("button", { name: "Save subjects" }));
 
@@ -87,14 +90,12 @@ describe("Subjects this class takes", () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
   });
 
-  it("only offers subjects the class doesn't already take", async () => {
+  it("ticks the subjects the class already takes", async () => {
     render(<ClassSubjects klass={KLASS} editable onSaved={vi.fn()} />);
-    const add = await screen.findByRole("combobox", { name: "Add a subject" });
-    await waitFor(() => expect(add.querySelectorAll("option").length).toBe(2));
-    expect(Array.from(add.querySelectorAll("option")).map((o) => o.textContent)).toEqual([
-      "Add a subject",
-      "Biology",
-    ]);
+    fireEvent.focus(await screen.findByRole("combobox", { name: "Add a subject" }));
+    expect(await screen.findByRole("checkbox", { name: "Biology" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Mathematics" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "English Language" })).toBeChecked();
   });
 
   it("says a refused save in the server's words, and keeps the draft", async () => {
@@ -102,9 +103,7 @@ describe("Subjects this class takes", () => {
       new ApiError(422, "x", { detail: { code: "bad", message: "A class can take at most 20 subjects." } }),
     );
     const { container } = render(<ClassSubjects klass={KLASS} editable onSaved={vi.fn()} />);
-    fireEvent.change(await screen.findByRole("combobox", { name: "Add a subject" }), {
-      target: { value: "s-bio" },
-    });
+    await pick("Biology");
     fireEvent.click(screen.getByRole("button", { name: "Save subjects" }));
     await waitFor(() => expect(visibleText(container)).toMatch(/A class can take at most 20 subjects\./));
     expect(screen.getByRole("button", { name: "Remove Biology" })).toBeInTheDocument();
@@ -129,9 +128,7 @@ describe("Create a class", () => {
     // A teacher at create could only be refused: a new class takes no subjects.
     expect(visibleText(container)).not.toMatch(/Primary teacher/);
     fireEvent.change(screen.getByLabelText("Class name"), { target: { value: "JSS 3B" } });
-    fireEvent.change(await screen.findByRole("combobox", { name: "Add a subject" }), {
-      target: { value: "s-maths" },
-    });
+    await pick("Mathematics");
     expect(visibleText(container)).toMatch(/1 subject\. You can change these later from the class\./);
     fireEvent.click(screen.getByRole("button", { name: "Create class" }));
     await waitFor(() =>

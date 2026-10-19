@@ -7,7 +7,7 @@ import {
   screen,
 } from "@testing-library/react";
 import { ObservedInteractionSequence } from "./ObservedInteractionSequence";
-import { PIN_SAVE_FAILED_COPY } from "./PinCreationScreen";
+import { PIN_NOT_SAVED_COPY } from "./PinCreationScreen";
 import { ApiError } from "@/lib/api/client";
 import {
   clearEntryHandBack,
@@ -219,7 +219,7 @@ describe("a first PIN the server refuses", () => {
 
     await choosePin();
 
-    expect(alertText()).toContain(PIN_SAVE_FAILED_COPY);
+    expect(alertText()).toContain(PIN_NOT_SAVED_COPY);
     expect(screen.queryByText("You're all set")).toBeNull();
     expect(
       screen.getByRole("button", { name: "Try again" }),
@@ -278,7 +278,7 @@ describe("a first PIN the server refuses, and says why (B68)", () => {
     expect(
       screen.getByText("Let's wait a little before trying again."),
     ).toBeInTheDocument();
-    expect(document.body.textContent).not.toContain(PIN_SAVE_FAILED_COPY);
+    expect(document.body.textContent).not.toContain(PIN_NOT_SAVED_COPY);
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
   });
@@ -330,7 +330,7 @@ describe("a first PIN the server refuses, and says why (B68)", () => {
         .getByRole("heading", { name: heading })
         .closest("[data-nevo-letterbox-frame]"),
     ).not.toBeNull();
-    expect(alertText()).not.toContain(PIN_SAVE_FAILED_COPY);
+    expect(alertText()).not.toContain(PIN_NOT_SAVED_COPY);
     expect(push).not.toHaveBeenCalled();
     expect(getSession()).toBeNull();
     expect(getRememberedProfile()).toBeNull();
@@ -357,7 +357,7 @@ describe("a run that did not start on 05", () => {
     await choosePin();
 
     expect(entrySetPin).not.toHaveBeenCalled();
-    expect(alertText()).toContain(PIN_SAVE_FAILED_COPY);
+    expect(alertText()).toContain(PIN_NOT_SAVED_COPY);
     expect(getSession()).toBeNull();
   });
 });

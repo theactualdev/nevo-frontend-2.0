@@ -4,6 +4,7 @@ import {
   cardCopy,
   childWords,
   dayLabel,
+  footLine,
   weekCopy,
   weekKind,
   whenLabel,
@@ -164,5 +165,80 @@ describe("cardCopy", () => {
     expect(cardCopy(subject(), "quiet", amara).note).toBe("No lessons this week so far");
     expect(cardCopy(subject(), "break", amara).note).toBe("School on break");
     expect(cardCopy(subject(), "monday", amara).note).toBe("No lessons yet this week");
+  });
+});
+
+/**
+ * 14 Oct: the server sends `masteredSoFar` (its own total), `lastLessonAt` and
+ * `window.kind`, so D02a's foot and B4's "Since setup" are drawn.
+ */
+describe("the foot line", () => {
+  it("B1: the server's total, and no comparison with last week (Lydia, L5)", () => {
+    // "The comparison is not sent. Do not compute it on the device."
+    const s = subject({ covered: ["x"], masteredThisWindow: ["Equivalent fractions"], masteredBeforeWindow: 4, masteredSoFar: 5 });
+    expect(footLine(s, "week")).toBe("5 topics mastered so far");
+    expect(footLine(subject({ covered: ["x"], masteredBeforeWindow: 3, masteredSoFar: 3 }), "week")).toBe(
+      "3 topics mastered so far",
+    );
+  });
+
+  it("reads naturally at one, and says none yet at zero", () => {
+    expect(footLine(subject({ covered: ["x"], masteredSoFar: 1, masteredBeforeWindow: 1 }), "week")).toBe(
+      "1 topic mastered so far",
+    );
+    expect(footLine(subject({ covered: ["x"], masteredSoFar: 0, masteredBeforeWindow: 0 }), "week")).toBe(
+      "No topics mastered yet",
+    );
+  });
+
+  it("B2: a subject with nothing this week says when its last lesson was", () => {
+    const s = subject({ masteredSoFar: 3, lastLessonAt: "2027-01-14T10:00:00Z" });
+    expect(footLine(s, "quiet")).toBe("Last lesson Thu 14 Jan");
+    expect(footLine(s, "week")).toBe("Last lesson Thu 14 Jan");
+    // Never had one: no line, rather than a guess.
+    expect(footLine(subject({ masteredSoFar: 0, lastLessonAt: null }), "quiet")).toBeNull();
+  });
+
+  it("B3 and B7: a break or a Monday shows the total alone", () => {
+    const s = subject({ masteredSoFar: 3, masteredBeforeWindow: 3 });
+    expect(footLine(s, "break")).toBe("3 topics mastered so far");
+    expect(footLine(s, "monday")).toBe("3 topics mastered so far");
+  });
+
+  it("B4, B5 and B6 have no foot", () => {
+    const s = subject({ covered: ["x"], masteredSoFar: 5 });
+    expect(footLine(s, "since_setup")).toBeNull();
+    expect(footLine(subject({ state: "not_started", masteredSoFar: 0 }), "week")).toBeNull();
+    expect(footLine(s, "first")).toBeNull();
+  });
+
+  it("draws no total the server did not send", () => {
+    expect(footLine(subject({ covered: ["x"], masteredThisWindow: ["x"] }), "week")).toBeNull();
+  });
+});
+
+describe("B4: since setup", () => {
+  const sinceSetup = week([subject({ covered: ["Number bases"] }), subject({ subjectName: "Civic Education" })], {
+    state: "terms_not_set",
+    kind: "since_setup",
+  });
+
+  it("is its own state, never a week, a quiet week or a break", () => {
+    expect(weekKind(sinceSetup, "2027-01-20")).toBe("since_setup");
+  });
+
+  it("labels each card Since setup, with no dates", () => {
+    expect(whenLabel(sinceSetup, "2027-01-20")).toBe("Since setup");
+  });
+
+  it("calls the page the child's subjects, since the school set up Nevo", () => {
+    const copy = weekCopy("since_setup", amara, 2, "Corona Secondary School");
+    expect(copy.heading).toBe("Amara’s subjects");
+    expect(copy.sub).toBe("What Amara has covered and mastered since Corona Secondary School set up Nevo.");
+    expect(copy.panel).toBeNull();
+  });
+
+  it("says a subject has had no lessons since setup", () => {
+    expect(cardCopy(subject(), "since_setup", amara).note).toBe("No lessons in this subject since setup");
   });
 });

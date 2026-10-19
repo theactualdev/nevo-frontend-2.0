@@ -77,6 +77,22 @@ export interface Invoice {
   vatRate?: string | null;
 }
 
+/**
+ * One line of the upcoming charge's recorded breakdown (14 Oct): the
+ * subscription (students × rate) or its VAT. A legacy invoice with no
+ * recorded breakdown has none, rather than an invented split.
+ */
+export interface UpcomingLineItem {
+  description: string;
+  amount: string;
+  currency: string;
+  kind: "subscription" | "vat" | string;
+  quantity?: number | null;
+  unitAmount?: string | null;
+  /** 7.5 means 7.5 percent. */
+  percentageRate?: string | number | null;
+}
+
 export interface UpcomingCharge {
   invoiceId: string | null;
   invoiceNumber: string | null;
@@ -85,6 +101,9 @@ export interface UpcomingCharge {
   status: InvoiceStatus | null;
   renewalBannerVisible: boolean;
   renewalMessage: string | null;
+  /** Days past the due date, as the server counts them. Never counted here. */
+  daysOverdue?: number | null;
+  lineItems?: UpcomingLineItem[];
 }
 
 export interface BillingContact {

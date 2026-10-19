@@ -79,8 +79,9 @@ import {
  * 9d0ff6b). A school's learning support staff are usually teachers, so it is
  * the same permission line as on an administrator's record, under
  * "Permissions". The grant takes a user id, and a teacher's `id` is theirs.
- * D03b also draws "Upload to the shared library" and "Listed in the parent
- * directory" there; nothing stores either yet, so they are with design.
+ * D03b also drew "Upload to the shared library" and "Listed in the parent
+ * directory" there. Lydia dropped both (D1, 14 Oct): nothing stores either,
+ * and "a control that stores nothing is a promise the product does not keep".
  *
  * The Students headcount is summed client-side from each class's
  * `studentCount`, because no teacher-level aggregate exists. (This said
@@ -317,7 +318,9 @@ export function TeacherDetailView({
         <SectionHeading>Classes</SectionHeading>
         {/* SCRUM-40's second door onto D5c. This was a link back to Classes,
             leaving the admin to find the class and start again from there. */}
-        {canAssign ? (
+        {/* Not for an invited teacher: the server assigns only a teacher who
+            has joined, and refused this with "teacher not found". */}
+        {canAssign && !invited ? (
           <button
             type="button"
             onClick={() => setAssigning(true)}
@@ -329,13 +332,14 @@ export function TeacherDetailView({
           </button>
         ) : null}
       </div>
-      {canAssign ? <PausedNote className="mt-2" /> : null}
+      {canAssign && !invited ? <PausedNote className="mt-2" /> : null}
 
       <div className={cn(CARD, "mt-3.5")}>
         {held.length === 0 ? (
           <div className="px-[22px] py-6">
             <p className="m-0 text-sm text-nevo-near-black/62">
               {teacher.name} doesn&rsquo;t hold any classes yet.
+              {invited ? " They can be given classes once they\u2019ve joined." : null}
             </p>
           </div>
         ) : (

@@ -2,11 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { AdminClass } from "@/lib/api/classes";
-import {
-  invitesApi,
-  type BulkInviteResult,
-  type InviteRole,
-} from "@/lib/api/invites";
+import { invitesApi, type BulkInviteResult } from "@/lib/api/invites";
 import { cn } from "@/lib/utils";
 import {
   CheckIcon,
@@ -28,6 +24,11 @@ import { RejectedRows } from "./RejectedRows";
 
 /**
  * D19 bulk import: upload, read, preview, send, confirm.
+ *
+ * TEACHERS ONLY (Lydia's L2, 14 Oct; SCRUM-215 on the backend). A child gets
+ * no invitation, so the student import - its template, its parent contact
+ * column and its consent lines - went with the student invite rather than
+ * staying behind unreachable. A school adds its children on Students.
  *
  * PARTIAL SEND IS CORRECT HERE, and it is worth being explicit because the
  * other spec in this area says the opposite. SCRUM-40 claims CSV import is
@@ -68,13 +69,13 @@ type Phase = "upload" | "reading" | "preview" | "sending" | "done" | "failed";
 
 const CELL = "px-3 py-2.5 text-[13px] text-nevo-near-black/75";
 
+const TITLE = "Import teachers";
+
 export function BulkImportModal({
-  role,
   classes,
   onClose,
   onSent,
 }: {
-  role: InviteRole;
   classes: AdminClass[];
   onClose: () => void;
   onSent: () => void;
@@ -86,10 +87,6 @@ export function BulkImportModal({
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
-  const isStudent = role === "student";
-  const noun = isStudent ? "students" : "teachers";
-  const title = isStudent ? "Import students" : "Import teachers";
-
   const valid = rows.filter((r) => !r.error);
   const broken = rows.filter((r) => r.error);
 
@@ -99,7 +96,7 @@ export function BulkImportModal({
     file
       .text()
       .then((text) => {
-        const outcome = parseInviteCsv(text, role, classes);
+        const outcome = parseInviteCsv(text, classes);
         if (outcome.fatal) {
           setFatal(outcome.fatal);
           setRows([]);
@@ -118,7 +115,7 @@ export function BulkImportModal({
   const send = () => {
     setPhase("sending");
     invitesApi
-      .bulk(valid.map((r) => toDraft(r, role)))
+      .bulk(valid.map((r) => toDraft(r)))
       .then((res) => {
         setResult(res);
         setPhase("done");
@@ -128,11 +125,11 @@ export function BulkImportModal({
   };
 
   const downloadTemplate = () => {
-    const blob = new Blob([TEMPLATE[role]], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob([TEMPLATE], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `nevo-${noun}-template.csv`;
+    a.download = "nevo-teachers-template.csv";
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -140,7 +137,7 @@ export function BulkImportModal({
   // ------------------------------------------------------------ READING ---
   if (phase === "reading") {
     return (
-      <Modal title={title} onClose={onClose} footer={<span />}>
+      <Modal title={TITLE} onClose={onClose} footer={<span />}>
         <div className="flex flex-col items-center gap-3 py-10 text-center">
           <Spinner />
           <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
@@ -202,49 +199,24 @@ export function BulkImportModal({
             <CheckIcon size={22} />
           </span>
         </div>
+        {/*
+          * CL-06. This was ONE SENTENCE - "N rows were skipped due to
+          * errors" - over data that already carried every row number and
+          * every reason. `BulkInvitationResponse.rejected` is
+          * `{row, reason}` with both required, and our own parser produces
+          * `{line, error}`; the screen added the two lengths together and
+          * threw the rest away one step from the render. An admin
+          * importing thirty classes was handed a count and left to find
+          * the four themselves.
+          */}
         {skipped > 0 ? (
-          <>
-            {isStudent && result.created.length > 0 ? (
-              <p className="mt-4 text-center text-[14.5px] leading-[1.6] text-nevo-near-black/72">
-                Each student&rsquo;s parent contact was recorded; your school
-                still needs to record consent for them.
-              </p>
-            ) : null}
-            {/*
-              * CL-06. This was ONE SENTENCE - "N rows were skipped due to
-              * errors" - over data that already carried every row number and
-              * every reason. `BulkInvitationResponse.rejected` is
-              * `{row, reason}` with both required, and our own parser produces
-              * `{line, error}`; the screen added the two lengths together and
-              * threw the rest away one step from the render. An admin
-              * importing thirty classes was handed a count and left to find
-              * the four themselves.
-              */}
-            <RejectedRows
-              broken={broken}
-              rejected={result.rejected}
-              submitted={valid}
-              rowNumberBase={result.rowNumberBase}
-              isStudent={isStudent}
-              filename={`nevo-${noun}-not-imported.csv`}
-            />
-          </>
-        ) : isStudent && result.created.length > 0 ? (
-          /* Was: "Each parent has been sent a consent request." The bulk
-             response is `{created, rejected}` and carries no delivery state at
-             all, so this had even less behind it than the single-invite claim.
-             See `deliveryCopy.ts` - nothing queues a consent request against
-             an invitation. */
-          <p className="mt-4 text-center text-[14.5px] leading-[1.6] text-nevo-near-black/72">
-            {/* The SIBLING of the branch above, and it kept the claim that
-                branch was corrected for. SCRUM-80: an unconfirmed consent is
-                the school's paperwork and the learner proceeds - only a
-                withdrawal stops anything. Fixing one branch and not the one
-                three lines below it is the pattern this console keeps
-                repeating. */}
-            Each student&rsquo;s parent contact was recorded; your school still
-            needs to record consent for them.
-          </p>
+          <RejectedRows
+            broken={broken}
+            rejected={result.rejected}
+            submitted={valid}
+            rowNumberBase={result.rowNumberBase}
+            filename="nevo-teachers-not-imported.csv"
+          />
         ) : null}
 
         {undelivered.length > 0 ? (
@@ -312,7 +284,7 @@ export function BulkImportModal({
     return (
       <Modal
         busy={phase === "sending"}
-        title={title}
+        title={TITLE}
         onClose={onClose}
         widthClass="max-w-[720px]"
         footer={
@@ -355,7 +327,7 @@ export function BulkImportModal({
         }
       >
         <p className="m-0 text-[14.5px] leading-[1.6] text-nevo-near-black/72">
-          Found {rows.length} {rows.length === 1 ? noun.slice(0, -1) : noun} in
+          Found {rows.length} {rows.length === 1 ? "teacher" : "teachers"} in
           your file.
           {broken.length > 0 ? (
             <>
@@ -374,12 +346,7 @@ export function BulkImportModal({
               <tr className="text-[11.5px] font-semibold uppercase tracking-[0.05em] text-nevo-near-black/50">
                 <th className="px-3 py-2.5">Name</th>
                 <th className="px-3 py-2.5">Class</th>
-                <th className="px-3 py-2.5">
-                  {isStudent ? "Student email" : "Email"}
-                </th>
-                {isStudent ? (
-                  <th className="px-3 py-2.5">Parent email</th>
-                ) : null}
+                <th className="px-3 py-2.5">Email</th>
                 <th className="px-3 py-2.5">Status</th>
               </tr>
             </thead>
@@ -392,9 +359,6 @@ export function BulkImportModal({
                   <td className={CELL}>{r.name || "—"}</td>
                   <td className={CELL}>{r.className || "—"}</td>
                   <td className={CELL}>{r.email || "—"}</td>
-                  {isStudent ? (
-                    <td className={CELL}>{r.parentContact || "—"}</td>
-                  ) : null}
                   <td className="px-3 py-2.5">
                     {r.error ? (
                       <span className="text-[13px] font-semibold text-nevo-navy">
@@ -418,12 +382,8 @@ export function BulkImportModal({
   // ------------------------------------------------------------- UPLOAD ---
   return (
     <Modal
-      title={title}
-      subtitle={
-        isStudent
-          ? "Upload a CSV with your roster. We'll create an invite for each row and record each parent's contact."
-          : "Upload a CSV with your roster. We'll create an invite for each row."
-      }
+      title={TITLE}
+      subtitle="Upload a CSV with your roster. We'll create an invite for each row."
       onClose={onClose}
       footer={
         <button
@@ -491,10 +451,7 @@ export function BulkImportModal({
           Download CSV template
         </button>
         <span className="text-[12.5px] text-nevo-near-black/55">
-          Columns:{" "}
-          {isStudent
-            ? "name, class, student_email, parentContact"
-            : "name, email, class"}
+          Columns: name, email, class
         </span>
       </div>
     </Modal>
