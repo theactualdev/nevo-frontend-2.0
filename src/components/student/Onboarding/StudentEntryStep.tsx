@@ -33,6 +33,7 @@ import type { EntryIdentity, EntryPinElsewhere } from "@/lib/auth/firstPin";
 import {
   claimOnboardingDraft,
   clearOnboardingDraft,
+  endSessionForNewChild,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
 import { SCHOOL_CODE_LENGTH, placeSchoolCode } from "@/lib/auth/schoolCode";
@@ -162,6 +163,15 @@ function isThrottle(err: unknown): boolean {
  * illustration makes way for it.
  */
 export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
+  /*
+   * FIRST, BEFORE ANYTHING HERE READS THE SESSION (19 Oct browser-storage
+   * audit): a child on 05 has no account, so a session the device still holds
+   * is the last child's, and it ends now - not after this screen's lookup,
+   * stream and consent read have gone up on it. In the state initializer so
+   * it runs during the first render, ahead of every hook below; once per
+   * mount, and a second call finds nothing to end.
+   */
+  useState(endSessionForNewChild);
   const router = useRouter();
   /*
    * Empty, or 05's miss with the pair as typed: handed back from the end of a

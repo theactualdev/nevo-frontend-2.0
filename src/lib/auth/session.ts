@@ -16,7 +16,6 @@ import { rememberChild, rememberedChildren } from "./deviceRoster";
 import { announceSessionEnd } from "./sessionEnd";
 
 const SESSION_KEY = "nevo.auth.session";
-const PROFILE_KEY = "nevo.auth.profile";
 /** Prefix for the name a child chose, stored per account (`.<userId>`). */
 const DISPLAY_NAME_KEY = "nevo.auth.displayName";
 
@@ -332,42 +331,45 @@ export function onSessionChange(listener: () => void): () => void {
   };
 }
 
+/**
+ * The child this device remembered most recently, or null when it remembers
+ * nobody - read from the roster (28c), which is the device's memory now.
+ *
+ * It read the old single-profile key, `nevo.auth.profile`, until 19 Oct.
+ * Nothing writes that any more (`rememberProfile`), the roster folds in what
+ * an older device still has there, and sign-out deletes it
+ * (`retireLegacyProfile`).
+ */
 export function getRememberedProfile(): RememberedProfile | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(PROFILE_KEY);
-    return raw ? (JSON.parse(raw) as RememberedProfile) : null;
-  } catch {
-    return null;
-  }
+  const latest = rememberedChildren()[0];
+  if (!latest) return null;
+  const { schoolCode, loginIdentifier, displayName, initials, userId } = latest;
+  return {
+    schoolCode,
+    loginIdentifier,
+    initials,
+    ...(displayName ? { displayName } : {}),
+    ...(userId ? { userId } : {}),
+  };
 }
 
 /**
  * Called when a student finishes onboarding / creates a PIN on this device.
  *
- * WRITES BOTH THE LEGACY KEY AND THE ROSTER, and the delegation lives here on
- * purpose. Every path that remembers a child goes through this function -
- * onboarding's `rememberOnboardedStudent` and the returning sign-in screen - so
- * doing it at the call sites would have been two places to forget. Without the
- * roster write, a newly onboarded child would never appear in 28c's picker: it
- * would only ever show children migrated from the old single-profile key, and
- * would empty out school by school as those aged out.
+ * INTO THE ROSTER, and the delegation lives here on purpose. Every path that
+ * remembers a child goes through this function - onboarding's
+ * `rememberOnboardedStudent` (a first PIN, and a cleared child's new one) and
+ * the returning sign-in screen - so doing it at the call sites would have
+ * been places to forget. Without the roster write, a newly onboarded child
+ * would never appear in 28c's picker.
  *
- * The legacy key is still written because `getRememberedProfile` still backs
- * `setStoredDisplayName`. It no longer picks a door: sign-out and Forgot PIN
- * both go to `/auth/login`, which handles a device that remembers nobody.
- *
- * AND IT GOES WHEN THE SESSION DOES (19 Oct browser-storage audit). Nothing
- * reads it for anything the roster does not already hold, so it is deleted
- * at every sign-out, once the roster has it (`retireLegacyProfile`). Only for
- * the length of a session does a device keep this second copy.
+ * NOT THE OLD SINGLE-PROFILE KEY ANY MORE (19 Oct browser-storage audit). It
+ * was written beside the roster - a second copy of one child's school code
+ * and login identifier - for nothing the roster does not hold, and sign-out
+ * only had to delete it again. Nothing writes it now; sign-out still
+ * retires what an older build left (`retireLegacyProfile`).
  */
 export function rememberProfile(profile: RememberedProfile): void {
-  try {
-    window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-  } catch {
-    // ignore
-  }
   rememberChild(profile);
 }
 
@@ -420,8 +422,8 @@ export function retireLegacyDisplayName(): void {
  * Written under the account's id, and into the roster entry that belongs to
  * this account so the picker learns it too. An entry is only ever matched by
  * account id - never by "the one the device remembers", which is the bug this
- * replaces. The legacy single-profile key is updated only when it is provably
- * the same child.
+ * replaces. The old single-profile key is not written (19 Oct): the roster
+ * is where a name lives.
  */
 export function setStoredDisplayName(name: string, initials: string): void {
   const trimmed = name.trim();
@@ -434,15 +436,4 @@ export function setStoredDisplayName(name: string, initials: string): void {
   }
   const own = rememberedChildren().find((c) => c.userId === userId);
   if (own) rememberChild({ ...own, displayName: trimmed, initials });
-  const legacy = getRememberedProfile();
-  if (legacy?.userId === userId) {
-    try {
-      window.localStorage.setItem(
-        PROFILE_KEY,
-        JSON.stringify({ ...legacy, displayName: trimmed, initials }),
-      );
-    } catch {
-      // ignore
-    }
-  }
 }

@@ -136,10 +136,8 @@ function isChild(v: unknown): v is RememberedChild {
  * Without this, shipping 28c would sign out every device that already
  * remembered somebody - the roster key is new, so every tablet in every school
  * would look like a tablet nobody has used. The legacy key is left in place
- * here: it picks no door any more, but `rememberProfile` still writes it and
- * `setStoredDisplayName` still reads it through `getRememberedProfile` - see
- * `rememberProfile` in `session.ts`. It is deleted at sign-out, once this has
- * run (`retireLegacyProfile`).
+ * here, and nothing writes it any more (19 Oct, `rememberProfile`): it is
+ * deleted at sign-out, once this has run (`retireLegacyProfile`).
  */
 function migrateLegacy(): RememberedChild[] {
   try {
@@ -169,11 +167,9 @@ function migrateLegacy(): RememberedChild[] {
  *
  * Called at every sign-out (19 Oct browser-storage audit). The record names
  * ONE child - whoever this device remembered last, signed out or not - with
- * their school code and login identifier, and nothing reads it for anything
- * the roster does not hold: `getRememberedProfile` backs only
- * `setStoredDisplayName`, which keeps it in step with the roster, and the
- * roster reads it only to migrate from it. So a sign-out leaves one copy of
- * who uses this tablet, not two.
+ * their school code and login identifier, and nothing reads it but the
+ * roster, to migrate from it - and nothing writes it since 19 Oct. So a
+ * sign-out leaves one copy of who uses this tablet, not two.
  *
  * NEVER BEFORE THE ROSTER HAS IT. A device from before 28c may still hold its
  * child only here, and the read below folds them in first. If the roster

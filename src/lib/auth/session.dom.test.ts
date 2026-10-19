@@ -183,8 +183,13 @@ describe("the name a child is called on a shared tablet", () => {
     expect(getStoredDisplayName()).toBe("Adaeze");
     as("bayo");
     expect(getStoredDisplayName()).toBe("Bayo");
-    // And the legacy single profile - Bayo's, the last remembered - untouched.
-    expect(getRememberedProfile()?.displayName).toBe("Bayo");
+    // Bayo's own entry is untouched, and no old single-profile copy of
+    // anyone is written (19 Oct).
+    expect(
+      rememberedChildren().find((c) => c.loginIdentifier === "bayo.k")
+        ?.displayName,
+    ).toBe("Bayo");
+    expect(window.localStorage.getItem("nevo.auth.profile")).toBeNull();
   });
 
   it("is nobody's when nobody is signed in", () => {

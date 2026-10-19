@@ -791,6 +791,8 @@ describe("a child whose PIN a teacher cleared (B67)", () => {
       loginIdentifier: "NV-A1B2C3",
       displayName: "Amara",
     });
+    // In the roster, and only there: no old single-profile copy (19 Oct).
+    expect(window.localStorage.getItem("nevo.auth.profile")).toBeNull();
   });
 
   it("holds them instead of Home when the server holds them once they are in", async () => {

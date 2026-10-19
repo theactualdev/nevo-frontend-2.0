@@ -12,7 +12,7 @@
  */
 
 import type { EntryIdentity } from "./firstPin";
-import { getSession, rememberProfile } from "./session";
+import { clearSession, getSession, rememberProfile } from "./session";
 
 const DRAFT_KEY = "nevo.onboarding.draft";
 
@@ -48,6 +48,12 @@ export interface OnboardingDraft {
    * is not given: a run with no answer holds (`ProfilingFlow`).
    */
   consent?: "given";
+  /**
+   * The account this run's first PIN created, once it has (19 Oct). The
+   * session it started is this run's own: a reload of the sequence keeps it
+   * rather than ending it as somebody else's (`endSessionNotThisRuns`).
+   */
+  userId?: string;
 }
 
 export function getOnboardingDraft(): OnboardingDraft {
@@ -94,6 +100,44 @@ export function clearOnboardingDraft(): void {
   } catch {
     // ignore
   }
+}
+
+/**
+ * A CHILD WITH NO ACCOUNT IS STARTING, SO THE SESSION THE DEVICE HOLDS IS
+ * SOMEBODY ELSE'S (19 Oct browser-storage audit).
+ *
+ * The onboarding routes let a stored session through, and everything on them
+ * that talks to the server sent it: 05 Entry's lookup, the onboarding signal
+ * stream, the consent read, the account read. So a new child's typing, taps
+ * and first minutes were recorded against the last child's account, the last
+ * child's consent decided whether the new child's baseline was captured, and
+ * when the last child's token died its 401 sent the new child - who had no
+ * session at all - to the session-ended door, off their own run.
+ *
+ * Ended here, through the same path every sign-out takes (`clearSession`),
+ * so the last child's leftovers go as they would at Sign out - one last try
+ * for their unsent signals with their own token, their held answers and
+ * progress kept for them - and from then on the new child's requests carry
+ * no token until their own first PIN gives them one.
+ *
+ * Called from 05 Entry (and 03, the same screen) as it first renders, before
+ * anything on it reads the session. A child with an account does not start
+ * here: 05 itself sends them to sign in (`entryRoute`'s `sign-in`).
+ */
+export function endSessionForNewChild(): void {
+  if (getSession()) clearSession();
+}
+
+/**
+ * The sequence's version: the same, unless the session is the run's own - an
+ * SSO child's, who starts the sequence signed in (`method: "sso"`), or the
+ * account this run's first PIN created (the draft's `userId`).
+ */
+export function endSessionNotThisRuns(): void {
+  const session = getSession();
+  if (!session || session.method === "sso") return;
+  if (getOnboardingDraft().userId === session.userId) return;
+  clearSession();
 }
 
 /** How many open screens are using the draft (05 Entry, the sequence). */

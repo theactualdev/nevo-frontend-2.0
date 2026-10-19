@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   claimOnboardingDraft,
   clearOnboardingDraft,
+  endSessionForNewChild,
+  endSessionNotThisRuns,
   entryIdentityFromDraft,
   forgetOnboardingDraft,
   getOnboardingDraft,
@@ -9,7 +11,13 @@ import {
   rememberOnboardedStudent,
   startOnboardingDraft,
 } from "./onboarding";
-import { clearSession, getRememberedProfile } from "./session";
+import {
+  clearSession,
+  getRememberedProfile,
+  getSession,
+  setSession,
+} from "./session";
+import { onSessionEnd } from "./sessionEnd";
 
 /**
  * A remembered profile the server cannot authenticate is worse than none.
@@ -199,5 +207,82 @@ describe("forgetOnboardingDraft - when a session ends", () => {
 
     expect(getOnboardingDraft()).toEqual(draft);
     second();
+  });
+});
+
+/*
+ * THE ROSTER ONLY (19 Oct browser-storage audit). Remembering a child wrote
+ * the old single-profile key beside the roster - a second copy of one
+ * child's school code and login identifier - for nothing the roster does not
+ * hold. A first PIN and a cleared child's new one both come through here.
+ */
+describe("remembering a child on the device", () => {
+  it("writes no old single-profile copy of them", () => {
+    mergeOnboardingDraft({ name: "Amara Kalu", schoolCode: "751A1136" });
+
+    expect(rememberOnboardedStudent(SERVER_IDENTIFIER)).toBe(true);
+
+    expect(window.localStorage.getItem("nevo.auth.profile")).toBeNull();
+    expect(getRememberedProfile()?.loginIdentifier).toBe(SERVER_IDENTIFIER);
+  });
+});
+
+/*
+ * A CHILD WITH NO ACCOUNT IS STARTING (19 Oct browser-storage audit): a
+ * session the device still holds is somebody else's, and it ends through the
+ * path every sign-out takes, so its child's leftovers go as they would at
+ * Sign out.
+ */
+describe("ending the last child's session for a new one", () => {
+  const settle = () => new Promise<void>((r) => setTimeout(r, 0));
+  const store = (over: Partial<Parameters<typeof setSession>[0]> = {}) =>
+    setSession({
+      token: "tok-last",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId: "last-child",
+      role: "student",
+      ...over,
+    });
+
+  it("ends it on 05, and says whose ended", async () => {
+    store();
+    await settle();
+    const ended: string[] = [];
+    const off = onSessionEnd((e) => ended.push(e.userId));
+
+    endSessionForNewChild();
+    await settle();
+    off();
+
+    expect(getSession()).toBeNull();
+    expect(ended).toEqual(["last-child"]);
+  });
+
+  it("ends nothing when nothing is stored", async () => {
+    clearSession();
+    await settle();
+    const ended: string[] = [];
+    const off = onSessionEnd((e) => ended.push(e.userId));
+
+    endSessionForNewChild();
+    await settle();
+    off();
+
+    expect(ended).toEqual([]);
+  });
+
+  it("ends it in the sequence, unless it is the run's own", () => {
+    store();
+    endSessionNotThisRuns();
+    expect(getSession()).toBeNull();
+
+    store({ userId: "sso-child", method: "sso" });
+    endSessionNotThisRuns();
+    expect(getSession()?.userId).toBe("sso-child");
+
+    store({ userId: "new-child" });
+    mergeOnboardingDraft({ userId: "new-child" });
+    endSessionNotThisRuns();
+    expect(getSession()?.userId).toBe("new-child");
   });
 });

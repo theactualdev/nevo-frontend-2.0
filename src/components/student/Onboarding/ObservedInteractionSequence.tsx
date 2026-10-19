@@ -6,7 +6,9 @@ import { useAuth, useSignals, type TrackEvent } from "@/hooks";
 import {
   claimOnboardingDraft,
   clearOnboardingDraft,
+  endSessionNotThisRuns,
   entryIdentityFromDraft,
+  mergeOnboardingDraft,
   rememberOnboardedStudent,
 } from "@/lib/auth/onboarding";
 import {
@@ -72,6 +74,14 @@ const ENTRY = "/student/onboarding/school";
  * (`user.method`), never a URL param.
  */
 export function ObservedInteractionSequence() {
+  /*
+   * A SESSION THAT IS NOT THIS RUN'S ENDS BEFORE THE RUN READS IT (19 Oct
+   * browser-storage audit), as on 05: otherwise this child's onboarding and
+   * profiling streams, and the consent read their capture waits on, go up as
+   * the last child. An SSO child's own session, and the one this run's first
+   * PIN made, are kept. During the first render, ahead of every hook below.
+   */
+  useState(endSessionNotThisRuns);
   const router = useRouter();
   const { user } = useAuth();
   const isSso = user?.method === "sso";
@@ -305,6 +315,8 @@ export function ObservedInteractionSequence() {
           const res = await bindFirstPin(entry, pin);
           identifierRef.current = res.loginIdentifier;
           startEntrySession(res);
+          // This run's own account now: a reload keeps its session (19 Oct).
+          mergeOnboardingDraft({ userId: res.userId });
           /*
            * The baseline this child sat in phase 0 can now reach them.
            *

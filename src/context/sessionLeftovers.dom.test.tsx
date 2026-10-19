@@ -89,6 +89,18 @@ async function aSharedTablet() {
     initials: "AO",
     userId: a,
   });
+  // The old single-profile record, as a build from before 19 Oct left it:
+  // nothing writes it now, and sign-out retires what is there.
+  window.localStorage.setItem(
+    LEGACY,
+    JSON.stringify({
+      schoolCode: "NEVO-1",
+      loginIdentifier: "ada.o",
+      displayName: "Ada",
+      initials: "AO",
+      userId: a,
+    }),
+  );
   signInAs(a);
   // Anything the setup itself ended has run its course.
   await settle();

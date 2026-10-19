@@ -17,6 +17,7 @@ import {
 import {
   clearSession,
   getRememberedProfile,
+  getSession,
   setSession,
 } from "@/lib/auth/session";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants";
@@ -186,5 +187,50 @@ describe("the onboarding draft, through endings that are not the child's", () =>
     await settle();
 
     expect(getOnboardingDraft()).toEqual({});
+  });
+});
+
+/*
+ * A SESSION THAT IS NOT THIS RUN'S ENDS AS THE RUN OPENS (19 Oct
+ * browser-storage audit): otherwise the run's onboarding and profiling
+ * streams, and the consent read its capture waits on, go up as the last
+ * child. An SSO child's own session, and the one this run's first PIN made,
+ * are kept.
+ */
+describe("the session the sequence opens on", () => {
+  it("is ended when it is another child's", () => {
+    leftBehind();
+
+    render(<ObservedInteractionSequence />);
+
+    expect(getSession()).toBeNull();
+  });
+
+  it("is kept when it is an SSO child's own, who starts here signed in", () => {
+    setSession({
+      token: "tok-sso",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId: "sso-child",
+      role: "student",
+      method: "sso",
+    });
+
+    render(<ObservedInteractionSequence />);
+
+    expect(getSession()?.userId).toBe("sso-child");
+  });
+
+  it("is kept when this run's own first PIN made it, through a reload", async () => {
+    render(<ObservedInteractionSequence />);
+    fireEvent.click(screen.getByRole("button", { name: "after transition" }));
+    fireEvent.click(screen.getByRole("button", { name: "after profiling" }));
+    await choosePin();
+    expect(getOnboardingDraft().userId).toBe("student-9");
+
+    // Reloaded before the run had finished with its draft.
+    cleanup();
+    render(<ObservedInteractionSequence />);
+
+    expect(getSession()?.userId).toBe("student-9");
   });
 });
