@@ -624,19 +624,56 @@ describe("bringing the step into view above the docked pad", () => {
     expect(scrolled).not.toHaveBeenCalled();
   });
 
-  it("brings That's the total into view as it arrives", () => {
-    rects = { column: [100, 400], prompt: [300, 326], total: [380, 432] };
-    const onSystemScroll = inColumn(
-      build({
-        steps: [
-          step({ stepId: "b1", prompt: "Build the total.", expectedInput: "drag", input: "tap", options: [], tapCount: 2 }),
-        ],
-      }),
-    );
-    for (let i = 0; i < 2; i++) placeOne();
+  /*
+   * A BUILD MOVES ONLY AS IT OPENS (Lydia, 17 Oct). On-screen QA of the
+   * first fix: brought into view at the last tap, the column rose by "That's
+   * the total" and its gap, 70px, and put it exactly where the tray had
+   * been, under the finger - a stray tap 221ms later committed.
+   */
+  const BUILD_STEP = () =>
+    build({
+      steps: [
+        step({ stepId: "b1", prompt: "Build the total.", expectedInput: "drag", input: "tap", options: [], tapCount: 2 }),
+      ],
+    });
+
+  it("brings a build into view as it opens, with the place That's the total will take", () => {
+    // Too short for all of it to the hint link; the question, the build,
+    // the tray and the held place fit.
+    rects = { column: [100, 340], prompt: [300, 326], build: [344, 400], tray: [416, 460], total: [478, 530], hint: [546, 590] };
+    const onSystemScroll = inColumn(BUILD_STEP());
+    resized();
 
     expect(lastMove()).toEqual({ part: "total", how: { block: "end" } });
-    expect(onSystemScroll).toHaveBeenCalled();
+    expect(onSystemScroll).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves nothing at the last tap, or on a resize while the child builds", () => {
+    rects = { column: [100, 400], prompt: [120, 146], build: [160, 300], tray: [316, 360], total: [378, 430], hint: [446, 490] };
+    const onSystemScroll = inColumn(BUILD_STEP());
+    resized();
+    scrolled.mockReset();
+    onSystemScroll.mockReset();
+
+    placeOne();
+    resized();
+    placeOne();
+    resized();
+
+    expect(scrolled).not.toHaveBeenCalled();
+    expect(onSystemScroll).not.toHaveBeenCalled();
+  });
+
+  it("leaves the held place below the fold where the tray and it do not fit together", () => {
+    // 100px of column: the tray and the place below it take 114.
+    rects = { column: [100, 200], prompt: [120, 146], build: [160, 300], tray: [316, 360], total: [378, 430], hint: [446, 490] };
+    const onSystemScroll = inColumn(BUILD_STEP());
+    resized();
+    for (let i = 0; i < 2; i++) placeOne();
+    resized();
+
+    expect(scrolled).not.toHaveBeenCalled();
+    expect(onSystemScroll).not.toHaveBeenCalled();
   });
 });
 
@@ -799,6 +836,50 @@ describe("the last piece cannot also submit the build (Lydia, 17 Oct; D162)", ()
     },
   );
 
+  /** Everything holding That's the total's place, seen or not. */
+  const totalPlaces = () => [
+    ...document.querySelectorAll<HTMLElement>('[data-reveal="total"]'),
+  ];
+
+  it.each([
+    ["a fraction bar", { kind: "fraction_bar", parts: 4, rows: 1, labels: [] }, "+ 1/4", 3],
+    ["an array", { kind: "array", parts: 3, rows: 2 }, "Tap to add", 4],
+    ["counters", { kind: "counters", parts: 5, rows: 2 }, "Tap to add", 3],
+    ["a number line", { kind: "number_line", parts: 5 }, "+1", 3],
+  ] as const)(
+    "%s: holds That's the total's place from the step's start, and the button takes it rather than being added",
+    (_, manipulative, piece, count) => {
+      const props = show(build({ manipulative, steps: [TAP(count)] }));
+      const tile = screen.getByRole("button", { name: piece });
+
+      // Before any piece: the place, as the button itself - so exactly its
+      // size and gap - unseen, inert, and out of the accessibility tree.
+      const [place] = totalPlaces();
+      expect(totalPlaces()).toHaveLength(1);
+      expect(place).toHaveAttribute("data-slot", "button");
+      expect(place).toHaveClass("mt-[18px]", "w-full", "invisible");
+      expect(place).toHaveAttribute("aria-hidden", "true");
+      expect(place).toHaveAttribute("inert");
+      expect(place).toHaveAttribute("tabindex", "-1");
+      expect(screen.queryByRole("button", { name: "That's the total" })).toBeNull();
+      expect(tile.parentElement!.nextElementSibling).toBe(place);
+      // Pressing the place does nothing.
+      fireEvent.click(place);
+      expect(props.onStepAnswered).not.toHaveBeenCalled();
+
+      for (let i = 0; i < count; i++) fireEvent.click(tile);
+
+      const total = screen.getByRole("button", { name: "That's the total" });
+      expect(total).toBe(place);
+      expect(totalPlaces()).toHaveLength(1);
+      expect(total).toHaveClass("mt-[18px]", "w-full", "nevo-arrive-late");
+      expect(total).not.toHaveClass("invisible");
+      expect(total).not.toHaveAttribute("aria-hidden");
+      expect(total).not.toHaveAttribute("inert");
+      expect(total).not.toHaveAttribute("tabindex");
+    },
+  );
+
   it("place value: a tap where the last column's piece was submits nothing, and That's the total still does", () => {
     const props = show(
       build({
@@ -814,6 +895,10 @@ describe("the last piece cannot also submit the build (Lydia, 17 Oct; D162)", ()
     );
     const hundreds = screen.getByRole("button", { name: "Tap to add, Hundreds" });
     const tray = hundreds.parentElement!;
+    // That's the total's place, held under the tray from the start.
+    const [place] = totalPlaces();
+    expect(tray.nextElementSibling).toBe(place);
+    expect(place).toHaveAttribute("aria-hidden", "true");
     tap("Tap to add, Tens");
     tap("Tap to add, Tens");
     fireEvent.click(hundreds);
@@ -829,6 +914,8 @@ describe("the last piece cannot also submit the build (Lydia, 17 Oct; D162)", ()
 
     const total = screen.getByRole("button", { name: "That's the total" });
     expect(tray.contains(total)).toBe(false);
+    expect(total).toBe(place);
+    expect(totalPlaces()).toHaveLength(1);
     tap("That's the total");
     expect(props.onStepAnswered).toHaveBeenCalledWith("a1", true);
   });

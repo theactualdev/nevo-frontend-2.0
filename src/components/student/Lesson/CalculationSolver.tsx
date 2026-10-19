@@ -222,6 +222,10 @@ export function CalculationSolver({
    * row, the screen turning. The child's finger is on the docked pad, which
    * none of this moves. A choice step is never moved: the child's finger is
    * on the options, and moving them under it is what SCRUM-94 took out.
+   *
+   * A tap step is brought into view once, as it opens, and never again (see
+   * `TAP_OPEN`): from then on the child's finger is on the tray, in the
+   * column, and anything that moves the column moves what is under it.
    */
   const response = useRef<HTMLDivElement | null>(null);
   const systemScrolled = useRef(onSystemScroll);
@@ -247,11 +251,36 @@ export function CalculationSolver({
     watch.observe(scroller);
     return () => watch.disconnect();
   }, [padStep, step.stepId, live, engineHint, hintOpen, levelHint]);
-  // A build's "That's the total", as it arrives below the spent tray.
+  /*
+   * A BUILD IS BROUGHT INTO VIEW AS IT OPENS, WITH THE PLACE ITS "THAT'S THE
+   * TOTAL" WILL TAKE (Lydia, 17 Oct). It was brought into view as that
+   * button arrived, at the last tap: the column moved up by the button's
+   * height and its gap, which put the button exactly where the tray had
+   * been, under the finger that had just tapped it. Its place is held from
+   * the step's start instead, so nothing moves when the build is done; on a
+   * column too short for the tray and that place together, the place stays
+   * below the fold and the child scrolls to it themselves.
+   */
+  const tapStep = asking && step.input === "tap";
   useEffect(() => {
     const block = response.current;
-    if (built && block && revealIn(block, BUILT)) systemScrolled.current?.();
-  }, [built]);
+    if (!tapStep || !block) return;
+    const show = () => {
+      if (revealIn(block, TAP_OPEN)) systemScrolled.current?.();
+    };
+    const scroller = scrollerOf(block);
+    if (!scroller || typeof ResizeObserver === "undefined") {
+      show();
+      return;
+    }
+    // Once, after layout - and not again on a resize while the child builds.
+    const watch = new ResizeObserver(() => {
+      watch.disconnect();
+      show();
+    });
+    watch.observe(scroller);
+    return () => watch.disconnect();
+  }, [tapStep, step.stepId]);
 
   /*
    * A HINT IS OFFERED AS IT COMES ON SCREEN (B131), not as the engine's
@@ -605,22 +634,31 @@ export function CalculationSolver({
                   />
                 )}
                 {/*
-                  BELOW THE TRAY, A BEAT LATER (Lydia, 17 Oct; D162). The
-                  tray keeps its row once the build is done, so this never
-                  takes the place of the piece just tapped; and it arrives
-                  about 450ms on, unseen and untappable until then, so the
-                  child sees what they built before they can confirm it.
-                  With reduced motion it is there at once, still below.
+                  BELOW THE TRAY, IN A PLACE HELD FROM THE START, A BEAT
+                  LATER (Lydia, 17 Oct; D162). The tray keeps its row once
+                  the build is done, so this never takes the place of the
+                  piece just tapped. Until then it is its own place, unseen,
+                  inert and out of the accessibility tree - the same button,
+                  so the place is exactly its size - and the step opened with
+                  it in view where the column has room (`TAP_OPEN`), so
+                  nothing moves when it arrives. It arrives about 450ms on,
+                  unseen and untappable until then, so the child sees what
+                  they built before they can confirm it; with reduced motion
+                  it is there at once.
                 */}
-                {built && (
-                  <Button
-                    data-reveal="total"
-                    className="nevo-arrive-late mt-[18px] w-full"
-                    onClick={() => answer(true)}
-                  >
-                    That&apos;s the total
-                  </Button>
-                )}
+                <Button
+                  data-reveal="total"
+                  aria-hidden={built ? undefined : true}
+                  inert={!built}
+                  tabIndex={built ? undefined : -1}
+                  className={cn(
+                    "mt-[18px] w-full",
+                    built ? "nevo-arrive-late" : "invisible",
+                  )}
+                  onClick={built ? () => answer(true) : undefined}
+                >
+                  That&apos;s the total
+                </Button>
               </>
             )}
 
@@ -666,10 +704,17 @@ const CHECK_LIVE: Stretch[] = [
   ["field", "form"],
   ["check", "check"],
 ];
-/** A build's commit, with its question if both fit. */
-const BUILT: Stretch[] = [
+/**
+ * What of a tap step to show as it opens, most first: all of it to the hint
+ * link; then the question, the build, the tray and the place "That's the
+ * total" will take; then without the question; then the tray and that place
+ * alone. None fitting, nothing moves.
+ */
+const TAP_OPEN: Stretch[] = [
+  ["prompt", "hint"],
   ["prompt", "total"],
-  ["total", "total"],
+  ["build", "total"],
+  ["tray", "total"],
 ];
 
 /**
@@ -1985,7 +2030,10 @@ function BuildTray({
 }) {
   return (
     <>
-      <div className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-6">
+      <div
+        data-reveal="build"
+        className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-6"
+      >
         <span className="font-mono text-[10px] tracking-[0.06em] text-nevo-near-black/50 uppercase">
           The total
         </span>
@@ -2045,6 +2093,7 @@ function TapToAdd({
 }) {
   return (
     <div
+      data-reveal="tray"
       data-tray-done={done || undefined}
       className="mt-4 flex items-center justify-center gap-2.5"
     >
@@ -2167,7 +2216,10 @@ function ArrayBuild({
 }) {
   return (
     <>
-      <div className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-6">
+      <div
+        data-reveal="build"
+        className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-6"
+      >
         <span className="font-mono text-[10px] tracking-[0.06em] text-nevo-near-black/50 uppercase">
           The total
         </span>
@@ -2261,7 +2313,10 @@ function PlaceValueBuild({
   const isOpen = (i: number) => (placed[i] ?? 0) < columns[i].count;
   return (
     <>
-      <div className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-6">
+      <div
+        data-reveal="build"
+        className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-6"
+      >
         <span className="font-mono text-[10px] tracking-[0.06em] text-nevo-near-black/50 uppercase">
           The total
         </span>
@@ -2342,7 +2397,10 @@ function LineBuild({
 }) {
   return (
     <>
-      <div className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-6">
+      <div
+        data-reveal="build"
+        className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-6"
+      >
         <span className="font-mono text-[10px] tracking-[0.06em] text-nevo-near-black/50 uppercase">
           The total
         </span>
