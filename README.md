@@ -28,7 +28,7 @@ npm run lint    # eslint
 API calls go through the same-origin proxy at `/api/backend/*`
 (`src/app/api/backend/[...path]/route.ts`), which forwards to the FastAPI
 backend — by default the hosted instance at
-`https://nevo-backend-2-0.onrender.com`. No env setup is needed for
+`https://api.nevolearning.com`. No env setup is needed for
 development. To point elsewhere set `NEXT_PUBLIC_API_URL`; to bypass the proxy
 and call the backend directly (requires CORS on the backend) also set
 `NEXT_PUBLIC_API_DIRECT=1`. Auth is Bearer-token (`src/lib/auth/session.ts`);

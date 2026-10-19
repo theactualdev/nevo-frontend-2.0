@@ -141,7 +141,7 @@ const STUDENT_ADMISSION = process.env.E2E_STUDENT_ADMISSION;
 /** Who clears the probe's PIN, when set. See "Who clears it" above. */
 const TEACHER_EMAIL = process.env.E2E_TEACHER_EMAIL;
 const TEACHER_PASSWORD = process.env.E2E_TEACHER_PASSWORD;
-const API = process.env.E2E_API_BASE ?? "https://nevo-backend-2-0-kn3d.onrender.com";
+const API = process.env.E2E_API_BASE ?? "https://api.nevolearning.com";
 
 /** Mirrors `lib/auth/session.ts`. Changing either without the other breaks this. */
 const SESSION_KEY = "nevo.auth.session";
