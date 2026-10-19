@@ -22,6 +22,21 @@ import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
 import { revealIn, scrollerOf, type Stretch } from "./revealStep";
 import { useMediaSource, type MediaFailReason } from "./useMediaSource";
 
+/** One committed step, as the answer the server marks takes it. */
+export interface StepGiven {
+  stepId: string;
+  answer: string | number;
+  responseTimeMs?: number;
+  hinted: boolean;
+}
+
+/** Whole milliseconds since a monotonic reading, or undefined without one. */
+function msSince(start: number | null): number | undefined {
+  return start === null
+    ? undefined
+    : Math.max(0, Math.round(performance.now() - start));
+}
+
 /**
  * Calculation Solver (17b, co-construction), rendered from the engine's
  * payload (SCRUM-181, on SCRUM-177).
@@ -70,6 +85,7 @@ export function CalculationSolver({
   reading = false,
   onSolved,
   onStepAnswered,
+  onStepGiven,
   onPiecePlaced,
   onHintOpened,
   onHintShown,
@@ -111,14 +127,27 @@ export function CalculationSolver({
    * the text segment and the checks read - see `readingSupport`.
    */
   reading?: boolean;
-  /** Fired once the solution assembles - the player opens the forward chevron. */
-  onSolved: () => void;
+  /**
+   * Fired once the solution assembles - the player opens the forward chevron
+   * - with how long the whole calculation took from its first step being put
+   * to the child, by `performance.now()` (rule 4). Absent if nothing timed it.
+   */
+  onSolved: (solved: { responseTimeMs?: number }) => void;
   /**
    * Each committed step (`calculation_step_response`). `correct` is this
    * screen's match against the stored answers; it feeds the lesson's error
    * streak and is never sent as a key of its own.
    */
   onStepAnswered?: (stepId: string, correct: boolean) => void;
+  /**
+   * What the child gave on each committed step - every try, wrong ones too -
+   * for the answer the server marks (`calculationAttemptFor`): the option
+   * picked, the text as typed, or a build's count where the step stores its
+   * answer as one. `responseTimeMs` runs from the step being put to the
+   * child (again after a miss) to the commit; `hinted` is a hint having been
+   * on screen for the step. Not fired for a build the server cannot mark.
+   */
+  onStepGiven?: (given: StepGiven) => void;
   /** A piece tapped into the manipulative (`manipulative_piece_placed`). */
   onPiecePlaced?: (stepId: string) => void;
   /** The child opened this step's hint themselves. */
@@ -311,10 +340,35 @@ export function CalculationSolver({
   /** The step a hint was last used on: B130's "once per step". */
   const usedOn = useRef<string | null>(null);
 
+  /*
+   * WHEN THE STEP WAS PUT TO THE CHILD, and when the calculation was (rule 4:
+   * `performance.now()`, never the wall clock). A step is put to them as it
+   * is asked, and again after a miss - their next try is timed from there, as
+   * a quick check's "Try again" is. Measured for the server, never shown.
+   */
+  const askedAt = useRef<number | null>(null);
+  useEffect(() => {
+    if (asking) askedAt.current = performance.now();
+  }, [asking, index]);
+  const begunAt = useRef<number | null>(null);
+  useEffect(() => {
+    begunAt.current = performance.now();
+  }, []);
+
+  /** What the child gave on this step, or nothing the server could mark. */
+  const given = (): string | number | undefined => {
+    if (step.input === "choice") {
+      return chosen === null ? undefined : step.options[chosen]?.value;
+    }
+    if (step.input === "number") return typed;
+    return step.counted;
+  };
+
   const advance = () => {
     if (index === lastIndex) {
       setPhase("done");
-      onSolved();
+      const responseTimeMs = msSince(begunAt.current);
+      onSolved(responseTimeMs === undefined ? {} : { responseTimeMs });
       return;
     }
     setIndex(index + 1);
@@ -341,7 +395,21 @@ export function CalculationSolver({
       onHintUsed?.(from, step.stepId);
     }
     onStepAnswered?.(step.stepId, correct);
+    // The answer itself goes to the server, which marks it; `correct` stays
+    // this screen's, for the tick and the nudge.
+    const answered = given();
+    if (answered !== undefined) {
+      const responseTimeMs = msSince(askedAt.current);
+      onStepGiven?.({
+        stepId: step.stepId,
+        answer: answered,
+        ...(responseTimeMs === undefined ? {} : { responseTimeMs }),
+        hinted: usedOn.current === step.stepId,
+      });
+    }
     if (!correct) {
+      // Put back to the child: the next try is its own, timed from here.
+      askedAt.current = performance.now();
       setNudge((n) => n + 1);
       return;
     }

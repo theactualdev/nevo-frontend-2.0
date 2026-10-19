@@ -338,6 +338,14 @@ export interface CalcNumberStep extends CalcStepBase {
 export interface CalcTapStep extends CalcStepBase {
   input: "tap";
   target: number;
+  /**
+   * What a finished build is written to the server as, where the server can
+   * mark a build at all: the step's stored `answer`, in its own type, when
+   * that answer IS the count built (`tapCount`). The server marks against the
+   * answer, so a build of three quarters stored as "3/4" is not a count it
+   * can match. Absent there, and the build is written as nothing.
+   */
+  counted?: string | number;
 }
 
 export type CalculationStep = CalcChoiceStep | CalcNumberStep | CalcTapStep;
@@ -346,6 +354,13 @@ export interface CalculationSegment {
   variant: CalculationVariant;
   /** The concept taught, for the hint events. Omitted when the wire has none. */
   conceptId?: string;
+  /**
+   * The whole calculation's answer, as the wire gives it - the solution the
+   * steps assemble. Never shown and never spread across the steps: it is what
+   * the solved calculation is written to the server as, against the problem
+   * the server keys on the segment itself. Absent when the wire has none.
+   */
+  answer?: string | number | boolean;
   /** The problem's notation, shown before any step has assembled anything. */
   expression: string;
   /**

@@ -603,8 +603,9 @@ export interface LessonQuestionAttemptWrite {
   problemId: string;
   segmentId?: string | null;
   /**
-   * "calculation" is on the contract since 18 Oct and sent by nothing yet: a
-   * calculation step is still matched on the device against its stored forms.
+   * "calculation" (18 Oct) is a calculation step - `problemId` its `stepId` -
+   * or the solved calculation, `problemId` the segment's id; `segmentId` is
+   * required for both. See `calculationAttemptFor`.
    */
   source?: "checkpoint" | "assessment" | "calculation";
   answer: CheckpointScalar | CheckpointScalar[];
@@ -678,7 +679,9 @@ export const lessonsApi = {
    * check here, so a child who leaves a check part way keeps the answers they
    * gave (D36). The body is built by `answerFor`, which sends the option's
    * own value rather than its stringified id. Review answers reads them back
-   * through `attempts` below, as a resumed check does (B49).
+   * through `attempts` below, as a resumed check does (B49). Every committed
+   * calculation step, and the solved calculation, are written here too
+   * (`calculationAttemptFor`), so the engine sees calculation errors.
    */
   saveAttempt: (lessonId: string, body: LessonQuestionAttemptWrite) =>
     api.post<LessonQuestionAttempt>(

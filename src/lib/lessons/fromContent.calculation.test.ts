@@ -132,6 +132,18 @@ describe("a calculation from the payload", () => {
     ).toEqual([["3x - 4"], ["3x"], ["5"]]);
   });
 
+  it("keeps the whole problem's answer for the solved calculation, on no step", () => {
+    // What the solved calculation is written to the server as - the problem
+    // it keys on the segment is answered with it. Never shown.
+    expect(calcOf(algebra())?.answer).toBe("5");
+    expect(calcOf(algebra({ answer: 12 }))?.answer).toBe(12);
+    for (const answer of [null, undefined, "", "  "]) {
+      expect(calcOf(algebra({ answer })), String(answer)).not.toHaveProperty(
+        "answer",
+      );
+    }
+  });
+
   it("takes the stored answer alone, never a step's targets", () => {
     const calc = calcOf(
       algebra({ steps: [step({ answer: "x + 1", targets: ["1 + x", 1.5] })] }),
@@ -596,6 +608,36 @@ describe("a tap step and what it builds on", () => {
         calcOf(quarters({ steps: [step({ input: "tap", answer })] })),
         answer,
       ).toBeUndefined();
+    }
+  });
+
+  /*
+   * WHAT A FINISHED BUILD IS WRITTEN TO THE SERVER AS (Lydia, 17 Oct: the
+   * engine reads calculation errors from marked answers). The server marks a
+   * step against its stored answer, so a build goes up as that answer only
+   * where the answer IS the count built - in its own type, because a step
+   * with options is matched as text and 3 is not "3" there.
+   */
+  it("writes a build as its stored answer where that answer is the count built", () => {
+    const counted = (answer: unknown) =>
+      calcOf(
+        quarters({ steps: [step({ input: "tap", answer, tapCount: 3 })] }),
+      )?.steps[0];
+
+    expect(counted(3)).toMatchObject({ input: "tap", target: 3, counted: 3 });
+    expect(counted("3")).toMatchObject({ counted: "3" });
+    expect(counted(" 3 ")).toMatchObject({ counted: "3" });
+  });
+
+  it("writes a build as nothing where its answer is not a count", () => {
+    // 17b's own bar: three quarters, stored as "3/4". Three pieces are not
+    // that answer, and nothing here composes "3/4" out of them.
+    for (const answer of ["3/4", "0.75", 2, "2", true]) {
+      const built = calcOf(
+        quarters({ steps: [step({ input: "tap", answer, tapCount: 3 })] }),
+      )?.steps[0];
+      expect(built, String(answer)).toMatchObject({ input: "tap", target: 3 });
+      expect(built, String(answer)).not.toHaveProperty("counted");
     }
   });
 
