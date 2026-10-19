@@ -178,7 +178,10 @@ export const ADDING_FRACTIONS: Lesson = {
     },
     {
       id: "calc-add-fifths",
-      modalities: [MODALITY.TEXT, MODALITY.INTERACTIVE],
+      // The solver alone, as a live calculation is (Lydia, 17 Oct; Teslim,
+      // 19 Oct). Its text stays: it is what the segment reads as if the
+      // solver fails on the device.
+      modalities: [MODALITY.INTERACTIVE],
       text: {
         heading: "Add them step by step",
         body: {
