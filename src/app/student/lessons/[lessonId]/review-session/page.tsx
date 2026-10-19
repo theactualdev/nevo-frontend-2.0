@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LessonRoute } from "@/components/student/Lesson/LessonRoute";
+import { readReviewBack } from "@/lib/lessons/reviewHref";
 
 export const metadata: Metadata = {
   title: "Review session - Nevo",
@@ -15,15 +16,27 @@ export const metadata: Metadata = {
 // the entrance and used to be dropped at the door - which is why the review's
 // own outcome was never recorded.
 //
+// `?back=` is the Subject Detail page the review was opened from, where it
+// goes back to when it ends or is left before it begins (Olayinka, 14 Oct).
+// Read as untrusted: anything but Subject Detail's own address is dropped
+// here, and the review goes Home as it always has.
+//
 // Next.js 16: `searchParams` is a Promise and must be awaited.
 export default async function ReviewSessionPage({
   params,
   searchParams,
 }: {
   params: Promise<{ lessonId: string }>;
-  searchParams: Promise<{ concept?: string }>;
+  searchParams: Promise<{ concept?: string; back?: string | string[] }>;
 }) {
   const { lessonId } = await params;
-  const { concept } = await searchParams;
-  return <LessonRoute lessonId={lessonId} review reviewConceptId={concept} />;
+  const { concept, back } = await searchParams;
+  return (
+    <LessonRoute
+      lessonId={lessonId}
+      review
+      reviewConceptId={concept}
+      reviewBack={readReviewBack(back) ?? undefined}
+    />
+  );
 }
