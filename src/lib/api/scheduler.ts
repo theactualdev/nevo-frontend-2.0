@@ -94,11 +94,20 @@ export const schedulerApi = {
    * Not sent at all when the review asked nothing about that concept. There is
    * no evidence either way, and a cheerful outcome because the child reached
    * the end is precisely the invented signal Zero-Tag exists to stop.
+   *
+   * `sessionId` IS THE REVIEW'S OWN SITTING (`RecordReviewRequest.sessionId`,
+   * Teslim's 19 Oct contract). For a student the server reads the answers it
+   * marked in a COMPLETED session and ignores `outcome`; without the id it
+   * takes the latest completed sitting on the concept, which can be an older
+   * one, or answers 409 `review_evidence_required` when this one's completion
+   * has not landed. So it names this sitting, and is sent once that sitting's
+   * completion write has landed - see the review in `LessonPlayer`.
    */
   recordReview: (body: {
     studentId: string;
     conceptId: string;
     outcome: ReviewOutcome;
+    sessionId: string;
   }) =>
     api.post<RecordReviewResponse>("/api/scheduler/record-review", body),
 };

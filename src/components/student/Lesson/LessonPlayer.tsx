@@ -73,7 +73,7 @@ import {
   type LessonQuestionAttempt,
   type LessonQuestionAttemptWrite,
 } from "@/lib/api/lessons";
-import { schedulerApi } from "@/lib/api/scheduler";
+import { schedulerApi, type ReviewOutcome } from "@/lib/api/scheduler";
 import { answerFor, calculationAttemptFor } from "@/lib/lessons/attempts";
 import { holdAnswer, retryable } from "@/lib/lessons/pendingProgress";
 import {
@@ -686,7 +686,9 @@ export function LessonPlayer({
    * outcome for reaching the end is exactly what Zero-Tag exists to stop.
    *
    * What is sent is B28's `outcome` - what happened, not a mark - and the
-   * server decides whether it counts as recall.
+   * server decides whether it counts as recall. Since d461b60 it decides
+   * that for a student from the answers it marked in the named sitting, and
+   * answers `recallSuccessful: null`, so the firmer line cannot show (asked).
    *
    * A failure is not announced. The scheduler missing one outcome costs a
    * slightly wrong interval; telling a child their review did not count would
@@ -706,16 +708,54 @@ export function LessonPlayer({
   const teacherNote = useAssignmentNote(assignmentId);
 
   /*
-   * SENT FROM THE MOVE THAT FINISHES THE REVIEW, not from an effect on the
-   * phase, because the completion screen now waits on the answer (D40): what
-   * it may claim is what the scheduler said back. See `reviewCompletionCopy`.
+   * DECIDED BY THE MOVE THAT FINISHES THE REVIEW, not by an effect on the
+   * phase, because the completion screen waits on the answer (D40): what it
+   * may claim is what the scheduler said back. See `reviewCompletionCopy`.
+   *
+   * SENT ONCE THAT SITTING'S COMPLETION HAS LANDED, AND NAMING IT (Teslim's
+   * 19 Oct contract, `RecordReviewRequest.sessionId`). For a student the
+   * server reads the answers it marked in a COMPLETED session; sent with no
+   * id beside the completion write, it took the latest completed sitting on
+   * the concept - an older one - or answered 409 `review_evidence_required`.
+   * So it waits for `completionSaved` and sends this sitting's own id. A
+   * review that is never written completed - an authored mock, which opens
+   * no session, or a partial offline copy (`markComplete`) - has no sitting
+   * to name, and sends nothing.
    */
   const reviewRecorded = useRef(false);
   const [reviewRecord, setReviewRecord] = useState<ReviewRecord>({
     state: "unsent",
   });
+  /** What the finishing move found to say, until its sitting's completion lands. */
+  const [reviewOwed, setReviewOwed] = useState<{
+    studentId: string;
+    conceptId: string;
+    outcome: ReviewOutcome;
+  } | null>(null);
+  const reviewSent = useRef(false);
+  const reviewSitting = progress.sessionId;
+  const reviewSittingSaved = progress.completionSaved;
+  useEffect(() => {
+    if (!reviewOwed || reviewSent.current) return;
+    if (!reviewSittingSaved || !reviewSitting) return;
+    reviewSent.current = true;
+    schedulerApi
+      .recordReview({ ...reviewOwed, sessionId: reviewSitting })
+      .then((response) => setReviewRecord({ state: "recorded", response }))
+      .catch(() => setReviewRecord({ state: "failed" }));
+  }, [reviewOwed, reviewSitting, reviewSittingSaved]);
+  /*
+   * A completion that did not land leaves nothing for the scheduler to read,
+   * so the heading is not held for it: it says what is true of everyone who
+   * got here. Sent all the same if the completion lands later.
+   */
+  const reviewShown: ReviewRecord =
+    reviewRecord.state === "pending" && progress.completionFailed
+      ? { state: "failed" }
+      : reviewRecord;
   const recordReview = () => {
     if (!review || !reviewConceptId) return;
+    if (!live || partial) return;
     if (reviewRecorded.current) return;
     const studentId = getSession()?.userId;
     if (!studentId) return;
@@ -753,10 +793,7 @@ export function LessonPlayer({
 
     reviewRecorded.current = true;
     setReviewRecord({ state: "pending" });
-    schedulerApi
-      .recordReview({ studentId, conceptId: reviewConceptId, outcome })
-      .then((response) => setReviewRecord({ state: "recorded", response }))
-      .catch(() => setReviewRecord({ state: "failed" }));
+    setReviewOwed({ studentId, conceptId: reviewConceptId, outcome });
   };
   // SCRUM-101: the segment index the player is about to enter across a module
   // boundary. Non-null takes over the screen with the boundary landing; the
@@ -2418,7 +2455,7 @@ export function LessonPlayer({
     // and "once more before it fully sticks" go with it: the first claims the
     // movement the heading now waits for, the second a count nothing carries.
     if (review) {
-      const copy = reviewCompletionCopy(reviewRecord);
+      const copy = reviewCompletionCopy(reviewShown);
       return (
         <LessonComplete
           // Back to where the review was opened from (Olayinka, 14 Oct).

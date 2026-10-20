@@ -163,6 +163,7 @@ const workThrough = () => {
 beforeEach(() => {
   progress.report.mockReset();
   progress.sessionId = SESSION;
+  progress.completionSaved = false;
   trackEvent.mockReset();
   recordReview.mockReset().mockResolvedValue({});
   saveAttempt.mockReset().mockResolvedValue(reply());
@@ -266,6 +267,8 @@ describe("the server hands a child off from the quick check (B94)", () => {
   it("is never the check passed when the child closes the panel and moves on", async () => {
     const REVIEW = { ...LESSON, assessment: undefined } as unknown as Lesson;
     saveAttempt.mockResolvedValue(reply(HANDOFF));
+    // The review's completion lands, so the scheduler is told (Teslim, 19 Oct).
+    progress.completionSaved = true;
     render(
       <LessonPlayer
         lesson={REVIEW}
@@ -288,6 +291,7 @@ describe("the server hands a child off from the quick check (B94)", () => {
         studentId: "stu-1",
         conceptId: "concept-1",
         outcome: "not_recalled",
+        sessionId: SESSION,
       }),
     );
   });
@@ -362,6 +366,8 @@ describe("what a hand-off records (38a)", () => {
   it("is never the check passed when the child moves on through it", async () => {
     const REVIEW = { ...LESSON, assessment: undefined } as unknown as Lesson;
     saveAttempt.mockResolvedValue(reply(HANDOFF));
+    // The review's completion lands, so the scheduler is told (Teslim, 19 Oct).
+    progress.completionSaved = true;
     render(
       <LessonPlayer
         lesson={REVIEW}
@@ -384,6 +390,7 @@ describe("what a hand-off records (38a)", () => {
         studentId: "stu-1",
         conceptId: "concept-1",
         outcome: "not_recalled",
+        sessionId: SESSION,
       }),
     );
   });
