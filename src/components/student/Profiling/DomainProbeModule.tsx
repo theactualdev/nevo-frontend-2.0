@@ -30,8 +30,8 @@ import { StretchInterstitial } from "./StretchInterstitial";
  *
  * `sat` - the child was asked at least one question here, or the server
  * already holds the module as done. `absent` - there was nothing to ask: no
- * session, no subject with items, or every subject answered with none
- * (`probePlan`). `failed` - a read failed before anything could be asked, so
+ * session, the server holds the probe as unavailable, no subject with items,
+ * or every subject answered with none (`probePlan`). `failed` - a read failed before anything could be asked, so
  * whether there was anything is not known. None of the three is a claim that
  * the server recorded the module; only the server's gate says that
  * (`onboardingGate`).
@@ -157,9 +157,12 @@ type Stage =
  * WHICH SUBJECT. Finishing ONE subject is what records `domain_probe`
  * (`probe.submit_answer`), so one is run. The subjects are those the plan
  * found an item in. A JSS or SS child with more than one chooses, in the
- * frame's grid; anyone else - and a JSS or SS child with only one, where a
- * grid of one is not a choice - gets the first the server lists. The frame
- * draws no choice for Primary.
+ * frame's grid, listed in the server's order; anyone else - and a JSS or SS
+ * child with only one, where a grid of one is not a choice - runs the
+ * server's suggested subject (`probeSubjectId`, Teslim 19 Oct: "use
+ * probeSubjectId as the server's suggested first subject"), or the first the
+ * server lists when it suggests none this device can ask. The frame draws no
+ * choice for Primary.
  *
  * Only ever presented with something to ask: absence is the caller's to act
  * on (rule 5), before this is drawn (`DomainProbeStep`).
@@ -185,14 +188,16 @@ export function DomainProbeModule({
   track?: TrackEvent;
   onDone: (outcome: DomainProbeOutcome) => void;
 }) {
+  /** The subject run without a choice: the server's suggestion, else its first. */
+  const runs = openings.find((o) => o.suggested) ?? openings[0];
   /** After the stretch, or instead of it: the choice, or the first item as read. */
   const opening = (): Stage =>
     CHOOSE_FIRST.includes(band) && openings.length > 1
       ? { at: "choose" }
       : {
           at: "asking",
-          subjectId: openings[0].subject.subjectId,
-          item: openings[0].item,
+          subjectId: runs.subject.subjectId,
+          item: runs.item,
           picked: null,
         };
   const [stage, setStage] = useState<Stage>(() =>

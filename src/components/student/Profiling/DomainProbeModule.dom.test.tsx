@@ -109,14 +109,20 @@ const QE = {
   asked: 1,
   maxQuestions: 8,
 };
-const FINISHED = { finished: true, subjectId: "sub-maths", entryPoint: 0.62, asked: 6 };
+// `entryPoint` is withheld from a student since d461b60: always null.
+const FINISHED = { finished: true, subjectId: "sub-maths", entryPoint: null, asked: 6 };
 const EMPTY = { finished: true, noItems: true, subjectId: "sub-maths" };
 
 /** What the plan hands the module: a subject and the first item it read. */
-const MATHS_FIRST: ProbeOpenings = [{ subject: MATHS, item: Q1 }];
+const MATHS_FIRST: ProbeOpenings = [{ subject: MATHS, item: Q1, suggested: false }];
 const BOTH: ProbeOpenings = [
-  { subject: MATHS, item: Q1 },
-  { subject: ENGLISH, item: QE },
+  { subject: MATHS, item: Q1, suggested: false },
+  { subject: ENGLISH, item: QE, suggested: false },
+];
+/** Both, with the second the server's suggested subject (`probeSubjectId`). */
+const ENGLISH_SUGGESTED: ProbeOpenings = [
+  { subject: MATHS, item: Q1, suggested: false },
+  { subject: ENGLISH, item: QE, suggested: true },
 ];
 
 const signIn = () =>
@@ -304,7 +310,7 @@ describe("nothing a child reads says how they did (rules 2, 3 and 9)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Rock" }));
     await waitFor(() => expect(onDone).toHaveBeenCalled());
-    // The finish carried `entryPoint: 0.62` and `asked: 6`.
+    // The finish carried `asked: 6`.
     expect(text()).not.toMatch(/\d/);
     expect(text()).not.toMatch(verdict);
   });
@@ -378,6 +384,33 @@ describe("which subject (JSS and SS choose first, 09d)", () => {
     expect(screen.queryByText(/which subject/i)).toBeNull();
   });
 
+  it("runs the server's suggested subject for a Primary child, not the first listed", () => {
+    // Teslim, 19 Oct: "use probeSubjectId as the server's suggested first
+    // subject". Never this device's pick.
+    renderModule({ band: "p46", openings: ENGLISH_SUGGESTED });
+
+    expect(screen.getByText("Which word names a colour?")).toBeInTheDocument();
+    expect(screen.queryByText("Which animal lives in water?")).toBeNull();
+    expect(screen.queryByText(/which subject/i)).toBeNull();
+  });
+
+  it("runs the first the server lists when it suggests none this device can ask", () => {
+    renderModule({ band: "p13", openings: BOTH });
+
+    expect(screen.getByText("Which animal lives in water?")).toBeInTheDocument();
+  });
+
+  it("leaves a JSS child's grid in the server's order, suggestion or not", () => {
+    // Whether the suggestion is listed first or preselected is design's call
+    // (09d draws neither); until then the grid is as it was.
+    renderModule({ band: "jss", openings: ENGLISH_SUGGESTED });
+
+    const names = screen
+      .getAllByRole("button")
+      .map((b) => b.textContent);
+    expect(names).toEqual(["Mathematics", "English"]);
+  });
+
   it("asks a Primary child no choice, which the frame does not draw", () => {
     renderModule({ band: "p13", openings: BOTH });
 
@@ -403,6 +436,19 @@ describe("which subject (JSS and SS choose first, 09d)", () => {
     expect(await screen.findByText("Which word names a colour?")).toBeInTheDocument();
     expect(screen.queryByText(/which subject/i)).toBeNull();
     expect(next.mock.calls).toEqual([["sub-maths"], ["sub-eng"]]);
+  });
+
+  it("runs the subject the server suggests, read from readiness", async () => {
+    readiness.mockResolvedValue({
+      ...ready([MATHS, ENGLISH]),
+      probeSubjectId: "sub-eng",
+      probePolicy: "one_available_subject",
+    });
+    next.mockImplementation(async (id: string) => (id === "sub-eng" ? QE : Q1));
+    renderStep();
+
+    expect(await screen.findByText("Which word names a colour?")).toBeInTheDocument();
+    expect(screen.queryByText("Which animal lives in water?")).toBeNull();
   });
 
   it("takes the band from the roster for the child signed in", async () => {
@@ -455,7 +501,7 @@ describe("whether it runs is found out first (Olayinka, 19 Oct)", () => {
   });
 
   it("starts from what the caller already read, reading nothing itself", async () => {
-    renderStep({ openings: [{ subject: ENGLISH, item: QE }] });
+    renderStep({ openings: [{ subject: ENGLISH, item: QE, suggested: false }] });
 
     expect(await screen.findByText("Which word names a colour?")).toBeInTheDocument();
     expect(readiness).not.toHaveBeenCalled();
@@ -493,6 +539,31 @@ describe("with nothing to ask, it is not presented (rule 5)", () => {
     await waitFor(() => expect(onDone).toHaveBeenCalledWith("absent"));
     expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
     expect(track).not.toHaveBeenCalled();
+  });
+
+  it("ends as absent, not sat, when the server holds the probe as unavailable", async () => {
+    // Teslim's 19 Oct contract: no bank is `completed: true, status:
+    // "unavailable"`. Nothing was asked, so the run around it maps three.
+    readiness.mockResolvedValue({
+      complete: false,
+      modules: [
+        { id: "grid_span", completed: true, status: "completed" },
+        { id: "pattern_flanker", completed: true, status: "completed" },
+        { id: "sentence_dot", completed: true, status: "completed" },
+        { id: "domain_probe", completed: true, status: "unavailable" },
+      ],
+      subjects: [],
+      nextModule: null,
+      probeSubjectId: null,
+      probePolicy: "one_available_subject",
+    });
+    renderStep({ stretchFirst: true });
+
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith("absent"));
+    expect(onDone).not.toHaveBeenCalledWith("sat");
+    expect(next).not.toHaveBeenCalled();
+    expect(track).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
   });
 
   it("asks nothing of a child the server already has it for", async () => {

@@ -67,8 +67,6 @@ import { depthShown, type DepthShown } from "@/lib/lessons/depthShown";
 import { atLowerDepth, NOTHING_SIMPLIFIED } from "@/lib/lessons/lowerDepth";
 import { asSourceText } from "@/lib/lessons/fromContent";
 import { reportCalculationFallback } from "@/lib/api/clientErrors";
-import { scaffoldAttemptFor } from "@/lib/lessons/scaffoldAttempt";
-import { scaffoldsApi } from "@/lib/api/scaffolds";
 import { useAssignmentNote } from "@/hooks/useAssignmentNote";
 import { isChunkable } from "@/lib/lessons/chunk";
 import {
@@ -77,7 +75,7 @@ import {
   type LessonQuestionAttempt,
   type LessonQuestionAttemptWrite,
 } from "@/lib/api/lessons";
-import { schedulerApi } from "@/lib/api/scheduler";
+import { schedulerApi, type ReviewOutcome } from "@/lib/api/scheduler";
 import { answerFor, calculationAttemptFor } from "@/lib/lessons/attempts";
 import { holdAnswer, retryable } from "@/lib/lessons/pendingProgress";
 import {
@@ -719,7 +717,9 @@ export function LessonPlayer({
    * outcome for reaching the end is exactly what Zero-Tag exists to stop.
    *
    * What is sent is B28's `outcome` - what happened, not a mark - and the
-   * server decides whether it counts as recall.
+   * server decides whether it counts as recall. Since d461b60 it decides
+   * that for a student from the answers it marked in the named sitting, and
+   * answers `recallSuccessful: null`, so the firmer line cannot show (asked).
    *
    * A failure is not announced. The scheduler missing one outcome costs a
    * slightly wrong interval; telling a child their review did not count would
@@ -739,16 +739,54 @@ export function LessonPlayer({
   const teacherNote = useAssignmentNote(assignmentId);
 
   /*
-   * SENT FROM THE MOVE THAT FINISHES THE REVIEW, not from an effect on the
-   * phase, because the completion screen now waits on the answer (D40): what
-   * it may claim is what the scheduler said back. See `reviewCompletionCopy`.
+   * DECIDED BY THE MOVE THAT FINISHES THE REVIEW, not by an effect on the
+   * phase, because the completion screen waits on the answer (D40): what it
+   * may claim is what the scheduler said back. See `reviewCompletionCopy`.
+   *
+   * SENT ONCE THAT SITTING'S COMPLETION HAS LANDED, AND NAMING IT (Teslim's
+   * 19 Oct contract, `RecordReviewRequest.sessionId`). For a student the
+   * server reads the answers it marked in a COMPLETED session; sent with no
+   * id beside the completion write, it took the latest completed sitting on
+   * the concept - an older one - or answered 409 `review_evidence_required`.
+   * So it waits for `completionSaved` and sends this sitting's own id. A
+   * review that is never written completed - an authored mock, which opens
+   * no session, or a partial offline copy (`markComplete`) - has no sitting
+   * to name, and sends nothing.
    */
   const reviewRecorded = useRef(false);
   const [reviewRecord, setReviewRecord] = useState<ReviewRecord>({
     state: "unsent",
   });
+  /** What the finishing move found to say, until its sitting's completion lands. */
+  const [reviewOwed, setReviewOwed] = useState<{
+    studentId: string;
+    conceptId: string;
+    outcome: ReviewOutcome;
+  } | null>(null);
+  const reviewSent = useRef(false);
+  const reviewSitting = progress.sessionId;
+  const reviewSittingSaved = progress.completionSaved;
+  useEffect(() => {
+    if (!reviewOwed || reviewSent.current) return;
+    if (!reviewSittingSaved || !reviewSitting) return;
+    reviewSent.current = true;
+    schedulerApi
+      .recordReview({ ...reviewOwed, sessionId: reviewSitting })
+      .then((response) => setReviewRecord({ state: "recorded", response }))
+      .catch(() => setReviewRecord({ state: "failed" }));
+  }, [reviewOwed, reviewSitting, reviewSittingSaved]);
+  /*
+   * A completion that did not land leaves nothing for the scheduler to read,
+   * so the heading is not held for it: it says what is true of everyone who
+   * got here. Sent all the same if the completion lands later.
+   */
+  const reviewShown: ReviewRecord =
+    reviewRecord.state === "pending" && progress.completionFailed
+      ? { state: "failed" }
+      : reviewRecord;
   const recordReview = () => {
     if (!review || !reviewConceptId) return;
+    if (!live || partial) return;
     if (reviewRecorded.current) return;
     const studentId = getSession()?.userId;
     if (!studentId) return;
@@ -786,10 +824,7 @@ export function LessonPlayer({
 
     reviewRecorded.current = true;
     setReviewRecord({ state: "pending" });
-    schedulerApi
-      .recordReview({ studentId, conceptId: reviewConceptId, outcome })
-      .then((response) => setReviewRecord({ state: "recorded", response }))
-      .catch(() => setReviewRecord({ state: "failed" }));
+    setReviewOwed({ studentId, conceptId: reviewConceptId, outcome });
   };
   // SCRUM-101: the segment index the player is about to enter across a module
   // boundary. Non-null takes over the screen with the boundary landing; the
@@ -2412,42 +2447,19 @@ export function LessonPlayer({
           });
           // The first answer to each question, for the scheduler. `Map.set` is
           // guarded so a re-answer cannot overwrite what they knew first time.
+          /*
+           * NO SCAFFOLD ATTEMPT RIDES BESIDE IT ANY MORE. `POST
+           * /api/intelligence/scaffolds/attempt` refuses every student write
+           * without persisted server evidence (422
+           * `server_marked_attempt_required`), and the answer above already
+           * moves support: "Review/scaffold compatibility writes require
+           * persisted server evidence; normal lesson completion/answers
+           * already update these mechanisms" (Teslim's 19 Oct contract,
+           * d461b60). It also sent a device verdict the server no longer
+           * takes from a student.
+           */
           if (!firstAnswers.current.has(questionIndex)) {
             firstAnswers.current.set(questionIndex, correct);
-            /*
-             * THE SCAFFOLD ATTEMPT, AND IT RIDES THE SAME FIRST-ANSWER GUARD.
-             *
-             * Inside the `if` deliberately: the engine decides how much support
-             * a child gets on a concept from how they answered, and a child who
-             * changes their mind has not attempted the problem twice. Posting
-             * on every tap would let one question move a support level as often
-             * as it was tapped.
-             *
-             * Fire and forget, and the response is deliberately ignored. The
-             * decision is the server's, the only surface a level appears on is
-             * the indicator, and the indicator is not on screen during the
-             * after-lesson assessment - so there is nothing here to apply it
-             * to. Design ruled that a change of support announces itself
-             * nowhere, so inventing a surface for `nextIntensity` would be the
-             * one thing that ruling forbids.
-             *
-             * Failure is swallowed for the same reason the scheduler write
-             * swallows its own: missing one attempt costs a slightly stale
-             * intensity, and telling a child their answer did not count would
-             * be worse and is not true.
-             */
-            const attempt = scaffoldAttemptFor({
-              question: lesson.assessment?.questions[questionIndex] ?? {},
-              correct,
-              studentId: getSession()?.userId,
-              responseTimeMs,
-              // B27: the pick itself, and the lesson it came from.
-              choice: lesson.assessment?.questions[questionIndex]?.options.find(
-                (o) => o.id === selectedId,
-              ),
-              lessonId: lesson.id,
-            });
-            if (attempt) void scaffoldsApi.attempt(attempt).catch(() => {});
           }
           // Record the pick (first per question) for the Review Answers screen.
           reviewAnswers.current = [
@@ -2491,7 +2503,7 @@ export function LessonPlayer({
     // and "once more before it fully sticks" go with it: the first claims the
     // movement the heading now waits for, the second a count nothing carries.
     if (review) {
-      const copy = reviewCompletionCopy(reviewRecord);
+      const copy = reviewCompletionCopy(reviewShown);
       return (
         <LessonComplete
           // Back to where the review was opened from (Olayinka, 14 Oct).

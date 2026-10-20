@@ -68,8 +68,10 @@ function firstStep(
 /**
  * Module 4 has nothing to ask: Home, the first time this tab meets that for
  * this child, and the nothing-state every time after (`claimMoveOn`, the loop
- * guard: until the server applies the no-question-bank exception it still
- * refuses their lessons, and each refusal brings them back here).
+ * guard: a server refusing their lessons for Module 4 would bring them back
+ * here on every refusal). Since Teslim's 19 Oct contract the server records a
+ * probe with no bank as `unavailable` and `completed`, and no longer refuses
+ * for it, so the guard should not be reached that way; it stays as the guard.
  */
 function moveOn(): "home" | "nothing" {
   return claimMoveOn(getSession()?.userId) ? "home" : "nothing";

@@ -3,6 +3,7 @@ import type {
   CheckpointScalar,
   ComprehensionCheckpoint,
 } from "./checkpoints";
+import type { SessionDelivery } from "./intelligence";
 import type { SegmentVariants } from "./variants";
 
 /**
@@ -191,6 +192,26 @@ export interface ReadingChunk {
   endOffset: number;
 }
 
+/**
+ * `ReadingGroup` - a run of `readingChunks` the server groups for this
+ * child's delivery, from the session's frozen `engineConfig` (Teslim's 19 Oct
+ * learning-science handoff: "Online/offline segments can carry readingGroups
+ * over immutable readingChunks").
+ *
+ * TYPED, NOT READ. How a group is drawn - whether a reading "part" is a chunk
+ * or a group, and whether `pauseAfter` places a pause - is a question for
+ * design, so nothing consumes it yet. `wordCount` is the server's sizing,
+ * never shown.
+ */
+export interface ReadingGroup {
+  id: string;
+  /** `ReadingChunk.id`s, in order. */
+  chunkIds: string[];
+  wordCount: number;
+  /** Defaults to false. */
+  pauseAfter?: boolean;
+}
+
 export interface LessonSegment extends SegmentVariants {
   id: string;
   /** Shipped 1 Sep. 0 or absent means no estimate - see `LessonSummary`. */
@@ -205,6 +226,8 @@ export interface LessonSegment extends SegmentVariants {
    * or empty is one body, which is a normal state.
    */
   readingChunks?: ReadingChunk[];
+  /** Groups of those chunks for this child's delivery - see `ReadingGroup`. Not read. */
+  readingGroups?: ReadingGroup[];
   availableModalities: ContentModality[];
   /**
    * Typed as of 3 Sep. `answerKey` is NULLABLE for lessons parsed before the
@@ -460,6 +483,22 @@ export interface LessonSessionResponse {
    */
   depth?: "standard" | "lower";
   reroutedFromSessionId?: string | null;
+  /**
+   * What the server froze for this session's delivery (`SessionDeliveryResponse`,
+   * 18 Oct): the engine config with the active accommodations applied, as it
+   * was at `capturedAt`. TYPED, NOT READ. It answers after the first frame,
+   * so applying it would reshape a screen the child already sees (rules 6
+   * and 7); whether the session opens first and this becomes the source is a
+   * question to Teslim (20 Oct contract check).
+   */
+  deliveryState?: SessionDelivery | null;
+  /**
+   * Where the server starts this session, zero-based (defaults to 0). For a
+   * fresh lesson it can be past the first segment, chosen by next-work. TYPED,
+   * NOT READ: whether a lesson opens part-way is a question to Teslim and
+   * design (20 Oct contract check).
+   */
+  segmentPosition?: number;
 }
 
 /**
@@ -581,6 +620,12 @@ export interface LessonReroute {
   /** Zero-based, like every segment position on the wire. */
   segmentPosition: number;
   reason: "nothing_landed" | "not_attempted";
+  /**
+   * The new lower session's frozen delivery, on a `nothing_landed` reroute;
+   * none on `not_attempted`, which keeps its session. TYPED, NOT READ: whether
+   * "Start again" takes it is a question to Teslim (20 Oct contract check).
+   */
+  deliveryState?: SessionDelivery | null;
 }
 
 /**

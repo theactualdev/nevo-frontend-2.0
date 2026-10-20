@@ -305,8 +305,14 @@ export function useStudentProfile(studentId: string): StudentProfileState {
       // swallowed - and when it failed a teacher was shown a raw UUID as the
       // name of the concept their student was struggling with.
       name: m.conceptName as string,
-      understanding: pct(m.masteryProbabilityConcept),
-      reading: pct(m.masteryProbabilityReading),
+      /*
+       * TEACHER LANE: both are nullable since d461b60 (withheld from a
+       * student; staff reads still carry numbers), and `pct(null)` draws 0%.
+       * Cast to compile with the behaviour unchanged; the null guard is the
+       * teacher lane's to add (student lane, 20 Oct contract catch-up).
+       */
+      understanding: pct(m.masteryProbabilityConcept as number),
+      reading: pct(m.masteryProbabilityReading as number),
       practiceCount: m.practiceCount,
     })),
     recommendations,

@@ -27,7 +27,9 @@ import { useLiveQuery } from "./useLiveQuery";
  *
  * AND NO NUMBERS REACH THE SCREEN. Screen 22 is explicit - no percentile, no
  * score, no comparison, only direction of travel - so `understanding` and
- * `masteryAverage` order and select what to show, and never appear. What a
+ * `masteryAverage` never appear, and nothing orders or selects by them:
+ * since d461b60 (Teslim, 19 Oct) the server withholds both from a student,
+ * and they are always null here. Concepts are ordered by practice. What a
  * child reads is which subjects they have worked in and which concepts they
  * have touched, both of which are facts rather than judgements.
  */
@@ -35,8 +37,11 @@ import { useLiveQuery } from "./useLiveQuery";
 export interface ConceptRow {
   conceptId: string;
   name: string;
-  /** 0-1. Orders the list; never rendered. */
-  understanding: number;
+  /**
+   * The engine's estimate, withheld from a student since d461b60: always null
+   * here. Carried as sent; never rendered, never ordered by, never a 0.
+   */
+  understanding: number | null;
   practiceCount: number;
 }
 

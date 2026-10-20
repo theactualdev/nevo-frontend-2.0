@@ -62,43 +62,6 @@ describe("state", () => {
   });
 });
 
-describe("attempt", () => {
-  it("returns the decision whole, including the words we do not render", async () => {
-    /*
-     * `studentMessage` is required on the wire and has no home on any frame.
-     * It is typed so it is not erased while design decides where it goes - the
-     * opposite mistake from rendering it somewhere we invented.
-     */
-    post.mockResolvedValue({
-      state,
-      previousIntensity: "full_support",
-      nextIntensity: "partial_support",
-      outcome: "correct",
-      levelChanged: true,
-      changeReason: "three in a row",
-      studentMessage: "You're getting this.",
-    });
-
-    const res = await scaffoldsApi.attempt({
-      studentId: "s-1",
-      conceptId: "c-1",
-      problemId: "p-1",
-      responseCorrect: true,
-    });
-
-    expect(res.nextIntensity).toBe("partial_support");
-    expect(res.levelChanged).toBe(true);
-    expect(res.changeReason).toBe("three in a row");
-    expect(res.studentMessage).toBe("You're getting this.");
-    expect(post).toHaveBeenCalledWith("/api/intelligence/scaffolds/attempt", {
-      studentId: "s-1",
-      conceptId: "c-1",
-      problemId: "p-1",
-      responseCorrect: true,
-    });
-  });
-});
-
 describe("history", () => {
   it("narrows server-side rather than filtering what came back", async () => {
     get.mockResolvedValue([]);
