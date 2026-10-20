@@ -42,9 +42,10 @@ function baselineLeft(readiness: LearningReadiness): boolean {
 }
 
 /**
- * Where the server's answers start a child, Home when nothing is left, or
- * null while they are still being read - and for a Module 4 with nothing to
- * ask, which is not a place to start but a move on (`moveOn`).
+ * Where the server's answers start a child, on (`returnTo`, else Home) when
+ * nothing is left, or null while they are still being read - and for a
+ * Module 4 with nothing to ask, which is not a place to start but a move on
+ * (`moveOn`).
  */
 function firstStep(
   readiness: LearningReadiness,
@@ -66,7 +67,7 @@ function firstStep(
 }
 
 /**
- * Module 4 has nothing to ask: Home, the first time this tab meets that for
+ * Module 4 has nothing to ask: on, the first time this tab meets that for
  * this child, and the nothing-state every time after (`claimMoveOn`, the loop
  * guard: a server refusing their lessons for Module 4 would bring them back
  * here on every refusal). Since Teslim's 19 Oct contract the server records a
@@ -95,19 +96,29 @@ function afterModuleFour(outcome: DomainProbeOutcome): "home" | "nothing" {
  * THE SERVER SAYS WHAT IS LEFT; THIS DEVICE NEVER INFERS IT. Readiness
  * (`GET /api/v1/students/me/onboarding`), and then whether Module 4 has
  * anything to ask (`planProbe`), decide - both before anything is drawn:
- *   - all four in: Home.
- *   - only Module 4 left: straight into it, then Home.
+ *   - all four in: on.
+ *   - only Module 4 left: straight into it, then on.
  *   - any of the first three left: the profiling run, its trials sent for
- *     this child, then Module 4, then Home. Its quest map has a stop for
+ *     this child, then Module 4, then on. Its quest map has a stop for
  *     Module 4 only if Module 4 will run.
+ *
+ * ON IS BACK TO THE PAGE THAT WAS REFUSED, else Home. On the 20 Oct
+ * production run a child who tapped Start on a lesson finished the probe and
+ * landed on Home instead of in the lesson. The refused page rides here as
+ * `returnTo`, checked twice (`returnPathOf`, as it is sent and as it is
+ * read), and every way out that means "onboarding is done" takes it: all
+ * four in on arrival, Module 4 sat, Module 4 already held, and the one-time
+ * move on for a Module 4 with nothing to ask. Not the nothing-state's Home
+ * button: that is the way out of a state that may be refused again, and it
+ * goes Home.
  *
  * NOTHING TO ASK MOVES THE CHILD ON (Olayinka, 19 Oct: "an unavailable probe
  * moves the child on, never to a dead end"; Teslim's 19 Oct no-question-bank
- * exception): straight Home, replacing this route, rather than a screen to
+ * exception): straight on, replacing this route, rather than a screen to
  * dismiss. Nothing is recorded or assumed for Module 4 - no placement, no
- * completion - and the server's gate decides what Home can open. If it still
+ * completion - and the server's gate decides what can open. If it still
  * refuses, the child is back here, and a second arrival in the same tab stays
- * on the nothing-state rather than bouncing Home again (`claimMoveOn`).
+ * on the nothing-state rather than bouncing on again (`claimMoveOn`).
  *
  * A READ THAT FAILS IS NOT "NOTHING TO ASK": it is the nothing-state, as it
  * was - no words (none is designed, and none is true for every cause) and the
@@ -117,7 +128,15 @@ function afterModuleFour(outcome: DomainProbeOutcome): "home" | "nothing" {
  *
  * NO NOTICE, PIN OR YOU'RE IN. Those make an account, and this child has one.
  */
-export function OnboardingResume() {
+export function OnboardingResume({
+  returnTo,
+}: {
+  /**
+   * The student page the child was refused, already checked by the route
+   * (`returnPathOf`). Absent: Home.
+   */
+  returnTo?: string;
+} = {}) {
   const router = useRouter();
   const hydrated = useHydrated();
   const owner = hydrated ? (getSession()?.userId ?? null) : null;
@@ -165,8 +184,9 @@ export function OnboardingResume() {
   useEffect(() => {
     // A visitor with no session has nothing to finish here, and reads nothing.
     if (signedOut) router.replace(SIGN_IN);
-    else if (step === "home") router.replace(HOME);
-  }, [signedOut, step, router]);
+    // Done: back to the page they were refused, else Home - see above.
+    else if (step === "home") router.replace(returnTo ?? HOME);
+  }, [signedOut, step, router, returnTo]);
 
   if (signedOut || step === null || step === "home") {
     // Reading, or on the way out: nothing to show for a moment.

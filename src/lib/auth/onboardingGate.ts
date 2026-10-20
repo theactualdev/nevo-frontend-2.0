@@ -18,7 +18,8 @@ export const ONBOARDING_REQUIRED = "onboarding_required";
 
 /**
  * Where a signed-in child finishes onboarding: the modules the server still
- * names, and then Home (`OnboardingResume`).
+ * names, and then back to the page that was refused - or Home, when there is
+ * none to go back to (`OnboardingResume`, `returnPathOf`).
  *
  * Its own route because the server's `navigatesTo`, `/student/onboarding`, is
  * the Welcome screen - the first door of the flow that CREATES an account,
@@ -69,12 +70,43 @@ export function isOnboardingRequired(err: unknown): boolean {
   return status === 409 && refusal(detail).code === ONBOARDING_REQUIRED;
 }
 
+/** The query the continue route reads the way back from. */
+export const RETURN_PARAM = "next";
+
+/** A student page, as a bare path with an optional plain query. */
+const STUDENT_PAGE = /^\/student\/[A-Za-z0-9_/-]*(\?[A-Za-z0-9_=&%-]*)?$/;
+
+/**
+ * The page a child is sent back to once onboarding is finished, or null.
+ *
+ * On the 20 Oct production run a child who tapped Start on a lesson was sent
+ * to finish Module 4 and, once it was sat, landed on Home - not on the lesson
+ * they had asked for. So the refused page rides to the continue route and
+ * back. It arrives in a URL, which anyone can write, so ONLY A SAME-SITE
+ * STUDENT PAGE is taken: `/student/...` as a bare path of letters, digits,
+ * `-`, `_` and `/`, with at most a plain query (a lesson link's
+ * `?assignment=`). No host, no `//`, no backslash, no dots at all - so no
+ * `..` - and never an onboarding route, which would send a child who has
+ * just finished back into the flow that finished them.
+ */
+export function returnPathOf(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  if (!STUDENT_PAGE.test(value) || value.includes("//")) return null;
+  if (value.startsWith("/student/onboarding")) return null;
+  return value;
+}
+
 /**
  * Where a refused request sends a child onboarding is not finished for, or
  * null to leave the refusal with whoever made it.
  *
  * ONLY A CHILD, ONLY THIS CODE, and never from an onboarding route itself: a
  * refusal met there must not reload the very flow that is finishing it.
+ *
+ * The continue route is told the refused page, `pathname` and `search`, when
+ * it is one a child may be sent back to (`returnPathOf`), so finishing takes
+ * them back there. Only the continue route: a server-named onboarding path is
+ * not one that reads it.
  *
  * Pure so it can be tested, for the reason `withdrawnDoor` is: jsdom will not
  * let a test observe `window.location`.
@@ -84,11 +116,17 @@ export function onboardingDoor(
   status: number,
   detail: unknown,
   pathname: string,
+  search = "",
 ): string | null {
   if (role !== USER_ROLES.STUDENT) return null;
   if (!isOnboardingRequired({ status, detail })) return null;
   if (pathname.startsWith("/student/onboarding")) return null;
-  return onboardingPath(refusal(detail).navigatesTo);
+  const door = onboardingPath(refusal(detail).navigatesTo);
+  if (door !== ONBOARDING_CONTINUE_ROUTE) return door;
+  const back = returnPathOf(pathname + search);
+  return back
+    ? `${door}?${RETURN_PARAM}=${encodeURIComponent(back)}`
+    : door;
 }
 
 const MOVED_ON = "nevo:onboarding:moved-on-without-probe";
@@ -98,11 +136,12 @@ const MOVED_ON = "nevo:onboarding:moved-on-without-probe";
  *
  * Olayinka, 19 Oct: "an unavailable probe moves the child on, never to a dead
  * end", under Teslim's 19 Oct no-question-bank exception. So the continue
- * route sends such a child Home rather than leaving them on a screen to
- * dismiss. But until the server applies the exception, its gate still refuses
- * their lessons with 409 `onboarding_required`, and that refusal sends them
- * straight back to the continue route - Home, lesson, refused, continue, Home,
- * for ever. The client's latch cannot stop it: `client.ts` leaves with
+ * route moves such a child on - back to the page they were refused, or Home -
+ * rather than leaving them on a screen to dismiss. But until the server
+ * applies the exception, its gate still refuses their lessons with 409
+ * `onboarding_required`, and that refusal sends them straight back to the
+ * continue route - lesson, refused, continue, lesson, for ever. The client's
+ * latch cannot stop it: `client.ts` leaves with
  * `location.assign`, a full load, and every load starts unlatched.
  *
  * So the move on is taken ONCE PER TAB PER CHILD, in `sessionStorage`, which
