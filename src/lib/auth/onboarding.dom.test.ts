@@ -13,6 +13,7 @@ import {
   rememberOnboardedStudent,
   startOnboardingDraft,
 } from "./onboarding";
+import { startEntrySession } from "./firstPin";
 import {
   clearSession,
   getRememberedProfile,
@@ -379,5 +380,77 @@ describe("a session stored as 05 or the sequence opens", () => {
 
     expect(arriveAtSequence()).toBe("stay");
     expect(getSession()?.userId).toBe("sso-child");
+  });
+
+  /*
+   * A SESSION A PIN MADE IN THIS TAB IS THIS TAB'S OWN (19 Oct, on-screen
+   * QA). A cleared child's new PIN on 05 went Home; the device's Back came to
+   * 05, which held his new session as one it had found, and leaving 05 ended
+   * it. A first PIN's session, Back from Module 4 to 05, the same.
+   */
+  const pinMade = (userId: string) => ({
+    userId,
+    loginIdentifier: `NV-${userId}`,
+    session: {
+      accessToken: `tok-${userId}`,
+      tokenType: "bearer",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId,
+      role: "student",
+    },
+  });
+
+  it("is routed on from 05 when a cleared child's new PIN made it in this tab", () => {
+    store();
+    clearOnboardingDraft();
+
+    startEntrySession(pinMade("chidi"));
+
+    expect(arriveAtEntry()).toBe("routeOn");
+    expect(arriveAtSequence()).toBe("routeOn");
+    expect(getSession()?.userId).toBe("chidi");
+  });
+
+  it("is routed on from 05 when the run's own first PIN made it, part way through", () => {
+    startOnboardingDraft({ ...RUN, userId: "tobi" });
+
+    startEntrySession(pinMade("tobi"));
+
+    expect(arriveAtEntry()).toBe("routeOn");
+    expect(getSession()?.userId).toBe("tobi");
+  });
+});
+
+/*
+ * NOTHING IN IT, NOTHING STORED (19 Oct, on-screen QA). Leaving 05 for the
+ * Welcome wrote `nevo.onboarding.draft = {}` into the tab: the Welcome starts
+ * each new child's draft, with nothing in it.
+ */
+describe("an empty draft", () => {
+  const DRAFT_KEY = "nevo.onboarding.draft";
+
+  it("is not stored when a new child starts with nothing to carry", () => {
+    startOnboardingDraft({ name: "Femi", schoolCode: "K7DQ" });
+
+    startOnboardingDraft();
+
+    expect(window.sessionStorage.getItem(DRAFT_KEY)).toBeNull();
+    expect(getOnboardingDraft()).toEqual({});
+  });
+
+  it("is not stored by a merge that adds nothing", () => {
+    mergeOnboardingDraft({ userId: undefined });
+
+    expect(window.sessionStorage.getItem(DRAFT_KEY)).toBeNull();
+  });
+
+  it("is still stored whenever there is something in it", () => {
+    startOnboardingDraft({ name: "Tobi" });
+    mergeOnboardingDraft({ userId: "tobi" });
+
+    expect(JSON.parse(window.sessionStorage.getItem(DRAFT_KEY) ?? "")).toEqual({
+      name: "Tobi",
+      userId: "tobi",
+    });
   });
 });

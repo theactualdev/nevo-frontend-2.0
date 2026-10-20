@@ -66,12 +66,20 @@ export function getOnboardingDraft(): OnboardingDraft {
   }
 }
 
+/**
+ * NOTHING IN IT, NOTHING STORED (19 Oct browser-storage audit). The Welcome
+ * starts every new child's draft, and leaving 05 for it wrote an empty
+ * `{}` into the tab. Absent reads as the same empty draft.
+ */
+function writeDraft(draft: OnboardingDraft): void {
+  const raw = JSON.stringify(draft);
+  if (raw === "{}") window.sessionStorage.removeItem(DRAFT_KEY);
+  else window.sessionStorage.setItem(DRAFT_KEY, raw);
+}
+
 export function mergeOnboardingDraft(patch: OnboardingDraft): void {
   try {
-    window.sessionStorage.setItem(
-      DRAFT_KEY,
-      JSON.stringify({ ...getOnboardingDraft(), ...patch }),
-    );
+    writeDraft({ ...getOnboardingDraft(), ...patch });
   } catch {
     // Private mode etc. - the flow still works, the device just won't remember.
   }
@@ -88,7 +96,7 @@ export function mergeOnboardingDraft(patch: OnboardingDraft): void {
  */
 export function startOnboardingDraft(seed: OnboardingDraft = {}): void {
   try {
-    window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(seed));
+    writeDraft(seed);
   } catch {
     // Private mode etc. - there is no earlier draft to leak either.
   }
@@ -125,10 +133,11 @@ export function clearOnboardingDraft(): void {
  *    progress are kept, and the run goes on with no token until its own
  *    first PIN.
  *  - THIS TAB FINISHED ITS RUN AS THIS SESSION'S CHILD (`markRunFinished`, at
- *    You're In), or the run in progress is the session's own (its first PIN
- *    made the account): the child is routed on, signed in, to finishing
- *    onboarding as themselves (`OnboardingResume`), which resumes what is
- *    left or goes Home. Nothing is ended.
+ *    You're In), or a PIN made the session in this tab (a first PIN, or a
+ *    cleared child's new one), or the run in progress is the session's own
+ *    (its first PIN made the account): the child is routed on, signed in,
+ *    to finishing onboarding as themselves (`OnboardingResume`), which
+ *    resumes what is left or goes Home. Nothing is ended.
  *  - ANY OTHER SESSION: nobody can say whose it is yet. Nothing is ended
  *    and nobody is routed into it. 05 opens as a door - nothing on it is
  *    sent as that session (`doorSession`) - and the child's own lookup
@@ -157,6 +166,11 @@ function differentChildsRun(userId: string): boolean {
  * child holding the tablet rather than whoever used it last: Back from the
  * first lesson routes them on, signed in, and no other session is ever
  * routed on. Forgotten when that session ends (`forgetFinishedRun`).
+ *
+ * AND WHEN A PIN MADE THE SESSION IN THIS TAB (19 Oct browser-storage
+ * audit; `startEntrySession`): a first PIN in the sequence, or a cleared
+ * child's new PIN on 05. That session is this tab's own as surely, and 05
+ * held it as one it found - so Back to 05, then off it, ended it.
  */
 const FINISHED_RUN_KEY = "nevo.onboarding.finishedRun";
 
