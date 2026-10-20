@@ -45,6 +45,12 @@ export function isHeldAtDoor(token: string | null | undefined): boolean {
   return openDoors > 0 && Boolean(token) && token === heldToken;
 }
 
+/** The stored session's token, while an open door is holding it. */
+export function heldSessionToken(): string | null {
+  const token = getSession()?.token;
+  return token && isHeldAtDoor(token) ? token : null;
+}
+
 /**
  * LEAVING A DOOR BY ITS BACK ENDS THE SESSION IT HAS BEEN HOLDING (19 Oct
  * browser-storage audit). 05's Back went to the Welcome with the last
@@ -52,14 +58,24 @@ export function isHeldAtDoor(token: string | null | undefined): boolean {
  * the student cookie from the Welcome on to Home - so the next child landed
  * on that child's Home, signed in as them. Ended through `clearSession`, the
  * path every sign-out takes, so that child's leftovers go as at Sign out.
+ * Leaving 05 any other way - the device's own Back included - ends it as 05
+ * closes (`useDoor`'s `endOnLeave`).
  *
  * ONLY THE HELD ONE. A session stored at the door since it opened - a
  * cleared child's new PIN on 05 - has its own token, and is kept. Returns
  * whether there was one to end.
  */
 export function endHeldSession(): boolean {
-  const session = getSession();
-  if (!session || !isHeldAtDoor(session.token)) return false;
+  const token = heldSessionToken();
+  return token ? endSessionIfStill(token) : false;
+}
+
+/**
+ * End the stored session if it is still the one with this token - the one a
+ * door held, read while it was open. Anything stored since is somebody's own.
+ */
+export function endSessionIfStill(token: string): boolean {
+  if (getSession()?.token !== token) return false;
   clearSession();
   return true;
 }

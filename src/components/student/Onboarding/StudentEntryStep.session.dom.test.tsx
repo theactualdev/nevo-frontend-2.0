@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { StrictMode, useLayoutEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import { StudentEntryStep } from "./StudentEntryStep";
+import { WelcomeScreen } from "@/components/student/Welcome/WelcomeScreen";
 import { AuthProvider } from "@/context/AuthContext";
+import { isHeldAtDoor } from "@/lib/auth/doorSession";
 import {
   getOnboardingDraft,
   markRunFinished,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
 import { clearSession, getSession, setSession } from "@/lib/auth/session";
+import { onSessionEnd } from "@/lib/auth/sessionEnd";
 import { holdSignals } from "@/lib/signals/outbox";
 
 /**
@@ -25,8 +30,10 @@ import { holdSignals } from "@/lib/signals/outbox";
  *    05 from their first lesson - and they are routed on, signed in, to
  *    finish onboarding as themselves. Nothing is ended, and nothing on 05 is
  *    sent as them while it is open.
- *  - LEAVING BY BACK with another child's session held ends it, then goes to
- *    the Welcome; a session stored on 05 itself is kept.
+ *  - LEAVING 05 BY ANY WAY with another child's session held ends it - the
+ *    chevron, and the device's own Back as Next's router delivers it; a
+ *    session a PIN stored on 05 itself is kept, and routed on when Back
+ *    comes to 05 again.
  *
  * The real network layer runs here; only `fetch` is replaced, to read what
  * each request carried.
@@ -244,69 +251,117 @@ describe("05 over another child's stored session, with no run in progress", () =
   });
 });
 
-describe("05 for the child this tab finished its run as", () => {
-  it("routes them on, signed in, and ends nothing", async () => {
-    markRunFinished("amara");
-    open05();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-
-    expect(getSession()?.userId).toBe("amara");
-    expect(replace).toHaveBeenCalledWith("/student/onboarding/continue");
-  });
-
-  it("keeps their session through the device's own Back", async () => {
-    markRunFinished("amara");
-    open05();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-    act(() => {
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-
-    expect(getSession()?.userId).toBe("amara");
-    expect(replace).not.toHaveBeenCalledWith("/student/onboarding");
-  });
-});
 
 /*
- * LEAVING 05 BY BACK WITH ANOTHER CHILD'S SESSION HELD (19 Oct browser-storage
- * audit). Back went to the Welcome with Amara's session still stored, and the
- * route guard sends anyone carrying the student cookie from the Welcome on to
- * Home - so the next child landed on Amara's Home, signed in as her. Leaving
- * ends the session 05 has been holding, through the path every sign-out
- * takes, and then goes to the Welcome.
+ * THE TABLET'S HISTORY, AND NEXT'S ROUTER OVER IT (19 Oct, on-screen QA).
+ * Next added its own `popstate` listener when the app first loaded - before
+ * 05 existed to add one - and it draws the page the history goes back to
+ * inside that same dispatch. So 05 is unmounted, and any listener of its own
+ * removed, before that listener is called. Firing `popstate` at a lone 05
+ * never showed this: its listener was the only one, and ran.
  */
-describe("leaving 05 by Back with another child's session held", () => {
-  /** Where the session stood at the moment each navigation was asked for. */
-  let atNavigation: (string | null)[] = [];
-  beforeEach(() => {
-    atNavigation = [];
-    const note = () => {
-      atNavigation.push(getSession()?.userId ?? null);
-    };
-    push.mockImplementation(note);
-    replace.mockImplementation(note);
-  });
+type Page = "welcome" | "05" | "03" | "elsewhere";
+const PAGES: Record<string, Page> = {
+  "/student/onboarding": "welcome",
+  "/student/onboarding/school": "05",
+  "/student/onboarding/teacher-join": "03",
+};
+/** The history, oldest first; the last is the page on screen. */
+let history: Page[] = [];
+let show: (page: Page) => void = () => {};
+/** Where the session stood at the moment each navigation was asked for. */
+let atNavigation: (string | null)[] = [];
 
-  it("ends it from the Back chevron, as at Sign out, then goes to the Welcome", async () => {
-    open05();
+function Tablet() {
+  const [page, setPage] = useState<Page>(() => history[history.length - 1]);
+  useLayoutEffect(() => {
+    show = setPage;
+  }, []);
+  if (page === "welcome") return <WelcomeScreen />;
+  if (page === "05") return <StudentEntryStep key="05" framing="school" />;
+  if (page === "03") return <StudentEntryStep key="03" framing="teacher" />;
+  return <p>Somewhere else</p>;
+}
+
+/** Next's own Back: the page before, drawn inside the dispatch. */
+function nextsOwnBack() {
+  history.pop();
+  const page = history[history.length - 1];
+  flushSync(() => show(page));
+}
+
+function navigate(how: "push" | "replace") {
+  return (url: string) => {
+    atNavigation.push(getSession()?.userId ?? null);
+    const page = PAGES[url] ?? "elsewhere";
+    if (how === "push") history.push(page);
+    else history[history.length - 1] = page;
+    show(page);
+  };
+}
+
+/**
+ * The tablet on `pages`, settled as a child would find it: what the page
+ * asked for on opening has been asked before anyone can press anything.
+ */
+async function onTablet(pages: Page[], { strict = false } = {}) {
+  history = pages;
+  const tablet = (
+    <AuthProvider>
+      <Tablet />
+    </AuthProvider>
+  );
+  render(strict ? <StrictMode>{tablet}</StrictMode> : tablet);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+}
+
+/** Next's listener is there before 05 is: added before anything renders. */
+function nextsRouter() {
+  history = [];
+  atNavigation = [];
+  show = () => {};
+  window.addEventListener("popstate", nextsOwnBack);
+  return () => window.removeEventListener("popstate", nextsOwnBack);
+}
+
+async function devicesBack() {
+  act(() => {
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+}
+
+const DRAFT_KEY = "nevo.onboarding.draft";
+const roleCookie = () => /(?:^|;\s*)nevo\.role=student/.test(document.cookie);
+
+describe("leaving 05 with another child's session held", () => {
+  let offRouter = () => {};
+  beforeEach(() => {
+    offRouter = nextsRouter();
+    push.mockImplementation(navigate("push"));
+    replace.mockImplementation(navigate("replace"));
+  });
+  afterEach(() => offRouter());
+
+  it("ends it on the device's own Back, landing on the Welcome with no session, no cookie and no empty draft", async () => {
+    await onTablet(["welcome", "05"]);
     expect(getSession()?.userId).toBe("amara");
 
-    fireEvent.click(screen.getByRole("button", { name: "Back" }));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
+    await devicesBack();
 
+    expect(
+      screen.getByRole("button", { name: "I have a school code" }),
+    ).toBeInTheDocument();
     expect(getSession()).toBeNull();
-    expect(push).toHaveBeenCalledWith("/student/onboarding");
-    // Ended before the Welcome was asked for, not after.
-    expect(atNavigation).toEqual([null]);
+    expect(window.localStorage.getItem("nevo.auth.session")).toBeNull();
+    expect(roleCookie()).toBe(false);
+    // The Welcome starts the next child's draft with nothing in it, and so
+    // stores nothing.
+    expect(window.sessionStorage.getItem(DRAFT_KEY)).toBeNull();
     // Her own unsent signals got their last try with her token, as at any
     // sign-out - and that is all that went as her.
     const asAmara = sent.filter((r) => r.auth === "Bearer tok-amara");
@@ -314,29 +369,49 @@ describe("leaving 05 by Back with another child's session held", () => {
     expect(asAmara[0].body).toContain(AMARAS_STREAM.sessionId);
   });
 
-  it("ends it on the device's own Back too, and lands on the Welcome", async () => {
-    open05();
+  it("ends it on the device's own Back to 03, which opens over nothing, and 03's own Back ends nothing more", async () => {
+    await onTablet(["welcome", "03", "05"]);
     expect(getSession()?.userId).toBe("amara");
 
-    act(() => {
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    });
+    await devicesBack();
+
+    expect(
+      screen.getByRole("heading", { name: "Join your school" }),
+    ).toBeInTheDocument();
+    expect(getSession()).toBeNull();
+    expect(roleCookie()).toBe(false);
+
+    await devicesBack();
+
+    expect(
+      screen.getByRole("button", { name: "I have a school code" }),
+    ).toBeInTheDocument();
+    expect(getSession()).toBeNull();
+    expect(sent.filter((r) => r.auth === "Bearer tok-amara")).toHaveLength(1);
+  });
+
+  it("ends it from the Back chevron, as at Sign out, before the Welcome is asked for", async () => {
+    await onTablet(["welcome", "05"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    expect(getSession()).toBeNull();
-    expect(replace).toHaveBeenCalledWith("/student/onboarding");
+    expect(push).toHaveBeenCalledWith("/student/onboarding");
     expect(atNavigation).toEqual([null]);
+    expect(getSession()).toBeNull();
+    expect(window.sessionStorage.getItem(DRAFT_KEY)).toBeNull();
     const asAmara = sent.filter((r) => r.auth === "Bearer tok-amara");
     expect(asAmara).toHaveLength(1);
+    expect(asAmara[0].body).toContain(AMARAS_STREAM.sessionId);
   });
 
-  it("ends it from the age check's hold on 05, whose Back is the same chevron", async () => {
+  it("ends it from the age check's hold on 05, by its chevron", async () => {
     // A held child ends nothing on the match, so the session is still held
     // when they leave.
     lookupBody = { ...MATCHED, ageCheckPending: true };
-    open05();
+    await onTablet(["welcome", "05"]);
     await typeThePair();
     expect(
       screen.getByText("Nevo is sorting something out with your school"),
@@ -348,34 +423,142 @@ describe("leaving 05 by Back with another child's session held", () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    expect(getSession()).toBeNull();
     expect(push).toHaveBeenCalledWith("/student/onboarding");
     expect(atNavigation).toEqual([null]);
+    expect(getSession()).toBeNull();
   });
 
-  it("keeps a session a cleared child's new PIN stored on 05", async () => {
-    lookupBody = { ...MATCHED, pinCleared: true };
-    open05();
+  it("ends it from the age check's hold on 05 by the device's Back too", async () => {
+    lookupBody = { ...MATCHED, ageCheckPending: true };
+    await onTablet(["welcome", "05"]);
     await typeThePair();
-    expect(
-      screen.getByRole("heading", { name: "Choose a new PIN" }),
-    ).toBeInTheDocument();
+    expect(getSession()?.userId).toBe("amara");
+
+    await devicesBack();
+
+    expect(getSession()).toBeNull();
+    expect(roleCookie()).toBe(false);
+  });
+
+  it("holds it through Strict Mode's rehearsed unmount, and ends it only when 05 is left", async () => {
+    await onTablet(["welcome", "05"], { strict: true });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+
+    // Development mounts every screen twice; that is not a child leaving.
+    expect(getSession()?.userId).toBe("amara");
+    expect(isHeldAtDoor("tok-amara")).toBe(true);
+    expect(sent.filter((r) => r.auth === "Bearer tok-amara")).toEqual([]);
+
+    await devicesBack();
+
+    expect(getSession()).toBeNull();
+  });
+
+  it("leaves a way on after the lookup as it was: Tobi goes to his first run with his own draft", async () => {
+    await onTablet(["welcome", "05"]);
+
+    await typeThePair();
+
+    expect(push).toHaveBeenCalledWith("/student/onboarding/sequence");
+    expect(screen.getByText("Somewhere else")).toBeInTheDocument();
+    // Ended at the match, before the way on was asked for - and once.
+    expect(atNavigation).toEqual([null]);
+    expect(getSession()).toBeNull();
+    expect(sent.filter((r) => r.auth === "Bearer tok-amara")).toHaveLength(1);
+    expect(getOnboardingDraft()).toMatchObject({
+      name: "Tobi",
+      schoolCode: "K7DQ",
+      admissionNumber: "BGA/2031",
+    });
+  });
+});
+
+/*
+ * A SESSION MADE ON 05 IS THIS TAB'S OWN (19 Oct, on-screen QA). Chidi's
+ * teacher cleared his PIN; he chose a new one on 05 and went Home. The
+ * device's Back came to 05 again, which held his new session as one it had
+ * found stored - so leaving it, by its chevron or any other way, ended his
+ * own session: his last try went as him, his cookie went, and his queued
+ * signals were dropped. Marked as the tab's own when the PIN stored it, he
+ * is routed on, signed in, and nothing on 05 ends it.
+ */
+describe("a cleared child's new PIN on 05, then the device's Back to 05", () => {
+  let offRouter = () => {};
+  beforeEach(() => {
+    offRouter = nextsRouter();
+    push.mockImplementation(navigate("push"));
+    // 05 stays up while it routes him on, as over a slow route.
+    replace.mockImplementation(() => {
+      atNavigation.push(getSession()?.userId ?? null);
+    });
+  });
+  afterEach(() => offRouter());
+
+  it("routes him on, offers no Back that ends him, and keeps his session off 05 again", async () => {
+    lookupBody = { ...MATCHED, pinCleared: true };
+    await onTablet(["welcome", "05"]);
+    await typeThePair();
     for (const digit of ["1", "2", "3", "4", "1", "2", "3", "4"]) {
       fireEvent.click(screen.getByRole("button", { name: digit }));
     }
+    // Stored, the "all set" beat, then Home.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(400);
+      await vi.advanceTimersByTimeAsync(7_000);
     });
-    expect(getSession()?.userId).toBe("tobi");
+    expect(getSession()).toMatchObject({ userId: "tobi", token: "tok-tobi" });
+    expect(push).toHaveBeenCalledWith("/student/dashboard");
+    expect(screen.getByText("Somewhere else")).toBeInTheDocument();
+    const ended: string[] = [];
+    const off = onSessionEnd((e) => ended.push(e.userId));
 
-    act(() => {
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    });
+    // Back from Home: 05 again.
+    await devicesBack();
+
+    expect(replace).toHaveBeenCalledWith("/student/onboarding/continue");
+    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+    expect(getSession()).toMatchObject({ userId: "tobi", token: "tok-tobi" });
+
+    // And off 05 again, by the device's Back once more.
+    await devicesBack();
+    off();
+
+    expect(getSession()).toMatchObject({ userId: "tobi", token: "tok-tobi" });
+    expect(roleCookie()).toBe(true);
+    expect(ended).toEqual([]);
+  });
+});
+
+describe("05 for the child this tab finished its run as", () => {
+  let offRouter = () => {};
+  beforeEach(() => {
+    offRouter = nextsRouter();
+  });
+  afterEach(() => offRouter());
+
+  it("routes them on, signed in, and ends nothing", async () => {
+    markRunFinished("amara");
+    open05();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    expect(getSession()).toMatchObject({ userId: "tobi", token: "tok-tobi" });
-    expect(replace).not.toHaveBeenCalledWith("/student/onboarding");
+    expect(getSession()?.userId).toBe("amara");
+    expect(replace).toHaveBeenCalledWith("/student/onboarding/continue");
+  });
+
+  it("keeps their session as the device's Back takes them off 05", async () => {
+    markRunFinished("amara");
+    await onTablet(["welcome", "05"]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(replace).toHaveBeenCalledWith("/student/onboarding/continue");
+
+    await devicesBack();
+
+    expect(getSession()?.userId).toBe("amara");
+    expect(roleCookie()).toBe(true);
   });
 });

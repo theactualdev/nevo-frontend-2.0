@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError } from "@/lib/api/client";
-import { isHeldAtDoor, openDoor, usableSession } from "./doorSession";
-import { clearSession, setSession } from "./session";
+import {
+  endHeldSession,
+  endSessionIfStill,
+  heldSessionToken,
+  isHeldAtDoor,
+  openDoor,
+  usableSession,
+} from "./doorSession";
+import { clearSession, getSession, setSession } from "./session";
 
 /**
  * A DOOR SENDS NOTHING AS THE SESSION IT FOUND STORED (19 Oct browser-storage
@@ -88,5 +95,51 @@ describe("a door open over a stored session", () => {
 
     expect(usableSession()?.userId).toBe("kofi");
     close();
+  });
+});
+
+/*
+ * LEAVING A DOOR ENDS WHAT IT HELD, AND NOTHING ELSE (19 Oct browser-storage
+ * audit). The held token is read while the door is open and ended after it
+ * has closed - so the ending is told which token, and a session stored since
+ * is somebody's own.
+ */
+describe("ending the session a door held", () => {
+  it("names the held token only while the door is open", () => {
+    signInAs("amara");
+    expect(heldSessionToken()).toBeNull();
+
+    const close = openDoor();
+    expect(heldSessionToken()).toBe("tok-amara");
+
+    close();
+    expect(heldSessionToken()).toBeNull();
+  });
+
+  it("ends that token's session after the door has closed", () => {
+    signInAs("amara");
+    const close = openDoor();
+    const held = heldSessionToken() ?? "";
+    close();
+
+    expect(endSessionIfStill(held)).toBe(true);
+    expect(getSession()).toBeNull();
+  });
+
+  it("keeps a session stored since, which has its own token", () => {
+    signInAs("amara");
+    const close = openDoor();
+    const held = heldSessionToken() ?? "";
+    signInAs("chidi");
+    close();
+
+    expect(endSessionIfStill(held)).toBe(false);
+    expect(getSession()?.userId).toBe("chidi");
+    // And the chevron's own end, while the door is open, keeps it too.
+    const again = openDoor();
+    signInAs("tobi");
+    expect(endHeldSession()).toBe(false);
+    expect(getSession()?.userId).toBe("tobi");
+    again();
   });
 });
