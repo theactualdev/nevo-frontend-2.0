@@ -85,7 +85,9 @@ import type {
  *   - CALCULATION is on where `calculationFor` can build every step from the
  *     payload SCRUM-177 delivered: each step's `input`, its stored answers,
  *     `assembles` and `equationState`, and the `scaffold` drawing where a
- *     frame draws its kind. See `calculationFromVariant`.
+ *     frame draws its kind. See `calculationFromVariant`. It is then the
+ *     segment's ONLY channel, and where it cannot be built the segment is its
+ *     source text - see `modalitiesFor`.
  *
  * ON EXPIRING URLS, which used to be the stated reason visual was off: the
  * variants carry `urlExpiresInSeconds`, and `contentApi.mediaUrl` mints a fresh
@@ -114,20 +116,25 @@ function modalitiesFor(
   calculation: CalculationSegment | undefined,
 ): Modality[] {
   /*
-   * A CALCULATION IS AN INTERACTIVE CHANNEL, and offering it is what makes the
-   * solver reachable at all. The player routes the Interactive modality to the
-   * solver when the segment carries a calculation, so a segment that never
-   * offers Interactive can never open one however good its payload is.
+   * A CALCULATION IS THE INTERACTIVE CHANNEL AND NOTHING ELSE. The player
+   * routes Interactive to the solver when the segment carries a calculation,
+   * and a calculation is never opened, offered or suggested as plain text or
+   * as a picture: Lydia, 17 Oct (#5), "Calculations stop opening as plain
+   * text ... Agree it is interactive and visual only, and match", and Teslim,
+   * 19 Oct, "A valid one advertises interactive only, with the scaffold
+   * inside the player." The scaffold is drawn by the solver; "calculations do
+   * not generate pictures".
+   *
+   * This offered Text beside it, and the player opens a segment in its first
+   * offered channel when the engine names none - so a calculation with no
+   * plan row opened as its text, and could be switched to it besides.
    *
    * Gated on the BUILT calculation rather than on `availableModalities`,
    * because the same rule applies here as to visual and audio: a segment can
-   * claim a modality it has no payload for, and claiming is not having. If
-   * `calculationFor` refused the variant, there is nothing to open and the
-   * channel is not offered.
+   * claim a modality it has no payload for, and claiming is not having. One
+   * the server offered that `calculationFor` refused is `asSourceText`.
    */
-  if (calculation) {
-    return [MODALITY.TEXT, MODALITY.INTERACTIVE];
-  }
+  if (calculation) return [MODALITY.INTERACTIVE];
   const offered = segment.availableModalities.filter(
     (m): m is Modality =>
       (RENDERABLE as readonly string[]).includes(m) &&
@@ -138,6 +145,40 @@ function modalitiesFor(
       (m !== MODALITY.AUDIO || audioFor(segment, "") !== undefined),
   );
   return offered.length > 0 ? offered : [MODALITY.TEXT];
+}
+
+/**
+ * A calculation this app cannot draw, as its source text - and its narration
+ * where it has a clip to play - never a blank section and never a picture.
+ *
+ * Teslim, 19 Oct: "Invalid/missing calculation data falls back to source text
+ * and available audio ... If frontend validation rejects it, render the
+ * returned source body rather than a blank section", and "A renderer failure
+ * on the device should use the source body and report the failure." Both
+ * come here: `calculationFor` refusing what the server offered as
+ * interactive, and the solver failing on the device (`LessonPlayer`).
+ *
+ * The picture goes with the calculation: calculations do not generate
+ * pictures, and a diagram of a sum with no words is the failure the backend
+ * itself fixed ("a picture of a sum is not a lesson on its own").
+ *
+ * `reason` is why, for the crash report the player sends - never rendered.
+ */
+export function asSourceText(
+  segment: LessonSegment,
+  reason: string,
+): LessonSegment {
+  const fallback: LessonSegment = {
+    ...segment,
+    modalities: segment.audio
+      ? [MODALITY.TEXT, MODALITY.AUDIO]
+      : [MODALITY.TEXT],
+    calculationRefused: reason,
+  };
+  delete fallback.calculation;
+  delete fallback.calculationVariant;
+  delete fallback.visual;
+  return fallback;
 }
 
 /**
@@ -415,13 +456,45 @@ function quickCheckFor(segment: ContentSegment): QuickCheck | undefined {
  * none: a child who works two steps and meets a dead third has been walked
  * into a locked door, and the text they would otherwise have read is still
  * the whole lesson.
+ *
+ * A REFUSAL SAYS WHY, for the crash report the player sends when the server
+ * offered this segment as interactive (Teslim, 19 Oct) - so a calculation
+ * the server checked and this app did not is found and fixed, not silently
+ * read as text forever. `undefined` is a segment that is no calculation.
  */
 function calculationFor(
   segment: ContentSegment,
-): CalculationSegment | undefined {
+): CalculationVerdict | undefined {
   const variant = segment.calculationVariant;
-  return variant ? calculationFromVariant(variant) : undefined;
+  if (!variant) {
+    return segment.contentType === "calculation" && offersInteractive(segment)
+      ? { refused: "no calculation payload" }
+      : undefined;
+  }
+  /*
+   * A PAYLOAD THIS CANNOT EVEN READ IS A REFUSAL, NOT A CRASH. This runs for
+   * every segment as the lesson opens, so one malformed calculation thrown
+   * from here took the whole lesson down to its error screen. Only the
+   * error's kind goes in the reason: its message can quote what it read.
+   */
+  try {
+    return calculationVerdict(variant);
+  } catch (cause) {
+    const kind = cause instanceof Error ? cause.name : typeof cause;
+    return { refused: `the payload could not be read (${kind})` };
+  }
 }
+
+/** Whether the server offered this segment as interactive. */
+const offersInteractive = (segment: ContentSegment) =>
+  (segment.availableModalities as readonly string[]).includes(
+    MODALITY.INTERACTIVE,
+  );
+
+/** A calculation built, or why it was not - about our checks, never the lesson's words. */
+type CalculationVerdict =
+  | { calculation: CalculationSegment; refused?: undefined }
+  | { calculation?: undefined; refused: string };
 
 /**
  * One wire `CalculationVariant` as the solver draws it, or nothing.
@@ -433,7 +506,15 @@ function calculationFor(
 export function calculationFromVariant(
   variant: WireCalculationVariant,
 ): CalculationSegment | undefined {
-  if (variant.steps.length === 0) return undefined;
+  return calculationVerdict(variant).calculation;
+}
+
+function calculationVerdict(
+  variant: WireCalculationVariant,
+): CalculationVerdict {
+  if (!Array.isArray(variant.steps) || variant.steps.length === 0) {
+    return { refused: "no steps" };
+  }
 
   // Resolved once: a tap step needs something to build on, and that is a
   // property of the variant rather than of the step. A place-value build
@@ -447,16 +528,21 @@ export function calculationFromVariant(
   );
 
   const steps: CalculationStep[] = [];
-  for (const step of variant.steps) {
+  for (const [i, step] of variant.steps.entries()) {
     const built = calcStepFor(step, manipulative);
-    if (!built) return undefined;
+    // By position, never by its words or its authored id.
+    if (typeof built === "string") {
+      return {
+        refused: `step ${i + 1} of ${variant.steps.length}: ${built}`,
+      };
+    }
     steps.push(built);
   }
 
   const conceptId = variant.conceptId?.trim();
   const answer =
     typeof variant.answer === "string" ? variant.answer.trim() : variant.answer;
-  return {
+  const calculation: CalculationSegment = {
     variant: variant.type?.trim() || "co_construction",
     ...(conceptId ? { conceptId } : {}),
     // The solved calculation's answer, for the server alone (see the type).
@@ -487,6 +573,7 @@ export function calculationFromVariant(
     steps,
     completion: variant.completionStatement.trim(),
   };
+  return { calculation };
 }
 
 /**
@@ -625,7 +712,7 @@ function storedAnswers(
 }
 
 /**
- * One step, or nothing.
+ * One step, or why not - in words about our checks, never the step's own.
  *
  * `input` - SCRUM-177's tap, choice or number - is what the child does, and it
  * alone decides how the step is drawn. A step that names none is content
@@ -640,7 +727,7 @@ function storedAnswers(
 function calcStepFor(
   step: WireCalculationStep,
   manipulative: CalculationSegment["manipulative"],
-): CalculationStep | undefined {
+): CalculationStep | string {
   const accepted = storedAnswers(step, {
     alternatives: step.input === "number",
   });
@@ -664,11 +751,11 @@ function calcStepFor(
     }));
     // Backend rejects a choice with fewer than two options now, but older
     // content is already parsed and a prompt with one choice is not a choice.
-    if (options.length < 2) return undefined;
+    if (options.length < 2) return "a choice with fewer than two options";
     // The same defect `toQuickCheck` refuses on a checkpoint: a key that names
     // none of its own options is a question with no right answer.
     if (!options.some((o) => isStoredAnswer(o.value, accepted))) {
-      return undefined;
+      return "a choice whose stored answer names none of its options";
     }
     const confirm = step.confirmationText?.trim();
     return {
@@ -681,7 +768,7 @@ function calcStepFor(
   }
 
   if (step.input === "number") {
-    if (accepted.length === 0) return undefined;
+    if (accepted.length === 0) return "a number step with no stored answer";
     const unit = step.unit?.trim();
     const keys = keysFor(step);
     return {
@@ -701,7 +788,7 @@ function calcStepFor(
      * substitution §4 forbids for the scaffold image - a different task
      * wearing the right prompt.
      */
-    if (!manipulative) return undefined;
+    if (!manipulative) return "a tap step with nothing this app can build on";
     /*
      * HOW MANY PIECES IS `tapCount`, a positive whole number (B102). It used
      * to be read out of the step's stored answers, which said what the answer
@@ -710,11 +797,11 @@ function calcStepFor(
      */
     const target = step.tapCount;
     if (typeof target !== "number" || !Number.isInteger(target)) {
-      return undefined;
+      return "a tap step whose tapCount is not a whole number";
     }
     const places = placesIn(manipulative);
     if (target < 1 || (places !== undefined && target > places)) {
-      return undefined;
+      return "a tap step whose tapCount its build cannot hold";
     }
     const counted = countedAnswer(step.answer, target);
     return {
@@ -725,7 +812,7 @@ function calcStepFor(
     };
   }
 
-  return undefined;
+  return "a step with no input this app draws";
 }
 
 /**
@@ -1025,8 +1112,9 @@ function segmentFor(
   const quickCheck = quickCheckFor(segment);
   const visual = visualFor(segment, lessonTitle);
   const audio = audioFor(segment, lessonTitle);
-  const calculation = calculationFor(segment);
-  return {
+  const verdict = calculationFor(segment);
+  const calculation = verdict?.calculation;
+  const built: LessonSegment = {
     id: segment.id,
     modalities: modalitiesFor(segment, calculation),
     text: textFor(segment, lessonTitle),
@@ -1042,6 +1130,16 @@ function segmentFor(
       ? { calculationVariant: calculation.variant, calculation }
       : {}),
   };
+  /*
+   * OURS TO FALL BACK FROM ONLY WHERE THE SERVER OFFERED IT AS INTERACTIVE.
+   * A calculation the server itself could not build arrives as text, and
+   * audio where it made some, with no Interactive (Teslim, 19 Oct): that is
+   * rendered as it is offered, above. One it checked and offered that our
+   * stricter checks refuse is its source text, and is reported.
+   */
+  return verdict?.refused !== undefined && offersInteractive(segment)
+    ? asSourceText(built, verdict.refused)
+    : built;
 }
 
 /**

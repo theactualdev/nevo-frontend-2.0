@@ -418,7 +418,10 @@ export interface CalculationSegment {
 
 export interface LessonSegment {
   id: string;
-  /** Modalities this segment supports (minimum two). */
+  /**
+   * Modalities this segment supports (minimum two) - except a calculation,
+   * which is the solver alone (Lydia, 17 Oct; Teslim, 19 Oct).
+   */
   modalities: Modality[];
   text?: TextContent;
   visual?: VisualContent;
@@ -432,6 +435,12 @@ export interface LessonSegment {
   calculationVariant?: CalculationVariant | null;
   /** Calculation content, present when `calculationVariant` is set. */
   calculation?: CalculationSegment;
+  /**
+   * The server offered a calculation here that this app could not draw, so
+   * the segment is its source text instead - see `asSourceText`. Why, in
+   * words about our checks, for the crash report alone: never rendered.
+   */
+  calculationRefused?: string;
   /** Optional inline comprehension check shown after this segment. */
   quickCheck?: QuickCheck;
 }

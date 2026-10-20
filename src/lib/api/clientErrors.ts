@@ -213,7 +213,64 @@ export function reportClientError(
 ): void {
   if (typeof window === "undefined") return;
   if (process.env.NODE_ENV === "development") return;
-  const report = clientErrorReport(error, surface, window.location.pathname);
+  send(clientErrorReport(error, surface, window.location.pathname));
+}
+
+/** What a calculation that fell back to its source text was. */
+export interface CalculationFallback {
+  lessonId: string;
+  segmentId: string;
+  /** Why, in words about our checks - see `LessonSegment.calculationRefused`. */
+  reason: string;
+  /** What the solver threw, where it was the solver that failed. */
+  error?: unknown;
+}
+
+/**
+ * The report for a calculation shown as its source text. Pure.
+ *
+ * NAMES THE LESSON AND THE SEGMENT, which no other report does: a crash says
+ * where in our code it happened, and this is a fault in one lesson's content
+ * meeting our checks, which nobody can find without both ids. They are
+ * content ids - which lesson, not which child - and the route still has its
+ * values taken out, because the ids in a path cannot be told from a token.
+ * The reason is ours (`calculationFor`): never the lesson's words. A solver
+ * that threw adds its message, cut down as any crash's is, and its frames.
+ */
+export function calculationFallbackReport(
+  { lessonId, segmentId, reason, error }: CalculationFallback,
+  pathname: string,
+): ClientErrorReport {
+  const thrown =
+    error === undefined ? "" : ` - ${reportableMessage(error, pathname)}`;
+  return {
+    message:
+      `Calculation shown as its source text: lesson ${lessonId}, segment ${segmentId}: ${reason}${thrown}`.slice(
+        0,
+        MESSAGE_MAX,
+      ),
+    route: pathname ? reportableRoute(pathname) : null,
+    stack: error instanceof Error ? reportableStack(error.stack, pathname) : null,
+    appVersion: appVersion(),
+    surface: "student",
+    incidentId: null,
+  };
+}
+
+/**
+ * Report a calculation the child was given as text instead (Teslim, 19 Oct:
+ * "A renderer failure on the device should use the source body and report
+ * the failure"). Sent the way a crash is - once per page, and never a word
+ * on screen if it fails.
+ */
+export function reportCalculationFallback(fallback: CalculationFallback): void {
+  if (typeof window === "undefined") return;
+  if (process.env.NODE_ENV === "development") return;
+  send(calculationFallbackReport(fallback, window.location.pathname));
+}
+
+/** One report, once per fault per page, fire-and-forget. */
+function send(report: ClientErrorReport): void {
   const fault = [
     report.surface,
     report.route,

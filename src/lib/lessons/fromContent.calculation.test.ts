@@ -1030,3 +1030,189 @@ describe("the scaffold drawing", () => {
     expect(calc?.scaffold).toBeUndefined();
   });
 });
+
+/*
+ * Lydia, 17 Oct (#5): "Calculations stop opening as plain text. The app
+ * offers text or interactive, the backend sends interactive or visual. Agree
+ * it is interactive and visual only, and match." Teslim, 19 Oct: "A valid one
+ * advertises interactive only, with the scaffold inside the player.
+ * Invalid/missing calculation data falls back to source text and available
+ * audio ... If frontend validation rejects it, render the returned source
+ * body rather than a blank section."
+ */
+describe("what a calculation segment offers", () => {
+  const PICTURE = {
+    type: "ai_generated_image",
+    imageUrl: "https://cdn.example/sum.png",
+    caption: "Two quarters and one quarter",
+    qualityValidated: true,
+  };
+  const CLIP = {
+    audioUrl: "https://cdn.example/sum.mp3",
+    script: "We move the letters to one side.",
+  };
+  const offered = (over: Partial<ContentSegment>) => {
+    const built = lessonFromContent(lesson(segment(over)));
+    if (!built) throw new Error("the adapter refused the whole lesson");
+    return built.segments[0];
+  };
+  /** One step nobody can be right about: the whole variant is refused. */
+  const UNMARKABLE = algebra({
+    steps: [step(), step({ stepId: "st-2", answer: null })],
+  });
+
+  it("offers a calculation it can draw as the solver alone", () => {
+    // Whatever the server's list says beside it, and whatever else it sent:
+    // never its text, never a picture, never its narration in place of it.
+    for (const availableModalities of [
+      ["interactive"],
+      ["text", "interactive"],
+      ["interactive", "visual"],
+      ["text", "visual", "audio", "interactive"],
+    ]) {
+      const built = offered({
+        availableModalities,
+        calculationVariant: algebra(),
+        visualVariant: PICTURE,
+        audioVariant: CLIP,
+      } as unknown as Partial<ContentSegment>);
+
+      expect(built.modalities, availableModalities.join()).toEqual([
+        "interactive",
+      ]);
+      expect(built.calculation).toBeDefined();
+      expect(built).not.toHaveProperty("calculationRefused");
+    }
+  });
+
+  it("gives one offered as interactive that our checks refuse as its source text, and says why", () => {
+    const built = offered({
+      availableModalities: ["interactive"],
+      calculationVariant: UNMARKABLE,
+    } as unknown as Partial<ContentSegment>);
+
+    // Its text, never a blank section.
+    expect(built.modalities).toEqual(["text"]);
+    expect(built.text?.body.default).toBe("We move the letters to one side.");
+    expect(built.calculation).toBeUndefined();
+    expect(built.calculationVariant).toBeUndefined();
+    // Why, by position and in words about our checks, for the report.
+    expect(built.calculationRefused).toBe(
+      "step 2 of 2: a number step with no stored answer",
+    );
+  });
+
+  it("adds its narration where it has a clip, and never its picture", () => {
+    for (const availableModalities of [["interactive"], ["interactive", "visual"]]) {
+      const built = offered({
+        availableModalities,
+        calculationVariant: UNMARKABLE,
+        visualVariant: PICTURE,
+        audioVariant: CLIP,
+      } as unknown as Partial<ContentSegment>);
+
+      // A picture of a sum with no words was the lone channel here before.
+      expect(built.modalities, availableModalities.join()).toEqual([
+        "text",
+        "audio",
+      ]);
+      expect(built.visual).toBeUndefined();
+      expect(built.audio?.src).toBe(CLIP.audioUrl);
+    }
+  });
+
+  it("says why in our words, never the lesson's", () => {
+    const refused = (variant: CalculationVariant) =>
+      offered({
+        availableModalities: ["interactive"],
+        calculationVariant: variant,
+      } as unknown as Partial<ContentSegment>).calculationRefused;
+
+    expect(refused(algebra({ steps: [] }))).toBe("no steps");
+    expect(
+      refused(
+        algebra({
+          steps: [
+            step({
+              input: "choice",
+              answer: "5x",
+              options: [{ value: "5x", label: "Only one" }],
+            }),
+          ],
+        }),
+      ),
+    ).toBe("step 1 of 1: a choice with fewer than two options");
+    expect(
+      refused(algebra({ steps: [step(), step({ input: undefined })] })),
+    ).toBe("step 2 of 2: a step with no input this app draws");
+    const why = refused(UNMARKABLE) ?? "";
+    for (const words of ["Subtract", "letters", "3x - 4", "st-2"]) {
+      expect(why).not.toContain(words);
+    }
+  });
+
+  it("gives a payload it cannot even read as its text, rather than losing the lesson", () => {
+    // This threw from the adapter, and the whole lesson went to its error screen.
+    const unreadable = [
+      algebra({ steps: null }),
+      algebra({ completionStatement: null }),
+    ];
+    const reasons = unreadable.map((variant) => {
+      const built = offered({
+        availableModalities: ["interactive"],
+        calculationVariant: variant,
+      } as unknown as Partial<ContentSegment>);
+      expect(built.modalities).toEqual(["text"]);
+      return built.calculationRefused;
+    });
+
+    expect(reasons).toEqual([
+      "no steps",
+      "the payload could not be read (TypeError)",
+    ]);
+  });
+
+  it("gives one offered as interactive with no payload at all as its text", () => {
+    const built = offered({
+      availableModalities: ["interactive"],
+      calculationVariant: null,
+    } as unknown as Partial<ContentSegment>);
+
+    expect(built.modalities).toEqual(["text"]);
+    expect(built.calculationRefused).toBe("no calculation payload");
+  });
+
+  it("renders the server's own fallback as the server offers it, with nothing to report", () => {
+    // The server could not build it: it sends no variant and offers text,
+    // and audio where it made some, for a teacher to review.
+    const withClip = offered({
+      availableModalities: ["text", "audio"],
+      calculationVariant: null,
+      audioVariant: CLIP,
+    } as unknown as Partial<ContentSegment>);
+    const textOnly = offered({
+      availableModalities: ["text"],
+      calculationVariant: null,
+      audioVariant: CLIP,
+    } as unknown as Partial<ContentSegment>);
+
+    expect(withClip.modalities).toEqual(["text", "audio"]);
+    expect(textOnly.modalities).toEqual(["text"]);
+    expect(withClip).not.toHaveProperty("calculationRefused");
+    expect(textOnly).not.toHaveProperty("calculationRefused");
+  });
+
+  it("reports only what the server offered as interactive", () => {
+    // A variant stored beside a text-only offer - content from before the
+    // server's rule - is the server's own call, and this app's refusal of it
+    // is no fault of ours to report.
+    const built = offered({
+      availableModalities: ["text", "audio"],
+      calculationVariant: UNMARKABLE,
+      audioVariant: CLIP,
+    } as unknown as Partial<ContentSegment>);
+
+    expect(built.modalities).toEqual(["text", "audio"]);
+    expect(built).not.toHaveProperty("calculationRefused");
+  });
+});
