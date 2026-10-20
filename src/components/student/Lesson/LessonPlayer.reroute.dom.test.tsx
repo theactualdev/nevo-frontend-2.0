@@ -51,9 +51,6 @@ vi.mock("@/hooks/useRuntimeAdaptation", () => ({
 }));
 vi.mock("@/hooks/useScaffoldLevel", () => ({ useScaffoldLevel: () => null }));
 vi.mock("@/hooks/useAssignmentNote", () => ({ useAssignmentNote: () => null }));
-vi.mock("@/lib/api/scaffolds", () => ({
-  scaffoldsApi: { attempt: vi.fn().mockResolvedValue({}) },
-}));
 vi.mock("@/lib/api/lessons", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/lessons")>();
   return {

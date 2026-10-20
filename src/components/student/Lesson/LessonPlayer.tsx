@@ -65,8 +65,6 @@ import { densityForAction } from "@/lib/lessons/densityForAction";
 import { densitySpacing } from "@/lib/lessons/densitySpacing";
 import { depthShown, type DepthShown } from "@/lib/lessons/depthShown";
 import { atLowerDepth, NOTHING_SIMPLIFIED } from "@/lib/lessons/lowerDepth";
-import { scaffoldAttemptFor } from "@/lib/lessons/scaffoldAttempt";
-import { scaffoldsApi } from "@/lib/api/scaffolds";
 import { useAssignmentNote } from "@/hooks/useAssignmentNote";
 import { isChunkable } from "@/lib/lessons/chunk";
 import {
@@ -2364,42 +2362,19 @@ export function LessonPlayer({
           });
           // The first answer to each question, for the scheduler. `Map.set` is
           // guarded so a re-answer cannot overwrite what they knew first time.
+          /*
+           * NO SCAFFOLD ATTEMPT RIDES BESIDE IT ANY MORE. `POST
+           * /api/intelligence/scaffolds/attempt` refuses every student write
+           * without persisted server evidence (422
+           * `server_marked_attempt_required`), and the answer above already
+           * moves support: "Review/scaffold compatibility writes require
+           * persisted server evidence; normal lesson completion/answers
+           * already update these mechanisms" (Teslim's 19 Oct contract,
+           * d461b60). It also sent a device verdict the server no longer
+           * takes from a student.
+           */
           if (!firstAnswers.current.has(questionIndex)) {
             firstAnswers.current.set(questionIndex, correct);
-            /*
-             * THE SCAFFOLD ATTEMPT, AND IT RIDES THE SAME FIRST-ANSWER GUARD.
-             *
-             * Inside the `if` deliberately: the engine decides how much support
-             * a child gets on a concept from how they answered, and a child who
-             * changes their mind has not attempted the problem twice. Posting
-             * on every tap would let one question move a support level as often
-             * as it was tapped.
-             *
-             * Fire and forget, and the response is deliberately ignored. The
-             * decision is the server's, the only surface a level appears on is
-             * the indicator, and the indicator is not on screen during the
-             * after-lesson assessment - so there is nothing here to apply it
-             * to. Design ruled that a change of support announces itself
-             * nowhere, so inventing a surface for `nextIntensity` would be the
-             * one thing that ruling forbids.
-             *
-             * Failure is swallowed for the same reason the scheduler write
-             * swallows its own: missing one attempt costs a slightly stale
-             * intensity, and telling a child their answer did not count would
-             * be worse and is not true.
-             */
-            const attempt = scaffoldAttemptFor({
-              question: lesson.assessment?.questions[questionIndex] ?? {},
-              correct,
-              studentId: getSession()?.userId,
-              responseTimeMs,
-              // B27: the pick itself, and the lesson it came from.
-              choice: lesson.assessment?.questions[questionIndex]?.options.find(
-                (o) => o.id === selectedId,
-              ),
-              lessonId: lesson.id,
-            });
-            if (attempt) void scaffoldsApi.attempt(attempt).catch(() => {});
           }
           // Record the pick (first per question) for the Review Answers screen.
           reviewAnswers.current = [

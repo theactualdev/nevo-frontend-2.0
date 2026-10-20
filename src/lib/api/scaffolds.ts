@@ -5,10 +5,14 @@ import { api } from "./client";
  * concept, and how that changes.
  *
  * **THE DIVISION OF LABOUR IS ALREADY RIGHT IN THE SCHEMA, which is the only
- * reason this is safe to wire.** We post what happened - was it right, how long
- * it took, how many hints were open - and the server answers with the next
- * intensity and whether it moved. Nothing here computes a level, a threshold or
- * a streak. Rule 3.
+ * reason this is safe to wire.** The server decides the intensity from the
+ * answers it marks, and these reads say where it stands. Nothing here computes
+ * a level, a threshold or a streak. Rule 3.
+ *
+ * READS ONLY. `POST /scaffolds/attempt` is not called: since Teslim's 19 Oct
+ * contract (d461b60) it refuses a student write without persisted server
+ * evidence (422 `server_marked_attempt_required`), and the lesson's own
+ * answers already move support.
  *
  * **MOST OF WHAT COMES BACK MUST NEVER REACH A SCREEN.**
  * `consecutiveCorrect`, `responseTimeImprovementStreak` and `reducedHintStreak`
@@ -54,64 +58,6 @@ export interface ScaffoldState {
   lastHintCount: number | null;
 }
 
-/** Body of `POST /scaffolds/attempt`. */
-export interface ScaffoldAttempt {
-  studentId: string;
-  conceptId: string;
-  /**
-   * The checkpoint id - `AssessmentQuestion.id`, which the question carried
-   * all along (see its note). Never a position in an array, which moves when
-   * content is re-authored, and never `correctId`, which is the answer.
-   */
-  problemId: string;
-  /** Lets the server find the question it marks against. */
-  lessonId?: string | null;
-  segmentId?: string | null;
-  /**
-   * The child's own pick (B27), at most 400 characters. The server marks it
-   * where the attempt names a lesson segment whose calculation it holds.
-   */
-  answer?: string | null;
-  /**
-   * The device's verdict. Optional since B27, and the contract still takes it
-   * where the server cannot mark the answer itself - see `scaffoldAttemptFor`
-   * for why the after-lesson check is one of those places.
-   */
-  responseCorrect?: boolean | null;
-  scaffoldIntensity?: ScaffoldIntensity | null;
-  responseTimeMs?: number | null;
-  expectedResponseTimeMs?: number | null;
-  hintCount?: number;
-}
-
-/** 200 of `POST /scaffolds/attempt`. */
-export interface ScaffoldDecision {
-  state: ScaffoldState;
-  previousIntensity: ScaffoldIntensity;
-  nextIntensity: ScaffoldIntensity;
-  outcome: ScaffoldOutcome;
-  /**
-   * Whether support moved. **It must not announce itself** - 37a: *"the circles
-   * just update, the label never animates"*, and an adaptation transition is
-   * felt rather than seen.
-   */
-  levelChanged: boolean;
-  /** The engine's reasoning. NEVER RENDERED. Frame 38. */
-  changeReason: string | null;
-  /**
-   * The server's own words to the child about the change.
-   *
-   * **REQUIRED ON THE WIRE AND IT HAS NO HOME ON ANY FRAME.** 37a draws the
-   * indicator as four dots plus the fixed word "Support" - the state names
-   * ("Full scaffold", "Moderate", "Light", "Minimal") are annotations on the
-   * design sheet, not copy, and nothing in the frame says anything about a
-   * level in words. Rendering this would be inventing a surface, which is the
-   * `highlights` situation and was ruled "do not build a surface for it".
-   * Typed so it is not erased; raised to design 23 Sep.
-   */
-  studentMessage: string;
-}
-
 /** One past decision. `GET /scaffolds/history/{student_id}`. */
 export interface ScaffoldLogEntry {
   studentId: string;
@@ -133,14 +79,6 @@ export const scaffoldsApi = {
     api.get<ScaffoldState>(
       `/api/intelligence/scaffolds/state/${encodeURIComponent(studentId)}/${encodeURIComponent(conceptId)}`,
     ),
-
-  /**
-   * Report one attempt and receive the decision. Called once per question of
-   * the after-lesson check, keyed on the checkpoint's own id - see
-   * `ScaffoldAttempt.problemId` and `lib/lessons/scaffoldAttempt`.
-   */
-  attempt: (body: ScaffoldAttempt) =>
-    api.post<ScaffoldDecision>("/api/intelligence/scaffolds/attempt", body),
 
   /** Past decisions, newest first. `conceptId` narrows server-side. */
   history: (studentId: string, params?: { conceptId?: string; limit?: number }) =>

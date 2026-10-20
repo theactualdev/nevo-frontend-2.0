@@ -66,9 +66,6 @@ vi.mock("@/hooks/useAssignmentNote", () => ({ useAssignmentNote: () => null }));
 vi.mock("@/lib/api/scheduler", () => ({
   schedulerApi: { recordReview: (...a: unknown[]) => recordReview(...a) },
 }));
-vi.mock("@/lib/api/scaffolds", () => ({
-  scaffoldsApi: { attempt: vi.fn().mockResolvedValue({}) },
-}));
 vi.mock("@/lib/api/intelligence", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/intelligence")>();
   return {
