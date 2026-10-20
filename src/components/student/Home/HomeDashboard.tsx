@@ -119,11 +119,11 @@ const PICKUP: PickUp[] = [
 ];
 
 /**
- * The frame's caught-up note. It shows where the frame's caught-up state
- * does - nothing left part-way - and, by design's D99 (6 Oct), where nothing
- * new is waiting and the only work is a lesson part-way: "the part-way lesson
- * appears in continue-where-you-left-off, and the slot below shows the
- * caught-up state. A child with one unfinished lesson is not empty-handed."
+ * The frame's caught-up note. It shows where nothing new is waiting - with
+ * nothing part-way, and, by design's D99 (6 Oct), beside a lesson part-way:
+ * "the part-way lesson appears in continue-where-you-left-off, and the slot
+ * below shows the caught-up state. A child with one unfinished lesson is not
+ * empty-handed." Never beside a ready lesson - see `note`.
  */
 const CAUGHT_UP = "You're all caught up. Nice and steady - come back any time.";
 
@@ -340,11 +340,17 @@ export function HomeDashboard() {
    * needs a read to see it.
    *
    * With nothing new today it shows even beside a part-way lesson (D99).
+   *
+   * AND ONLY WITH NOTHING NEW WAITING. It used to show whenever nothing was
+   * part-way, because the frame's toggle (`showNote: !outstanding`) reads
+   * part-way work alone - so on the 20 Oct production run a child with a new
+   * lesson in Today's lessons and nothing started read "You're all caught up"
+   * right under it. That is untrue beside a ready lesson, and D98 rules out a
+   * line that claims what nothing checks. So the line follows what is new,
+   * part-way work or not, and the walkthrough follows the same rule; never on
+   * the nothing-set empty state, which draws no note. Raised with design.
    */
-  const note =
-    (!signedIn || live) && (pickup.length === 0 || today.length === 0)
-      ? CAUGHT_UP
-      : null;
+  const note = (!signedIn || live) && today.length === 0 ? CAUGHT_UP : null;
 
   const openPreview = (lesson: LessonSummary) => {
     setPreview(lesson);
