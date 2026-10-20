@@ -354,6 +354,13 @@ export const intelligenceApi = {
    *
    * `studentId` is nullable in the contract: the backend can take the student
    * from the token, so it is optional here rather than invented by the caller.
+   *
+   * `sessionId` IS THE LESSON SESSION THE CHILD IS SITTING, the id `POST
+   * /api/v1/lessons/{id}/session` issued. An `in_lesson` read is refused 409
+   * `lesson_session_required` unless that sitting is open
+   * (`prepare_adaptation`), and naming it scopes the read, and the decisions
+   * the engine records, to it. Sent only when given: `lesson_load` has no
+   * sitting to name, and a null would be a claim that there is none.
    */
   getAdaptation: (
     lessonId: string,
@@ -363,12 +370,15 @@ export const intelligenceApi = {
       mode?: AdaptationMode;
       /** Omitted on `lesson_load`; the engine's neutral defaults apply. */
       signals?: RuntimeSignals;
+      /** The backend's lesson session id - see above. */
+      sessionId?: string | null;
     } = {},
   ) =>
     api.post<AdaptResponse>("/api/intelligence/adapt", {
       lessonId,
       segments,
       studentId: options.studentId ?? null,
+      ...(options.sessionId ? { sessionId: options.sessionId } : {}),
       mode: options.mode ?? "lesson_load",
       ...(options.signals ? { signals: options.signals } : {}),
     }),

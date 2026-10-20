@@ -21,7 +21,8 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  * about the segment the child is on, so asked only on the way in they were
  * always zero; frontend §1 has the state read "after every interaction event".
  * Nothing is asked on a timer and nothing while a child simply reads. The
- * clock is read when the request is built, never during render.
+ * clock is read when the request is built, never during render. And nothing
+ * is asked before the backend's lesson session exists - see the request.
  */
 
 /**
@@ -132,6 +133,11 @@ export function useRuntimeAdaptation(
   segments: AdaptSegment[] | undefined,
   /** Live lessons only - a mock's ids mean nothing to the engine. */
   enabled: boolean,
+  /**
+   * The lesson session the BACKEND issued (`useLessonProgress`), null until
+   * `POST /session` answers. Nothing is asked without it - see the request.
+   */
+  lessonSessionId: string | null,
   runtime: RuntimeState,
   /** The built lesson, so the engine's rows are clamped to what it renders. */
   lesson: Lesson | null = null,
@@ -214,7 +220,30 @@ export function useRuntimeAdaptation(
   }, [segmentId, modality]);
 
   useEffect(() => {
-    if (!enabled || !lessonId || !segments?.length || !segmentId) return;
+    /*
+     * NOTHING IS ASKED UNTIL THE LESSON SESSION EXISTS, and every ask names
+     * it. The engine refuses an `in_lesson` read 409 `lesson_session_required`
+     * unless the child has an open sitting on this lesson
+     * (`prepare_adaptation`), and the player arrives on its first segment
+     * before `POST /session` has answered - so the first ask raced the
+     * session open, and on the 20 Oct production run the ask that followed
+     * the 201 was refused as well. The session id is a dependency, so the
+     * first ask goes the moment it lands, for the segment the child is on;
+     * a reroute that opens a new sitting is named on the next ask.
+     *
+     * The load-time read (`useAdaptation`, `lesson_load`) is untouched: it
+     * needs no sitting, and it gates the first frame (rule 6), so holding it
+     * for the session would hold the lesson. Whether it should follow the
+     * session is a separate, open question.
+     */
+    if (
+      !enabled ||
+      !lessonId ||
+      !lessonSessionId ||
+      !segments?.length ||
+      !segmentId
+    )
+      return;
     let active = true;
     /*
      * BUILT A MICROTASK LATER, once every effect in this commit has run. The
@@ -272,7 +301,11 @@ export function useRuntimeAdaptation(
       const askedFor = state.currentSegmentId;
 
       void intelligenceApi
-        .getAdaptation(lessonId, segments, { mode: "in_lesson", signals })
+        .getAdaptation(lessonId, segments, {
+          mode: "in_lesson",
+          signals,
+          sessionId: lessonSessionId,
+        })
         .then((res) => {
           if (!active) return;
           const built = lessonRef.current;
@@ -296,7 +329,17 @@ export function useRuntimeAdaptation(
     return () => {
       active = false;
     };
-  }, [enabled, lessonId, segments, segmentId, replays, errors, declines, applied]);
+  }, [
+    enabled,
+    lessonId,
+    lessonSessionId,
+    segments,
+    segmentId,
+    replays,
+    errors,
+    declines,
+    applied,
+  ]);
 
   return result;
 }

@@ -368,7 +368,7 @@ describe("what became of a modality offer", () => {
       { segmentId: "seg-1", suggested: "audio" },
     ]);
 
-    const state = runtimeArgs.at(-1)![3] as Record<string, unknown>;
+    const state = runtimeArgs.at(-1)![4] as Record<string, unknown>;
     expect(state.sessionDeclineCount).toBe(1);
     expect(state.declinedModalities).toEqual(["audio"]);
   });
@@ -614,7 +614,7 @@ describe("an answer, as the engine receives it", () => {
       { segmentId: "seg-1", questionId: "cp-1", source: "checkpoint" },
     ]);
     // The miss is still the player's own reading for the adapt request.
-    const state = runtimeArgs.at(-1)![3] as Record<string, unknown>;
+    const state = runtimeArgs.at(-1)![4] as Record<string, unknown>;
     expect(state.consecutiveErrors).toBe(1);
   });
 });

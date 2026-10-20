@@ -214,7 +214,7 @@ describe("adaptations the child saw applied (B42)", () => {
   /** The record the player keeps, as both hooks receive it. */
   const applied = () => {
     const ref = signalArgs.at(-1)![4] as Applied;
-    expect(runtimeArgs.at(-1)![5]).toBe(ref);
+    expect(runtimeArgs.at(-1)![6]).toBe(ref);
     return ref.current;
   };
   const instructed = (adjustment: AdaptationPlan["adjustment"]): AdaptationPlan => ({
