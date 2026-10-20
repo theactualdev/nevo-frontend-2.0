@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDoor } from "@/hooks/useDoor";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Info } from "lucide-react";
 import { Button } from "@/components/shared";
@@ -66,6 +67,9 @@ const SUCCESS_HOLD_MS = 900;
  * PIN for. What it should show is design's to say.
  */
 export function SsoCallback() {
+  // The SSO callback is a door: nothing on this page goes as the session it found
+  // stored (19 Oct, `doorSession`).
+  useDoor();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signIn } = useAuth();

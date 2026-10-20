@@ -211,6 +211,24 @@ describe("how the session ended", () => {
 
     expect(post.mock.calls[0][2]).toEqual({ keepalive: true });
   });
+
+  it("sends a last try at sign-out with the token it is given, and its bound", async () => {
+    // The session has gone by then, so nothing would read a token from it
+    // (19 Oct browser-storage audit).
+    const bound = new AbortController();
+
+    await signalsApi.submitBatch(
+      SESSION,
+      [event(SIGNAL_EVENT_TYPES.FEELING_CHECKIN)],
+      { keepalive: true, token: "tok-leaving", signal: bound.signal },
+    );
+
+    expect(post.mock.calls[0][2]).toEqual({
+      keepalive: true,
+      headers: { Authorization: "Bearer tok-leaving" },
+      signal: bound.signal,
+    });
+  });
 });
 
 describe("types the server writes itself (B37)", () => {

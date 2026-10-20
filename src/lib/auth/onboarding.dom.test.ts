@@ -1,12 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  claimOnboardingDraft,
   clearOnboardingDraft,
+  arriveAtEntry,
+  arriveAtSequence,
+  endSessionForEntryMatch,
+  markRunFinished,
   entryIdentityFromDraft,
+  forgetOnboardingDraft,
+  getOnboardingDraft,
   mergeOnboardingDraft,
   rememberOnboardedStudent,
   startOnboardingDraft,
 } from "./onboarding";
-import { clearSession, getRememberedProfile } from "./session";
+import {
+  clearSession,
+  getRememberedProfile,
+  getSession,
+  setSession,
+} from "./session";
+import { onSessionEnd } from "./sessionEnd";
 
 /**
  * A remembered profile the server cannot authenticate is worse than none.
@@ -148,5 +161,223 @@ describe("entryIdentityFromDraft", () => {
 
     startOnboardingDraft({ schoolCode: "K7DQ", admissionNumber: "   " });
     expect(entryIdentityFromDraft()).toBeNull();
+  });
+});
+
+/*
+ * THE DRAFT OUTLIVED EVERY CHILD BUT ITS OWN (19 Oct browser-storage audit):
+ * a school code, a Student ID and a first name, kept in the tab through
+ * every later child's sign-in and sign-out. A session ending takes it now -
+ * but never from a child still using it on this page.
+ */
+describe("forgetOnboardingDraft - when a session ends", () => {
+  const draft = {
+    schoolCode: "K7DQ",
+    admissionNumber: "BGA/2031",
+    name: "Amara",
+    consent: "given" as const,
+  };
+
+  it("takes a draft no open screen is using", () => {
+    startOnboardingDraft(draft);
+
+    forgetOnboardingDraft();
+
+    expect(getOnboardingDraft()).toEqual({});
+  });
+
+  it("leaves a draft a child is still using, consent answer and all, until their screen closes", () => {
+    startOnboardingDraft(draft);
+    const release = claimOnboardingDraft();
+
+    forgetOnboardingDraft();
+    expect(getOnboardingDraft()).toEqual(draft);
+
+    release();
+    forgetOnboardingDraft();
+    expect(getOnboardingDraft()).toEqual({});
+  });
+
+  it("counts a screen that lets go twice only once", () => {
+    startOnboardingDraft(draft);
+    const first = claimOnboardingDraft();
+    const second = claimOnboardingDraft();
+
+    first();
+    first();
+    forgetOnboardingDraft();
+
+    expect(getOnboardingDraft()).toEqual(draft);
+    second();
+  });
+});
+
+/*
+ * THE ROSTER ONLY (19 Oct browser-storage audit). Remembering a child wrote
+ * the old single-profile key beside the roster - a second copy of one
+ * child's school code and login identifier - for nothing the roster does not
+ * hold. A first PIN and a cleared child's new one both come through here.
+ */
+describe("remembering a child on the device", () => {
+  it("writes no old single-profile copy of them", () => {
+    mergeOnboardingDraft({ name: "Amara Kalu", schoolCode: "751A1136" });
+
+    expect(rememberOnboardedStudent(SERVER_IDENTIFIER)).toBe(true);
+
+    expect(window.localStorage.getItem("nevo.auth.profile")).toBeNull();
+    expect(getRememberedProfile()?.loginIdentifier).toBe(SERVER_IDENTIFIER);
+  });
+});
+
+/*
+ * A CHILD WITH NO ACCOUNT IS STARTING (19 Oct browser-storage audit): a
+ * session the device still holds is somebody else's, and it ends through the
+ * path every sign-out takes, so its child's leftovers go as they would at
+ * Sign out.
+ */
+describe("a session stored as 05 or the sequence opens", () => {
+  const settle = () => new Promise<void>((r) => setTimeout(r, 0));
+  const store = (over: Partial<Parameters<typeof setSession>[0]> = {}) =>
+    setSession({
+      token: "tok-last",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId: "last-child",
+      role: "student",
+      ...over,
+    });
+  const RUN = {
+    schoolCode: "K7DQ",
+    admissionNumber: "BGA/2031",
+    name: "Tobi",
+    consent: "given" as const,
+  };
+  /** What ended, from here on. */
+  const listen = async () => {
+    await settle();
+    const ended: string[] = [];
+    const off = onSessionEnd((e) => ended.push(e.userId));
+    return { ended, off };
+  };
+
+  /*
+   * ONLY A SESSION BELONGING TO A DIFFERENT CHILD THAN THE RUN IN PROGRESS IS
+   * ENDED (19 Oct). Ending any session found here signed a child out who was
+   * back on the sequence from their own first lesson.
+   */
+  it("is ended on 05 when a different child's run is in progress, and that run's draft goes", async () => {
+    store();
+    startOnboardingDraft(RUN);
+    const { ended, off } = await listen();
+
+    expect(arriveAtEntry()).toBe("stay");
+    await settle();
+    off();
+
+    expect(getSession()).toBeNull();
+    expect(ended).toEqual(["last-child"]);
+    // 05 writes its own draft on the next match; the old run's is not it.
+    expect(getOnboardingDraft()).toEqual({});
+  });
+
+  /*
+   * NEVER ROUTED INTO ON A GUESS (19 Oct). With no run in progress, a stored
+   * session was routed on from 05 - which put a new child opening 05
+   * directly inside the last child's account. Only the child this tab
+   * finished its run as is routed on; any other session waits for 05's
+   * lookup, kept and unsent-as.
+   */
+  it("is neither ended nor routed into on 05 when nothing says whose it is", async () => {
+    store();
+    const { ended, off } = await listen();
+
+    expect(arriveAtEntry()).toBe("stay");
+    await settle();
+    off();
+
+    expect(getSession()?.userId).toBe("last-child");
+    expect(ended).toEqual([]);
+  });
+
+  it("is routed on from 05 when this tab finished its run as that child", () => {
+    store({ userId: "tobi" });
+    markRunFinished("tobi");
+
+    expect(arriveAtEntry()).toBe("routeOn");
+    expect(getSession()?.userId).toBe("tobi");
+  });
+
+  it("is not routed on for another child's mark", () => {
+    store();
+    markRunFinished("tobi");
+
+    expect(arriveAtEntry()).toBe("stay");
+    expect(arriveAtSequence()).toBe("toEntry");
+  });
+
+  it("ends at 05's match, once the lookup has a child to go on with", async () => {
+    store();
+    arriveAtEntry();
+    const { ended, off } = await listen();
+
+    endSessionForEntryMatch();
+    await settle();
+    off();
+
+    expect(getSession()).toBeNull();
+    expect(ended).toEqual(["last-child"]);
+  });
+
+  it("is nothing to act on when nothing is stored", async () => {
+    clearSession();
+    const { ended, off } = await listen();
+
+    expect(arriveAtEntry()).toBe("stay");
+    expect(arriveAtSequence()).toBe("stay");
+    await settle();
+    off();
+
+    expect(ended).toEqual([]);
+  });
+
+  it("is ended in the sequence for a different child's run, which keeps its draft", () => {
+    store();
+    startOnboardingDraft(RUN);
+
+    expect(arriveAtSequence()).toBe("stay");
+
+    expect(getSession()).toBeNull();
+    expect(getOnboardingDraft()).toEqual(RUN);
+  });
+
+  it("is kept in the sequence when it is the run's own, and the run resumes", () => {
+    store({ userId: "tobi" });
+    startOnboardingDraft({ ...RUN, userId: "tobi" });
+
+    expect(arriveAtSequence()).toBe("routeOn");
+    expect(getSession()?.userId).toBe("tobi");
+  });
+
+  it("is kept in the sequence with no run in progress - Back from the first lesson", () => {
+    store({ userId: "tobi" });
+    clearOnboardingDraft();
+    markRunFinished("tobi");
+
+    expect(arriveAtSequence()).toBe("routeOn");
+    expect(getSession()?.userId).toBe("tobi");
+  });
+
+  it("sends a session nothing marks, with no run in progress, to 05 to be asked", () => {
+    store();
+    clearOnboardingDraft();
+
+    expect(arriveAtSequence()).toBe("toEntry");
+    expect(getSession()?.userId).toBe("last-child");
+  });
+
+  it("is kept in the sequence for an SSO child, who starts it signed in", () => {
+    store({ userId: "sso-child", method: "sso" });
+
+    expect(arriveAtSequence()).toBe("stay");
+    expect(getSession()?.userId).toBe("sso-child");
   });
 });

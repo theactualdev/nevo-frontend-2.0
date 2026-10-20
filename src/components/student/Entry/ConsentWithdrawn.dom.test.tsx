@@ -4,6 +4,7 @@ import { ConsentWithdrawn } from "./ConsentWithdrawn";
 import { WAITING_WAY_BACK, WaitingOnConsent } from "./WaitingOnConsent";
 import StudentUnavailablePage from "@/app/student/unavailable/page";
 import { clearSession, setSession } from "@/lib/auth/session";
+import { fakeIndexedDb } from "@/test/fakeIndexedDb";
 
 const signOut = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks", () => ({ useAuth: () => ({ signOut }) }));
@@ -136,5 +137,36 @@ describe("its way back", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
 
     expect(signOut).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * NOTHING OF THEIRS IS KEPT ON ARRIVAL (19 Oct browser-storage audit). A run
+ * under way when the withdrawal landed left its raw taps in IndexedDB: the
+ * page holding the capture was left before it could stop it. 00e lets them
+ * go, whichever way the child arrived.
+ */
+describe("00e — the baseline's raw taps a run left", () => {
+  it("are purged when 00e opens", async () => {
+    const idb = fakeIndexedDb();
+    vi.stubGlobal("indexedDB", idb.factory);
+    idb.seed("nevo-baseline", [
+      [
+        "baseline-run-1",
+        {
+          capturedAt: Date.now(),
+          events: [{ kind: "tap", t: 1, payload: { x: 120, y: 340 } }],
+        },
+      ],
+    ]);
+    try {
+      render(<ConsentWithdrawn />);
+
+      await vi.waitFor(() =>
+        expect(idb.records("nevo-baseline")?.size).toBe(0),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -9,6 +9,10 @@ import { contractAgeBand, type BaselineDimension } from "./bands";
  * for the server to reduce (B9), and the raw stream is purged. The device
  * computes no mean, accuracy or span. What a trial has no field for - tap
  * coordinates above all - never leaves the device, and goes with the purge.
+ *
+ * A run that never reaches its purge - abandoned part way - goes at the next
+ * sign-out, or a week after it was written (19 Oct browser-storage audit;
+ * `purgeStoredCaptures`, `sweepStoredCaptures`).
  */
 
 export interface CaptureEvent {
@@ -21,6 +25,24 @@ export interface CaptureEvent {
 
 const DB_NAME = "nevo-baseline";
 const STORE = "streams";
+
+/**
+ * How long a run's raw stream may sit on the device: the week its parked
+ * trials get (`pendingBaseline`), on the same `Date.now()` clock. A wall
+ * clock, not `performance.now()`: this is how long the tablet keeps
+ * something, which nothing measures a child by, and it has to hold across
+ * page loads.
+ */
+const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * One run's raw stream as it is stored: the events, and when they were
+ * written. A record from before 19 Oct is a bare array, with no date.
+ */
+interface StoredStream {
+  capturedAt: number;
+  events: CaptureEvent[];
+}
 
 function openDb(): Promise<IDBDatabase | null> {
   return new Promise((resolve) => {
@@ -36,6 +58,85 @@ function openDb(): Promise<IDBDatabase | null> {
 }
 
 /**
+ * The store, only if this device already has it. Opening is creating, and a
+ * sweep on a device that never ran a baseline must not leave a database
+ * behind. A browser that cannot list its databases is opened anyway.
+ */
+async function openIfPresent(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === "undefined") return null;
+  try {
+    if (typeof indexedDB.databases === "function") {
+      const all = await indexedDB.databases();
+      if (!all.some((d) => d.name === DB_NAME)) return null;
+    }
+  } catch {
+    // It could not say: open it and look.
+  }
+  return openDb();
+}
+
+/** Delete every stored stream `keep` says no to, then let the store go. */
+function sweepWith(
+  db: IDBDatabase,
+  keep: (stored: unknown) => boolean,
+): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      db.close();
+      resolve();
+    };
+    try {
+      const tx = db.transaction(STORE, "readwrite");
+      const cursor = tx.objectStore(STORE).openCursor();
+      cursor.onsuccess = () => {
+        const at = cursor.result;
+        if (!at) return;
+        if (!keep(at.value)) at.delete();
+        at.continue();
+      };
+      tx.oncomplete = done;
+      tx.onerror = done;
+      tx.onabort = done;
+    } catch {
+      done();
+    }
+  });
+}
+
+/**
+ * Raw streams older than a week go, the same rule as the parked trials
+ * (19 Oct browser-storage audit).
+ *
+ * A RUN ABANDONED PART WAY THROUGH ONBOARDING KEPT ITS TAPS FOR GOOD - the
+ * coordinates of every touch, on a shared tablet - when no later run came to
+ * sweep it (`persist`, below). Run when the app loads (`AuthProvider`), so a
+ * device nobody onboards on again still lets them go. An undated record is
+ * from before this rule and goes too: nothing ever reads a stream back.
+ */
+export async function sweepStoredCaptures(): Promise<void> {
+  const db = await openIfPresent();
+  if (!db) return;
+  const now = Date.now();
+  await sweepWith(db, (stored) => {
+    const at = (stored as Partial<StoredStream> | null)?.capturedAt;
+    return typeof at === "number" && now - at <= MAX_AGE_MS;
+  });
+}
+
+/**
+ * Every stored stream goes, at a sign-out (19 Oct browser-storage audit).
+ *
+ * The device's copy only: a run still going in another tab keeps its stream
+ * in memory, which is the one its trials are taken from, and writes it again
+ * at its next module's end.
+ */
+export async function purgeStoredCaptures(): Promise<void> {
+  const db = await openIfPresent();
+  if (!db) return;
+  await sweepWith(db, () => false);
+}
+
+/**
  * One capture session spans the whole profiling run. `record` is synchronous
  * (an in-memory push); IndexedDB persistence is batched in the background so
  * timing capture never waits on storage.
@@ -45,11 +146,22 @@ export class BaselineCapture {
   private db: Promise<IDBDatabase | null> | null = null;
   /** Set by `stop()`; nothing is recorded or written after it. */
   private stopped = false;
+  /**
+   * Waiting on consent: nothing is recorded or written until `allow()`.
+   *
+   * NOT KNOWING IS NOT PERMISSION (19 Oct browser-storage audit). The runs
+   * captured from their first tap and only stopped on a withdrawal, so a
+   * device that could not read consent - offline, the read failing - kept a
+   * child's taps and their coordinates as though it had been told yes. Both
+   * runs now construct theirs held (`ProfilingFlow`, `WarmUpRun`).
+   */
+  private held: boolean;
   readonly sessionId: string;
 
   /** Construction is pure (safe in a state initializer); the DB opens lazily. */
-  constructor(sessionId: string) {
+  constructor(sessionId: string, options: { held?: boolean } = {}) {
     this.sessionId = sessionId;
+    this.held = options.held ?? false;
   }
 
   private ensureDb() {
@@ -57,8 +169,22 @@ export class BaselineCapture {
     return this.db;
   }
 
+  /** Consent read as allowed: record from now on, unless stopped. */
+  allow() {
+    this.held = false;
+  }
+
+  /**
+   * Consent cannot be known (any more): record and write nothing, and let go
+   * of what was kept - in memory and on the device - until `allow()`.
+   */
+  async hold() {
+    this.held = true;
+    await this.purge();
+  }
+
   record(kind: string, payload?: Record<string, unknown>) {
-    if (this.stopped) return;
+    if (this.stopped || this.held) return;
     this.events.push({ kind, t: performance.now(), payload });
   }
 
@@ -79,15 +205,21 @@ export class BaselineCapture {
 
   /** Snapshot the raw stream into IndexedDB (ephemeral, purged on submit). */
   async persist() {
-    if (this.stopped) return;
+    if (this.stopped || this.held) return;
     const db = await this.ensureDb();
-    // A stop can land while the database is opening. Writing after it would
-    // put back the key `stop()` has just deleted.
-    if (!db || this.stopped) return;
+    // A stop or a hold can land while the database is opening. Writing after
+    // it would put back the key it has just deleted.
+    if (!db || this.stopped || this.held) return;
     try {
       const tx = db.transaction(STORE, "readwrite");
       const store = tx.objectStore(STORE);
-      store.put(this.events, this.sessionId);
+      // Dated, so a stream nobody comes back for goes after a week
+      // (`sweepStoredCaptures`).
+      const stored: StoredStream = {
+        capturedAt: Date.now(),
+        events: this.events,
+      };
+      store.put(stored, this.sessionId);
       /*
        * SWEEP EVERY OTHER RUN'S RECORD WHILE WE ARE HERE.
        *
@@ -118,10 +250,24 @@ export class BaselineCapture {
     }
   }
 
-  /** Purge the raw stream everywhere (once its trials have been taken). */
+  /**
+   * Purge the raw stream everywhere (once its trials have been taken).
+   *
+   * Never by creating the store: a run that has written nothing - held from
+   * its start, say, because consent could not be read - opened nothing, and
+   * a purge used to open (and so create) an empty `nevo-baseline` to delete
+   * from (19 Oct). It looks only where something could be.
+   */
   async purge() {
     this.events = [];
-    const db = await this.ensureDb();
+    let db: IDBDatabase | null;
+    if (this.db) {
+      db = await this.db;
+    } else {
+      db = await openIfPresent();
+      // Kept, so a write after an `allow()` does not open a second.
+      if (db) this.db = Promise.resolve(db);
+    }
     if (!db) return;
     try {
       const tx = db.transaction(STORE, "readwrite");

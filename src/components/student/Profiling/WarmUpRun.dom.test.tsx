@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { WarmUpRun } from "./WarmUpRun";
+import { clearSession, setSession } from "@/lib/auth/session";
+
+// Consent answered and allowing the run: these tests are about something
+// else. What a run does without an answer is pinned in its `.consent` test.
+vi.mock("@/hooks/useConsentGate", () => ({
+  useConsentGate: () => ({ withdrawn: false, known: true, unreadable: false }),
+}));
 
 /**
  * The daily warm-up captured everything and submitted almost none of it.
@@ -23,6 +30,10 @@ import { WarmUpRun } from "./WarmUpRun";
 
 const { submit } = vi.hoisted(() => ({ submit: vi.fn() }));
 vi.mock("@/lib/api", () => ({ baselineApi: { submitTrials: submit } }));
+// Banding is WarmUpRun.band's subject; here the roster gives none.
+vi.mock("@/hooks/useRosterBand", () => ({
+  useRosterBand: () => ({ band: null, settled: true }),
+}));
 const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
 // These pin the task with the `dimension` prop; the engine's prompt is
@@ -78,10 +89,19 @@ beforeEach(() => {
   submit.mockReset();
   submit.mockResolvedValue(true);
   holdBaseline.mockReset();
+  // A warm-up is only ever sat signed in (the route guard), and its trials go
+  // as that child or not at all (19 Oct).
+  setSession({
+    token: "tok",
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    userId: "child-1",
+    role: "student",
+  });
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  clearSession();
 });
 
 describe("WarmUpRun — what actually reaches Nevo", () => {

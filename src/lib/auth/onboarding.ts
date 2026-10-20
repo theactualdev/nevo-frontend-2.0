@@ -12,7 +12,7 @@
  */
 
 import type { EntryIdentity } from "./firstPin";
-import { getSession, rememberProfile } from "./session";
+import { clearSession, getSession, rememberProfile } from "./session";
 
 const DRAFT_KEY = "nevo.onboarding.draft";
 
@@ -37,6 +37,23 @@ export interface OnboardingDraft {
    * of the pair their first PIN is stored against - see `bindFirstPin`.
    */
   admissionNumber?: string;
+  /**
+   * The entry lookup's consent answer for this child, as 05 read it: `given`,
+   * or not here at all.
+   *
+   * THE ONLY CONSENT READ THERE IS BEFORE THE ACCOUNT EXISTS. The baseline is
+   * sat before the PIN step creates one, so there is no session to ask the
+   * consent gate with, and the run used to capture regardless (19 Oct
+   * browser-storage audit). It captures on this, and only this, now. Absent
+   * is not given: a run with no answer holds (`ProfilingFlow`).
+   */
+  consent?: "given";
+  /**
+   * The account this run's first PIN created, once it has (19 Oct). The
+   * session it started is this run's own: a reload of the sequence keeps it
+   * rather than ending it as somebody else's (`endSessionNotThisRuns`).
+   */
+  userId?: string;
 }
 
 export function getOnboardingDraft(): OnboardingDraft {
@@ -86,6 +103,207 @@ export function clearOnboardingDraft(): void {
 }
 
 /**
+ * WHAT 05 ENTRY OR THE SEQUENCE DOES WITH A SESSION IT FINDS STORED AS IT
+ * OPENS (19 Oct browser-storage audit).
+ *
+ * The onboarding routes let a stored session through, and everything on them
+ * sent it: 05's lookup, the onboarding signal stream, the consent read, the
+ * account read. So a new child's first minutes were recorded against the
+ * last child's account, the last child's consent decided whether the new
+ * child's baseline was captured, and when the last child's token died its
+ * 401 sent the new child - who had no session - off their own run.
+ *
+ * But a stored session is not always somebody else's, and the device must
+ * never GUESS whose it is: guessing one way signs a child out of their own
+ * new account (Back from their first lesson), and guessing the other puts a
+ * new child inside another child's account. So it is told:
+ *
+ *  - A DIFFERENT CHILD'S RUN IS IN PROGRESS - the draft names a pair 05
+ *    matched, and its account is not this session's. The session ends,
+ *    through the path every sign-out takes: its child's unsent signals get
+ *    their one last try with their own token, their held answers and
+ *    progress are kept, and the run goes on with no token until its own
+ *    first PIN.
+ *  - THIS TAB FINISHED ITS RUN AS THIS SESSION'S CHILD (`markRunFinished`, at
+ *    You're In), or the run in progress is the session's own (its first PIN
+ *    made the account): the child is routed on, signed in, to finishing
+ *    onboarding as themselves (`OnboardingResume`), which resumes what is
+ *    left or goes Home. Nothing is ended.
+ *  - ANY OTHER SESSION: nobody can say whose it is yet. Nothing is ended
+ *    and nobody is routed into it. 05 opens as a door - nothing on it is
+ *    sent as that session (`doorSession`) - and the child's own lookup
+ *    decides (`endSessionForEntryMatch`). The sequence sends the child to 05
+ *    to be asked.
+ *  - An SSO child starts the sequence signed in, on their own session.
+ */
+export type Arrival = "stay" | "routeOn" | "toEntry";
+
+/** Where onboarding goes on for a signed-in child (`OnboardingResume`). */
+export const CONTINUE_ROUTE = "/student/onboarding/continue";
+
+/** A different child's run is in progress, by the draft, for this session. */
+function differentChildsRun(userId: string): boolean {
+  return (
+    entryIdentityFromDraft() !== null &&
+    getOnboardingDraft().userId !== userId
+  );
+}
+
+/**
+ * THIS TAB'S RUN FINISHED AS THIS CHILD (19 Oct). Written at You're In - and
+ * when a run past its PIN is handed on to the resume - as the account the
+ * run made, in this tab only (sessionStorage), and nothing but the id the
+ * session already holds. It is how a stored session is known to be the
+ * child holding the tablet rather than whoever used it last: Back from the
+ * first lesson routes them on, signed in, and no other session is ever
+ * routed on. Forgotten when that session ends (`forgetFinishedRun`).
+ */
+const FINISHED_RUN_KEY = "nevo.onboarding.finishedRun";
+
+export function markRunFinished(userId: string | null | undefined): void {
+  if (!userId) return;
+  try {
+    window.sessionStorage.setItem(FINISHED_RUN_KEY, userId);
+  } catch {
+    // Unavailable storage: Back will ask 05, the safe side.
+  }
+}
+
+function finishedRunWas(userId: string): boolean {
+  try {
+    return window.sessionStorage.getItem(FINISHED_RUN_KEY) === userId;
+  } catch {
+    return false;
+  }
+}
+
+/** That session has ended: its mark goes with it. */
+export function forgetFinishedRun(userId: string): void {
+  if (finishedRunWas(userId)) {
+    try {
+      window.sessionStorage.removeItem(FINISHED_RUN_KEY);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/**
+ * 05 Entry (and 03, the same screen). Ending a session here also clears the
+ * draft that was in progress: 05 writes its own on the next match, and the
+ * old one is not that run's.
+ */
+export function arriveAtEntry(): Arrival {
+  const session = getSession();
+  if (!session) return "stay";
+  if (differentChildsRun(session.userId)) {
+    clearSession();
+    clearOnboardingDraft();
+    return "stay";
+  }
+  if (finishedRunWas(session.userId)) return "routeOn";
+  // Whose it is, the lookup says (`endSessionForEntryMatch`). Until then 05
+  // is a door, and nothing on it goes as this session.
+  return "stay";
+}
+
+/**
+ * The sequence. Ending a session here keeps the draft: it is the run in
+ * progress, and the sequence goes on with it (`endForNewChild`).
+ */
+export function arriveAtSequence(): Arrival {
+  const session = getSession();
+  if (!session) return "stay";
+  // This tab finished its run as them: Back from the first lesson.
+  if (finishedRunWas(session.userId)) return "routeOn";
+  // An SSO child arrives here from the callback on their own new session,
+  // whatever an earlier 05 left in the tab.
+  if (session.method === "sso") return "stay";
+  if (differentChildsRun(session.userId)) {
+    endForNewChild(session.userId);
+    return "stay";
+  }
+  if (getOnboardingDraft().userId === session.userId) return "routeOn";
+  // Nobody's run is here, and nothing says the session is the child at the
+  // tablet: 05 asks.
+  return "toEntry";
+}
+
+/**
+ * 05'S LOOKUP HAS MATCHED A CHILD, and a session is still stored that nothing
+ * has shown to be theirs (19 Oct). The lookup's answer carries no account id
+ * to compare (`StudentEntryState`: a first name, a class, the consent and PIN
+ * states), so it cannot show the child IS that session's - and so the
+ * session ends before this child goes on, on the safe side: the stored child
+ * signs in again, and nobody lands in somebody else's account. Through the
+ * path every sign-out takes, so their leftovers go as at Sign out.
+ */
+export function endSessionForEntryMatch(): void {
+  if (getSession()) clearSession();
+}
+
+/**
+ * Sessions ended for a child whose run is in progress: their ending does not
+ * take the draft that run is using (`forgetOnboardingDraft`).
+ *
+ * THE DRAFT WENT WITH THE SESSION IT WAS ENDED FOR (19 Oct). The ending is
+ * announced a moment later, and the clean-up it runs found no screen holding
+ * the draft yet - the sequence claims it after its first render, which is
+ * where the session is ended - so a child sent straight to the sequence lost
+ * their school code, Student ID, name and 05's consent answer, and was sent
+ * back to an empty 05. Marked before the session ends, so the order cannot
+ * matter.
+ */
+const endedForNewChild = new Set<string>();
+
+function endForNewChild(userId: string): void {
+  endedForNewChild.add(userId);
+  clearSession();
+}
+
+/** How many open screens are using the draft (05 Entry, the sequence). */
+let draftInUse = 0;
+
+/**
+ * Say that this screen is using the draft, for as long as it is open. Returns
+ * the release - the shape of an effect's cleanup.
+ */
+export function claimOnboardingDraft(): () => void {
+  draftInUse += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    draftInUse -= 1;
+  };
+}
+
+/**
+ * A session has ended: the draft goes with it, unless a child is onboarding
+ * on this page right now.
+ *
+ * IT OUTLIVED EVERY CHILD BUT ITS OWN (19 Oct browser-storage audit). It
+ * holds the school code, the Student ID and the first name 05 matched, and
+ * it was cleared only when that child's onboarding finished or the tab
+ * closed - so a child who walked away part way left all three in the tab,
+ * through every later child's sign-in and sign-out.
+ *
+ * NOT FROM A CHILD WHO IS STILL USING IT. A child onboarding has no account,
+ * so no session of their own to end - but a session the last child left on
+ * the device can end under them (it lapses as it is read), and their first
+ * PIN replaces it with their own. Neither is a reason to take their school
+ * code, Student ID, name or consent answer away mid-run: while 05 or the
+ * sequence is open, the draft stays, and that run clears it itself when it
+ * ends, as it always has.
+ */
+export function forgetOnboardingDraft(endedUserId?: string): void {
+  // Ended FOR the child using it: theirs to keep (`endForNewChild`).
+  if (endedUserId && endedForNewChild.delete(endedUserId)) return;
+  if (draftInUse > 0) return;
+  clearOnboardingDraft();
+}
+
+/**
  * The pair 05 matched this child on, or null when this run did not start
  * there - a typed URL straight into the sequence. Without it there is nobody
  * to attach a PIN to, and PIN creation says it could not save rather than
@@ -127,7 +345,18 @@ function initialsOf(name: string): string {
  */
 export function rememberOnboardedStudent(
   loginIdentifier: string | null | undefined,
+  /**
+   * Leave the draft for the run to clear at its own end (19 Oct). The
+   * sequence's PIN comes before Module 4, Complete and You're In, and the
+   * draft carries what a reload there needs - the account the PIN made -
+   * so it is cleared on You're In, not here. A cleared child's new PIN ends
+   * its flow, and clears it here.
+   */
+  options: { keepDraft?: boolean } = {},
 ): boolean {
+  const done = () => {
+    if (!options.keepDraft) clearOnboardingDraft();
+  };
   const draft = getOnboardingDraft();
   const name = draft.name?.trim();
   const identifier = loginIdentifier?.trim();
@@ -143,7 +372,7 @@ export function rememberOnboardedStudent(
    * to prevent, and it was left open for one of the three fields.
    */
   if (!name || !identifier || !schoolCode) {
-    clearOnboardingDraft();
+    done();
     return false;
   }
   const userId = getSession()?.userId;
@@ -155,6 +384,6 @@ export function rememberOnboardedStudent(
     // Account creation has just stored the session this child now owns.
     ...(userId ? { userId } : {}),
   });
-  clearOnboardingDraft();
+  done();
   return true;
 }

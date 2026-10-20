@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { useConsentGate } from "./useConsentGate";
+import { consentAnswer, useConsentGate } from "./useConsentGate";
 import { clearSession, setSession } from "@/lib/auth/session";
 
 /**
@@ -19,6 +19,10 @@ import { clearSession, setSession } from "@/lib/auth/session";
  *
  * The second is chosen, and both halves are pinned here, because a default that
  * drifts either way is the whole behaviour.
+ *
+ * AND SINCE 19 OCT, NEITHER IS PERMISSION. A failed read is still not a
+ * withdrawal, but it is its own answer now - `unreadable` - and a capture
+ * holds on it rather than proceeding (the last block below).
  */
 
 const { myConsentGate } = vi.hoisted(() => ({ myConsentGate: vi.fn() }));
@@ -127,5 +131,90 @@ describe("useConsentGate", () => {
 
     await new Promise((r) => setTimeout(r, 20));
     expect(myConsentGate).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * NOT KNOWING IS NOT PERMISSION (19 Oct browser-storage audit; rule 5). A
+ * failed read still stops nothing - it is not a withdrawal - but it is no
+ * longer the same as an answer either: a capture holds on it. So the hook
+ * says which of the three it is, and never one child's answer for another.
+ */
+describe("useConsentGate — answered, still asking, or no answer to be had", () => {
+  const flush = () =>
+    act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+  it("says a failed read could not be read: not known, and not withdrawn", async () => {
+    signIn();
+    myConsentGate.mockRejectedValue(new Error("network"));
+
+    const { result } = renderHook(() => useConsentGate());
+    await waitFor(() => expect(myConsentGate).toHaveBeenCalled());
+    await flush();
+
+    expect(result.current).toEqual({
+      withdrawn: false,
+      known: false,
+      unreadable: true,
+    });
+    expect(consentAnswer(result.current)).toBe("unknown");
+  });
+
+  it("says nobody signed in cannot be read for", async () => {
+    const { result } = renderHook(() => useConsentGate());
+    await flush();
+
+    expect(result.current.unreadable).toBe(true);
+    expect(consentAnswer(result.current)).toBe("unknown");
+  });
+
+  it("is still asking while the read is in flight, which is neither", () => {
+    signIn();
+    myConsentGate.mockReturnValue(new Promise(() => {}));
+
+    const { result } = renderHook(() => useConsentGate());
+
+    expect(result.current).toEqual({
+      withdrawn: false,
+      known: false,
+      unreadable: false,
+    });
+    expect(consentAnswer(result.current)).toBe("pending");
+  });
+
+  it("allows a capture only on an answer that is not a withdrawal", async () => {
+    signIn();
+    myConsentGate.mockResolvedValue(gate("pending"));
+
+    const { result } = renderHook(() => useConsentGate());
+    await waitFor(() => expect(result.current.known).toBe(true));
+
+    expect(consentAnswer(result.current)).toBe("allowed");
+  });
+
+  it("never hands one child's answer to the next child on the tablet", async () => {
+    signIn();
+    myConsentGate.mockResolvedValueOnce(gate("withdrawn"));
+    const { result } = renderHook(() => useConsentGate());
+    await waitFor(() => expect(result.current.withdrawn).toBe(true));
+
+    // The next child signs in; their own read has not answered yet.
+    myConsentGate.mockReturnValue(new Promise(() => {}));
+    await act(async () => {
+      setSession({
+        token: "tok-2",
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        userId: "student-2",
+        role: "student",
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.withdrawn).toBe(false);
+    expect(consentAnswer(result.current)).toBe("pending");
+    expect(myConsentGate).toHaveBeenCalledTimes(2);
   });
 });

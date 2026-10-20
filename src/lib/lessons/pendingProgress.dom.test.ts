@@ -589,6 +589,62 @@ describe("answers held for a check (Lydia, 6 Oct)", () => {
     expect(calls).toEqual(["attempt cp-1", "progress exited"]);
   });
 
+  /*
+   * KEPT FOR GOOD UNTIL 19 OCT (browser-storage audit). A refusal was swept
+   * only when its own visit came round again, and the flush visits only what
+   * it can still send - so a refusal with nothing else left in its visit sat
+   * on the tablet for ever. The week now runs for every refusal on the shelf.
+   */
+  describe("a refusal with nothing left to send beside it", () => {
+    const shelf = "nevo.lesson.pendingAnswers.student-1";
+    const DAY = 24 * 60 * 60 * 1000;
+    /** Refuse one answer, with no position in its visit, then age the refusal. */
+    const refusedDaysAgo = async (days: number) => {
+      signInAs("student-1");
+      holdAnswer("lesson-1", answer(1));
+      spyWrites(() => Promise.reject(new ApiError(422, "refused")));
+      await flushPendingProgress();
+      const raw = JSON.parse(window.localStorage.getItem(shelf) ?? "{}");
+      const id = answer(1).body.clientAttemptId;
+      expect(raw[id].refusedAt).toEqual(expect.any(Number));
+      raw[id].refusedAt = Date.now() - days * DAY;
+      window.localStorage.setItem(shelf, JSON.stringify(raw));
+    };
+
+    it("is forgotten once it is more than a week old", async () => {
+      await refusedDaysAgo(8);
+
+      await flushPendingProgress();
+
+      expect(window.localStorage.getItem(shelf)).toBeNull();
+      expect(holdsAnswers("lesson-1", "sess-1")).toBe(false);
+    });
+
+    it("is kept inside its week, still holding back its visit's completion", async () => {
+      await refusedDaysAgo(6);
+
+      await flushPendingProgress();
+      expect(holdsAnswers("lesson-1", "sess-1")).toBe(true);
+
+      holdProgress("lesson-1", completion);
+      await flushPendingProgress();
+      expect(calls).toContain("progress exited");
+    });
+
+    it("is forgotten on the child's own shelf only", async () => {
+      await refusedDaysAgo(8);
+      // Another child signed in: their flush reads their own shelf, and the
+      // first child's stays as it is until they are back.
+      signInAs("student-2");
+      await flushPendingProgress();
+      expect(window.localStorage.getItem(shelf)).not.toBeNull();
+
+      signInAs("student-1");
+      await flushPendingProgress();
+      expect(window.localStorage.getItem(shelf)).toBeNull();
+    });
+  });
+
   it("opens one session for a visit that never had one, for both", async () => {
     // A lesson played from Downloads with no connection never opened one.
     signInAs("student-1");
@@ -658,5 +714,79 @@ describe("answers held for a check (Lydia, 6 Oct)", () => {
     spyWrites(() => Promise.reject(new ApiError(status, "no")));
 
     expect(await sendHeldAnswers("lesson-1", "sess-1")).toBe(outcome);
+  });
+
+  /*
+   * NOTHING GOES UP AFTER THE CHILD'S SESSION HAS ENDED (19 Oct
+   * browser-storage audit). A flush read its owner once and awaited one write
+   * after another; a 401 elsewhere cleared the session between two of them,
+   * and the next held answer went up with no Authorization header at all,
+   * just before the page left. It stops at the first send now, and what it
+   * had not sent stays held for the child, as before.
+   */
+  describe("a flush whose child's session ends while it runs", () => {
+    const shelf = "nevo.lesson.pendingAnswers.student-1";
+    const positions = "nevo.lesson.pendingProgress.student-1";
+    const endsAfterFirst = () =>
+      spyWrites(() => {
+        // The first write answers just as a 401 elsewhere ends the session.
+        clearSession();
+        return Promise.resolve({});
+      });
+
+    it("sends no answer after the session has gone, and keeps the rest held", async () => {
+      signInAs("student-1");
+      holdAnswer("lesson-1", answer(1));
+      holdAnswer("lesson-1", answer(2));
+      const { save } = endsAfterFirst();
+
+      await flushPendingProgress();
+
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(calls).toEqual(["attempt cp-1"]);
+      const held = JSON.parse(window.localStorage.getItem(shelf) ?? "{}");
+      expect(Object.keys(held)).toEqual([answer(2).body.clientAttemptId]);
+      expect(held[answer(2).body.clientAttemptId].refusedAt).toBeUndefined();
+    });
+
+    it("sends no position after it either, and keeps the completion held", async () => {
+      signInAs("student-1");
+      holdAnswer("lesson-1", answer(1));
+      holdProgress("lesson-1", completion);
+      const { progress } = endsAfterFirst();
+
+      await flushPendingProgress();
+
+      expect(progress).not.toHaveBeenCalled();
+      const held = JSON.parse(window.localStorage.getItem(positions) ?? "{}");
+      expect(held["lesson-1:sess-1"]?.status).toBe("completed");
+    });
+
+    it("opens no new lesson session for a later visit after it", async () => {
+      signInAs("student-1");
+      const start = vi.spyOn(lessonsApi, "startSession");
+      holdAnswer("lesson-1", answer(1));
+      holdAnswer("lesson-1", answer(2, { sessionId: null, localId: "local-2" }));
+      endsAfterFirst();
+
+      await flushPendingProgress();
+
+      expect(start).not.toHaveBeenCalled();
+      expect(calls).toEqual(["attempt cp-1"]);
+    });
+
+    it("sends nothing for the first child once another has signed in over them", async () => {
+      signInAs("student-1");
+      holdAnswer("lesson-1", answer(1));
+      holdAnswer("lesson-1", answer(2));
+      const { save } = spyWrites(() => {
+        signInAs("student-2");
+        return Promise.resolve({});
+      });
+
+      await flushPendingProgress();
+
+      expect(save).toHaveBeenCalledTimes(1);
+    });
   });
 });

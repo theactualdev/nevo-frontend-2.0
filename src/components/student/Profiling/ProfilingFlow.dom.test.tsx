@@ -6,6 +6,17 @@ import {
   mergeOnboardingDraft,
 } from "@/lib/auth/onboarding";
 
+// Consent answered and allowing the run: these tests are about something
+// else. What a run does without an answer is pinned in its `.consent` test.
+vi.mock("@/hooks/useConsentGate", () => ({
+  useConsentGate: () => ({ withdrawn: false, known: true, unreadable: false }),
+}));
+
+// The run sends a child with no consent answer to a hold (19 Oct).
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
 /**
  * The band decides what a child is asked to do, so it must never be a guess.
  *

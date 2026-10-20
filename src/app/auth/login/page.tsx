@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDoor } from "@/hooks/useDoor";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
@@ -125,6 +126,9 @@ function forgotPinHref(childId: string, next: string | undefined): string {
  * the child's PIN says so instead - see `error`.
  */
 export default function LoginPage() {
+  // The PIN door is a door: nothing on this page goes as the session it found
+  // stored (19 Oct, `doorSession`).
+  useDoor();
   const router = useRouter();
   const { signIn } = useAuth();
   /** Null until the client has read localStorage - never during SSR. */

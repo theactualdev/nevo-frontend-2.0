@@ -10,11 +10,24 @@ import {
 } from "react";
 import { ApiError, authApi } from "@/lib/api";
 import { clearSession, getSession } from "@/lib/auth/session";
+import { onSessionEnd } from "@/lib/auth/sessionEnd";
 import type { UserRole } from "@/lib/constants";
+import { sweepStoredCaptures } from "@/lib/profiling/capture";
 import {
   endEphemeralSession,
   setEphemeralStudent,
 } from "@/lib/signals/ephemeralStore";
+import { forgetLeavingChild } from "./sessionLeftovers";
+
+/*
+ * EVERY WAY A SESSION ENDS TAKES THE CHILD'S LEFTOVERS WITH IT (19 Oct
+ * browser-storage audit) - not only this context's Sign out. A lapse, a 401,
+ * a closed account and a hand-over end it in `session.ts` without coming
+ * near here, so the clean-up listens to the session store itself. Registered
+ * once, when this module loads, which is on every page: `AppProviders` mounts
+ * the provider at the root.
+ */
+onSessionEnd(forgetLeavingChild);
 
 /** The authenticated user (Product Arch A.1–A.2). */
 export interface AuthUser {
@@ -53,6 +66,13 @@ export const AuthContext = createContext<AuthContextValue | undefined>(
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<AuthStatus>("loading");
+
+  // A baseline run abandoned part way left its raw taps on the device; a
+  // week on, they go, whoever opens the app next (19 Oct browser-storage
+  // audit). Once per page, here because this is mounted on every one.
+  useEffect(() => {
+    void sweepStoredCaptures();
+  }, []);
 
   // Hydrate from the live backend: a stored Bearer token is validated against
   // GET /auth/session on mount; a rejected/expired token clears quietly.

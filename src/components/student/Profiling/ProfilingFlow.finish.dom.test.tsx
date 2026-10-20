@@ -2,11 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ProfilingFlow } from "./ProfilingFlow";
 import { BaselineCapture } from "@/lib/profiling/capture";
+import { clearSession, setSession } from "@/lib/auth/session";
 import catalogue from "@/lib/api/signals.catalogue.json";
 import {
   clearOnboardingDraft,
   mergeOnboardingDraft,
 } from "@/lib/auth/onboarding";
+
+// The run sends a child with no consent answer to a hold (19 Oct).
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
 
 /**
  * What the end of the baseline does with what it measured.
@@ -26,6 +32,10 @@ import {
 
 const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
+// The band is ProfilingFlow.band's subject; here the roster gives none.
+vi.mock("@/hooks/useRosterBand", () => ({
+  useRosterBand: () => ({ band: null, settled: true }),
+}));
 
 const consent = vi.hoisted(() => ({ withdrawn: false }));
 vi.mock("@/hooks/useConsentGate", () => ({
@@ -94,11 +104,26 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   clearOnboardingDraft();
+  clearSession();
   vi.restoreAllMocks();
 });
 
+/**
+ * An SSO child is signed in throughout, and their run is parked for them only
+ * while they still are (19 Oct).
+ */
+const ssoChild = () =>
+  setSession({
+    token: "tok-sso",
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    userId: "child-sso",
+    role: "student",
+    method: "sso",
+  });
+
 describe("ProfilingFlow — whose baseline it is", () => {
   it("parks an SSO child's vector under their own id", () => {
+    ssoChild();
     render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-sso" />);
 
     sitTheWholeRun();
@@ -118,11 +143,50 @@ describe("ProfilingFlow — whose baseline it is", () => {
 
   it("hands back the run it parked, so the flush can prove it", () => {
     const onDone = vi.fn();
+    ssoChild();
     render(<ProfilingFlow onDone={onDone} ownerUserId="child-sso" />);
     sitTheWholeRun();
 
     expect(onDone).toHaveBeenCalledTimes(1);
     expect(onDone).toHaveBeenCalledWith(holdBaseline.mock.calls[0][0]);
+  });
+
+  /*
+   * NOT FOR A CHILD WHO IS NO LONGER HERE (19 Oct browser-storage audit). An
+   * owned run is parked for its owner, still signed in; with their session
+   * gone by the end, nothing is parked and the raw stream goes.
+   */
+  it("parks nothing for an SSO child whose session ended under the run", () => {
+    ssoChild();
+    render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-sso" />);
+    fireEvent.click(screen.getByRole("button", { name: /let's go/i }));
+    for (const step of ["m1", "pause", "m2", "pause"]) {
+      fireEvent.click(screen.getByRole("button", { name: step }));
+    }
+
+    clearSession();
+    fireEvent.click(screen.getByRole("button", { name: "m3" }));
+
+    expect(holdBaseline).not.toHaveBeenCalled();
+  });
+
+  it("parks nothing for them as the next child signed in over them", () => {
+    ssoChild();
+    render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-sso" />);
+    fireEvent.click(screen.getByRole("button", { name: /let's go/i }));
+    for (const step of ["m1", "pause", "m2", "pause"]) {
+      fireEvent.click(screen.getByRole("button", { name: step }));
+    }
+
+    setSession({
+      token: "tok-next",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId: "next-child",
+      role: "student",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "m3" }));
+
+    expect(holdBaseline).not.toHaveBeenCalled();
   });
 });
 
@@ -287,6 +351,7 @@ describe("ProfilingFlow — a withdrawn guardian", () => {
   it("parks nothing at the end, and hands on no run", () => {
     consent.withdrawn = true;
     const onDone = vi.fn();
+    ssoChild();
     render(<ProfilingFlow onDone={onDone} ownerUserId="child-sso" />);
 
     sitTheWholeRun();

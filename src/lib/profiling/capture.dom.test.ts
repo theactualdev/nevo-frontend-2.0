@@ -1,8 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fakeIndexedDb } from "@/test/fakeIndexedDb";
 import {
   BaselineCapture,
   baselineRunContext,
   baselineTrials,
+  purgeStoredCaptures,
+  sweepStoredCaptures,
   tapPoint,
   wordsShown,
 } from "./capture";
@@ -751,5 +754,178 @@ describe("tapPoint — where the finger landed", () => {
 
   it("records nothing when there was no event", () => {
     expect(tapPoint(undefined)).toEqual({});
+  });
+});
+
+/*
+ * THE RAW TAPS A RUN LEAVES BEHIND (19 Oct browser-storage audit). A run
+ * abandoned part way through onboarding kept its stream - the coordinates of
+ * every touch - in IndexedDB with no time limit, unless a later run came to
+ * sweep it. They go a week after they were written, the same week and the
+ * same `Date.now()` clock as the parked trials, and at every sign-out.
+ */
+describe("raw streams left on the device", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const DB = "nevo-baseline";
+  let idb: ReturnType<typeof fakeIndexedDb>;
+
+  beforeEach(() => {
+    idb = fakeIndexedDb();
+    vi.stubGlobal("indexedDB", idb.factory);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const tap = { kind: "tap", t: 1, payload: { x: 120, y: 340 } };
+  const stored = (daysAgo: number) => ({
+    capturedAt: Date.now() - daysAgo * DAY,
+    events: [tap],
+  });
+
+  it("are written with the time they were written", async () => {
+    const c = new BaselineCapture("run-now");
+    c.record("tap", { cell: 3, x: 120, y: 340 });
+
+    await c.persist();
+
+    const record = await vi.waitFor(() => {
+      const r = idb.records(DB)?.get("run-now");
+      expect(r).toBeDefined();
+      return r as { capturedAt: number; events: unknown[] };
+    });
+    expect(Math.abs(record.capturedAt - Date.now())).toBeLessThan(5_000);
+    expect(record.events).toHaveLength(1);
+  });
+
+  it("go a week after they were written, and a younger one stays", async () => {
+    idb.seed(DB, [
+      ["abandoned", stored(8)],
+      ["recent", stored(6)],
+    ]);
+
+    await sweepStoredCaptures();
+
+    expect([...(idb.records(DB)?.keys() ?? [])]).toEqual(["recent"]);
+  });
+
+  it("go when they carry no date, as every one written before this rule does", async () => {
+    idb.seed(DB, [["undated", [tap]]]);
+
+    await sweepStoredCaptures();
+
+    expect(idb.records(DB)?.size).toBe(0);
+  });
+
+  it("all go at a sign-out, whatever their age", async () => {
+    idb.seed(DB, [
+      ["abandoned", stored(3)],
+      ["today", stored(0)],
+    ]);
+
+    await purgeStoredCaptures();
+
+    expect(idb.records(DB)?.size).toBe(0);
+  });
+
+  it("are looked for without creating a store on a device that never had one", async () => {
+    await sweepStoredCaptures();
+    await purgeStoredCaptures();
+
+    expect(idb.records(DB)).toBeUndefined();
+  });
+
+  it("are nothing to look for where the device has no IndexedDB at all", async () => {
+    vi.stubGlobal("indexedDB", undefined);
+
+    await expect(sweepStoredCaptures()).resolves.toBeUndefined();
+    await expect(purgeStoredCaptures()).resolves.toBeUndefined();
+  });
+});
+
+/*
+ * HELD UNTIL CONSENT ALLOWS IT (19 Oct browser-storage audit; rule 5). Both
+ * runs construct their capture held, and nothing a child does is kept -
+ * in memory or on the device - until an answer allows it. Losing the answer
+ * lets go of what was kept.
+ */
+describe("BaselineCapture — held until consent allows it", () => {
+  const DB = "nevo-baseline";
+  let idb: ReturnType<typeof fakeIndexedDb>;
+
+  beforeEach(() => {
+    idb = fakeIndexedDb();
+    vi.stubGlobal("indexedDB", idb.factory);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("records nothing, and writes nothing, while held", async () => {
+    const c = new BaselineCapture("held-1", { held: true });
+
+    c.record("tap", { cell: 3, x: 120, y: 340 });
+    await c.persist();
+
+    expect(c.stream).toHaveLength(0);
+    expect(idb.records(DB)).toBeUndefined();
+  });
+
+  it("records from the moment it is allowed, and not before", () => {
+    const c = new BaselineCapture("held-2", { held: true });
+    c.record("tap", { cell: 1 });
+
+    c.allow();
+    c.record("tap", { cell: 2 });
+
+    expect(c.stream.map((e) => e.payload?.cell)).toEqual([2]);
+  });
+
+  it("lets go of what it kept, here and on the device, when held again", async () => {
+    const c = new BaselineCapture("held-3", { held: true });
+    c.allow();
+    c.record("tap", { cell: 4 });
+    await c.persist();
+    await vi.waitFor(() => expect(idb.records(DB)?.has("held-3")).toBe(true));
+
+    await c.hold();
+    c.record("tap", { cell: 5 });
+    await c.persist();
+
+    expect(c.stream).toHaveLength(0);
+    await vi.waitFor(() => expect(idb.records(DB)?.has("held-3")).toBe(false));
+  });
+
+  it("creates no store on the device just to empty it (19 Oct)", async () => {
+    // Held from its start - consent could not be read - and never written.
+    const c = new BaselineCapture("held-5", { held: true });
+
+    await c.hold();
+    await c.stop();
+
+    expect(idb.records(DB)).toBeUndefined();
+  });
+
+  it("still empties a store that is there, and writes to it once allowed", async () => {
+    idb.seed(DB, [["held-6", { capturedAt: Date.now(), events: [] }]]);
+    const c = new BaselineCapture("held-6", { held: true });
+
+    await c.hold();
+    await vi.waitFor(() => expect(idb.records(DB)?.has("held-6")).toBe(false));
+
+    c.allow();
+    c.record("tap", { cell: 1 });
+    await c.persist();
+    await vi.waitFor(() => expect(idb.records(DB)?.has("held-6")).toBe(true));
+  });
+
+  it("is not allowed again after a withdrawal has stopped it", async () => {
+    const c = new BaselineCapture("held-4", { held: true });
+    await c.stop();
+
+    c.allow();
+    c.record("tap", { cell: 6 });
+
+    expect(c.stream).toHaveLength(0);
   });
 });

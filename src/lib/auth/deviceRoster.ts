@@ -110,12 +110,68 @@ function read(): RememberedChild[] {
     const raw = window.localStorage.getItem(ROSTER_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : null;
     if (!Array.isArray(parsed)) return migrateLegacy();
-    return parsed.filter(isChild);
+    const children = parsed.filter(isChild);
+    const merged = mergeSameAccount(children);
+    if (merged.length !== children.length) write(merged);
+    return merged;
   } catch {
     // Private mode, refused storage, or something that is not our JSON. An
     // unreadable roster is an empty one, which lands on the sign-in screen.
     return [];
   }
+}
+
+const stamp = (c: RememberedChild): number => {
+  const at = Date.parse(c.lastUsedAt);
+  return Number.isNaN(at) ? 0 : at;
+};
+
+/**
+ * ONE TILE PER ACCOUNT (19 Oct browser-storage audit). `rememberChild` once
+ * matched on the credential pair alone, so a child who signed in at 00c with
+ * their admission number rather than their issued identifier was remembered
+ * a second time - the same account, as a nameless tile beside their own.
+ * Entries already stored that way are folded into one here, and written back.
+ *
+ * The tile the child knows stays: a named one before a nameless one, the
+ * latest used among them, with its id, its shape, its name and initials. It
+ * takes the newest identifier and last-used time, since that is the pair
+ * that last signed in. Closed if any of them is: the account is one account.
+ *
+ * NEVER WITHOUT AN ACCOUNT ID. Two entries with no `userId` cannot be shown
+ * to be the same child, and two children are never merged on a guess.
+ */
+function mergeSameAccount(children: RememberedChild[]): RememberedChild[] {
+  const byAccount = new Map<string, RememberedChild[]>();
+  for (const c of children) {
+    if (!c.userId) continue;
+    byAccount.set(c.userId, [...(byAccount.get(c.userId) ?? []), c]);
+  }
+  if ([...byAccount.values()].every((group) => group.length < 2)) {
+    return children;
+  }
+  const out: RememberedChild[] = [];
+  for (const c of children) {
+    const group = c.userId ? byAccount.get(c.userId) : undefined;
+    if (!group || group.length < 2) {
+      out.push(c);
+      continue;
+    }
+    const latestFirst = [...group].sort((a, b) => stamp(b) - stamp(a));
+    const kept =
+      latestFirst.find((g) => g.displayName?.trim()) ?? latestFirst[0];
+    // Written once, where the kept tile stood; the others are dropped.
+    if (c !== kept) continue;
+    const newest = latestFirst[0];
+    out.push({
+      ...kept,
+      schoolCode: newest.schoolCode,
+      loginIdentifier: newest.loginIdentifier,
+      lastUsedAt: newest.lastUsedAt,
+      ...(group.some((g) => g.closed) ? { closed: true as const } : {}),
+    });
+  }
+  return out;
 }
 
 function isChild(v: unknown): v is RememberedChild {
@@ -136,9 +192,8 @@ function isChild(v: unknown): v is RememberedChild {
  * Without this, shipping 28c would sign out every device that already
  * remembered somebody - the roster key is new, so every tablet in every school
  * would look like a tablet nobody has used. The legacy key is left in place
- * rather than deleted: it picks no door any more, but `rememberProfile` still
- * writes it and `setStoredDisplayName` still reads it through
- * `getRememberedProfile` - see `rememberProfile` in `session.ts`.
+ * here, and nothing writes it any more (19 Oct, `rememberProfile`): it is
+ * deleted at sign-out, once this has run (`retireLegacyProfile`).
  */
 function migrateLegacy(): RememberedChild[] {
   try {
@@ -160,6 +215,35 @@ function migrateLegacy(): RememberedChild[] {
     return migrated;
   } catch {
     return [];
+  }
+}
+
+/**
+ * Delete the old single remembered profile, once the roster holds what it did.
+ *
+ * Called at every sign-out (19 Oct browser-storage audit). The record names
+ * ONE child - whoever this device remembered last, signed out or not - with
+ * their school code and login identifier, and nothing reads it but the
+ * roster, to migrate from it - and nothing writes it since 19 Oct. So a
+ * sign-out leaves one copy of who uses this tablet, not two.
+ *
+ * NEVER BEFORE THE ROSTER HAS IT. A device from before 28c may still hold its
+ * child only here, and the read below folds them in first. If the roster
+ * cannot be read or written afterwards, the old record stays rather than
+ * leave the device remembering nobody.
+ */
+export function retireLegacyProfile(): void {
+  if (typeof window === "undefined") return;
+  read();
+  try {
+    const roster: unknown = JSON.parse(
+      window.localStorage.getItem(ROSTER_KEY) ?? "null",
+    );
+    if (!Array.isArray(roster)) return;
+    window.localStorage.removeItem(LEGACY_PROFILE_KEY);
+  } catch {
+    // An unreadable roster is not one the old record can be dropped in
+    // favour of.
   }
 }
 
@@ -256,11 +340,20 @@ export function childById(id: string): RememberedChild | null {
 /**
  * Record that a child signed in on this device.
  *
- * Matched on school code + login identifier, because that pair is what the
- * server authenticates. Matching on name would merge two different children
- * who share a first name - which on a classroom tablet is not an edge case.
+ * Matched on the account when the sign-in says which it is, else on school
+ * code + login identifier, because that pair is what the server
+ * authenticates. Matching on name would merge two different children who
+ * share a first name - which on a classroom tablet is not an edge case.
  *
- * An existing child keeps their id and their shape and moves to the front. A
+ * THE ACCOUNT FIRST (19 Oct browser-storage audit). Sign-in takes either the
+ * issued identifier or the admission number, so the pair alone missed a
+ * child who signed in at 00c with the other one, and remembered them again:
+ * a second, nameless tile for the same account. An entry found by its
+ * account takes the identifier that signed in now.
+ *
+ * An existing child keeps their id, their shape, their name and its initials
+ * - a write without a name brings only stand-in initials - and moves to the
+ * front. A
  * new child joins the front, and if that makes seven, the least recently used
  * drops off. Signing out does not call this and does not remove anybody, which
  * is 28c's rule: *"signing out does not remove a child"*.
@@ -273,15 +366,24 @@ export function rememberChild(profile: RememberedProfile): RememberedChild[] {
   if (!schoolCode || !loginIdentifier) return rememberedChildren();
 
   const existing = rememberedChildren();
-  const match = existing.find(
-    (c) => c.schoolCode === schoolCode && c.loginIdentifier === loginIdentifier,
-  );
+  const match =
+    (profile.userId
+      ? existing.find((c) => c.userId === profile.userId)
+      : undefined) ??
+    existing.find(
+      (c) =>
+        c.schoolCode === schoolCode && c.loginIdentifier === loginIdentifier,
+    );
   const rest = existing.filter((c) => c !== match);
+  const named = Boolean(profile.displayName?.trim());
 
   const updated: RememberedChild = {
     ...profile,
     schoolCode,
     loginIdentifier,
+    // Initials go with the name they were made from: a write without one
+    // brings the identifier's stand-in ("B2"), not the child's.
+    initials: !named && match?.initials ? match.initials : profile.initials,
     id: match?.id ?? newId(),
     // Kept across sign-ins so a child's shape is the same every morning. A new
     // child takes the lowest slot nobody on the device is using, so a full

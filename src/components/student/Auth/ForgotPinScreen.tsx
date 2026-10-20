@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useDoor } from "@/hooks/useDoor";
 import { useHydrated } from "@/hooks/useHydrated";
 import { pickerEntries } from "@/lib/auth/deviceRoster";
 import { withNext } from "@/lib/auth/nextPath";
@@ -57,6 +58,9 @@ export function ForgotPinScreen({
   /** The remembered child who forgot, as the roster's opaque id. */
   childId?: string;
 }) {
+  // Forgot PIN is a door: nothing on this page goes as the session it found
+  // stored (19 Oct, `doorSession`).
+  useDoor();
   const hydrated = useHydrated();
   const back = forgotPinWayBack(
     // Anyone the picker would SHOW: a closed child's entry lingers on the

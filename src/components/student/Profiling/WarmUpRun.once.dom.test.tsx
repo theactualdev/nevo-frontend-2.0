@@ -3,6 +3,12 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { WarmUpRun } from "./WarmUpRun";
 import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
 
+// Consent answered and allowing the run: these tests are about something
+// else. What a run does without an answer is pinned in its `.consent` test.
+vi.mock("@/hooks/useConsentGate", () => ({
+  useConsentGate: () => ({ withdrawn: false, known: true, unreadable: false }),
+}));
+
 /**
  * ONE WARM-UP A DAY.
  *
@@ -32,10 +38,10 @@ vi.mock("next/navigation", () => ({
 
 /*
  * PARTIAL mock, spreading the real module. A whole-module replacement drops
- * `getToken`, which `useHasSession` calls through `useConsentGate` on this very
- * component - so the run dies at mount and every test in the file fails for a
- * reason that has nothing to do with what it is testing. Same trap as the
- * `deviceRoster` mock that once blanked `SHAPE_COUNT`.
+ * what the rest of this component reads from it (`getToken` once, through
+ * `useConsentGate`) - so the run dies at mount and every test in the file
+ * fails for a reason that has nothing to do with what it is testing. Same trap
+ * as the `deviceRoster` mock that once blanked `SHAPE_COUNT`.
  */
 const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }));
 vi.mock("@/lib/auth/session", async (importOriginal) => {
@@ -57,7 +63,7 @@ beforeEach(() => {
   submit.mockReset();
   submit.mockResolvedValue(true);
   holdBaseline.mockReset();
-  getSession.mockReturnValue({ userId: "child-1" });
+  getSession.mockReturnValue({ userId: "child-1", token: "tok-1" });
   window.localStorage.clear();
 });
 
@@ -161,7 +167,7 @@ describe("a second child on the same tablet", () => {
      * addressed to them.
      */
     markWarmUpDone("child-1");
-    getSession.mockReturnValue({ userId: "child-2" });
+    getSession.mockReturnValue({ userId: "child-2", token: "tok-2" });
 
     render(<WarmUpRun dimension="attention" />);
     await settle();
