@@ -37,7 +37,25 @@ import { getSession } from "@/lib/auth/session";
  * device and is still purged as soon as the trials are taken.
  */
 
-const KEY = "nevo.baseline.pending";
+/**
+ * ONE PARKED RUN PER OWNER, AND AN OWNERLESS RUN UNDER ITS OWN RUN ID (19 Oct
+ * browser-storage audit).
+ *
+ * There was one slot for the whole device. A run parked there replaced
+ * whatever was waiting: a new child's finished pre-account run overwrote the
+ * last child's parked warm-up, and that child's trials were simply gone. Each
+ * owner has their own now, and a run with no owner yet - the onboarding run,
+ * before its account exists - is parked under its own run id, so no child's
+ * parked run ever replaces another's. Who may send each is unchanged: its
+ * owner, or the run that parked it, proving it with that id.
+ */
+const PREFIX = "nevo.baseline.pending.";
+/** The single slot before 19 Oct, moved onto its shelf the first time it is read. */
+const LEGACY_KEY = "nevo.baseline.pending";
+const ownerKey = (userId: string) => `${PREFIX}${userId}`;
+const runKey = (sessionId: string) => `${PREFIX}run.${sessionId}`;
+const keyFor = (p: Pick<PendingBaseline, "ownerUserId" | "sessionId">) =>
+  p.ownerUserId ? ownerKey(p.ownerUserId) : runKey(p.sessionId);
 
 /**
  * How long a parked baseline is worth sending. A child who abandons onboarding
@@ -68,25 +86,9 @@ interface PendingBaseline {
   context: BaselineRunContext;
 }
 
-export function holdBaseline(
-  sessionId: string,
-  trials: BaselineTrial[],
-  ownerUserId: string | null = null,
-  context: BaselineRunContext = {},
-): void {
-  // Nothing answered is nothing to send; the contract takes one trial or more.
-  if (trials.length === 0) return;
+function write(pending: PendingBaseline): void {
   try {
-    window.localStorage.setItem(
-      KEY,
-      JSON.stringify({
-        sessionId,
-        trials,
-        capturedAt: Date.now(),
-        ownerUserId,
-        context,
-      }),
-    );
+    window.localStorage.setItem(keyFor(pending), JSON.stringify(pending));
   } catch {
     // Private mode, or storage full. Nothing else to do: the run is over and
     // the child is moving on. Losing it here is the old behaviour, not a
@@ -94,10 +96,21 @@ export function holdBaseline(
   }
 }
 
-export function readPendingBaseline(): PendingBaseline | null {
+function remove(key: string): void {
   try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return null;
+    window.localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * A stored value as a parked run, or null when it is not one that may still
+ * be sent: unreadable, a pre-B9 vector, or older than a week.
+ */
+function parse(raw: string | null): PendingBaseline | null {
+  if (!raw) return null;
+  try {
     const v = JSON.parse(raw) as Partial<PendingBaseline>;
     if (!v?.sessionId) return null;
     /*
@@ -107,15 +120,9 @@ export function readPendingBaseline(): PendingBaseline | null {
      * own tablet is what B9 removed. Its trials were never kept, so there is
      * nothing to recover it into.
      */
-    if (!Array.isArray(v.trials) || v.trials.length === 0) {
-      clearPendingBaseline();
-      return null;
-    }
+    if (!Array.isArray(v.trials) || v.trials.length === 0) return null;
     if (typeof v.capturedAt !== "number") return null;
-    if (Date.now() - v.capturedAt > MAX_AGE_MS) {
-      clearPendingBaseline();
-      return null;
-    }
+    if (Date.now() - v.capturedAt > MAX_AGE_MS) return null;
     // A record written before `ownerUserId` existed reads as an onboarding
     // run's, which is the safe reading: it then has to prove its run.
     return {
@@ -128,11 +135,84 @@ export function readPendingBaseline(): PendingBaseline | null {
   }
 }
 
-export function clearPendingBaseline(): void {
+/** The old single slot, onto its owner's shelf or its run's - once. */
+function migrateLegacy(): void {
   try {
-    window.localStorage.removeItem(KEY);
+    const raw = window.localStorage.getItem(LEGACY_KEY);
+    if (raw === null) return;
+    window.localStorage.removeItem(LEGACY_KEY);
+    const pending = parse(raw);
+    // Nothing newer on that shelf is replaced by an older slot.
+    if (pending && !window.localStorage.getItem(keyFor(pending))) {
+      write(pending);
+    }
   } catch {
-    // ignore
+    // Unreadable storage holds nothing to move.
+  }
+}
+
+/**
+ * Every run parked on this device that may still be sent. What may not - a
+ * week old, a pre-B9 vector, unreadable - is deleted as it is found.
+ */
+function allParked(): { key: string; pending: PendingBaseline }[] {
+  if (typeof window === "undefined") return [];
+  migrateLegacy();
+  const found: { key: string; pending: PendingBaseline }[] = [];
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const k = window.localStorage.key(i);
+      if (k?.startsWith(PREFIX)) keys.push(k);
+    }
+    for (const key of keys) {
+      const pending = parse(window.localStorage.getItem(key));
+      if (pending) found.push({ key, pending });
+      else remove(key);
+    }
+  } catch {
+    // Unreadable storage: nothing parked that can be read.
+  }
+  return found;
+}
+
+export function holdBaseline(
+  sessionId: string,
+  trials: BaselineTrial[],
+  ownerUserId: string | null = null,
+  context: BaselineRunContext = {},
+): void {
+  // Nothing answered is nothing to send; the contract takes one trial or more.
+  if (trials.length === 0) return;
+  write({ sessionId, trials, capturedAt: Date.now(), ownerUserId, context });
+}
+
+/** Which parked run: an owner's, a run's, or - with neither - the newest. */
+export interface ParkedRun {
+  owner?: string | null;
+  run?: string;
+}
+
+const matches = (p: PendingBaseline, which: ParkedRun) =>
+  (which.owner === undefined || p.ownerUserId === which.owner) &&
+  (which.run === undefined || p.sessionId === which.run);
+
+export function readPendingBaseline(
+  which: ParkedRun = {},
+): PendingBaseline | null {
+  return (
+    allParked()
+      .map(({ pending }) => pending)
+      .filter((p) => matches(p, which))
+      .sort((a, b) => b.capturedAt - a.capturedAt)[0] ?? null
+  );
+}
+
+/** Forget the parked runs `which` names - every one, when it names none. */
+export function clearPendingBaseline(which: ParkedRun = {}): void {
+  if (which.owner === undefined && which.run === undefined) remove(LEGACY_KEY);
+  for (const { key, pending } of allParked()) {
+    if (matches(pending, which)) remove(key);
   }
 }
 
@@ -165,25 +245,51 @@ export function clearPendingBaseline(): void {
  * Left parked on failure too. A submit that did not land is not a reason to
  * throw away the only copy - that was the original defect.
  */
-export async function flushPendingBaseline(
+/** Each owner's flush under way, so the next waits for it (19 Oct). */
+const flushing = new Map<string, Promise<boolean>>();
+
+/**
+ * ONE FLUSH AT A TIME FOR EACH CHILD (19 Oct browser-storage audit).
+ *
+ * After a sign-in at the door, two flushes started together - the shell's
+ * and the landing screen's - read the same parked run, and both sent it:
+ * two consent reads and the same trials twice, under one run id. A flush now
+ * waits for any already under way for the same child, and then finds what
+ * that one delivered gone.
+ */
+export function flushPendingBaseline(
   expectedUserId: string | null | undefined,
   runSessionId?: string | null,
 ): Promise<boolean> {
-  const pending = readPendingBaseline();
-  if (!pending) return false;
+  if (!expectedUserId) return Promise.resolve(false);
+  const before = flushing.get(expectedUserId) ?? Promise.resolve(false);
+  const next = () => flushOnce(expectedUserId, runSessionId);
+  const run = before.then(next, next);
+  flushing.set(expectedUserId, run);
+  const done = () => {
+    if (flushing.get(expectedUserId) === run) flushing.delete(expectedUserId);
+  };
+  run.then(done, done);
+  return run;
+}
 
+async function flushOnce(
+  expectedUserId: string,
+  runSessionId?: string | null,
+): Promise<boolean> {
   const session = getSession();
   if (!session?.token || !expectedUserId || session.userId !== expectedUserId) {
     return false;
   }
-
-  const ownedByThisChild =
-    pending.ownerUserId != null && pending.ownerUserId === expectedUserId;
-  const parkedByThisRun =
-    pending.ownerUserId == null &&
-    Boolean(runSessionId) &&
-    pending.sessionId === runSessionId;
-  if (!ownedByThisChild && !parkedByThisRun) return false;
+  // This child's own, and the ownerless run this caller proves is theirs.
+  const mine = allParked().filter(
+    ({ pending: p }) =>
+      p.ownerUserId === expectedUserId ||
+      (p.ownerUserId == null &&
+        Boolean(runSessionId) &&
+        p.sessionId === runSessionId),
+  );
+  if (mine.length === 0) return false;
 
   /*
    * A WITHDRAWN GUARDIAN STOPS THIS, and this is the last place it can be
@@ -208,17 +314,54 @@ export async function flushPendingBaseline(
    * withdrawn stops anything.
    */
   if (await processingWithdrawnNow()) {
-    clearPendingBaseline();
+    for (const { key } of mine) remove(key);
     return false;
   }
 
-  const ok = await baselineApi.submitTrials(
-    pending.sessionId,
-    pending.trials,
-    pending.context,
-  );
-  if (ok) clearPendingBaseline();
-  return ok;
+  let all = true;
+  for (const found of mine) {
+    /*
+     * STILL THEIRS, NOW (19 Oct browser-storage audit). The session was
+     * checked above, and then this waited on the network: a 401 elsewhere in
+     * that time cleared it, and the run went up with no Authorization at all.
+     * Asked again before every send, and every retry asks too
+     * (`submitTrials`). Not theirs any more: nothing more is sent, and what
+     * is parked stays for its owner.
+     */
+    const now = getSession();
+    if (!now?.token || now.userId !== expectedUserId) return false;
+    /*
+     * AN OWNERLESS RUN BECOMES ITS OWNER'S as its own run proves it (19 Oct),
+     * before it is sent: if this send fails, the next flush on any student
+     * screen can still deliver it, with no run id to prove anything with.
+     */
+    let { key, pending } = found;
+    if (pending.ownerUserId == null) {
+      remove(key);
+      pending = { ...pending, ownerUserId: expectedUserId };
+      write(pending);
+      key = keyFor(pending);
+    }
+    const ok = await baselineApi.submitTrials(
+      pending.sessionId,
+      pending.trials,
+      pending.context,
+    );
+    if (!ok) {
+      all = false;
+      continue;
+    }
+    // Forget the run that went - not a newer one parked under the same key
+    // while it was on its way.
+    const stored = parse(window.localStorage.getItem(key));
+    if (
+      stored?.sessionId === pending.sessionId &&
+      stored.capturedAt === pending.capturedAt
+    ) {
+      remove(key);
+    }
+  }
+  return all;
 }
 
 async function processingWithdrawnNow(): Promise<boolean> {

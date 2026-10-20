@@ -119,8 +119,13 @@ export const signalsApi = {
     /**
      * `keepalive` lets the request outlive the page - the flush a tab makes
      * as it is hidden or closed. Bearer rules out `sendBeacon`.
+     *
+     * `token` and `signal` are for the last try at sign-out only (19 Oct):
+     * the session that held the token has already gone, so it is named here
+     * rather than read, and the try is bounded so it cannot outlast its
+     * moment.
      */
-    options: { keepalive?: boolean } = {},
+    options: { keepalive?: boolean; token?: string; signal?: AbortSignal } = {},
   ): Promise<SignalBatchReceipt | null> => {
     // Ours alone, or the server's own to write (B37) - neither travels.
     const known = events.filter(
@@ -170,7 +175,17 @@ export const signalsApi = {
           eventData: e.payload,
         })),
       },
-      options.keepalive ? { keepalive: true } : undefined,
+      options.token || options.signal
+        ? {
+            ...(options.keepalive ? { keepalive: true } : {}),
+            ...(options.token
+              ? { headers: { Authorization: `Bearer ${options.token}` } }
+              : {}),
+            ...(options.signal ? { signal: options.signal } : {}),
+          }
+        : options.keepalive
+          ? { keepalive: true }
+          : undefined,
     );
   },
 };

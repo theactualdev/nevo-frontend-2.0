@@ -365,6 +365,53 @@ export function settleAnswers(lessonId: string, sessionId: string): void {
   if (owner) settle(owner, slotFor(lessonId, sessionId));
 }
 
+/**
+ * Forget every refusal this child holds that is more than a week old, across
+ * the whole shelf.
+ *
+ * KEPT FOR GOOD UNTIL 19 OCT (browser-storage audit). A refusal was forgotten
+ * only when its own visit came round again: by `settle`, once its completion
+ * went as `exited`, or by the week's check in `sendAnswers`. But the flush
+ * visits only what it can still send - a refusal is never sent - so a visit
+ * with nothing else left in it was never visited again, and an answer the
+ * server refused stayed on a shared tablet with nothing that would ever
+ * remove it. Now every flush sweeps the shelf, on the same week and the same
+ * `Date.now()` clock as every other entry here.
+ *
+ * A WEEK FROM THE REFUSAL, as the refusal's own note has always said. Its one
+ * job is to send its visit's completion as `exited`, and that visit's
+ * position is held after the answers in it were given: a week from the
+ * ANSWER could forget the refusal while the completion it holds back is still
+ * waiting to go.
+ */
+function expireRefusals(owner: string): void {
+  const now = Date.now();
+  const store = readAnswers(owner);
+  let changed = false;
+  for (const [id, a] of Object.entries(store)) {
+    if (a.refusedAt === undefined || now - a.refusedAt <= MAX_AGE_MS) continue;
+    delete store[id];
+    changed = true;
+  }
+  if (changed) writeAnswers(owner, store);
+}
+
+/**
+ * Is `owner` still the child signed in here, with a token to send as?
+ *
+ * Asked before EVERY send (19 Oct browser-storage audit). A flush reads the
+ * owner once and then awaits one write after another, and a session can end
+ * between them - a 401 anywhere clears it, then the page leaves. The flush
+ * carried on: the next held answer went up with no Authorization header at
+ * all, a child's answer sent after their session had ended, to be refused.
+ * Now a flush stops at the first send its child's session is no longer there
+ * for, and what it had not sent stays held for them, as it always did.
+ */
+function stillSignedInAs(owner: string): boolean {
+  const session = getSession();
+  return Boolean(session?.token) && session?.userId === owner;
+}
+
 export type HeldAnswers = "sent" | "held" | "refused";
 
 /**
@@ -384,6 +431,11 @@ async function sendAnswers(
   let held = false;
   for (const answer of waiting) {
     const id = answer.body.clientAttemptId;
+    // Their session ended while this ran: what is left stays held for them.
+    if (!stillSignedInAs(owner)) {
+      held = true;
+      break;
+    }
     if (Date.now() - answer.heldAt <= MAX_AGE_MS) {
       try {
         await lessonsApi.saveAttempt(lessonId, { sessionId, ...answer.body });
@@ -407,17 +459,8 @@ async function sendAnswers(
     }
   }
   // A refusal is forgotten a week after it was made, like everything here.
-  const now = Date.now();
-  const left = answersIn(owner, slot);
-  const stale = left.filter(
-    (a) => a.refusedAt !== undefined && now - a.refusedAt > MAX_AGE_MS,
-  );
-  if (stale.length > 0) {
-    const store = readAnswers(owner);
-    for (const a of stale) delete store[a.body.clientAttemptId];
-    writeAnswers(owner, store);
-  }
-  if (left.some((a) => a.refusedAt !== undefined && !stale.includes(a))) {
+  expireRefusals(owner);
+  if (answersIn(owner, slot).some((a) => a.refusedAt !== undefined)) {
     return "refused";
   }
   return held ? "held" : "sent";
@@ -454,7 +497,7 @@ async function deliverSlot(
     let sessionId =
       held?.sessionId ?? waiting.find((a) => a.sessionId)?.sessionId ?? null;
     if (!sessionId) {
-      if (mine) return;
+      if (mine || !stillSignedInAs(owner)) return;
       sessionId = (await lessonsApi.startSession(lessonId)).sessionId;
       // Kept under the session from here on, so its answers and its position
       // land in one visit even if they go on different reconnects.
@@ -475,6 +518,7 @@ async function deliverSlot(
       if (answers === "held") return;
       status = LESSON_STATUS.EXITED;
     }
+    if (!stillSignedInAs(owner)) return;
     await lessonsApi.saveProgress(lessonId, {
       sessionId,
       status,
@@ -501,6 +545,9 @@ async function flushOnce(): Promise<void> {
   const session = getSession();
   if (!session?.token || !session.userId) return;
   const owner = session.userId;
+  // First, what has outlived its week - including refusals, which nothing
+  // below would ever visit again.
+  expireRefusals(owner);
 
   // Every visit holding a position or an answer to send, by lesson, with the
   // moment its oldest was held.

@@ -76,4 +76,14 @@ describe("a new child at the door", () => {
 
     expect(getOnboardingDraft()).toEqual({});
   });
+
+  // Not even an empty one (19 Oct browser-storage audit): leaving 05 for the
+  // Welcome left `nevo.onboarding.draft = {}` in the tab.
+  it("stores no draft at all while there is nothing in it", () => {
+    mergeOnboardingDraft({ name: "Someone Else" });
+
+    render(<WelcomeScreen />);
+
+    expect(window.sessionStorage.getItem("nevo.onboarding.draft")).toBeNull();
+  });
 });

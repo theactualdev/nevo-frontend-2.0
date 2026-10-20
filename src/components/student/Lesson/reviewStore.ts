@@ -27,8 +27,12 @@ export interface ReviewAnswer {
   selectedId: string;
 }
 
-const key = (lessonId: string) =>
-  `nevo:review:${getSession()?.userId ?? "signed-out"}:${lessonId}`;
+/** Whose shelf: the signed-in child's, or the walkthrough's. */
+const owner = () => getSession()?.userId ?? "signed-out";
+const picksPrefix = (who: string) => `nevo:review:${who}:`;
+const outcomePrefix = (who: string) => `nevo:check-outcome:${who}:`;
+
+const key = (lessonId: string) => `${picksPrefix(owner())}${lessonId}`;
 
 export function saveReviewAnswers(
   lessonId: string,
@@ -62,8 +66,7 @@ export function loadReviewAnswers(lessonId: string): ReviewAnswer[] {
  * and the summary reads the same three fields off the child's progress row
  * instead (B84, 8 Oct). See `LessonSummaryScreen`.
  */
-const outcomeKey = (lessonId: string) =>
-  `nevo:check-outcome:${getSession()?.userId ?? "signed-out"}:${lessonId}`;
+const outcomeKey = (lessonId: string) => `${outcomePrefix(owner())}${lessonId}`;
 
 /** Keep the outcome, or forget it with `null` when a new check begins. */
 export function saveCheckOutcome(
@@ -98,5 +101,33 @@ export function loadCheckOutcome(lessonId: string): CheckOutcome | null {
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Forget one child's picks and check-in outcomes in this tab, at sign-out.
+ *
+ * KEYED BY ACCOUNT ALREADY, AND STILL KEPT. The key stopped the next child
+ * reading them, but sessionStorage outlives a sign-out in the tab, so which
+ * options a child picked in their after-lesson check stayed on a shared
+ * tablet until the tab closed (19 Oct browser-storage audit). Nothing reads
+ * them once their child has gone: the review reads the account's own answers
+ * when they come back.
+ *
+ * ONLY THIS CHILD'S, and only this tab's - sessionStorage is per tab, and
+ * another tab's is out of reach. The walkthrough's shelf is nobody's.
+ */
+export function forgetReviewAnswers(userId: string): void {
+  if (!userId) return;
+  const mine = [picksPrefix(userId), outcomePrefix(userId)];
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i += 1) {
+      const k = sessionStorage.key(i);
+      if (k && mine.some((prefix) => k.startsWith(prefix))) keys.push(k);
+    }
+    for (const k of keys) sessionStorage.removeItem(k);
+  } catch {
+    // Unavailable storage holds nothing to forget.
   }
 }

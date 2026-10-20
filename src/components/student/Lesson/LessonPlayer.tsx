@@ -65,6 +65,8 @@ import { densityForAction } from "@/lib/lessons/densityForAction";
 import { densitySpacing } from "@/lib/lessons/densitySpacing";
 import { depthShown, type DepthShown } from "@/lib/lessons/depthShown";
 import { atLowerDepth, NOTHING_SIMPLIFIED } from "@/lib/lessons/lowerDepth";
+import { asSourceText } from "@/lib/lessons/fromContent";
+import { reportCalculationFallback } from "@/lib/api/clientErrors";
 import { useAssignmentNote } from "@/hooks/useAssignmentNote";
 import { isChunkable } from "@/lib/lessons/chunk";
 import {
@@ -99,6 +101,7 @@ import { useLessonProgress } from "@/hooks/useLessonProgress";
 import { AudioSegment } from "./AudioSegment";
 import { BreakOfferPill } from "./BreakOfferPill";
 import { BreakScreen } from "./BreakScreen";
+import { CalculationBoundary } from "./CalculationBoundary";
 import { CalculationSolver, type StepGiven } from "./CalculationSolver";
 import { FeedbackStrip } from "./FeedbackStrip";
 import { InteractiveSegment } from "./InteractiveSegment";
@@ -193,6 +196,9 @@ const PARTIAL_ENDING = {
   note: "We'll pick up the rest when you're back online.",
 } as const;
 
+/** Why a calculation whose solver threw is its text - see `failedCalcs`. */
+const SOLVER_FAILED = "the solver failed on the device";
+
 /** A calculation segment whose Interactive modality routes to the solver (§8). */
 function isCalculation(segment: LessonSegment): boolean {
   return Boolean(segment.calculationVariant) && Boolean(segment.calculation);
@@ -206,6 +212,16 @@ function isCalculation(segment: LessonSegment): boolean {
  * option renders a different component).
  */
 function hasContent(segment: LessonSegment, modality: Modality): boolean {
+  /*
+   * A CALCULATION IS THE SOLVER AND NOTHING ELSE - opened in it, and never
+   * offered as its text or a picture (Lydia, 17 Oct #5; Teslim, 19 Oct: "A
+   * valid one advertises interactive only"). Every segment carries its text,
+   * so this read `true` for Text on a calculation: a plan row naming Text
+   * opened it as plain text, and an offer of Text - the engine's or a
+   * lesson's own - put "Want to read this one instead?" over the solver.
+   * One this app cannot draw is no calculation by now (`asSourceText`).
+   */
+  if (isCalculation(segment)) return modality === MODALITY.INTERACTIVE;
   switch (modality) {
     case MODALITY.TEXT:
       return Boolean(segment.text);
@@ -357,6 +373,21 @@ export function LessonPlayer({
         : { lesson: given, simplified: NOTHING_SIMPLIFIED },
     [given, lowerDepth],
   );
+  /*
+   * CALCULATIONS WHOSE SOLVER FAILED ON THIS DEVICE, and what it threw. Each
+   * is its source text from then on, for the rest of the visit (Teslim, 19
+   * Oct: "A renderer failure on the device should use the source body and
+   * report the failure") - see `CalculationBoundary`. The segment itself is
+   * swapped as it is entered, rather than special-cased on screen, so the
+   * held forward chevron, the support dots, the pace chips and what the
+   * engine is told the segment offers all follow from the one fact. Not the
+   * lesson: a new lesson would rewrite the child's position for nothing.
+   */
+  const [failedCalcs, setFailedCalcs] = useState<ReadonlyMap<string, unknown>>(
+    () => new Map(),
+  );
+  const asEntered = (s: LessonSegment) =>
+    failedCalcs.has(s.id) ? asSourceText(s, SOLVER_FAILED) : s;
   // Every exit from the lesson - see `useLessonExit`.
   const exitTo = useLessonExit();
   // Where a review's entry and ending go - see `reviewBack`.
@@ -879,7 +910,24 @@ export function LessonPlayer({
     () => new Set(),
   );
 
-  const segment = lesson.segments[index];
+  const segment = asEntered(lesson.segments[index]);
+
+  /*
+   * A CALCULATION THE CHILD IS GIVEN AS TEXT IS REPORTED, as they meet it:
+   * one the server offered that this app refused (`calculationFor`), or one
+   * whose solver failed here. Once per segment a page - `clientErrors`.
+   */
+  const fellBack = segment.calculationRefused;
+  const failure = failedCalcs.get(segment.id);
+  useEffect(() => {
+    if (fellBack === undefined) return;
+    reportCalculationFallback({
+      lessonId: lesson.id,
+      segmentId: segment.id,
+      reason: fellBack,
+      ...(failure === undefined ? {} : { error: failure }),
+    });
+  }, [lesson.id, segment.id, fellBack, failure]);
 
   /**
    * The engine's mid-lesson read, asked at each segment boundary and when the
@@ -1598,7 +1646,7 @@ export function LessonPlayer({
       shownHere: false,
       sinceShown: o.sinceShown === null ? null : o.sinceShown + 1,
     }));
-    const nextSegment = lesson.segments[next];
+    const nextSegment = asEntered(lesson.segments[next]);
     const nextPlan = livePlanFor(nextSegment.id);
     setIndex(next);
     // Opening a segment names it, a return visit included (D148).
@@ -2955,6 +3003,13 @@ export function LessonPlayer({
               // D211's line has done its job once the child acts on the
               // step, and the column wants its room back for the step.
               onCalcAct={() => setHeldNextOn(null)}
+              onCalcFailed={(error) => {
+                // Its text from here on, and reported - see `failedCalcs`.
+                // Forward is no longer held for a solve that cannot happen.
+                setFailedCalcs((prev) => new Map(prev).set(segment.id, error));
+                setModality(MODALITY.TEXT);
+                setHeldNextOn(null);
+              }}
               onCalcHint={() => {
                 /*
                  * THE HINT A CHILD OPENS WAS SILENT (audit 44). Opening it is
@@ -3190,6 +3245,7 @@ function SegmentBody({
   onCalcHintShown,
   onCalcHintUsed,
   onCalcAct,
+  onCalcFailed,
 }: {
   segment: LessonSegment;
   modality: Modality;
@@ -3225,18 +3281,20 @@ function SegmentBody({
   onCalcHintUsed: (from: "step" | "engine") => void;
   /** The child did something in a calculation step - see `CalculationSolver`. */
   onCalcAct: () => void;
+  /** The solver threw while it drew - see `CalculationBoundary`. */
+  onCalcFailed: (error: unknown) => void;
 }) {
-  if (modality === MODALITY.TEXT && segment.text)
-    return (
-      <TextSegment
-        content={segment.text}
-        density={density}
-        reading={reading}
-        attention={attention}
-        onReadProgress={onReadProgress}
-        onChunkSeen={onChunkSeen}
-      />
-    );
+  const text = segment.text ? (
+    <TextSegment
+      content={segment.text}
+      density={density}
+      reading={reading}
+      attention={attention}
+      onReadProgress={onReadProgress}
+      onChunkSeen={onChunkSeen}
+    />
+  ) : null;
+  if (modality === MODALITY.TEXT && text) return text;
   if (modality === MODALITY.VISUAL && segment.visual)
     return (
       <VisualSegment
@@ -3257,33 +3315,41 @@ function SegmentBody({
       />
     );
   if (modality === MODALITY.INTERACTIVE) {
-    // A calculation segment routes the Interactive modality to the solver (§8).
+    // A calculation segment routes the Interactive modality to the solver (§8),
+    // fenced, so a solver that throws leaves the segment's text, never a
+    // blank section or the lesson's error screen (Teslim, 19 Oct).
     if (segment.calculationVariant && segment.calculation)
       return (
-        <CalculationSolver
-          calculation={segment.calculation}
-          padDock={padDock}
-          level={supportLevel}
-          engineHint={engineHint}
-          onEngineHintClosed={onEngineHintClosed}
-          onSystemScroll={onSystemScroll}
-          // D30: the same accommodation the text segment and the checks take.
-          reading={reading}
-          onSolved={onCalcSolved}
-          onStepAnswered={onCalcStep}
-          onStepGiven={onCalcGiven}
-          onPiecePlaced={onPiecePlaced}
-          onHintOpened={onCalcHint}
-          onHintShown={onCalcHintShown}
-          onHintUsed={onCalcHintUsed}
-          onAct={onCalcAct}
-          // A step's narration is the segment's narration: the same four
-          // signals the audio card sends, from the same handlers.
-          onReplay={onReplay}
-          onNarrationPlayed={onNarrationPlayed}
-          onAudioBusy={onAudioBusy}
-          onNarrationFailed={(reason) => onMediaFailed("audio", reason)}
-        />
+        <CalculationBoundary
+          key={segment.id}
+          fallback={text}
+          onFailed={onCalcFailed}
+        >
+          <CalculationSolver
+            calculation={segment.calculation}
+            padDock={padDock}
+            level={supportLevel}
+            engineHint={engineHint}
+            onEngineHintClosed={onEngineHintClosed}
+            onSystemScroll={onSystemScroll}
+            // D30: the same accommodation the text segment and the checks take.
+            reading={reading}
+            onSolved={onCalcSolved}
+            onStepAnswered={onCalcStep}
+            onStepGiven={onCalcGiven}
+            onPiecePlaced={onPiecePlaced}
+            onHintOpened={onCalcHint}
+            onHintShown={onCalcHintShown}
+            onHintUsed={onCalcHintUsed}
+            onAct={onCalcAct}
+            // A step's narration is the segment's narration: the same four
+            // signals the audio card sends, from the same handlers.
+            onReplay={onReplay}
+            onNarrationPlayed={onNarrationPlayed}
+            onAudioBusy={onAudioBusy}
+            onNarrationFailed={(reason) => onMediaFailed("audio", reason)}
+          />
+        </CalculationBoundary>
       );
     if (segment.interactive)
       return <InteractiveSegment content={segment.interactive} />;

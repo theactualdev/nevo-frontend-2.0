@@ -1,4 +1,5 @@
 import { api, ApiError } from "./client";
+import { getSession } from "@/lib/auth/session";
 
 /** How many times a baseline submit is attempted before we accept it failed. */
 const BASELINE_SUBMIT_ATTEMPTS = 3;
@@ -117,7 +118,20 @@ export interface BaselineRunContext {
  * its body as a literal, which is what `npm run contract` checks.
  */
 async function withRetry(send: () => Promise<unknown>): Promise<boolean> {
+  /*
+   * ONLY EVER AS THE CHILD SIGNED IN WHEN IT STARTED (19 Oct browser-storage
+   * audit). Trials sent with no token are a child's measurements put on the
+   * wire for nobody, and a retry a few seconds on can outlive the session it
+   * began in - a lapse, a 401 elsewhere, the next child signing in. So no
+   * attempt goes without a token, and none goes once the session is not the
+   * one this began with: it reports not sent, and the caller keeps the trials
+   * for their owner as it does for any failed write.
+   */
+  const as = getSession();
+  if (!as?.token) return false;
   for (let attempt = 0; attempt < BASELINE_SUBMIT_ATTEMPTS; attempt++) {
+    const now = getSession();
+    if (!now?.token || now.userId !== as.userId) return false;
     try {
       await send();
       return true;

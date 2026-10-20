@@ -23,6 +23,8 @@ import { closeRememberedChild } from "@/lib/auth/deviceRoster";
 import { noteServerClock } from "./serverClock";
 import { isAdminRole } from "@/lib/constants/permissions";
 import { API_ORIGIN } from "./upstream";
+import { purgeStoredCaptures } from "@/lib/profiling/capture";
+import { isHeldAtDoor } from "@/lib/auth/doorSession";
 
 // Default: the same-origin catch-all proxy (`app/api/backend/[...path]`),
 // which forwards to the FastAPI backend - the backend has no CORS headers, so
@@ -154,6 +156,34 @@ function friendlyMessage(status: number): string {
 // lives in the client session store and rides every request from here.
 async function getAuthToken(): Promise<string | undefined> {
   return getToken();
+}
+
+/**
+ * THE DOORS NEVER CARRY A STORED SESSION'S TOKEN (19 Oct browser-storage
+ * audit).
+ *
+ * Every request carried whatever session the device held, the doors
+ * included: with one child's session still on a shared tablet, the next
+ * child's PIN sign-in went up with the first child's Authorization, as did
+ * 05 Entry's lookup, a first or new PIN, and a request for a PIN to be
+ * cleared. None of these is anybody's yet - they are how an account is
+ * found or entered - so none is sent as anybody. Named by path here, once,
+ * so no caller can forget: sign-in (PIN and password), the PIN-reset and
+ * password-reset requests, the SSO callback, and 05's two routes.
+ */
+const ANONYMOUS_PATHS = [
+  "/api/v1/auth/login/",
+  "/api/v1/auth/pin/reset",
+  "/api/v1/auth/forgot-password",
+  "/api/v1/auth/password-reset/complete",
+  "/api/v1/auth/sso/callback",
+  "/api/v1/student-entry/",
+];
+
+/** Is this a door, sent as nobody whoever is signed in? */
+export function isAnonymousPath(path: string): boolean {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return ANONYMOUS_PATHS.some((door) => p.startsWith(door));
 }
 
 /**
@@ -300,6 +330,14 @@ function holdIfWithdrawn(status: number, detail: unknown): void {
   );
   if (!door) return;
   redirecting = true;
+  /*
+   * AND THE BASELINE'S RAW TAPS GO (19 Oct browser-storage audit). A run that
+   * learns of the withdrawal this way never gets to stop its capture - the
+   * page leaves under it - so the stream it last wrote stayed on the device
+   * until a sign-out or the week's sweep. Started here, before the page
+   * goes; 00e finishes it on arrival in case this one does not land.
+   */
+  void purgeStoredCaptures();
   window.location.assign(door);
 }
 
@@ -383,7 +421,18 @@ export async function request<T>(
 ): Promise<T> {
   const { body, params, headers, baseUrl, ...rest } = options;
   const url = buildUrl(path, params, baseUrl);
-  const token = await getAuthToken();
+  const token = isAnonymousPath(path) ? undefined : await getAuthToken();
+  /*
+   * NOT SENT AT ALL as a session an open door is holding (19 Oct
+   * browser-storage audit; `doorSession`). Not sent without it either: the
+   * app's routine reads on a sign-in screen are the stored child's, and with
+   * no token they would only be refused - and a refused session check would
+   * sign that child out for nothing. So nothing leaves, and the caller sees
+   * what it sees offline.
+   */
+  if (token && isHeldAtDoor(token)) {
+    throw new ApiError(0, friendlyMessage(0), { heldAtDoor: true });
+  }
 
   // FormData carries its own multipart boundary, which only the browser can
   // generate - so it must be passed through untouched and its Content-Type
