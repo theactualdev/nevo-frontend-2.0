@@ -158,6 +158,8 @@ export interface OfflinePackageSegment {
   body: string;
   /** The same chunks a live open carries (B87). */
   readingChunks?: LessonSegment["readingChunks"];
+  /** As a live open carries them - see `ReadingGroup`. Typed, not kept. */
+  readingGroups?: LessonSegment["readingGroups"];
   contentType: LessonContentType;
   sequenceOrder: number;
   availableModalities?: LessonSegment["availableModalities"];

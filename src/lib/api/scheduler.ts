@@ -24,10 +24,12 @@ export interface ConceptSchedule {
    * Spacing-engine parameters. Typed because the contract sends them, and
    * NEVER rendered - a number against a child's recall is the same
    * diagnostic-shaped measurement the Zero-Tag ruling bars elsewhere.
+   * NULLABLE since d461b60 (Teslim, 19 Oct): withheld from a student, so a
+   * student always reads null here; staff reads keep the numbers.
    */
-  stability: number;
-  difficulty: number;
-  retrievability: number;
+  stability: number | null;
+  difficulty: number | null;
+  retrievability: number | null;
   lastReview: string;
   reviewCount: number;
   nextReviewDue: string;
@@ -58,11 +60,13 @@ export type ReviewOutcome =
  * schedule (and its `nextReviewDue`) has always come back on the write.
  *
  * `recallSuccessful` here is the SERVER's verdict on the outcome sent, not an
- * echo of anything the client decided.
+ * echo of anything the client decided. NULLABLE since d461b60 (Teslim, 19
+ * Oct): withheld from a student, so a student always reads null here - and
+ * `outcome` with it. A null is no verdict, never a "no".
  */
 export interface RecordReviewResponse {
   schedule: ConceptSchedule;
-  recallSuccessful: boolean;
+  recallSuccessful: boolean | null;
   outcome?: ReviewOutcome | null;
 }
 

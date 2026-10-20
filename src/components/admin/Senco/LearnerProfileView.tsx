@@ -530,13 +530,20 @@ export function LearnerProfileView({
         ) : (
           mastery.slice(0, 10).map((row, i) => {
             // Bars, never numbers - see the note at the top of this file.
+            /*
+             * ADMIN LANE: both are nullable since d461b60 (withheld from a
+             * student; staff reads still carry numbers), and `Math.min(1,
+             * null)` draws an empty bar. Cast to compile with the behaviour
+             * unchanged; the null guard is the admin lane's to add (student
+             * lane, 20 Oct contract catch-up).
+             */
             const concept = Math.max(
               0,
-              Math.min(1, row.masteryProbabilityConcept),
+              Math.min(1, row.masteryProbabilityConcept as number),
             );
             const reading = Math.max(
               0,
-              Math.min(1, row.masteryProbabilityReading),
+              Math.min(1, row.masteryProbabilityReading as number),
             );
             /*
              * No "Reading is the barrier here". It was drawn whenever the

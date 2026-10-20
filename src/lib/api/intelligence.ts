@@ -259,9 +259,9 @@ export interface GuidedAnswerRequest {
  *   there is nothing to act on. The player already offers every check a
  *   lesson carries and holds none back, and a gap the content leaves is for
  *   parsing and teacher review to fill.
- * - `numberProblemsStepByStep`: no description in the spec, so NOT ACTED
- *   ON. The solver already gives one step at a time whatever the flag says
- *   (17b). Asked.
+ * - `numberProblemsStepByStep`: NOT ACTED ON. The spec now says "When true,
+ *   force authored calculation steps to be shown one at a time", and the
+ *   solver already gives one step at a time whatever the flag says (17b).
  * - `shorterTextBlocks` (B114, 13 Oct): "use the readingChunks supplied by
  *   the server. The client must not split prose itself." Nothing reads the
  *   flag, because nothing needs to: every passage that came with chunks is
@@ -271,7 +271,20 @@ export interface GuidedAnswerRequest {
  */
 export interface EngineConfig {
   version?: number;
-  reading?: { targetWordsPerMinute?: number; segmentWordTarget?: number };
+  reading?: {
+    targetWordsPerMinute?: number;
+    segmentWordTarget?: number;
+    /*
+     * Set by a session's delivery snapshot for a reading accommodation
+     * (`session_delivery.py`, 18 Oct). Typed, NOT APPLIED: the spec files
+     * `reading` as "returned for transparency rather than direct UI
+     * control", and whether these should drive the reading style instead of
+     * `accommodations: ["reading"]` is asked (20 Oct contract check).
+     */
+    fontScale?: number;
+    lineSpacing?: number;
+    contrast?: "standard" | "soft";
+  };
   pacing?: { responseTimeTargetMs?: number; attentionWindowMinutes?: number };
   support?: {
     /** `ScaffoldingLevel`. */
@@ -279,8 +292,28 @@ export interface EngineConfig {
     comprehensionCheckInterval?: number;
     numberProblemsStepByStep?: boolean;
     shorterTextBlocks?: boolean;
+    /*
+     * Both default false and the spec gives them no description: typed, NOT
+     * ACTED ON, and what each should do on the device is asked (20 Oct
+     * contract check).
+     */
+    pauseBetweenSegments?: boolean;
+    numericalVisuals?: boolean;
   };
   generatedFromBaselineAt?: string | null;
+}
+
+/**
+ * `SessionDeliveryResponse` - one lesson session's delivery, frozen by the
+ * server when the session opens (18 Oct): the engine config with the active
+ * accommodations applied, and when it was taken. On `POST
+ * /api/v1/lessons/{id}/session` and on a `nothing_landed` reroute. All three
+ * are required. Typed, not read - see `LessonSessionResponse.deliveryState`.
+ */
+export interface SessionDelivery {
+  engineConfig: EngineConfig;
+  accommodations: AccommodationType[];
+  capturedAt: string;
 }
 
 /**
