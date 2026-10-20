@@ -117,6 +117,31 @@ const ALL_DONE = ready({ ...BASELINE_DONE, domain_probe: true });
 /** The three done, and no subject with anything to ask. */
 const NOTHING_TO_ASK = ready(BASELINE_DONE, [ART]);
 
+/**
+ * Readiness as the server sends it since Teslim's 19 Oct contract, for a
+ * child with no question bank in any subject: Module 4 `completed: true,
+ * status: "unavailable"`, and no suggested subject.
+ */
+function readyNoBank(done: Record<string, boolean>) {
+  const modules = ["grid_span", "pattern_flanker", "sentence_dot"].map((id) => ({
+    id,
+    completed: done[id] ?? false,
+    status: done[id] ? ("completed" as const) : ("pending" as const),
+  }));
+  const all = [
+    ...modules,
+    { id: "domain_probe", completed: true, status: "unavailable" as const },
+  ];
+  return {
+    complete: all.every((m) => m.completed),
+    modules: all,
+    subjects: [{ ...ART }],
+    nextModule: all.find((m) => !m.completed)?.id ?? null,
+    probeSubjectId: null,
+    probePolicy: "one_available_subject" as const,
+  };
+}
+
 function signIn(userId = "student-1") {
   setSession({
     token: "tok-child",
@@ -269,6 +294,32 @@ describe("a Module 4 with nothing to ask moves the child on (Olayinka, 19 Oct)",
     // The baseline went first, and said so on the stream before it closed.
     expect(trackEvent).toHaveBeenCalledWith("baseline_submitted");
     expect(flush).toHaveBeenCalled();
+  });
+
+  it("maps three when the server holds the probe as unavailable, then moves them on", async () => {
+    // `completed: true` with `status: "unavailable"` is nothing asked, not
+    // a module sat: three stops (design, 9 Oct), and Module 4 never shows.
+    readiness.mockResolvedValue(readyNoBank({ grid_span: true }));
+    render(<OnboardingResume />);
+
+    const run = await screen.findByRole("button", { name: "after profiling" });
+    expect(run).toHaveAttribute("data-segments", "3");
+
+    fireEvent.click(run);
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
+    expect(screen.queryByTestId("module-four")).toBeNull();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("sends a child with the three done and the probe unavailable Home, asking nothing", async () => {
+    readiness.mockResolvedValue(readyNoBank(BASELINE_DONE));
+    render(<OnboardingResume />);
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
+    expect(screen.queryByTestId("module-four")).toBeNull();
+    expect(screen.queryByRole("button", { name: "after profiling" })).toBeNull();
+    expect(next).not.toHaveBeenCalled();
   });
 
   it("moves on when Module 4 finds nothing after all", async () => {

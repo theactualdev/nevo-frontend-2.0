@@ -2,6 +2,7 @@ import { getToken } from "@/lib/auth/session";
 import {
   DOMAIN_PROBE,
   moduleCompleted,
+  moduleUnavailable,
   probeApi,
   probeStepKind,
   type LearningReadiness,
@@ -29,6 +30,11 @@ import {
 export interface ProbeOpening {
   subject: OnboardingSubject;
   item: ProbeQuestion;
+  /**
+   * This is the server's suggested subject (`probeSubjectId`, Teslim 19 Oct),
+   * so a child who does not choose runs it. Never this device's pick.
+   */
+  suggested: boolean;
 }
 
 /**
@@ -37,10 +43,12 @@ export interface ProbeOpening {
  * - `held`: the server already holds it as done. Nothing to ask.
  * - `ask`: the subjects with an item to ask, in the server's order, each with
  *   that item.
- * - `unavailable`: nothing to ask - no subject has items, or every one that
- *   should answered with none (`ProbeEmpty`) or with a finish before asking
- *   anything. The server records nothing for this child then, and neither does
- *   this device: it moves on, and the server's gate says what happens next.
+ * - `unavailable`: nothing to ask - the server holds the probe as
+ *   `unavailable` (no question bank in any of the child's subjects; it comes
+ *   with `completed: true`), no subject has items, or every one that should
+ *   answered with none (`ProbeEmpty`) or with a finish before asking
+ *   anything. This device records nothing for it - no completion, no
+ *   placement: it moves on, and the server's gate says what happens next.
  * - `failed`: a read failed, so this device cannot know. Not `unavailable`: a
  *   broken read is not permission to move on as though nothing were there.
  */
@@ -60,8 +68,15 @@ export type ProbeOpenings = [ProbeOpening, ...ProbeOpening[]];
  * nothing (`probe.next_question`) - so it is asked of every subject the
  * readiness says has items, in parallel, and a subject is offered only if it
  * answered with an item. Never rejects.
+ *
+ * UNAVAILABLE BEFORE COMPLETED. The server sends a probe with no bank as
+ * `completed: true, status: "unavailable"` (Teslim, 19 Oct). Read as held,
+ * it ended Module 4 as sat, and the quest map kept a fourth stop for a
+ * module that never ran - against design's 9 Oct rule, "A child who will do
+ * three sees three segments".
  */
 export async function planProbe(readiness: LearningReadiness): Promise<ProbePlan> {
+  if (moduleUnavailable(readiness, DOMAIN_PROBE)) return { kind: "unavailable" };
   if (moduleCompleted(readiness, DOMAIN_PROBE)) return { kind: "held" };
   const open = readiness.subjects.filter((s) => s.probeAvailable);
   if (open.length === 0) return { kind: "unavailable" };
@@ -74,7 +89,11 @@ export async function planProbe(readiness: LearningReadiness): Promise<ProbePlan
   firsts.forEach((first, i) => {
     if (first.status === "rejected") failed = true;
     else if (probeStepKind(first.value) === "question") {
-      openings.push({ subject: open[i], item: first.value as ProbeQuestion });
+      openings.push({
+        subject: open[i],
+        item: first.value as ProbeQuestion,
+        suggested: open[i].subjectId === readiness.probeSubjectId,
+      });
     }
   });
   const [first, ...rest] = openings;

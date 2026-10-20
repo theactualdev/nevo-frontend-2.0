@@ -57,7 +57,8 @@ const empty = (subjectId: string) => ({ finished: true, noItems: true, subjectId
 const finished = (subjectId: string) => ({
   finished: true,
   subjectId,
-  entryPoint: 0.5,
+  // Withheld from a student since d461b60: always null.
+  entryPoint: null,
   asked: 0,
 });
 
@@ -73,6 +74,63 @@ describe("planProbe", () => {
   it("is held, and asks nothing, when the server already has Module 4", async () => {
     await expect(planProbe(ready([MATHS], true))).resolves.toEqual({ kind: "held" });
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it("is unavailable, not held, when the server holds the probe as unavailable", async () => {
+    // Teslim's 19 Oct contract: no bank arrives as `completed: true, status:
+    // "unavailable"`. Held, it ended as sat and kept a fourth quest map stop
+    // for a module nobody was asked (design, 9 Oct: three for three).
+    const noBank = {
+      ...ready([], true),
+      modules: [
+        { id: "grid_span", completed: true, status: "completed" as const },
+        { id: "pattern_flanker", completed: true, status: "completed" as const },
+        { id: "sentence_dot", completed: true, status: "completed" as const },
+        { id: "domain_probe", completed: true, status: "unavailable" as const },
+      ],
+      probeSubjectId: null,
+      probePolicy: "one_available_subject" as const,
+    };
+
+    await expect(planProbe(noBank)).resolves.toEqual({ kind: "unavailable" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("is still held when the server holds the probe as completed", async () => {
+    const done = ready([MATHS], true);
+    const modules = done.modules.map((m) => ({ ...m, status: "completed" as const }));
+
+    await expect(planProbe({ ...done, modules })).resolves.toEqual({ kind: "held" });
+  });
+
+  it("marks the server's suggested subject, and keeps the server's order", async () => {
+    next.mockImplementation(async (id: string) => item(id, `first-${id}`));
+
+    const plan = await planProbe({
+      ...ready([ENGLISH, MATHS]),
+      probeSubjectId: "sub-maths",
+    });
+
+    expect(plan).toEqual({
+      kind: "ask",
+      openings: [
+        { subject: ENGLISH, item: item("sub-eng", "first-sub-eng"), suggested: false },
+        { subject: MATHS, item: item("sub-maths", "first-sub-maths"), suggested: true },
+      ],
+    });
+  });
+
+  it("suggests none when the server suggests none", async () => {
+    next.mockImplementation(async (id: string) => item(id, `first-${id}`));
+
+    const plan = await planProbe({ ...ready([MATHS]), probeSubjectId: null });
+
+    expect(plan).toEqual({
+      kind: "ask",
+      openings: [
+        { subject: MATHS, item: item("sub-maths", "first-sub-maths"), suggested: false },
+      ],
+    });
   });
 
   it("is unavailable, and asks nothing, when no subject has items", async () => {
@@ -109,8 +167,8 @@ describe("planProbe", () => {
     expect(plan).toEqual({
       kind: "ask",
       openings: [
-        { subject: MATHS, item: item("sub-maths", "first-sub-maths") },
-        { subject: SCIENCE, item: item("sub-sci", "first-sub-sci") },
+        { subject: MATHS, item: item("sub-maths", "first-sub-maths"), suggested: false },
+        { subject: SCIENCE, item: item("sub-sci", "first-sub-sci"), suggested: false },
       ],
     });
     expect(next).toHaveBeenCalledTimes(3);
@@ -126,7 +184,7 @@ describe("planProbe", () => {
 
     expect(plan).toEqual({
       kind: "ask",
-      openings: [{ subject: ENGLISH, item: item("sub-eng", "eng-1") }],
+      openings: [{ subject: ENGLISH, item: item("sub-eng", "eng-1"), suggested: false }],
     });
   });
 
@@ -151,7 +209,7 @@ describe("readProbePlan", () => {
 
     await expect(readProbePlan()).resolves.toEqual({
       kind: "ask",
-      openings: [{ subject: MATHS, item: item("sub-maths", "m-1") }],
+      openings: [{ subject: MATHS, item: item("sub-maths", "m-1"), suggested: false }],
     });
   });
 

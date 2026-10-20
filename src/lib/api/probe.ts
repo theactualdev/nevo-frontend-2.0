@@ -10,11 +10,27 @@ import { api } from "./client";
  * that a module is done: it asks.
  */
 
+/**
+ * How the server holds one of the four (`OnboardingModule.status`, the three
+ * values its schema closes on - `learning_readiness.OnboardingModule`).
+ */
+export type OnboardingModuleStatus = "pending" | "completed" | "unavailable";
+
 /** One of the four, as the server holds it for this child. */
 export interface OnboardingModuleState {
   /** `grid_span`, `pattern_flanker`, `sentence_dot` or `domain_probe`. */
   id: string;
   completed: boolean;
+  /**
+   * `unavailable` is Module 4 with no question bank in any of the child's
+   * subjects (Teslim, 19 Oct: "`domain_probe` returns `completed: true,
+   * status: "unavailable"`"). It comes WITH `completed: true` - so the
+   * server lets the child on - but nothing was asked and no placement exists,
+   * so it is not a module the child sat (`moduleUnavailable`). Outside the
+   * schema's `required` list, defaulting to `pending`: absent from a server
+   * that predates it.
+   */
+  status?: OnboardingModuleStatus;
 }
 
 /** A subject this child is enrolled in, and whether it has probe items yet. */
@@ -35,6 +51,15 @@ export interface LearningReadiness {
   subjects: OnboardingSubject[];
   /** The first of the four not yet finished, or null when none is left. */
   nextModule: string | null;
+  /**
+   * The server's suggested subject for Module 4 (Teslim, 19 Oct: "use
+   * probeSubjectId as the server's suggested first subject"): the first of
+   * `subjects`, by name, with items. Null when none has any. Outside the
+   * schema's `required` list, so absent from a server that predates it.
+   */
+  probeSubjectId?: string | null;
+  /** Always `one_available_subject`: one finished subject completes Module 4. */
+  probePolicy?: "one_available_subject";
 }
 
 /** One option: the label is what the child reads, the value what is sent. */
@@ -64,7 +89,8 @@ export interface ProbeQuestion {
  *
  * `entryPoint` - the starting mastery estimate it seeded - and `asked` are
  * NOT TYPED HERE, so no screen can render either: the probe's output is the
- * engine's, never the child's (rules 2, 3 and 9).
+ * engine's, never the child's (rules 2, 3 and 9). Since d461b60 the server
+ * withholds `entryPoint` from a student anyway: it is always null.
  */
 export interface ProbeFinished {
   finished: true;
@@ -96,6 +122,19 @@ export function moduleCompleted(
   id: string,
 ): boolean {
   return readiness.modules.some((m) => m.id === id && m.completed);
+}
+
+/**
+ * Whether the server holds this module as unavailable for the child - asked
+ * of nobody, with nothing placed - however `completed` reads.
+ */
+export function moduleUnavailable(
+  readiness: LearningReadiness,
+  id: string,
+): boolean {
+  return readiness.modules.some(
+    (m) => m.id === id && m.status === "unavailable",
+  );
 }
 
 /** The server's id for Module 4. */
