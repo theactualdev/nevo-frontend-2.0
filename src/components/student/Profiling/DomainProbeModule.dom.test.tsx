@@ -212,6 +212,27 @@ describe("one item at a time, from the server", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("names each option on the button itself, as its own text", async () => {
+    /*
+     * 20 Oct production run: wrapped in a span, the label read as loose text
+     * beside an unnamed button. jsdom names a button from its contents
+     * either way, so the text is asserted where it lives.
+     */
+    renderModule();
+    await act(async () => {});
+
+    for (const label of ["Fish", "Cat", "Bird"]) {
+      const option = screen.getByRole("button", { name: label });
+      expect(option.children).toHaveLength(0);
+      expect(
+        Array.from(option.childNodes).some(
+          (n) => n.nodeType === Node.TEXT_NODE && n.textContent === label,
+        ),
+      ).toBe(true);
+      expect(option).toHaveAttribute("aria-pressed", "false");
+    }
+  });
+
   it("sends the option's value, fills the pick, and shows the next item it is given", async () => {
     const pending = deferred<typeof Q2>();
     answer.mockReturnValue(pending.promise);
