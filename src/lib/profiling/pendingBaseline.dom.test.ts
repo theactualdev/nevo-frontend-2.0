@@ -509,3 +509,54 @@ describe("parked runs on a shared tablet", () => {
     expect(readPendingBaseline({ owner: "kofi" })).not.toBeNull();
   });
 });
+
+/*
+ * ONE FLUSH AT A TIME FOR EACH CHILD (19 Oct browser-storage audit). After a
+ * sign-in at the door two flushes started together and both sent the parked
+ * run: two consent reads, the same trials twice, one run id.
+ */
+describe("two flushes for the same child at once", () => {
+  it("send the parked run once, and ask about consent once", async () => {
+    const submit = vi.spyOn(baselineApi, "submitTrials").mockResolvedValue(true);
+    const gate = vi
+      .spyOn(consentsApi, "myConsentGate")
+      .mockResolvedValue({ status: "granted" } as never);
+    holdBaseline("warmup-amara", TRIALS, "amara");
+    signInAs("amara");
+
+    const results = await Promise.all([
+      flushPendingBaseline("amara"),
+      flushPendingBaseline("amara"),
+    ]);
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(gate).toHaveBeenCalledTimes(1);
+    expect(results).toEqual([true, false]);
+  });
+
+  it("do not hold up another child's", async () => {
+    let land: (ok: boolean) => void = () => {};
+    vi.spyOn(baselineApi, "submitTrials").mockImplementation(
+      (run) =>
+        run === "warmup-amara"
+          ? new Promise<boolean>((r) => {
+              land = r;
+            })
+          : Promise.resolve(true),
+    );
+    vi.spyOn(consentsApi, "myConsentGate").mockResolvedValue({
+      status: "granted",
+    } as never);
+    holdBaseline("warmup-amara", TRIALS, "amara");
+    holdBaseline("warmup-kofi", TRIALS, "kofi");
+
+    signInAs("amara");
+    const amaras = flushPendingBaseline("amara");
+    await Promise.resolve();
+    signInAs("kofi");
+
+    await expect(flushPendingBaseline("kofi")).resolves.toBe(true);
+    land(true);
+    await amaras;
+  });
+});

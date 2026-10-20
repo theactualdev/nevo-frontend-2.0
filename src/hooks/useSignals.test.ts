@@ -56,6 +56,7 @@ const { ApiError } = await import("@/lib/api");
 const { clearSession, setSession } = await import("@/lib/auth/session");
 const { holdSignals } = await import("@/lib/signals/outbox");
 const { announceSessionEnd } = await import("@/lib/auth/sessionEnd");
+const { openDoor } = await import("@/lib/auth/doorSession");
 
 /**
  * These tests encode a defect that destroyed real data silently.
@@ -734,5 +735,65 @@ describe("a withdrawn consent", () => {
     });
 
     expect(submitBatch).toHaveBeenCalledTimes(1);
+  });
+});
+
+/*
+ * A STREAM ON A DOOR (19 Oct browser-storage audit). A refused SSO sign-in's
+ * stream posted as the child whose session was still stored. A door holds
+ * that session (`doorSession`): the stream sends nothing as it, keeps nothing
+ * under it, and goes as the screen's own child once they sign in.
+ */
+describe("a stream on a door, with another child's session stored", () => {
+  const OUTBOX = "nevo.signals.outbox";
+  const heldFor = () =>
+    (
+      JSON.parse(window.localStorage.getItem(OUTBOX) ?? "[]") as {
+        userId: string;
+      }[]
+    ).map((h) => h.userId);
+
+  it("sends nothing as them, and keeps nothing of the screen's under them", async () => {
+    signIn();
+    const close = openDoor();
+    const { result, unmount } = renderHook(() =>
+      useSignals(UUID, undefined, "sso"),
+    );
+    act(() => result.current.trackEvent("time_on_segment", { refused: true }));
+    await act(async () => {
+      result.current.flush();
+    });
+
+    unmount();
+    await act(async () => {});
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+    close();
+
+    expect(submitBatch).not.toHaveBeenCalled();
+    expect(heldFor()).not.toContain("user-1");
+  });
+
+  it("goes as the screen's own child once they sign in at it", async () => {
+    signIn();
+    const close = openDoor();
+    const { result } = renderHook(() => useSignals(UUID, undefined, "sso"));
+    act(() => result.current.trackEvent("time_on_segment", { mine: true }));
+
+    setSession({
+      token: "tok-sso",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId: "sso-child",
+      role: "student",
+    });
+    await act(async () => {
+      result.current.flush();
+    });
+    close();
+
+    expect(submitBatch).toHaveBeenCalledTimes(1);
+    const [, events] = submitBatch.mock.calls[0];
+    expect(events.some((e) => e.payload?.mine === true)).toBe(true);
   });
 });

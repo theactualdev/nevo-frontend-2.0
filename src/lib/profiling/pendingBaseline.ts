@@ -245,8 +245,36 @@ export function clearPendingBaseline(which: ParkedRun = {}): void {
  * Left parked on failure too. A submit that did not land is not a reason to
  * throw away the only copy - that was the original defect.
  */
-export async function flushPendingBaseline(
+/** Each owner's flush under way, so the next waits for it (19 Oct). */
+const flushing = new Map<string, Promise<boolean>>();
+
+/**
+ * ONE FLUSH AT A TIME FOR EACH CHILD (19 Oct browser-storage audit).
+ *
+ * After a sign-in at the door, two flushes started together - the shell's
+ * and the landing screen's - read the same parked run, and both sent it:
+ * two consent reads and the same trials twice, under one run id. A flush now
+ * waits for any already under way for the same child, and then finds what
+ * that one delivered gone.
+ */
+export function flushPendingBaseline(
   expectedUserId: string | null | undefined,
+  runSessionId?: string | null,
+): Promise<boolean> {
+  if (!expectedUserId) return Promise.resolve(false);
+  const before = flushing.get(expectedUserId) ?? Promise.resolve(false);
+  const next = () => flushOnce(expectedUserId, runSessionId);
+  const run = before.then(next, next);
+  flushing.set(expectedUserId, run);
+  const done = () => {
+    if (flushing.get(expectedUserId) === run) flushing.delete(expectedUserId);
+  };
+  run.then(done, done);
+  return run;
+}
+
+async function flushOnce(
+  expectedUserId: string,
   runSessionId?: string | null,
 ): Promise<boolean> {
   const session = getSession();

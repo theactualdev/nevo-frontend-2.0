@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDoor } from "@/hooks/useDoor";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
@@ -143,6 +144,9 @@ export function scrollToClearPad(buttonBottom: number, padTop: number): number {
 const DONE_MS = 1200;
 
 export function ReturningSignInScreen({ next }: { next?: string }) {
+  // Sign-in is a door: nothing on this page goes as the session it found
+  // stored (19 Oct, `doorSession`).
+  useDoor();
   const router = useRouter();
   const { signIn } = useAuth();
 

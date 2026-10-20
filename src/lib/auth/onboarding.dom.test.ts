@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   claimOnboardingDraft,
   clearOnboardingDraft,
-  endSessionForNewChild,
-  endSessionNotThisRuns,
+  arriveAtEntry,
+  arriveAtSequence,
   entryIdentityFromDraft,
   forgetOnboardingDraft,
   getOnboardingDraft,
@@ -233,7 +233,7 @@ describe("remembering a child on the device", () => {
  * path every sign-out takes, so its child's leftovers go as they would at
  * Sign out.
  */
-describe("ending the last child's session for a new one", () => {
+describe("a session stored as 05 or the sequence opens", () => {
   const settle = () => new Promise<void>((r) => setTimeout(r, 0));
   const store = (over: Partial<Parameters<typeof setSession>[0]> = {}) =>
     setSession({
@@ -243,46 +243,94 @@ describe("ending the last child's session for a new one", () => {
       role: "student",
       ...over,
     });
-
-  it("ends it on 05, and says whose ended", async () => {
-    store();
+  const RUN = {
+    schoolCode: "K7DQ",
+    admissionNumber: "BGA/2031",
+    name: "Tobi",
+    consent: "given" as const,
+  };
+  /** What ended, from here on. */
+  const listen = async () => {
     await settle();
     const ended: string[] = [];
     const off = onSessionEnd((e) => ended.push(e.userId));
+    return { ended, off };
+  };
 
-    endSessionForNewChild();
+  /*
+   * ONLY A SESSION BELONGING TO A DIFFERENT CHILD THAN THE RUN IN PROGRESS IS
+   * ENDED (19 Oct). Ending any session found here signed a child out who was
+   * back on the sequence from their own first lesson.
+   */
+  it("is ended on 05 when a different child's run is in progress, and that run's draft goes", async () => {
+    store();
+    startOnboardingDraft(RUN);
+    const { ended, off } = await listen();
+
+    expect(arriveAtEntry()).toBe("stay");
     await settle();
     off();
 
     expect(getSession()).toBeNull();
     expect(ended).toEqual(["last-child"]);
+    // 05 writes its own draft on the next match; the old run's is not it.
+    expect(getOnboardingDraft()).toEqual({});
   });
 
-  it("ends nothing when nothing is stored", async () => {
-    clearSession();
-    await settle();
-    const ended: string[] = [];
-    const off = onSessionEnd((e) => ended.push(e.userId));
+  it("is kept on 05 when no run is in progress: the child is routed on, signed in", async () => {
+    store();
+    const { ended, off } = await listen();
 
-    endSessionForNewChild();
+    expect(arriveAtEntry()).toBe("routeOn");
+    await settle();
+    off();
+
+    expect(getSession()?.userId).toBe("last-child");
+    expect(ended).toEqual([]);
+  });
+
+  it("is nothing to act on when nothing is stored", async () => {
+    clearSession();
+    const { ended, off } = await listen();
+
+    expect(arriveAtEntry()).toBe("stay");
+    expect(arriveAtSequence()).toBe("stay");
     await settle();
     off();
 
     expect(ended).toEqual([]);
   });
 
-  it("ends it in the sequence, unless it is the run's own", () => {
+  it("is ended in the sequence for a different child's run, which keeps its draft", () => {
     store();
-    endSessionNotThisRuns();
+    startOnboardingDraft(RUN);
+
+    expect(arriveAtSequence()).toBe("stay");
+
     expect(getSession()).toBeNull();
+    expect(getOnboardingDraft()).toEqual(RUN);
+  });
 
+  it("is kept in the sequence when it is the run's own, and the run resumes", () => {
+    store({ userId: "tobi" });
+    startOnboardingDraft({ ...RUN, userId: "tobi" });
+
+    expect(arriveAtSequence()).toBe("routeOn");
+    expect(getSession()?.userId).toBe("tobi");
+  });
+
+  it("is kept in the sequence with no run in progress - Back from the first lesson", () => {
+    store({ userId: "tobi" });
+    clearOnboardingDraft();
+
+    expect(arriveAtSequence()).toBe("routeOn");
+    expect(getSession()?.userId).toBe("tobi");
+  });
+
+  it("is kept in the sequence for an SSO child, who starts it signed in", () => {
     store({ userId: "sso-child", method: "sso" });
-    endSessionNotThisRuns();
-    expect(getSession()?.userId).toBe("sso-child");
 
-    store({ userId: "new-child" });
-    mergeOnboardingDraft({ userId: "new-child" });
-    endSessionNotThisRuns();
-    expect(getSession()?.userId).toBe("new-child");
+    expect(arriveAtSequence()).toBe("stay");
+    expect(getSession()?.userId).toBe("sso-child");
   });
 });

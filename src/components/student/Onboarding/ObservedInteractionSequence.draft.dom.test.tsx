@@ -6,6 +6,8 @@ import {
   render,
   screen,
 } from "@testing-library/react";
+import { hydrateRoot, type Root } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { ObservedInteractionSequence } from "./ObservedInteractionSequence";
 // Loaded as on every page: a session ending is what clears the leftovers.
 import "@/context/AuthContext";
@@ -312,5 +314,80 @@ describe("a reload after the first PIN", () => {
 
     expect(getOnboardingDraft()).toEqual({});
     expect(enterFirstLesson).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * BACK AFTER YOU'RE IN SIGNED THE NEW CHILD OUT (19 Oct). The first lesson
+   * opened, the device's Back went to the sequence again - its draft already
+   * gone - and the session found there was ended as somebody else's: the
+   * child's own, new one. Only a different child's session than the run in
+   * progress is ended; with no run in progress, they are routed on.
+   */
+  it("Back (popstate) from the first lesson keeps them signed in and routes them on", async () => {
+    await pastThePin();
+    fireEvent.click(screen.getByRole("button", { name: "module four" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Let's finish setting up" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "you are in" }));
+    expect(getOnboardingDraft()).toEqual({});
+
+    // The device's Back: the sequence's route mounts again.
+    window.history.pushState({}, "", "/student/lessons");
+    window.history.back();
+    cleanup();
+    render(<ObservedInteractionSequence />);
+    await settle();
+
+    expect(getSession()?.userId).toBe("student-9");
+    expect(replace).toHaveBeenCalledWith("/student/onboarding/continue");
+    expect(replace).not.toHaveBeenCalledWith("/student/onboarding/school");
+  });
+});
+
+/*
+ * A RESUME DID NOT TEAR HYDRATION (19 Oct). The server knows no session and
+ * draws the transition; the client decided to draw nothing on its first
+ * render, and every reload-resume logged "Hydration failed". The client now
+ * draws the server's frame until it is running, and routes on then.
+ */
+describe("a reload that resumes, as the page hydrates", () => {
+  it("draws the server's first frame, and only then routes on", async () => {
+    // The server: no session, no draft - nothing it can know.
+    clearSession();
+    clearOnboardingDraft();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    // Inside a page, as Next renders it: the route, then what follows it.
+    const page = () => (
+      <main>
+        <ObservedInteractionSequence />
+        <footer>after the route</footer>
+      </main>
+    );
+    container.innerHTML = renderToString(page());
+
+    // The tablet: the run is past its PIN, signed in on its own account.
+    setSession({
+      token: "tok-s",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId: "student-9",
+      role: "student",
+    });
+    startOnboardingDraft({ ...MATCHED, userId: "student-9" });
+    const torn: unknown[] = [];
+    let root: Root | undefined;
+    await act(async () => {
+      root = hydrateRoot(container, page(), {
+        onRecoverableError: (error) => torn.push(error),
+      });
+    });
+    await settle();
+
+    expect(torn).toEqual([]);
+    expect(replace).toHaveBeenCalledWith("/student/onboarding/continue");
+    expect(getSession()?.userId).toBe("student-9");
+    act(() => root?.unmount());
+    container.remove();
   });
 });

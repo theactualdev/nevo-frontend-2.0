@@ -14,6 +14,7 @@ import {
   SIGNAL_EVENT_TYPES,
   type SignalEventType,
 } from "@/lib/constants";
+import { usableSession } from "@/lib/auth/doorSession";
 import { onSessionEnd } from "@/lib/auth/sessionEnd";
 import {
   deliverHeldSignals,
@@ -293,7 +294,8 @@ export function useSignals(
   const persist = useCallback(() => {
     if (queue.current.length === 0) return;
     const env = envelope();
-    const who = owner.current ?? getSession()?.userId ?? null;
+    // Never a session a door is holding: the stream is not theirs (19 Oct).
+    const who = owner.current ?? usableSession()?.userId ?? null;
     if (!env || !who) return;
     holdSignals(who, env, queue.current);
     queue.current = [];
@@ -307,7 +309,13 @@ export function useSignals(
       // Ingest is Bearer-only. Without a token this would 401, and a 4xx batch
       // is dropped - so onboarding's whole stream would vanish. Hold it for the
       // session that PIN completion is about to create.
-      const signedIn = getSession();
+      //
+      // NOR AS A SESSION A DOOR IS HOLDING (19 Oct browser-storage audit). On
+      // a sign-in screen, Forgot PIN, the SSO callback or 05, the session
+      // stored when the screen opened is the last child's: a failed SSO
+      // sign-in's events went up as them. The stream holds until the screen's
+      // own child is signed in, and goes nowhere if nobody is.
+      const signedIn = usableSession();
       if (!signedIn?.token) {
         capHeld(queue);
         return;

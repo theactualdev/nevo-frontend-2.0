@@ -24,6 +24,7 @@ import { noteServerClock } from "./serverClock";
 import { isAdminRole } from "@/lib/constants/permissions";
 import { API_ORIGIN } from "./upstream";
 import { purgeStoredCaptures } from "@/lib/profiling/capture";
+import { isHeldAtDoor } from "@/lib/auth/doorSession";
 
 // Default: the same-origin catch-all proxy (`app/api/backend/[...path]`),
 // which forwards to the FastAPI backend - the backend has no CORS headers, so
@@ -421,6 +422,17 @@ export async function request<T>(
   const { body, params, headers, baseUrl, ...rest } = options;
   const url = buildUrl(path, params, baseUrl);
   const token = isAnonymousPath(path) ? undefined : await getAuthToken();
+  /*
+   * NOT SENT AT ALL as a session an open door is holding (19 Oct
+   * browser-storage audit; `doorSession`). Not sent without it either: the
+   * app's routine reads on a sign-in screen are the stored child's, and with
+   * no token they would only be refused - and a refused session check would
+   * sign that child out for nothing. So nothing leaves, and the caller sees
+   * what it sees offline.
+   */
+  if (token && isHeldAtDoor(token)) {
+    throw new ApiError(0, friendlyMessage(0), { heldAtDoor: true });
+  }
 
   // FormData carries its own multipart boundary, which only the browser can
   // generate - so it must be passed through untouched and its Content-Type

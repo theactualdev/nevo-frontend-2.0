@@ -19,8 +19,8 @@ import { api, authApi } from "@/lib/api";
 import { rememberedChildren } from "@/lib/auth/deviceRoster";
 import {
   claimOnboardingDraft,
-  endSessionForNewChild,
-  endSessionNotThisRuns,
+  arriveAtEntry,
+  arriveAtSequence,
   getOnboardingDraft,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
@@ -410,7 +410,7 @@ describe("a session ended for a new child who is starting", () => {
     await aSharedTablet();
     startOnboardingDraft(tobi);
 
-    endSessionNotThisRuns();
+    arriveAtSequence();
     await settle();
 
     expect(getSession()).toBeNull();
@@ -418,20 +418,21 @@ describe("a session ended for a new child who is starting", () => {
     expect(heldFor()).not.toContain(a);
   });
 
-  it("leaves it on 05 the same way", async () => {
+  it("on 05, takes it: 05 writes its own on the next match (19 Oct)", async () => {
     await aSharedTablet();
     startOnboardingDraft(tobi);
 
-    endSessionForNewChild();
+    arriveAtEntry();
     await settle();
 
-    expect(getOnboardingDraft()).toEqual(tobi);
+    expect(getSession()).toBeNull();
+    expect(getOnboardingDraft()).toEqual({});
   });
 
   it("spares it once: a later ordinary sign-out takes a draft nobody is using", async () => {
     await aSharedTablet();
     startOnboardingDraft(tobi);
-    endSessionNotThisRuns();
+    arriveAtSequence();
     await settle();
 
     signInAs(a);

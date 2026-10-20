@@ -2,31 +2,38 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { StudentEntryStep } from "./StudentEntryStep";
 import { AuthProvider } from "@/context/AuthContext";
-import { getOnboardingDraft } from "@/lib/auth/onboarding";
+import {
+  getOnboardingDraft,
+  startOnboardingDraft,
+} from "@/lib/auth/onboarding";
 import { clearSession, getSession, setSession } from "@/lib/auth/session";
 import { holdSignals } from "@/lib/signals/outbox";
 
 /**
- * A NEW CHILD ON 05 WHILE ANOTHER CHILD'S SESSION IS STILL STORED (19 Oct
- * browser-storage audit).
+ * 05 ENTRY WITH A SESSION STILL STORED (19 Oct browser-storage audit).
  *
- * The onboarding routes let a stored session through, and everything on them
- * sent it: 05's lookup, the onboarding signal stream, the consent read, the
- * account read. So Tobi's first minutes were recorded against Amara's
- * account, Amara's consent decided Tobi's capture, and when Amara's token
- * died its 401 sent Tobi - who had no session - to the session-ended door.
+ * Everything on 05 sent the stored session: its lookup, its signal stream,
+ * the app's routine reads. The rule now, the run's rather than the screen's:
  *
- * 05 ends the stored session as it first renders, through the path every
- * sign-out takes: Amara's own unsent signals get their one last try with her
- * token, and nothing of Tobi's ever carries it. The real network layer runs
- * here; only `fetch` is replaced, to read what each request carried.
+ *  - A DIFFERENT CHILD'S RUN IS IN PROGRESS - a draft 05 matched for someone
+ *    who walked away - and Amara's session is still stored: her session ends
+ *    through the path every sign-out takes (her own unsent signals get their
+ *    one last try with her token), the walked-away draft goes, and the new
+ *    child's requests carry no token at all.
+ *  - NO RUN IS IN PROGRESS: the stored session is the child's own - back on
+ *    05 from their first lesson - and they are routed on, signed in, to
+ *    finish onboarding as themselves. Nothing is ended, and nothing on 05 is
+ *    sent as them while it is open.
+ *
+ * The real network layer runs here; only `fetch` is replaced, to read what
+ * each request carried.
  */
 
 vi.setConfig({ testTimeout: 30_000 });
 
-const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+const { push, replace } = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({ push, replace, back: vi.fn() }),
 }));
 
 interface Sent {
@@ -54,10 +61,11 @@ const AMARAS_STREAM = {
   startedAt: "2026-10-19T09:00:00.000Z",
 };
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   sent = [];
   push.mockReset();
+  replace.mockReset();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -83,6 +91,10 @@ beforeEach(() => {
     userId: "amara",
     role: "student",
   });
+  // Her session's own sign-in moment has passed: nothing is on its way.
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
   holdSignals("amara", AMARAS_STREAM, [
     {
       type: "feeling_checkin",
@@ -90,6 +102,7 @@ beforeEach(() => {
       payload: { feeling: "tired" },
     },
   ]);
+  sent = [];
 });
 
 afterEach(async () => {
@@ -101,7 +114,14 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function tobiTypesTheirPair() {
+const open05 = () =>
+  render(
+    <AuthProvider>
+      <StudentEntryStep framing="school" />
+    </AuthProvider>,
+  );
+
+async function typeThePair() {
   const cells = screen.getAllByLabelText(
     /School code, character/,
   ) as HTMLInputElement[];
@@ -115,44 +135,60 @@ async function tobiTypesTheirPair() {
   });
 }
 
-describe("05 Entry with another child's session still on the tablet", () => {
-  it("ends that session before anything on 05 is sent", () => {
-    render(
-      <AuthProvider>
-        <StudentEntryStep framing="school" />
-      </AuthProvider>,
-    );
-
-    expect(getSession()).toBeNull();
+describe("05 with another child's session stored, and a walked-away run in the tab", () => {
+  beforeEach(() => {
+    startOnboardingDraft({
+      schoolCode: "K7DQ",
+      admissionNumber: "OLD/1",
+      name: "Femi",
+      consent: "given",
+    });
   });
 
-  it("sends nothing of Tobi's with Amara's token, and the lookup with none", async () => {
-    render(
-      <AuthProvider>
-        <StudentEntryStep framing="school" />
-      </AuthProvider>,
-    );
+  it("ends that session, takes the walked-away draft, and sends Tobi's lookup as nobody", async () => {
+    open05();
+    expect(getSession()).toBeNull();
+    expect(getOnboardingDraft()).toEqual({});
 
-    await tobiTypesTheirPair();
+    await typeThePair();
 
     const lookup = sent.filter((r) => r.url.includes("/student-entry/lookup"));
     expect(lookup).toHaveLength(1);
     expect(lookup[0].auth).toBeNull();
-    // Nothing read or recorded as anybody: no consent read, no account read,
-    // no session check, and no onboarding stream on Amara's account.
-    expect(sent.some((r) => /consent-gate|users\/me|auth\/session/.test(r.url))).toBe(false);
     expect(
-      sent.some((r) => r.url.includes("/api/signals") && r.body.includes('"onboarding"')),
+      sent.some((r) => /consent-gate|users\/me|auth\/session/.test(r.url)),
     ).toBe(false);
-    // The one request that carries her token is her own break feeling's last
-    // try, on her own lesson's stream - the sign-out's, not Tobi's.
+    // The one request carrying her token is her own break feeling's last try.
     const asAmara = sent.filter((r) => r.auth === "Bearer tok-amara");
     expect(asAmara).toHaveLength(1);
-    expect(asAmara[0].url).toContain("/api/signals");
     expect(asAmara[0].body).toContain(AMARAS_STREAM.sessionId);
-    expect(asAmara[0].body).toContain("feeling_checkin");
-    // And Tobi is on into his own first run.
+    // Tobi's own run, with 05's own draft.
     expect(push).toHaveBeenCalledWith("/student/onboarding/sequence");
-    expect(getOnboardingDraft()).toMatchObject({ name: "Tobi" });
+    expect(getOnboardingDraft()).toMatchObject({
+      name: "Tobi",
+      admissionNumber: "BGA/2031",
+    });
+  });
+});
+
+describe("05 with a signed-in child's session and no run in progress", () => {
+  it("routes them on, signed in, and ends nothing", async () => {
+    open05();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(getSession()?.userId).toBe("amara");
+    expect(replace).toHaveBeenCalledWith("/student/onboarding/continue");
+  });
+
+  it("sends nothing as them while 05 is open: no routine read, no stream", async () => {
+    open05();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(7_000);
+    });
+
+    expect(sent.filter((r) => r.auth === "Bearer tok-amara")).toEqual([]);
+    expect(sent.filter((r) => r.url.includes("/api/signals"))).toEqual([]);
   });
 });

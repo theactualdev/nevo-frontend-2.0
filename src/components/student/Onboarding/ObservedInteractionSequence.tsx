@@ -4,14 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useSignals, type TrackEvent } from "@/hooks";
 import {
+  arriveAtSequence,
+  CONTINUE_ROUTE,
   claimOnboardingDraft,
   clearOnboardingDraft,
-  endSessionNotThisRuns,
   entryIdentityFromDraft,
   mergeOnboardingDraft,
-  ownAccountRunResumes,
   rememberOnboardedStudent,
 } from "@/lib/auth/onboarding";
+import { useHydrated } from "@/hooks/useHydrated";
 import {
   bindFirstPin,
   startEntrySession,
@@ -47,8 +48,6 @@ import { YoureInScreen } from "./YoureInScreen";
 const SIGN_BACK_IN = "/auth/sign-in";
 /** 05 Entry, for a pair the PIN route no longer finds. */
 const ENTRY = "/student/onboarding/school";
-/** Finishing onboarding for a child who has an account (`OnboardingResume`). */
-const CONTINUE = "/student/onboarding/continue";
 
 /**
  * Onboarding Phase C — one continuous experience: a calm transition, the
@@ -79,10 +78,13 @@ const CONTINUE = "/student/onboarding/continue";
 export function ObservedInteractionSequence() {
   /*
    * A SESSION THAT IS NOT THIS RUN'S ENDS BEFORE THE RUN READS IT (19 Oct
-   * browser-storage audit), as on 05: otherwise this child's onboarding and
-   * profiling streams, and the consent read their capture waits on, go up as
-   * the last child. An SSO child's own session, and the one this run's first
-   * PIN made, are kept. During the first render, ahead of every hook below.
+   * browser-storage audit; `arriveAtSequence`): otherwise this child's
+   * onboarding and profiling streams, and the consent read their capture
+   * waits on, go up as the last child. Only a DIFFERENT child's session is
+   * ended - the run in progress is the one the draft names. An SSO child's
+   * own session is kept, and a signed-in child with no run here (back from
+   * their first lesson after You're In) is routed on, signed in. During the
+   * first render, ahead of every hook below.
    */
   /*
    * AND A RUN ALREADY PAST ITS PIN RESUMES (19 Oct). The PIN made the
@@ -93,16 +95,21 @@ export function ObservedInteractionSequence() {
    * hands the child to the resume for a signed-in child, which asks the
    * server what is left.
    */
-  const [resumes] = useState(() => {
-    endSessionNotThisRuns();
-    return ownAccountRunResumes();
-  });
+  const [arrival] = useState(arriveAtSequence);
+  /*
+   * DECIDED AFTER HYDRATION (19 Oct). The server knows no session, so it
+   * draws the transition; deciding to draw nothing on the first client
+   * render tore hydration on every resume. The frame matches until the
+   * client is running, and the route on happens then.
+   */
+  const hydrated = useHydrated();
+  const resumes = hydrated && arrival === "routeOn";
   const router = useRouter();
   useEffect(() => {
     if (!resumes) return;
     // Its work is done: the resume needs none of it.
     clearOnboardingDraft();
-    router.replace(CONTINUE);
+    router.replace(CONTINUE_ROUTE);
   }, [resumes, router]);
   const { user } = useAuth();
   const isSso = user?.method === "sso";

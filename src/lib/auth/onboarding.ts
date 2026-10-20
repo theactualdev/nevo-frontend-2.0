@@ -103,47 +103,78 @@ export function clearOnboardingDraft(): void {
 }
 
 /**
- * A CHILD WITH NO ACCOUNT IS STARTING, SO THE SESSION THE DEVICE HOLDS IS
- * SOMEBODY ELSE'S (19 Oct browser-storage audit).
+ * WHAT 05 ENTRY OR THE SEQUENCE DOES WITH A SESSION IT FINDS STORED AS IT
+ * OPENS (19 Oct browser-storage audit).
  *
  * The onboarding routes let a stored session through, and everything on them
- * that talks to the server sent it: 05 Entry's lookup, the onboarding signal
- * stream, the consent read, the account read. So a new child's typing, taps
- * and first minutes were recorded against the last child's account, the last
- * child's consent decided whether the new child's baseline was captured, and
- * when the last child's token died its 401 sent the new child - who had no
- * session at all - to the session-ended door, off their own run.
+ * sent it: 05's lookup, the onboarding signal stream, the consent read, the
+ * account read. So a new child's first minutes were recorded against the
+ * last child's account, the last child's consent decided whether the new
+ * child's baseline was captured, and when the last child's token died its
+ * 401 sent the new child - who had no session - off their own run.
  *
- * Ended here, through the same path every sign-out takes (`clearSession`),
- * so the last child's leftovers go as they would at Sign out - one last try
- * for their unsent signals with their own token, their held answers and
- * progress kept for them - and from then on the new child's requests carry
- * no token until their own first PIN gives them one.
+ * But a stored session is not always somebody else's. Back from the first
+ * lesson after You're In lands a child who has just made their account on
+ * the sequence, signed in on their own new session, and ending it signed
+ * them out onto an empty 05. So the rule is the run's, not the screen's:
+ * ONLY A SESSION BELONGING TO A DIFFERENT CHILD THAN THE RUN IN PROGRESS IS
+ * ENDED. The run in progress is the one the draft names - the pair 05
+ * matched - and it is the session's own once its first PIN has made the
+ * account (the draft's `userId`).
  *
- * Called from 05 Entry (and 03, the same screen) as it first renders, before
- * anything on it reads the session. A child with an account does not start
- * here: 05 itself sends them to sign in (`entryRoute`'s `sign-in`).
+ *  - A different child's run is in progress: the session ends, through the
+ *    path every sign-out takes, so its child's leftovers go as at Sign out -
+ *    one last try for their unsent signals with their own token, their held
+ *    answers and progress kept - and the run goes on with no token until its
+ *    own first PIN.
+ *  - No run is in progress, or it is the session's own: the child is
+ *    signed in, and is routed on to finishing onboarding for a signed-in
+ *    child (`OnboardingResume`), which resumes what is left or goes Home.
+ *    Nothing is ended.
+ *  - An SSO child starts the sequence signed in, on their own session.
  */
-export function endSessionForNewChild(): void {
-  const session = getSession();
-  if (session) endForNewChild(session.userId);
+export type Arrival = "stay" | "routeOn";
+
+/** Where onboarding goes on for a signed-in child (`OnboardingResume`). */
+export const CONTINUE_ROUTE = "/student/onboarding/continue";
+
+/** A different child's run is in progress, by the draft, for this session. */
+function differentChildsRun(userId: string): boolean {
+  return (
+    entryIdentityFromDraft() !== null &&
+    getOnboardingDraft().userId !== userId
+  );
 }
 
 /**
- * The sequence's version: the same, unless the session is the run's own - an
- * SSO child's, who starts the sequence signed in (`method: "sso"`), or the
- * account this run's first PIN created (the draft's `userId`).
+ * 05 Entry (and 03, the same screen). Ending a session here also clears the
+ * draft that was in progress: 05 writes its own on the next match, and the
+ * old one is not that run's.
  */
-export function endSessionNotThisRuns(): void {
+export function arriveAtEntry(): Arrival {
   const session = getSession();
-  if (!session || session.method === "sso") return;
-  if (getOnboardingDraft().userId === session.userId) return;
+  if (!session) return "stay";
+  if (!differentChildsRun(session.userId)) return "routeOn";
+  clearSession();
+  clearOnboardingDraft();
+  return "stay";
+}
+
+/**
+ * The sequence. Ending a session here keeps the draft: it is the run in
+ * progress, and the sequence goes on with it (`endForNewChild`).
+ */
+export function arriveAtSequence(): Arrival {
+  const session = getSession();
+  if (!session || session.method === "sso") return "stay";
+  if (!differentChildsRun(session.userId)) return "routeOn";
   endForNewChild(session.userId);
+  return "stay";
 }
 
 /**
- * Sessions ended here for a child who is starting: their ending does not take
- * the draft that child is using (`forgetOnboardingDraft`).
+ * Sessions ended for a child whose run is in progress: their ending does not
+ * take the draft that run is using (`forgetOnboardingDraft`).
  *
  * THE DRAFT WENT WITH THE SESSION IT WAS ENDED FOR (19 Oct). The ending is
  * announced a moment later, and the clean-up it runs found no screen holding
@@ -158,18 +189,6 @@ const endedForNewChild = new Set<string>();
 function endForNewChild(userId: string): void {
   endedForNewChild.add(userId);
   clearSession();
-}
-
-/**
- * Has this run's first PIN already made the child's account, and are they
- * signed in on it? Then the run is past its PIN, and a reload resumes it
- * from what the server holds (`OnboardingResume`) rather than starting the
- * baseline again.
- */
-export function ownAccountRunResumes(): boolean {
-  const session = getSession();
-  const own = getOnboardingDraft().userId;
-  return Boolean(session?.token && own && session.userId === own);
 }
 
 /** How many open screens are using the draft (05 Entry, the sequence). */

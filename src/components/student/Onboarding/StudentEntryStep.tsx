@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
+import { useDoor } from "@/hooks/useDoor";
+import { useHydrated } from "@/hooks/useHydrated";
 import {
   Button,
   IllustrationWrapper,
@@ -31,9 +33,10 @@ import {
 } from "@/lib/auth/entryHandBack";
 import type { EntryIdentity, EntryPinElsewhere } from "@/lib/auth/firstPin";
 import {
+  arriveAtEntry,
+  CONTINUE_ROUTE,
   claimOnboardingDraft,
   clearOnboardingDraft,
-  endSessionForNewChild,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
 import { SCHOOL_CODE_LENGTH, placeSchoolCode } from "@/lib/auth/schoolCode";
@@ -165,14 +168,28 @@ function isThrottle(err: unknown): boolean {
 export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
   /*
    * FIRST, BEFORE ANYTHING HERE READS THE SESSION (19 Oct browser-storage
-   * audit): a child on 05 has no account, so a session the device still holds
-   * is the last child's, and it ends now - not after this screen's lookup,
-   * stream and consent read have gone up on it. In the state initializer so
-   * it runs during the first render, ahead of every hook below; once per
-   * mount, and a second call finds nothing to end.
+   * audit; `arriveAtEntry`). A session stored as 05 opens is ended only if a
+   * different child's run is in progress, and that run's draft goes with it;
+   * a signed-in child with no run here - back from their first lesson, say -
+   * is routed on to finish onboarding as themselves, and keeps their
+   * session. In the state initializer, so it runs in the first render, ahead
+   * of every hook below; once per mount.
    */
-  useState(endSessionForNewChild);
+  const [arrival] = useState(arriveAtEntry);
+  // 05 is a door: nothing on this page goes as the session it found
+  // stored (19 Oct, `doorSession`).
+  useDoor();
   const router = useRouter();
+  /*
+   * The route on happens after hydration, and the server's frame is drawn
+   * until then: deciding the frame on the first client render would differ
+   * from the server's, which knows no session.
+   */
+  const hydrated = useHydrated();
+  const routesOn = hydrated && arrival === "routeOn";
+  useEffect(() => {
+    if (routesOn) router.replace(CONTINUE_ROUTE);
+  }, [routesOn, router]);
   /*
    * Empty, or 05's miss with the pair as typed: handed back from the end of a
    * first run whose pair the PIN route no longer found (B68). See
@@ -421,6 +438,8 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
     else if (at !== null) backspaceCell(at);
   };
 
+  // On the way to finishing onboarding as the child signed in here.
+  if (routesOn) return null;
   if (held === "withdrawn") return <ConsentWithdrawn />;
   // The Entry frame's own hold, with its Back (05, state 6) - not 00d's.
   if (held === "age-check") return <AgeCheckHold />;

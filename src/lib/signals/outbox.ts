@@ -4,6 +4,7 @@ import {
   type SignalEvent,
   type SignalSessionEnvelope,
 } from "@/lib/api";
+import { usableSession } from "@/lib/auth/doorSession";
 import { getSession, onSessionChange } from "@/lib/auth/session";
 import { SIGNAL_BATCH } from "@/lib/constants";
 
@@ -198,7 +199,8 @@ export function deliverHeldSignals(): Promise<void> {
 }
 
 async function deliver(): Promise<void> {
-  const session = getSession();
+  // Not as a session an open door is holding (19 Oct, `doorSession`).
+  const session = usableSession();
   if (!session?.token) return;
   // Nothing of a withdrawn child's goes - and anything another tab has held
   // for them since is deleted, not left for a later page to send.
