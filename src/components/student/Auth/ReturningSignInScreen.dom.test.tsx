@@ -738,6 +738,32 @@ describe("what the device remembers a child as", () => {
 
     expect(getRememberedProfile()?.userId).toBe("student-1");
   });
+
+  it("keeps one tile for a child the tablet knows, signing in with their admission number (19 Oct)", async () => {
+    // The tablet knows Amara by her issued identifier; sign-in takes either,
+    // and she typed her admission number. A second, nameless tile for the
+    // same account was the result.
+    rememberChild({
+      schoolCode: "K7DQ",
+      loginIdentifier: "amara.k",
+      displayName: "Amara",
+      initials: "AM",
+      userId: "student-1",
+    });
+    loginPin.mockResolvedValue(SESSION);
+    me.mockReturnValue(new Promise(() => {}));
+    render(<ReturningSignInScreen />);
+    fill({ user: "BGA/2031" });
+
+    await signInNow();
+
+    expect(pickerEntries().map((e) => e.name)).toEqual(["Amara"]);
+    expect(getRememberedProfile()).toMatchObject({
+      loginIdentifier: "BGA/2031",
+      displayName: "Amara",
+      initials: "AM",
+    });
+  });
 });
 
 describe("signing in on a device with a real keyboard", () => {

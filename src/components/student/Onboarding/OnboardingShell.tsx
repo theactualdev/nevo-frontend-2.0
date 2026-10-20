@@ -22,14 +22,19 @@ import { cn } from "@/lib/utils";
  *
  * `footer` is where that tray docks, after the content and in the flow, so the
  * page grows by its height rather than hiding anything under it.
+ *
+ * `onBack` runs as Back is pressed, before it goes to `backHref`: 05 ends the
+ * session it has been holding there (19 Oct browser-storage audit).
  */
 export function OnboardingShell({
   backHref,
+  onBack,
   lifted = false,
   footer,
   children,
 }: {
   backHref: string;
+  onBack?: () => void;
   lifted?: boolean;
   footer?: ReactNode;
   children: ReactNode;
@@ -43,7 +48,10 @@ export function OnboardingShell({
         <button
           type="button"
           aria-label="Back"
-          onClick={() => router.push(backHref)}
+          onClick={() => {
+            onBack?.();
+            router.push(backHref);
+          }}
           className="flex size-11 cursor-pointer items-center justify-center rounded-[10px] transition-colors hover:bg-nevo-near-black/[0.06] active:bg-nevo-near-black/[0.12]"
         >
           <ChevronLeft className="size-6" strokeWidth={2} />

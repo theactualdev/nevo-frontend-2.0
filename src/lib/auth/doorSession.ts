@@ -1,4 +1,4 @@
-import { getSession, type StoredSession } from "./session";
+import { clearSession, getSession, type StoredSession } from "./session";
 
 /**
  * A DOOR SENDS NOTHING AS THE SESSION IT FOUND STORED (19 Oct browser-storage
@@ -43,6 +43,25 @@ export function openDoor(): () => void {
 /** Is this the token a door found stored - not to be sent while it is open? */
 export function isHeldAtDoor(token: string | null | undefined): boolean {
   return openDoors > 0 && Boolean(token) && token === heldToken;
+}
+
+/**
+ * LEAVING A DOOR BY ITS BACK ENDS THE SESSION IT HAS BEEN HOLDING (19 Oct
+ * browser-storage audit). 05's Back went to the Welcome with the last
+ * child's session still stored, and the route guard sends anyone carrying
+ * the student cookie from the Welcome on to Home - so the next child landed
+ * on that child's Home, signed in as them. Ended through `clearSession`, the
+ * path every sign-out takes, so that child's leftovers go as at Sign out.
+ *
+ * ONLY THE HELD ONE. A session stored at the door since it opened - a
+ * cleared child's new PIN on 05 - has its own token, and is kept. Returns
+ * whether there was one to end.
+ */
+export function endHeldSession(): boolean {
+  const session = getSession();
+  if (!session || !isHeldAtDoor(session.token)) return false;
+  clearSession();
+  return true;
 }
 
 /**

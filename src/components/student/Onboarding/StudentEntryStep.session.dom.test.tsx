@@ -25,6 +25,8 @@ import { holdSignals } from "@/lib/signals/outbox";
  *    05 from their first lesson - and they are routed on, signed in, to
  *    finish onboarding as themselves. Nothing is ended, and nothing on 05 is
  *    sent as them while it is open.
+ *  - LEAVING BY BACK with another child's session held ends it, then goes to
+ *    the Welcome; a session stored on 05 itself is kept.
  *
  * The real network layer runs here; only `fetch` is replaced, to read what
  * each request carried.
@@ -55,6 +57,22 @@ const MATCHED = {
   ageCheckPending: false,
 };
 
+/** What the lookup answers, per test: Tobi, matched for a first run. */
+let lookupBody: Record<string, unknown> = MATCHED;
+
+/** `POST /student-entry/pin`'s answer: Tobi's new PIN, and his session. */
+const TOBIS_NEW_PIN = {
+  userId: "tobi",
+  loginIdentifier: "NV-TOBI1",
+  session: {
+    accessToken: "tok-tobi",
+    tokenType: "bearer",
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    userId: "tobi",
+    role: "student",
+  },
+};
+
 const AMARAS_STREAM = {
   sessionId: "fd0cba6c-0828-48e3-8510-c78146a5d449",
   lessonId: "9c1e77aa-1111-4222-8333-444455556666",
@@ -65,6 +83,7 @@ const AMARAS_STREAM = {
 beforeEach(async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   sent = [];
+  lookupBody = MATCHED;
   push.mockReset();
   replace.mockReset();
   vi.stubGlobal(
@@ -77,7 +96,11 @@ beforeEach(async () => {
         auth: headers.Authorization ?? null,
         body: typeof init?.body === "string" ? init.body : "",
       });
-      const body = url.includes("/student-entry/lookup") ? MATCHED : {};
+      const body = url.includes("/student-entry/lookup")
+        ? lookupBody
+        : url.includes("/student-entry/pin")
+          ? TOBIS_NEW_PIN
+          : {};
       return new Response(JSON.stringify(body), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -231,5 +254,128 @@ describe("05 for the child this tab finished its run as", () => {
 
     expect(getSession()?.userId).toBe("amara");
     expect(replace).toHaveBeenCalledWith("/student/onboarding/continue");
+  });
+
+  it("keeps their session through the device's own Back", async () => {
+    markRunFinished("amara");
+    open05();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    act(() => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(getSession()?.userId).toBe("amara");
+    expect(replace).not.toHaveBeenCalledWith("/student/onboarding");
+  });
+});
+
+/*
+ * LEAVING 05 BY BACK WITH ANOTHER CHILD'S SESSION HELD (19 Oct browser-storage
+ * audit). Back went to the Welcome with Amara's session still stored, and the
+ * route guard sends anyone carrying the student cookie from the Welcome on to
+ * Home - so the next child landed on Amara's Home, signed in as her. Leaving
+ * ends the session 05 has been holding, through the path every sign-out
+ * takes, and then goes to the Welcome.
+ */
+describe("leaving 05 by Back with another child's session held", () => {
+  /** Where the session stood at the moment each navigation was asked for. */
+  let atNavigation: (string | null)[] = [];
+  beforeEach(() => {
+    atNavigation = [];
+    const note = () => {
+      atNavigation.push(getSession()?.userId ?? null);
+    };
+    push.mockImplementation(note);
+    replace.mockImplementation(note);
+  });
+
+  it("ends it from the Back chevron, as at Sign out, then goes to the Welcome", async () => {
+    open05();
+    expect(getSession()?.userId).toBe("amara");
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(getSession()).toBeNull();
+    expect(push).toHaveBeenCalledWith("/student/onboarding");
+    // Ended before the Welcome was asked for, not after.
+    expect(atNavigation).toEqual([null]);
+    // Her own unsent signals got their last try with her token, as at any
+    // sign-out - and that is all that went as her.
+    const asAmara = sent.filter((r) => r.auth === "Bearer tok-amara");
+    expect(asAmara).toHaveLength(1);
+    expect(asAmara[0].body).toContain(AMARAS_STREAM.sessionId);
+  });
+
+  it("ends it on the device's own Back too, and lands on the Welcome", async () => {
+    open05();
+    expect(getSession()?.userId).toBe("amara");
+
+    act(() => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(getSession()).toBeNull();
+    expect(replace).toHaveBeenCalledWith("/student/onboarding");
+    expect(atNavigation).toEqual([null]);
+    const asAmara = sent.filter((r) => r.auth === "Bearer tok-amara");
+    expect(asAmara).toHaveLength(1);
+  });
+
+  it("ends it from the age check's hold on 05, whose Back is the same chevron", async () => {
+    // A held child ends nothing on the match, so the session is still held
+    // when they leave.
+    lookupBody = { ...MATCHED, ageCheckPending: true };
+    open05();
+    await typeThePair();
+    expect(
+      screen.getByText("Nevo is sorting something out with your school"),
+    ).toBeInTheDocument();
+    expect(getSession()?.userId).toBe("amara");
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(getSession()).toBeNull();
+    expect(push).toHaveBeenCalledWith("/student/onboarding");
+    expect(atNavigation).toEqual([null]);
+  });
+
+  it("keeps a session a cleared child's new PIN stored on 05", async () => {
+    lookupBody = { ...MATCHED, pinCleared: true };
+    open05();
+    await typeThePair();
+    expect(
+      screen.getByRole("heading", { name: "Choose a new PIN" }),
+    ).toBeInTheDocument();
+    for (const digit of ["1", "2", "3", "4", "1", "2", "3", "4"]) {
+      fireEvent.click(screen.getByRole("button", { name: digit }));
+    }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(getSession()?.userId).toBe("tobi");
+
+    act(() => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(getSession()).toMatchObject({ userId: "tobi", token: "tok-tobi" });
+    expect(replace).not.toHaveBeenCalledWith("/student/onboarding");
   });
 });

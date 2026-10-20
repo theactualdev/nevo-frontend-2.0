@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { useDoor } from "@/hooks/useDoor";
+import { endHeldSession } from "@/lib/auth/doorSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import {
   Button,
@@ -191,6 +192,25 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
   useEffect(() => {
     if (routesOn) router.replace(CONTINUE_ROUTE);
   }, [routesOn, router]);
+  /*
+   * LEAVING BY BACK ENDS THE SESSION 05 HAS BEEN HOLDING (19 Oct
+   * browser-storage audit). The Welcome sends anyone carrying the student
+   * cookie on to Home, so with the last child's session still stored, Back
+   * put the next child on that child's Home, signed in as them. The chevron
+   * ends it first (`endHeldSession`), and so does the device's own Back,
+   * which then lands on the Welcome too. Only the session held since 05
+   * opened: one a cleared child's new PIN stored here is theirs, and kept.
+   * Not for the child this tab finished its run as, who is routed on.
+   */
+  const leaving = arrival === "routeOn" ? undefined : endHeldSession;
+  useEffect(() => {
+    if (arrival === "routeOn") return;
+    const onPop = () => {
+      if (endHeldSession()) router.replace(WELCOME);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [arrival, router]);
   /*
    * Empty, or 05's miss with the pair as typed: handed back from the end of a
    * first run whose pair the PIN route no longer found (B68). See
@@ -453,7 +473,7 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
   if (routesOn) return null;
   if (held === "withdrawn") return <ConsentWithdrawn />;
   // The Entry frame's own hold, with its Back (05, state 6) - not 00d's.
-  if (held === "age-check") return <AgeCheckHold />;
+  if (held === "age-check") return <AgeCheckHold onBack={leaving} />;
   if (held) return <WaitingOnConsent hold={held} />;
   if (clearedChild) {
     return <NewPinAfterClear entry={clearedChild} onRefused={refusedNewPin} />;
@@ -491,6 +511,7 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
   return (
     <OnboardingShell
       backHref={WELCOME}
+      onBack={leaving}
       lifted={keyboardUp}
       footer={
         keyboardUp && (
