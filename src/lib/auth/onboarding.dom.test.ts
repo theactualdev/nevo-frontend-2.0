@@ -4,6 +4,8 @@ import {
   clearOnboardingDraft,
   arriveAtEntry,
   arriveAtSequence,
+  endSessionForEntryMatch,
+  markRunFinished,
   entryIdentityFromDraft,
   forgetOnboardingDraft,
   getOnboardingDraft,
@@ -277,16 +279,52 @@ describe("a session stored as 05 or the sequence opens", () => {
     expect(getOnboardingDraft()).toEqual({});
   });
 
-  it("is kept on 05 when no run is in progress: the child is routed on, signed in", async () => {
+  /*
+   * NEVER ROUTED INTO ON A GUESS (19 Oct). With no run in progress, a stored
+   * session was routed on from 05 - which put a new child opening 05
+   * directly inside the last child's account. Only the child this tab
+   * finished its run as is routed on; any other session waits for 05's
+   * lookup, kept and unsent-as.
+   */
+  it("is neither ended nor routed into on 05 when nothing says whose it is", async () => {
     store();
     const { ended, off } = await listen();
 
-    expect(arriveAtEntry()).toBe("routeOn");
+    expect(arriveAtEntry()).toBe("stay");
     await settle();
     off();
 
     expect(getSession()?.userId).toBe("last-child");
     expect(ended).toEqual([]);
+  });
+
+  it("is routed on from 05 when this tab finished its run as that child", () => {
+    store({ userId: "tobi" });
+    markRunFinished("tobi");
+
+    expect(arriveAtEntry()).toBe("routeOn");
+    expect(getSession()?.userId).toBe("tobi");
+  });
+
+  it("is not routed on for another child's mark", () => {
+    store();
+    markRunFinished("tobi");
+
+    expect(arriveAtEntry()).toBe("stay");
+    expect(arriveAtSequence()).toBe("toEntry");
+  });
+
+  it("ends at 05's match, once the lookup has a child to go on with", async () => {
+    store();
+    arriveAtEntry();
+    const { ended, off } = await listen();
+
+    endSessionForEntryMatch();
+    await settle();
+    off();
+
+    expect(getSession()).toBeNull();
+    expect(ended).toEqual(["last-child"]);
   });
 
   it("is nothing to act on when nothing is stored", async () => {
@@ -322,9 +360,18 @@ describe("a session stored as 05 or the sequence opens", () => {
   it("is kept in the sequence with no run in progress - Back from the first lesson", () => {
     store({ userId: "tobi" });
     clearOnboardingDraft();
+    markRunFinished("tobi");
 
     expect(arriveAtSequence()).toBe("routeOn");
     expect(getSession()?.userId).toBe("tobi");
+  });
+
+  it("sends a session nothing marks, with no run in progress, to 05 to be asked", () => {
+    store();
+    clearOnboardingDraft();
+
+    expect(arriveAtSequence()).toBe("toEntry");
+    expect(getSession()?.userId).toBe("last-child");
   });
 
   it("is kept in the sequence for an SSO child, who starts it signed in", () => {

@@ -3,7 +3,10 @@ import {
   rememberedChildren,
   retireLegacyProfile,
 } from "@/lib/auth/deviceRoster";
-import { forgetOnboardingDraft } from "@/lib/auth/onboarding";
+import {
+  forgetFinishedRun,
+  forgetOnboardingDraft,
+} from "@/lib/auth/onboarding";
 import { DISPLAY_NAME_KEY, retireLegacyDisplayName } from "@/lib/auth/session";
 import type { EndedSession } from "@/lib/auth/sessionEnd";
 import { purgeStoredCaptures } from "@/lib/profiling/capture";
@@ -81,6 +84,8 @@ export function forgetLeavingChild({
     () => retireLegacyDisplayName(),
     () => void purgeStoredCaptures(),
     () => forgetOnboardingDraft(userId),
+    // This tab's mark that its run finished as them goes with the session.
+    () => forgetFinishedRun(userId),
     () => forgetIfNotRemembered(userId, role),
   ];
   for (const step of steps) {

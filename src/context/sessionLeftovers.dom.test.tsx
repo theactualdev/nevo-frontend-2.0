@@ -22,6 +22,7 @@ import {
   arriveAtEntry,
   arriveAtSequence,
   getOnboardingDraft,
+  markRunFinished,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
 import {
@@ -499,5 +500,34 @@ describe("per-child settings at sign-out", () => {
     await settle();
 
     expect(window.localStorage.getItem("nevo:a11y:teacher-1")).not.toBeNull();
+  });
+});
+
+/*
+ * THIS TAB'S MARK THAT ITS RUN FINISHED AS A CHILD (19 Oct) is what lets
+ * Back from the first lesson route them on. It goes when their session does,
+ * so it can never route anyone into a session that has ended.
+ */
+describe("this tab's finished-run mark", () => {
+  const MARK = "nevo.onboarding.finishedRun";
+
+  it("goes when that child's session ends", async () => {
+    await aSharedTablet();
+    markRunFinished(a);
+
+    clearSession();
+    await settle();
+
+    expect(window.sessionStorage.getItem(MARK)).toBeNull();
+  });
+
+  it("stays when a different child's session ends", async () => {
+    await aSharedTablet();
+    markRunFinished("someone-else");
+
+    clearSession();
+    await settle();
+
+    expect(window.sessionStorage.getItem(MARK)).toBe("someone-else");
   });
 });

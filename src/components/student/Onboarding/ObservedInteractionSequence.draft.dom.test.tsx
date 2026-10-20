@@ -11,9 +11,11 @@ import { renderToString } from "react-dom/server";
 import { ObservedInteractionSequence } from "./ObservedInteractionSequence";
 // Loaded as on every page: a session ending is what clears the leftovers.
 import "@/context/AuthContext";
+import { isHeldAtDoor } from "@/lib/auth/doorSession";
 import {
   clearOnboardingDraft,
   getOnboardingDraft,
+  markRunFinished,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
 import {
@@ -342,6 +344,17 @@ describe("a reload after the first PIN", () => {
     expect(getSession()?.userId).toBe("student-9");
     expect(replace).toHaveBeenCalledWith("/student/onboarding/continue");
     expect(replace).not.toHaveBeenCalledWith("/student/onboarding/school");
+
+    // Because THIS TAB finished the run as them - not because a session was
+    // stored. The same session, without this tab's mark, is not routed on.
+    replace.mockClear();
+    window.sessionStorage.removeItem("nevo.onboarding.finishedRun");
+    cleanup();
+    render(<ObservedInteractionSequence />);
+    await settle();
+
+    expect(replace).not.toHaveBeenCalledWith("/student/onboarding/continue");
+    expect(replace).toHaveBeenCalledWith("/student/onboarding/school");
   });
 });
 
@@ -389,5 +402,48 @@ describe("a reload that resumes, as the page hydrates", () => {
     expect(getSession()?.userId).toBe("student-9");
     act(() => root?.unmount());
     container.remove();
+  });
+});
+
+/*
+ * NEVER ROUTED INTO ON A GUESS (19 Oct). With no run in progress, the
+ * sequence routed any stored session on - so a new child arriving there
+ * landed in the last child's account. Only the child this tab finished its
+ * run as is routed on; any other session goes to 05, which asks.
+ */
+describe("the sequence over a stored session with no run in progress", () => {
+  it("sends an unmarked session to 05 to be asked, and routes nobody into it", async () => {
+    clearOnboardingDraft();
+    leftBehind();
+
+    render(<ObservedInteractionSequence />);
+    await settle();
+
+    expect(replace).toHaveBeenCalledWith("/student/onboarding/school");
+    expect(replace).not.toHaveBeenCalledWith("/student/onboarding/continue");
+    expect(getSession()?.userId).toBe("last-child");
+  });
+
+  it("routes the child this tab finished its run as on, signed in", async () => {
+    clearOnboardingDraft();
+    leftBehind();
+    markRunFinished("last-child");
+
+    render(<ObservedInteractionSequence />);
+    await settle();
+
+    expect(replace).toHaveBeenCalledWith("/student/onboarding/continue");
+    expect(getSession()?.userId).toBe("last-child");
+  });
+
+  it("holds the session it found while it is on its way, so nothing goes as it", async () => {
+    clearOnboardingDraft();
+    leftBehind();
+
+    render(<ObservedInteractionSequence />);
+
+    expect(isHeldAtDoor("tok-last")).toBe(true);
+    cleanup();
+    expect(isHeldAtDoor("tok-last")).toBe(false);
   });
 });

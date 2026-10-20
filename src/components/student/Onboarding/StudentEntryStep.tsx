@@ -37,6 +37,7 @@ import {
   CONTINUE_ROUTE,
   claimOnboardingDraft,
   clearOnboardingDraft,
+  endSessionForEntryMatch,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
 import { SCHOOL_CODE_LENGTH, placeSchoolCode } from "@/lib/auth/schoolCode";
@@ -168,12 +169,12 @@ function isThrottle(err: unknown): boolean {
 export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
   /*
    * FIRST, BEFORE ANYTHING HERE READS THE SESSION (19 Oct browser-storage
-   * audit; `arriveAtEntry`). A session stored as 05 opens is ended only if a
-   * different child's run is in progress, and that run's draft goes with it;
-   * a signed-in child with no run here - back from their first lesson, say -
-   * is routed on to finish onboarding as themselves, and keeps their
-   * session. In the state initializer, so it runs in the first render, ahead
-   * of every hook below; once per mount.
+   * audit; `arriveAtEntry`). A session stored as 05 opens is ended at once
+   * only if a different child's run is in progress, and that run's draft goes
+   * with it; the child this tab finished its run as - back from their first
+   * lesson - is routed on, signed in. Any other session is nobody's to guess
+   * at: 05 is a door over it, and the lookup decides. In the state
+   * initializer, so it runs in the first render, ahead of every hook below.
    */
   const [arrival] = useState(arriveAtEntry);
   // 05 is a door: nothing on this page goes as the session it found
@@ -323,6 +324,16 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
     matchedNumber: string,
   ) => {
     const route = entryRoute(state);
+    /*
+     * A CHILD WHO GOES ON FROM HERE IS NOT SHOWN TO BE THE STORED SESSION'S
+     * (19 Oct browser-storage audit). The lookup carries no account id to
+     * compare, so a session still stored now ends before they go on - into
+     * their first run, a new PIN, or 00c to sign in - and nobody lands in
+     * another child's account. A held child stays here, and ends nothing.
+     */
+    if (route === "first-run" || route === "new-pin" || route === "sign-in") {
+      endSessionForEntryMatch();
+    }
     switch (route) {
       case "waiting":
         // Nothing of theirs is kept: a held child is not onboarding.

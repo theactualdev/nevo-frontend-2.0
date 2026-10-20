@@ -9,10 +9,13 @@ import {
   claimOnboardingDraft,
   clearOnboardingDraft,
   entryIdentityFromDraft,
+  markRunFinished,
   mergeOnboardingDraft,
   rememberOnboardedStudent,
 } from "@/lib/auth/onboarding";
 import { useHydrated } from "@/hooks/useHydrated";
+import { useDoor } from "@/hooks/useDoor";
+import { getSession } from "@/lib/auth/session";
 import {
   bindFirstPin,
   startEntrySession,
@@ -104,13 +107,29 @@ export function ObservedInteractionSequence() {
    */
   const hydrated = useHydrated();
   const resumes = hydrated && arrival === "routeOn";
+  /*
+   * A SESSION NOBODY HAS SHOWN TO BE THIS CHILD'S GOES TO 05 TO BE ASKED (19
+   * Oct): no run is here, and nothing in this tab says the session is the
+   * child holding the tablet. Routing it on would put whoever is there into
+   * that account.
+   */
+  const toEntry = hydrated && arrival === "toEntry";
+  // On its way elsewhere, the sequence is a door: its transition's events
+  // do not go as the session it found (`doorSession`).
+  useDoor(arrival !== "stay");
   const router = useRouter();
   useEffect(() => {
-    if (!resumes) return;
-    // Its work is done: the resume needs none of it.
-    clearOnboardingDraft();
-    router.replace(CONTINUE_ROUTE);
-  }, [resumes, router]);
+    if (resumes) {
+      // Handed on as this tab's own child: Back from the resume routes on
+      // again rather than asking 05 (`markRunFinished`).
+      markRunFinished(getSession()?.userId);
+      // Its work is done: the resume needs none of it.
+      clearOnboardingDraft();
+      router.replace(CONTINUE_ROUTE);
+    } else if (toEntry) {
+      router.replace(ENTRY);
+    }
+  }, [resumes, toEntry, router]);
   const { user } = useAuth();
   const isSso = user?.method === "sso";
   /*
@@ -261,7 +280,7 @@ export function ObservedInteractionSequence() {
    */
   // 05's hold for the age check, with its Back, as 05 would show it.
   // On the way to the resume: nothing of a run that is already past this.
-  if (resumes) return null;
+  if (resumes || toEntry) return null;
   if (held === "age-check")
     return (
       <Letterbox>
@@ -473,7 +492,10 @@ function YoureInStep({
          * read, since a check that cannot complete does not open the door
          * (D69).
          */
-        // The run is over: the draft goes now, and not before (19 Oct).
+        // The run is over: the draft goes now, and not before (19 Oct) -
+        // and this tab remembers whose run it was, so Back from the first
+        // lesson routes them on, signed in, and nobody else.
+        markRunFinished(getSession()?.userId);
         clearOnboardingDraft();
         void enterFirstLesson(firstLesson, go);
       }}

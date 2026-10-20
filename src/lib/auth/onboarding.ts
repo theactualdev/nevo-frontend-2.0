@@ -113,27 +113,30 @@ export function clearOnboardingDraft(): void {
  * child's baseline was captured, and when the last child's token died its
  * 401 sent the new child - who had no session - off their own run.
  *
- * But a stored session is not always somebody else's. Back from the first
- * lesson after You're In lands a child who has just made their account on
- * the sequence, signed in on their own new session, and ending it signed
- * them out onto an empty 05. So the rule is the run's, not the screen's:
- * ONLY A SESSION BELONGING TO A DIFFERENT CHILD THAN THE RUN IN PROGRESS IS
- * ENDED. The run in progress is the one the draft names - the pair 05
- * matched - and it is the session's own once its first PIN has made the
- * account (the draft's `userId`).
+ * But a stored session is not always somebody else's, and the device must
+ * never GUESS whose it is: guessing one way signs a child out of their own
+ * new account (Back from their first lesson), and guessing the other puts a
+ * new child inside another child's account. So it is told:
  *
- *  - A different child's run is in progress: the session ends, through the
- *    path every sign-out takes, so its child's leftovers go as at Sign out -
- *    one last try for their unsent signals with their own token, their held
- *    answers and progress kept - and the run goes on with no token until its
- *    own first PIN.
- *  - No run is in progress, or it is the session's own: the child is
- *    signed in, and is routed on to finishing onboarding for a signed-in
- *    child (`OnboardingResume`), which resumes what is left or goes Home.
- *    Nothing is ended.
+ *  - A DIFFERENT CHILD'S RUN IS IN PROGRESS - the draft names a pair 05
+ *    matched, and its account is not this session's. The session ends,
+ *    through the path every sign-out takes: its child's unsent signals get
+ *    their one last try with their own token, their held answers and
+ *    progress are kept, and the run goes on with no token until its own
+ *    first PIN.
+ *  - THIS TAB FINISHED ITS RUN AS THIS SESSION'S CHILD (`markRunFinished`, at
+ *    You're In), or the run in progress is the session's own (its first PIN
+ *    made the account): the child is routed on, signed in, to finishing
+ *    onboarding as themselves (`OnboardingResume`), which resumes what is
+ *    left or goes Home. Nothing is ended.
+ *  - ANY OTHER SESSION: nobody can say whose it is yet. Nothing is ended
+ *    and nobody is routed into it. 05 opens as a door - nothing on it is
+ *    sent as that session (`doorSession`) - and the child's own lookup
+ *    decides (`endSessionForEntryMatch`). The sequence sends the child to 05
+ *    to be asked.
  *  - An SSO child starts the sequence signed in, on their own session.
  */
-export type Arrival = "stay" | "routeOn";
+export type Arrival = "stay" | "routeOn" | "toEntry";
 
 /** Where onboarding goes on for a signed-in child (`OnboardingResume`). */
 export const CONTINUE_ROUTE = "/student/onboarding/continue";
@@ -147,6 +150,45 @@ function differentChildsRun(userId: string): boolean {
 }
 
 /**
+ * THIS TAB'S RUN FINISHED AS THIS CHILD (19 Oct). Written at You're In - and
+ * when a run past its PIN is handed on to the resume - as the account the
+ * run made, in this tab only (sessionStorage), and nothing but the id the
+ * session already holds. It is how a stored session is known to be the
+ * child holding the tablet rather than whoever used it last: Back from the
+ * first lesson routes them on, signed in, and no other session is ever
+ * routed on. Forgotten when that session ends (`forgetFinishedRun`).
+ */
+const FINISHED_RUN_KEY = "nevo.onboarding.finishedRun";
+
+export function markRunFinished(userId: string | null | undefined): void {
+  if (!userId) return;
+  try {
+    window.sessionStorage.setItem(FINISHED_RUN_KEY, userId);
+  } catch {
+    // Unavailable storage: Back will ask 05, the safe side.
+  }
+}
+
+function finishedRunWas(userId: string): boolean {
+  try {
+    return window.sessionStorage.getItem(FINISHED_RUN_KEY) === userId;
+  } catch {
+    return false;
+  }
+}
+
+/** That session has ended: its mark goes with it. */
+export function forgetFinishedRun(userId: string): void {
+  if (finishedRunWas(userId)) {
+    try {
+      window.sessionStorage.removeItem(FINISHED_RUN_KEY);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/**
  * 05 Entry (and 03, the same screen). Ending a session here also clears the
  * draft that was in progress: 05 writes its own on the next match, and the
  * old one is not that run's.
@@ -154,9 +196,14 @@ function differentChildsRun(userId: string): boolean {
 export function arriveAtEntry(): Arrival {
   const session = getSession();
   if (!session) return "stay";
-  if (!differentChildsRun(session.userId)) return "routeOn";
-  clearSession();
-  clearOnboardingDraft();
+  if (differentChildsRun(session.userId)) {
+    clearSession();
+    clearOnboardingDraft();
+    return "stay";
+  }
+  if (finishedRunWas(session.userId)) return "routeOn";
+  // Whose it is, the lookup says (`endSessionForEntryMatch`). Until then 05
+  // is a door, and nothing on it goes as this session.
   return "stay";
 }
 
@@ -166,10 +213,33 @@ export function arriveAtEntry(): Arrival {
  */
 export function arriveAtSequence(): Arrival {
   const session = getSession();
-  if (!session || session.method === "sso") return "stay";
-  if (!differentChildsRun(session.userId)) return "routeOn";
-  endForNewChild(session.userId);
-  return "stay";
+  if (!session) return "stay";
+  // This tab finished its run as them: Back from the first lesson.
+  if (finishedRunWas(session.userId)) return "routeOn";
+  // An SSO child arrives here from the callback on their own new session,
+  // whatever an earlier 05 left in the tab.
+  if (session.method === "sso") return "stay";
+  if (differentChildsRun(session.userId)) {
+    endForNewChild(session.userId);
+    return "stay";
+  }
+  if (getOnboardingDraft().userId === session.userId) return "routeOn";
+  // Nobody's run is here, and nothing says the session is the child at the
+  // tablet: 05 asks.
+  return "toEntry";
+}
+
+/**
+ * 05'S LOOKUP HAS MATCHED A CHILD, and a session is still stored that nothing
+ * has shown to be theirs (19 Oct). The lookup's answer carries no account id
+ * to compare (`StudentEntryState`: a first name, a class, the consent and PIN
+ * states), so it cannot show the child IS that session's - and so the
+ * session ends before this child goes on, on the safe side: the stored child
+ * signs in again, and nobody lands in somebody else's account. Through the
+ * path every sign-out takes, so their leftovers go as at Sign out.
+ */
+export function endSessionForEntryMatch(): void {
+  if (getSession()) clearSession();
 }
 
 /**

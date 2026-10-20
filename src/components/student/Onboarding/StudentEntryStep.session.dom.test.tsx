@@ -4,6 +4,7 @@ import { StudentEntryStep } from "./StudentEntryStep";
 import { AuthProvider } from "@/context/AuthContext";
 import {
   getOnboardingDraft,
+  markRunFinished,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
 import { clearSession, getSession, setSession } from "@/lib/auth/session";
@@ -171,18 +172,29 @@ describe("05 with another child's session stored, and a walked-away run in the t
   });
 });
 
-describe("05 with a signed-in child's session and no run in progress", () => {
-  it("routes them on, signed in, and ends nothing", async () => {
+/*
+ * A NEW CHILD OPENING 05 OVER ANOTHER CHILD'S STORED SESSION (19 Oct). With
+ * no run in progress, 05 routed the stored session on - so a new child
+ * landed in the last child's onboarding-continue, and from there their Home.
+ * Nothing in the tab says whose that session is, so 05 neither routes into
+ * it nor ends it on sight: it is a door over it, and the child's own lookup
+ * decides. That lookup carries no account id to compare, so a child who goes
+ * on from it ends the stored session first - the safe side.
+ */
+describe("05 over another child's stored session, with no run in progress", () => {
+  it("never routes the new child into that session", async () => {
     open05();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(1_000);
     });
 
+    expect(replace).not.toHaveBeenCalledWith("/student/onboarding/continue");
+    expect(push).not.toHaveBeenCalledWith("/student/dashboard");
+    // Kept, until a lookup says a child is going on.
     expect(getSession()?.userId).toBe("amara");
-    expect(replace).toHaveBeenCalledWith("/student/onboarding/continue");
   });
 
-  it("sends nothing as them while 05 is open: no routine read, no stream", async () => {
+  it("sends nothing as that session while 05 is open: no routine read, no stream", async () => {
     open05();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(7_000);
@@ -190,5 +202,34 @@ describe("05 with a signed-in child's session and no run in progress", () => {
 
     expect(sent.filter((r) => r.auth === "Bearer tok-amara")).toEqual([]);
     expect(sent.filter((r) => r.url.includes("/api/signals"))).toEqual([]);
+  });
+
+  it("ends it only once the lookup has a child to go on with, then carries on with theirs", async () => {
+    open05();
+    expect(getSession()?.userId).toBe("amara");
+
+    await typeThePair();
+
+    expect(getSession()).toBeNull();
+    expect(replace).not.toHaveBeenCalledWith("/student/onboarding/continue");
+    expect(push).toHaveBeenCalledWith("/student/onboarding/sequence");
+    expect(getOnboardingDraft()).toMatchObject({ name: "Tobi" });
+    // Her own unsent signals got their last try, as at any sign-out.
+    const asAmara = sent.filter((r) => r.auth === "Bearer tok-amara");
+    expect(asAmara).toHaveLength(1);
+    expect(asAmara[0].body).toContain(AMARAS_STREAM.sessionId);
+  });
+});
+
+describe("05 for the child this tab finished its run as", () => {
+  it("routes them on, signed in, and ends nothing", async () => {
+    markRunFinished("amara");
+    open05();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(getSession()?.userId).toBe("amara");
+    expect(replace).toHaveBeenCalledWith("/student/onboarding/continue");
   });
 });
