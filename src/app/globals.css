@@ -178,9 +178,9 @@
   /* No glow guide: the forward control's glow under a hint went with design's
      D124 (6 Oct). Nothing reacts visibly to a child's difficulty. Nor the
      system density chip's glow and sparkle, with D144 (8 Oct). */
-  /* Ask Nevo (26): thinking dots + listening mic - state-bound, end with the state. */
+  /* Ask Nevo (26): thinking dots - state-bound, end with the state. No mic
+     pulse: the microphone is off until v1.5 (SCRUM-256, Lydia 19 Oct). */
   --animate-nevo-dot: nevo-dot 1200ms ease-in-out infinite;
-  --animate-nevo-mic-pulse: nevo-mic-pulse 2000ms ease-in-out infinite;
   /* Teacher join (03): the viewfinder scan line - state-bound, only while scanning. */
   --animate-nevo-scanline: nevo-scan 2600ms cubic-bezier(0.45, 0, 0.55, 1)
     infinite alternate;
@@ -308,17 +308,6 @@
   40% {
     opacity: 1;
     transform: translateY(-3px);
-  }
-}
-
-/* Ask Nevo mic while listening - a soft breathing scale. */
-@keyframes nevo-mic-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.15);
   }
 }
 
