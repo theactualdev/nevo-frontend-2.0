@@ -401,6 +401,71 @@ describe("the child's pick", () => {
 });
 
 describe("the activity, through the group (SCRUM-268)", () => {
+  /** A live Osmosis section 4: text and an activity, read from the wire. */
+  const activityLesson = (order: string[]) =>
+    lessonFromContent({
+      id: "l-1",
+      title: "Osmosis",
+      confirmationSummary: null,
+      segments: [
+        {
+          id: "s4",
+          segmentKey: "s4",
+          contentType: "explanatory_text",
+          sequenceOrder: 1,
+          title: "Osmosis in a potato",
+          body: "Water moves into the potato.",
+          availableModalities: order,
+          availableFormats: order,
+          recommendedFormat: null,
+          comprehensionCheckpoints: [],
+          textVariant: null,
+          visualVariant: null,
+          audioVariant: null,
+          interactiveVariant: {
+            type: "activity",
+            title: "Watch a potato change",
+            introduction: null,
+            materials: [],
+            steps: [{ id: "a1", instruction: "Put a slice in salt water." }],
+            outcome: "The slice goes soft.",
+          },
+          calculationVariant: null,
+          needsReview: false,
+          reviewReasons: [],
+        },
+      ],
+    } as unknown as LessonDetailResponse)!;
+
+  it("leaves the opening as it was: never the activity with nothing picked", () => {
+    // Listed first, and named by the engine: the section still opens as it
+    // did before the activity mapped (Lydia, 21 Oct - the opening is hers).
+    render(
+      <LessonPlayer
+        lesson={activityLesson(["interactive", "text"])}
+        plan={{
+          lessonId: "l-1",
+          segments: [{ segmentId: "s4", startModality: "interactive" }],
+        }}
+        live
+      />,
+    );
+
+    expect(pressed()).toEqual(["Text"]);
+    expect(pills()).toEqual(["Activity", "Text"]);
+  });
+
+  it("opens in it on a reload where the child picked it - the one exception (K4)", () => {
+    const picked = activityLesson(["text", "interactive"]);
+    picked.segments[0].chosen = { modality: "interactive" };
+    render(<LessonPlayer lesson={picked} plan={null} live />);
+
+    expect(pressed()).toEqual(["Activity"]);
+    expect(
+      screen.getByRole("heading", { name: "Watch a potato change" }),
+    ).toBeInTheDocument();
+  });
+
   it("reaches the child from a live lesson that lists it", () => {
     const detail = {
       id: "l-1",

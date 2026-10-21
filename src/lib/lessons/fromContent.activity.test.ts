@@ -78,17 +78,34 @@ describe("an activity reaches the player", () => {
     });
   });
 
-  it("is offered, in the order the server gave", () => {
-    expect(built({ interactiveVariant: activity() }).modalities).toEqual([
-      "text",
-      "interactive",
-    ]);
+  it("is offered in the format group, in the order the server gave", () => {
+    expect(
+      built({
+        availableFormats: ["text", "interactive"],
+        interactiveVariant: activity(),
+      }).formats,
+    ).toEqual(["text", "interactive"]);
     expect(
       built({
         availableModalities: ["interactive", "text"],
+        availableFormats: ["interactive", "text"],
         interactiveVariant: activity(),
-      }).modalities,
+      }).formats,
     ).toEqual(["interactive", "text"]);
+  });
+
+  it("is never what a section opens in with nothing picked (Lydia, 21 Oct)", () => {
+    // `modalities` is the list the opening reads: the plan's format is held
+    // to it and its first entry is the fallback. The activity stays out of
+    // it, so the opening is exactly what it was before the activity mapped.
+    const seg = built({
+      availableModalities: ["interactive", "text"],
+      availableFormats: ["interactive", "text"],
+      interactiveVariant: activity(),
+    });
+
+    expect(seg.interactive).toBeDefined();
+    expect(seg.modalities).toEqual(["text"]);
   });
 
   it("reads an activity stored before `introduction` existed", () => {

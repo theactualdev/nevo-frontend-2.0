@@ -280,9 +280,25 @@ function openingModality(
   chosen?: Modality,
 ): Modality {
   if (chosen && hasContent(segment, chosen)) return chosen;
-  if (planned && hasContent(segment, planned)) return planned;
+  if (planned && hasContent(segment, planned) && opensUnpicked(segment, planned))
+    return planned;
   return (
     segment.modalities.find((m) => hasContent(segment, m)) ?? MODALITY.TEXT
+  );
+}
+
+/**
+ * Whether a section may open in `modality` with nothing picked: as before the
+ * activity reached the player, which is everything but an activity outside the
+ * section's `modalities`. A live activity is drawn and offered since 21 Oct
+ * (SCRUM-268) but kept out of that list, so a plan naming it opens the
+ * section as it always did - the opening is Lydia's to change, not this.
+ */
+function opensUnpicked(segment: LessonSegment, modality: Modality): boolean {
+  return (
+    modality !== MODALITY.INTERACTIVE ||
+    isCalculation(segment) ||
+    segment.modalities.includes(modality)
   );
 }
 

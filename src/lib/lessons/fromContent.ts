@@ -83,11 +83,20 @@ import type {
  * ON as of 21 Oct: THE ACTIVITY (SCRUM-268). The wire's `interactiveVariant`
  * comes in two forms (Teslim, 14 Oct), and the ACTIVITY - a title, what is
  * needed, ordered steps and the outcome - is the player's tickable steps, so
- * it maps; see `interactiveFor`. Until this it never reached a child: the
- * channel was not renderable here, so Osmosis's section 4 activity arrived
+ * it maps; see `interactiveFor`. Until this it never reached a child: no
+ * `segment.interactive` was built, so Osmosis's section 4 activity arrived
  * and was dropped on the device. The QUESTION form still does not map - a
  * prompt and an answer key are not steps - and the server does not offer it
  * as a format either.
+ *
+ * AN ACTIVITY IS OFFERED, NEVER OPENED ON ITS OWN. It is one of the
+ * section's `formats` - the group offers it, and a section the child picked
+ * it on opens in it - but it is not in `modalities`, which is what a section
+ * opens in when nothing was picked: the plan's format is held to that list,
+ * and its first entry is the fallback. Adding the activity there would have
+ * let a section open in it with no pick, and the opening format is Lydia's
+ * to decide (21 Oct, twice: "Do not change format selection logic yet";
+ * "with no stored pick, a section opens exactly as on main today").
  *
  * ONLY PART-WAY ON, and why:
  *   - CALCULATION is on where `calculationFor` can build every step from the
@@ -107,12 +116,14 @@ import type {
  * component, which is the only place that knows how long a lesson has been open.
  */
 
-/** The channels this adapter can actually populate from parsed content. */
+/**
+ * The channels a section can open in with nothing picked. The activity is
+ * drawn too, and offered beside them - see the top.
+ */
 const RENDERABLE: readonly Modality[] = [
   MODALITY.TEXT,
   MODALITY.VISUAL,
   MODALITY.AUDIO,
-  MODALITY.INTERACTIVE,
 ];
 
 /**
@@ -151,9 +162,7 @@ function modalitiesFor(
       // exactly that for months, listing `visual` with a null `visualVariant`.
       // Claiming is not having.
       (m !== MODALITY.VISUAL || visualFor(segment, "") !== undefined) &&
-      (m !== MODALITY.AUDIO || audioFor(segment, "") !== undefined) &&
-      // The activity alone: a question is offered as nothing (SCRUM-268).
-      (m !== MODALITY.INTERACTIVE || interactiveFor(segment, "") !== undefined),
+      (m !== MODALITY.AUDIO || audioFor(segment, "") !== undefined),
   );
   return offered.length > 0 ? offered : [MODALITY.TEXT];
 }
@@ -199,8 +208,8 @@ export function asSourceText(
 /**
  * The format group's pills and its marker, as the server sent them
  * (SCRUM-272): `availableFormats` in its own order - "authored opening order
- * is preserved among available formats" - narrowed to what `modalitiesFor`
- * found this app can draw, so a picture that failed its own review stays out
+ * is preserved among available formats" - narrowed to what this app can
+ * draw (`drawable`), so a picture that failed its own review stays out
  * whatever the list says. `recommendedFormat` only where it names one of
  * them; nothing here works one out.
  *
@@ -1217,7 +1226,14 @@ function segmentFor(
   const built: LessonSegment = {
     id: segment.id,
     modalities,
-    ...formatsFor(segment, modalities),
+    // The activity is drawable, and offered, beside them - never opened in
+    // with no pick (see the top). A calculation is the solver alone.
+    ...formatsFor(
+      segment,
+      interactive && !calculation
+        ? [...modalities, MODALITY.INTERACTIVE]
+        : modalities,
+    ),
     ...(chosen ? { chosen } : {}),
     text: textFor(segment, lessonTitle),
     // Omitted rather than null: the player's `hasContent` tests presence.
