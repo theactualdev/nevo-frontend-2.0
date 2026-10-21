@@ -13,7 +13,7 @@ import {
   type LearningReadiness,
 } from "@/lib/api/probe";
 import { planProbe, type ProbePlan } from "@/lib/api/probePlan";
-import { claimMoveOn } from "@/lib/auth/onboardingGate";
+import { claimMoveOn, claimReturn } from "@/lib/auth/onboardingGate";
 import { getSession, getToken } from "@/lib/auth/session";
 import { ONBOARDING_SIGNAL_TYPES } from "@/lib/constants";
 import { flushPendingBaseline } from "@/lib/profiling/pendingBaseline";
@@ -110,7 +110,9 @@ function afterModuleFour(outcome: DomainProbeOutcome): "home" | "nothing" {
  * four in on arrival, Module 4 sat, Module 4 already held, and the one-time
  * move on for a Module 4 with nothing to ask. Not the nothing-state's Home
  * button: that is the way out of a state that may be refused again, and it
- * goes Home.
+ * goes Home. And once per tab per page (`claimReturn`, the 21 Oct on-screen
+ * check): a page that still refuses after readiness says done sends the
+ * child Home the second time, as before the way back, not round again.
  *
  * NOTHING TO ASK MOVES THE CHILD ON (Olayinka, 19 Oct: "an unavailable probe
  * moves the child on, never to a dead end"; Teslim's 19 Oct no-question-bank
@@ -181,11 +183,24 @@ export function OnboardingResume({
     };
   }, [data]);
 
+  /*
+   * Where "done" goes, settled once per arrival: the claim is spent when it
+   * is read, so an effect that runs again (Strict Mode, a re-render) must not
+   * read it a second time and turn a first return into a Home.
+   */
+  const leaving = useRef<string | null>(null);
   useEffect(() => {
     // A visitor with no session has nothing to finish here, and reads nothing.
     if (signedOut) router.replace(SIGN_IN);
-    // Done: back to the page they were refused, else Home - see above.
-    else if (step === "home") router.replace(returnTo ?? HOME);
+    else if (step === "home") {
+      // Done: back to the page they were refused, once per tab - a page that
+      // still refuses sends them Home, not round again (`claimReturn`).
+      leaving.current ??=
+        returnTo && claimReturn(getSession()?.userId, returnTo)
+          ? returnTo
+          : HOME;
+      router.replace(leaving.current);
+    }
   }, [signedOut, step, router, returnTo]);
 
   if (signedOut || step === null || step === "home") {

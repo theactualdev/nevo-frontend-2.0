@@ -157,8 +157,51 @@ const MOVED_ON = "nevo:onboarding:moved-on-without-probe";
  * the child is left on.
  */
 export function claimMoveOn(userId: string | null | undefined): boolean {
-  if (!userId || typeof window === "undefined") return false;
-  const key = `${MOVED_ON}:${userId}`;
+  if (!userId) return false;
+  return claimOnce(`${MOVED_ON}:${userId}`);
+}
+
+const RETURNED = "nevo:onboarding:returned";
+
+/**
+ * THE LOOP GUARD, for the way back to the page that was refused.
+ *
+ * The continue route sends a child who has finished onboarding back to the
+ * page that sent them there (`returnPathOf`). But on the 21 Oct on-screen
+ * check a lesson whose read still answered 409 `onboarding_required` while
+ * readiness said complete - server state stale or out of step - sent the
+ * child round for ever: lesson, refused, continue, complete, lesson, every
+ * few seconds, the screen flickering between blank and "Getting your lesson
+ * ready", never reaching Home. Before the way back existed, that case went
+ * Home and stopped. Module 4 sat while the gate still refuses is the same.
+ *
+ * So the way back is taken ONCE PER TAB PER CHILD PER PAGE, in
+ * `sessionStorage`, for the reason `claimMoveOn` is. True the first time, and
+ * the caller goes back; false every time after - and whenever it cannot be
+ * recorded, since a return that cannot be counted is one that could loop -
+ * and the caller goes Home, as it did before the way back existed. Never the
+ * nothing-state: onboarding is done as far as the server's readiness says.
+ * Another page is its own claim, so the next lesson a child is refused still
+ * brings them back to it once.
+ *
+ * IT DECIDES NOTHING ABOUT ONBOARDING. Not a completion, a placement or a
+ * pass: the server's readiness still decides that on every arrival, and its
+ * gate what opens. It only chooses between the refused page and Home. It
+ * holds the child's id and the page's path, nothing else, and is not swept
+ * at sign-out (`sessionLeftovers` sweeps no onboarding key); it dies with
+ * the tab.
+ */
+export function claimReturn(
+  userId: string | null | undefined,
+  path: string,
+): boolean {
+  if (!userId || !path) return false;
+  return claimOnce(`${RETURNED}:${userId}:${path}`);
+}
+
+/** True the first time this tab records `key`; false after, or unrecordable. */
+function claimOnce(key: string): boolean {
+  if (typeof window === "undefined") return false;
   try {
     const store = window.sessionStorage;
     if (store.getItem(key) !== null) return false;
