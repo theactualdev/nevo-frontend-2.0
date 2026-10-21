@@ -29,15 +29,20 @@ import { clearSession, setSession } from "@/lib/auth/session";
  * invent a completion the server never recorded.
  */
 
-const { readiness, next, answer, myDashboard } = vi.hoisted(() => ({
+const { readiness, next, answer, myDashboard, report } = vi.hoisted(() => ({
   readiness: vi.fn(),
   next: vi.fn(),
   answer: vi.fn(),
   myDashboard: vi.fn(),
+  report: vi.fn(),
 }));
 vi.mock("@/lib/api/probe", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/probe")>()),
   probeApi: { readiness, next, answer },
+}));
+vi.mock("@/lib/api/clientErrors", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/clientErrors")>()),
+  reportProbeNothingToAsk: report,
 }));
 vi.mock("@/lib/api/students", () => ({ studentsApi: { myDashboard } }));
 vi.mock("./StretchInterstitial", () => ({
@@ -530,9 +535,26 @@ describe("whether it runs is found out first (Olayinka, 19 Oct)", () => {
   });
 });
 
+/** Teslim's 19 Oct contract for no bank: `completed: true, status: "unavailable"`. */
+const NO_BANK = {
+  complete: false,
+  modules: [
+    { id: "grid_span", completed: true, status: "completed" },
+    { id: "pattern_flanker", completed: true, status: "completed" },
+    { id: "sentence_dot", completed: true, status: "completed" },
+    { id: "domain_probe", completed: true, status: "unavailable" },
+  ],
+  subjects: [],
+  nextModule: null,
+  probeSubjectId: null,
+  probePolicy: "one_available_subject",
+};
+
 describe("with nothing to ask, it is not presented (rule 5)", () => {
-  it("presents nothing when no subject has items, and claims nothing done", async () => {
-    readiness.mockResolvedValue(ready([ART, { ...MATHS, probeAvailable: false }]));
+  it("presents nothing, and ends absent, when no subject has items and readiness read again says no bank", async () => {
+    readiness
+      .mockResolvedValueOnce(ready([ART, { ...MATHS, probeAvailable: false }]))
+      .mockResolvedValueOnce(NO_BANK);
     renderStep({ stretchFirst: true });
 
     await waitFor(() => expect(onDone).toHaveBeenCalledWith("absent"));
@@ -541,11 +563,19 @@ describe("with nothing to ask, it is not presented (rule 5)", () => {
     expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
   });
 
-  it("goes on without the stretch when the subject answers with no items", async () => {
+  it("ends failed, not absent, when readiness read again still holds it owed with nothing to ask", async () => {
+    // Teslim, 21 Oct: "an empty subject alone must not waive module 4". Only
+    // the server's `unavailable` moves a child on; this is reported, and the
+    // caller's nothing-state or the server's gate decides.
     next.mockResolvedValue(EMPTY);
     renderStep({ stretchFirst: true });
 
-    await waitFor(() => expect(onDone).toHaveBeenCalledWith("absent"));
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith("failed"));
+    expect(onDone).not.toHaveBeenCalledWith("absent");
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(readiness).toHaveBeenCalledTimes(2);
+    expect(report).toHaveBeenCalledTimes(1);
+    // Not presented on the way: no stretch, no map, no marker.
     expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
     expect(screen.queryByRole("progressbar")).toBeNull();
     expect(track).not.toHaveBeenCalled();
@@ -553,11 +583,13 @@ describe("with nothing to ask, it is not presented (rule 5)", () => {
 
   it("does not count a finish it was handed before asking anything", async () => {
     // `next` answering "finished" records nothing on the server (only an
-    // answer that finishes the probe does), so neither does this.
+    // answer that finishes the probe does), so neither does this - and it is
+    // not a no-bank signal either (Teslim, 21 Oct).
     next.mockResolvedValue(FINISHED);
     renderStep({ stretchFirst: true });
 
-    await waitFor(() => expect(onDone).toHaveBeenCalledWith("absent"));
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith("failed"));
+    expect(onDone).not.toHaveBeenCalledWith("sat");
     expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
     expect(track).not.toHaveBeenCalled();
   });

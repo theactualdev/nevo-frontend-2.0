@@ -29,19 +29,29 @@ import { StretchInterstitial } from "./StretchInterstitial";
  * How Module 4 ended, for the run around it.
  *
  * `sat` - the child was asked at least one question here, or the server
- * already holds the module as done. `absent` - there was nothing to ask: no
- * session, the server holds the probe as unavailable, no subject with items,
- * or every subject answered with none (`probePlan`). `failed` - a read failed before anything could be asked, so
- * whether there was anything is not known. None of the three is a claim that
- * the server recorded the module; only the server's gate says that
- * (`onboardingGate`).
+ * already holds the module as done. `absent` - there is no question bank:
+ * the server holds the probe as `unavailable` (`probePlan`), the one no-bank
+ * signal since Teslim's 21 Oct answers - or there is no session to ask with.
+ * `failed` - nothing was asked and this device cannot say why it should move
+ * on: a read failed, readiness still holds the probe as owed with nothing to
+ * ask (`nothingToAsk`), or the server ended the run before a question was
+ * shown. None of the three is a claim that the server recorded the module;
+ * only the server's gate says that (`onboardingGate`).
  */
 export type DomainProbeOutcome = "sat" | "absent" | "failed";
 
-/** What a plan with nothing to ask ends Module 4 as, without presenting it. */
+/**
+ * What a plan with nothing to ask ends Module 4 as, without presenting it.
+ *
+ * `nothingToAsk` IS `failed`, NOT `absent`. Readiness, read twice, still says
+ * the probe is owed and no subject gives a question: "an empty subject alone
+ * must not waive module 4" (Teslim, 21 Oct). So it is the nothing-state, as a
+ * failed read is, and the server's gate decides - never a move on.
+ */
 const ENDS_AS: Record<Exclude<ProbePlan["kind"], "ask">, DomainProbeOutcome> = {
   held: "sat",
   unavailable: "absent",
+  nothingToAsk: "failed",
   failed: "failed",
 };
 
@@ -62,8 +72,10 @@ const CHOOSE_FIRST: readonly AgeBand[] = [AGE_BANDS.JSS, AGE_BANDS.SS];
  * FIRST, WHETHER IT WILL RUN AT ALL (Olayinka, 19 Oct: "an unavailable probe
  * moves the child on, never to a dead end"). Readiness and each subject's
  * first item are read before anything of the module is drawn - the stretch
- * included - unless the caller has already read them (`openings`). With
- * nothing to ask the module ends there, unpresented, and the caller moves on.
+ * included - unless the caller has already read them (`openings`). With no
+ * bank, as the server says it (Teslim, 21 Oct), the module ends there,
+ * unpresented, and the caller moves on; with nothing to ask while readiness
+ * still holds it owed, it ends `failed`, unpresented, and the caller does not.
  * With something, the first item read is the one shown: it is not fetched
  * twice.
  */
@@ -246,13 +258,18 @@ export function DomainProbeModule({
       return;
     }
     /*
-     * Finished, or no items. Before any question this is the nothing-state:
-     * a `next` that says "finished" for a probe this child has not been
-     * recorded as finishing cannot record it either (backend, raised), so
-     * nothing here pretends it did.
+     * Finished, or no items, before any question was on screen. A guard:
+     * every read that lands here follows a pick, made on an item on screen,
+     * so one has normally been shown. Not sat: a `next` that says "finished"
+     * for a probe this child has not been recorded as finishing cannot
+     * record it either (backend, raised). And not absent: "`ProbeFinished`
+     * ... is not a no-bank signal", and "an empty subject alone must not
+     * waive module 4" (Teslim, 21 Oct) - only readiness's `unavailable` moves
+     * a child on, and readiness is not read in here. `failed` hands it to the
+     * caller's nothing-state and the server's gate, which do read it.
      */
     if (!shown.current) {
-      end("absent");
+      end("failed");
       return;
     }
     track?.(ONBOARDING_SIGNAL_TYPES.BASELINE_MODULE_COMPLETE, {
@@ -268,7 +285,8 @@ export function DomainProbeModule({
       (step) => take(subjectId, step),
       // Nothing to put on screen. A child part-way through is placed on what
       // they answered, and the server resumes the run from it next time.
-      () => end(shown.current ? "sat" : "absent"),
+      // Before any question it is a read that failed, not "no bank".
+      () => end(shown.current ? "sat" : "failed"),
     );
   };
 
