@@ -118,15 +118,6 @@ const PICKUP: PickUp[] = [
   },
 ];
 
-/**
- * The frame's caught-up note. It shows where nothing new is waiting - with
- * nothing part-way, and, by design's D99 (6 Oct), beside a lesson part-way:
- * "the part-way lesson appears in continue-where-you-left-off, and the slot
- * below shows the caught-up state. A child with one unfinished lesson is not
- * empty-handed." Never beside a ready lesson - see `note`.
- */
-const CAUGHT_UP = "You're all caught up. Nice and steady - come back any time.";
-
 /** At most five on "Pick up where you left off", by design (SCRUM-146). */
 const PICKUP_MAX = 5;
 
@@ -328,29 +319,18 @@ export function HomeDashboard() {
   const nothingSet = signedIn && Boolean(live) && !everSet;
 
   /*
-   * THE NOTE IS THE FRAME'S CAUGHT-UP LINE, OR NOTHING - signed in or not.
+   * NO CAUGHT-UP LINE UNTIL THE BACKEND SAYS SO - signed in or not.
    *
-   * Every child used to read "Go at your own pace - Nevo keeps up with you",
-   * which no frame draws. The frame's line for work outstanding ("You've been
-   * showing up this week") was a claim about the child that nothing here
-   * verifies, and design took it out (D98, 6 Oct): Home shows no note while
-   * new lessons AND part-way ones are both waiting. The signed-out
-   * walkthrough follows the same rule, since it is what a real child's Home
-   * looks like. The caught-up line states only what this screen can see, and
-   * needs a read to see it.
-   *
-   * With nothing new today it shows even beside a part-way lesson (D99).
-   *
-   * AND ONLY WITH NOTHING NEW WAITING. It used to show whenever nothing was
-   * part-way, because the frame's toggle (`showNote: !outstanding`) reads
-   * part-way work alone - so on the 20 Oct production run a child with a new
-   * lesson in Today's lessons and nothing started read "You're all caught up"
-   * right under it. That is untrue beside a ready lesson, and D98 rules out a
-   * line that claims what nothing checks. So the line follows what is new,
-   * part-way work or not, and the walkthrough follows the same rule; never on
-   * the nothing-set empty state, which draws no note. Raised with design.
+   * "All caught up" is a status, and the front end does not state a status
+   * the backend did not send (Lydia, 21 Oct, SCRUM-146). The line used to be
+   * decided here from the lists on screen: first whenever nothing was
+   * part-way, which put it under a ready lesson on the 20 Oct production
+   * run, then whenever nothing new was waiting (#837). Both were this app's
+   * own verdict. SCRUM-146 settles the rule for when finished work leaves the
+   * list and the sentences together; until it sends a status, Home draws no
+   * note at all. The walkthrough follows a real child's Home, so it draws
+   * none either. D98 already ruled out the other notes (6 Oct).
    */
-  const note = (!signedIn || live) && today.length === 0 ? CAUGHT_UP : null;
 
   const openPreview = (lesson: LessonSummary) => {
     setPreview(lesson);
@@ -450,8 +430,8 @@ export function HomeDashboard() {
             rather than draw with nothing in them (D20). The slot used to hold
             an empty state ("Your lessons will show up here soon"), which told
             a child with a lesson underway they had nothing. Design: "the
-            part-way lesson appears in continue-where-you-left-off, and the
-            slot below shows the caught-up state" - the note under the list.
+            part-way lesson appears in continue-where-you-left-off". The
+            caught-up state D99 put below it waits on SCRUM-146 (see above).
 
             Absent rather than an empty heading when nothing new is set - the
             frame never draws Today's lessons with nothing under it.
@@ -504,15 +484,6 @@ export function HomeDashboard() {
                 ))}
               </div>
             </section>
-          )}
-
-          {note && (
-            <div className="mt-8 flex items-center gap-3.5 rounded-[12px] bg-nevo-violet/14 px-5 py-[18px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:340ms]">
-              <span className="size-2.5 shrink-0 rounded-full bg-nevo-violet" />
-              <p className="text-[15px] leading-[1.45] text-nevo-near-black">
-                {note}
-              </p>
-            </div>
           )}
         </>
       )}
