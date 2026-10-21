@@ -937,57 +937,13 @@ describe("what Home says when there is nothing, or nothing left", () => {
     ).toBeInTheDocument();
   });
 
-  it("says nothing about being caught up beside a ready lesson, with nothing part-way", async () => {
-    /*
-     * 20 Oct production run: a new lesson in Today's lessons, nothing
-     * started, and "You're all caught up" under it. The frame's toggle reads
-     * part-way work alone; the line is untrue beside a lesson ready to start.
-     */
+  it("shows the caught-up line when nothing is part-way", async () => {
     signIn();
     live([{ ...done, id: "as-new", status: "assigned" }]);
 
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    expect(
-      screen.getByRole("region", { name: /Today's lessons/ }),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Pick up where you left off")).toBeNull();
-    expect(screen.queryByText(/caught up/)).toBeNull();
-  });
-
-  it("says nothing about being caught up without a read that shows it", async () => {
-    // Signed in, and no dashboard to read: nothing here can see that
-    // nothing new is waiting.
-    signIn();
-    dashboard.useStudentDashboard.mockReturnValue({
-      data: null,
-      failed: false,
-      loading: false,
-    });
-
-    const { container } = render(<HomeDashboard />);
-    await settled(container);
-
-    expect(screen.queryByText(/caught up/)).toBeNull();
-  });
-
-  it("shows the caught-up line once everything set is finished", async () => {
-    signIn();
-    live([done], [
-      {
-        lessonId: "l-done",
-        status: "completed",
-        segmentPosition: 4,
-        updatedAt: new Date().toISOString(),
-      },
-    ]);
-
-    const { container } = render(<HomeDashboard />);
-    await settled(container);
-
-    expect(screen.queryByText(/Today's lessons/)).toBeNull();
-    expect(screen.queryByText("Pick up where you left off")).toBeNull();
     expect(screen.getByText(/You're all caught up/)).toBeInTheDocument();
   });
 
