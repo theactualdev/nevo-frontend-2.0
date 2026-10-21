@@ -40,10 +40,11 @@ export interface AgeCheck {
   /**
    * Whether this hold can clear through the re-check (both dates present, at
    * most two years apart, inside the enrolled band, not expired). The
-   * SERVER'S answer: on backend main since 39ac06f (21 Oct) but NOT deployed
-   * yet, so absent today. Absent means unknown - never worked out here.
+   * SERVER'S answer (39ac06f, live 21 Oct) - never worked out here. It is not
+   * permission to activate: the school's re-check and the parent's
+   * reconfirmation are still both required.
    */
-  clearable?: boolean;
+  clearable: boolean;
 }
 
 /** The hold's three moments, read from the server's own timestamps - nothing compared. */
