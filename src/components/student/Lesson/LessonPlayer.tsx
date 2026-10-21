@@ -946,6 +946,9 @@ export function LessonPlayer({
     // Not for a visit that opened in the check (B82): the child never sees a
     // segment, and the engine must not be told they arrived on one.
     live && !review && checkOpensAt === null,
+    // The BACKEND's sitting, not the local correlation id above: the engine
+    // refuses an `in_lesson` read without it - see `useRuntimeAdaptation`.
+    progress.sessionId,
     {
       currentSegmentId: segment.id,
       currentModality: modality,

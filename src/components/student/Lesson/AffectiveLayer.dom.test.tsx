@@ -170,6 +170,15 @@ describe("the pill's focus ring", () => {
     expect(drawn.className).toMatch(/rounded-\[20px\]/);
     expect(drawn.className).toMatch(/group-focus-visible:outline-2/);
   });
+
+  it("names the pill on the button itself, not only in the drawn pill", () => {
+    // The key-term chips' pattern, found unnamed on the 20 Oct production run.
+    render(<SocraticPanel prompts={PROMPTS} onTryAgain={() => {}} />);
+
+    expect(
+      screen.getByRole("button", { name: "Which part is unclear?" }),
+    ).toHaveAttribute("aria-label", "Which part is unclear?");
+  });
 });
 
 describe("the offered hint's panel (Lesson Player frame, 13 Oct)", () => {

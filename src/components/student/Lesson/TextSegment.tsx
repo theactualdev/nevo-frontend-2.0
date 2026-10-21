@@ -409,6 +409,11 @@ function KeyTerms({
             <button
               key={i}
               type="button"
+              // NAMED ON THE BUTTON ITSELF. The term sits in the inner span,
+              // the chip's visible shape inside the 44px hit area, and the
+              // 20 Oct production run's accessibility read found these chips
+              // with no name at all.
+              aria-label={term}
               aria-expanded={open === i}
               aria-controls={open === i ? definitionId : undefined}
               onClick={() => setOpen(open === i ? null : i)}

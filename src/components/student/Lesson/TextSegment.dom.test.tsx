@@ -487,6 +487,17 @@ describe("a key term's definition, in place when tapped (design, 9 Oct)", () => 
   });
   const chip = (name: string) => screen.getByRole("button", { name });
 
+  it("names each chip on the button itself, and leaves a term with no definition plain", () => {
+    // 20 Oct production run: the chips read as buttons with no name, the
+    // term only in the inner span that draws the chip.
+    render(<TextSegment content={terms} density={null} />);
+
+    expect(chip("chlorophyll")).toHaveAttribute("aria-label", "chlorophyll");
+    expect(chip("glucose")).toHaveAttribute("aria-label", "glucose");
+    expect(screen.queryByRole("button", { name: "leaf" })).toBeNull();
+    expect(screen.getByText("leaf").tagName).toBe("SPAN");
+  });
+
   it("is closed until the child taps the term", () => {
     render(<TextSegment content={terms} density={null} />);
 

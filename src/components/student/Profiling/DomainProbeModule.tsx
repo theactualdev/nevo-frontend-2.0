@@ -423,7 +423,13 @@ function ProbeItem({
                   : "bg-nevo-cream text-nevo-near-black",
               )}
             >
-              <span>{o.label}</span>
+              {/*
+                THE LABEL IS THE BUTTON'S OWN TEXT. Wrapped in a span, the
+                20 Oct production run's accessibility read found an unnamed
+                button and the label as loose text beside it - an option a
+                reader could not find as one.
+              */}
+              {o.label}
             </button>
           );
         })}

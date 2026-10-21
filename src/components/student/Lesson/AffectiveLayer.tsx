@@ -327,6 +327,9 @@ export function SocraticPanel({
       <div className="mb-4 flex justify-center">
         <button
           type="button"
+          // Named on the button, not only in the pill's inner span - the
+          // key-term chips' pattern, unnamed on the 20 Oct production run.
+          aria-label="Which part is unclear?"
           aria-expanded={open}
           onClick={openPanel}
           className={PILL_HIT}

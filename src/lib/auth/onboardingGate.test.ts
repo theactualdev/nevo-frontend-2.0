@@ -5,6 +5,7 @@ import {
   ONBOARDING_CONTINUE_ROUTE,
   onboardingDoor,
   onboardingPath,
+  returnPathOf,
 } from "./onboardingGate";
 
 /**
@@ -25,9 +26,9 @@ const GATE = {
 const LESSON = "/student/lessons/les-1";
 
 describe("onboardingDoor", () => {
-  it("sends a child refused a lesson to finish onboarding", () => {
+  it("sends a child refused a lesson to finish onboarding, and back", () => {
     expect(onboardingDoor("student", 409, GATE, LESSON)).toBe(
-      "/student/onboarding/continue",
+      `/student/onboarding/continue?next=${encodeURIComponent(LESSON)}`,
     );
   });
 
@@ -58,6 +59,104 @@ describe("onboardingDoor", () => {
     expect(
       onboardingDoor("student", 409, GATE, "/student/onboarding/sequence"),
     ).toBeNull();
+  });
+});
+
+/*
+ * THE WAY BACK, from the 20 Oct production run: a child who tapped Start on a
+ * lesson finished the probe and landed on Home, not in the lesson.
+ */
+describe("onboardingDoor - the page the child was refused rides along", () => {
+  const ASSIGNED = "?assignment=7d2f1e4b-1111-4222-8333-999988887777";
+
+  it("carries the lesson's assignment back too", () => {
+    expect(onboardingDoor("student", 409, GATE, LESSON, ASSIGNED)).toBe(
+      `/student/onboarding/continue?next=${encodeURIComponent(LESSON + ASSIGNED)}`,
+    );
+  });
+
+  it("carries Home back as Home, which is harmless", () => {
+    expect(onboardingDoor("student", 409, GATE, "/student/dashboard")).toBe(
+      `/student/onboarding/continue?next=${encodeURIComponent("/student/dashboard")}`,
+    );
+  });
+
+  it("carries nothing it would not send a child back to", () => {
+    expect(
+      onboardingDoor("student", 409, GATE, LESSON, "?next=//evil.example"),
+    ).toBe(ONBOARDING_CONTINUE_ROUTE);
+    expect(onboardingDoor("student", 409, GATE, "/student/lessons/a.b")).toBe(
+      ONBOARDING_CONTINUE_ROUTE,
+    );
+  });
+
+  it("adds nothing to an onboarding path the server names other than continue", () => {
+    const named = {
+      detail: { ...GATE.detail, navigatesTo: "/student/onboarding/probe" },
+    };
+    expect(onboardingDoor("student", 409, named, LESSON)).toBe(
+      "/student/onboarding/probe",
+    );
+  });
+});
+
+describe("returnPathOf - only a plain student page is a way back", () => {
+  it("takes a lesson link, with and without its assignment", () => {
+    const lesson = "/student/lessons/9c1e77aa-1111-4222-8333-444455556666";
+    expect(returnPathOf(lesson)).toBe(lesson);
+    expect(
+      returnPathOf(`${lesson}?assignment=7d2f1e4b-1111-4222-8333-999988887777`),
+    ).toBe(`${lesson}?assignment=7d2f1e4b-1111-4222-8333-999988887777`);
+    expect(returnPathOf("/student/lessons/x?assignment=a%2Db")).toBe(
+      "/student/lessons/x?assignment=a%2Db",
+    );
+    expect(returnPathOf("/student/dashboard")).toBe("/student/dashboard");
+  });
+
+  it("never takes an onboarding route", () => {
+    for (const onboarding of [
+      "/student/onboarding",
+      "/student/onboarding/",
+      "/student/onboarding/continue",
+      "/student/onboarding/continue?next=%2Fstudent%2Flessons%2Fx",
+      "/student/onboarding/sequence",
+      "/student/onboardingx",
+    ]) {
+      expect(returnPathOf(onboarding)).toBeNull();
+    }
+  });
+
+  it("never takes anything that could leave the student app", () => {
+    for (const elsewhere of [
+      "//evil.com",
+      "//evil.com/student/lessons/x",
+      "/student//evil.com",
+      "/student//lessons/x",
+      "/student/lessons//x",
+      "/student/../x",
+      "/student/lessons/x/..",
+      "/student/lessons/x.html",
+      "https://evil.com/student/lessons/x",
+      "/student\\lessons\\x",
+      "/student/lessons/x\\",
+      "/student/lessons/x?next=https://evil.com",
+      "/student/lessons/x?next=//evil.com",
+      "/student/lessons/x#top",
+      "/student/lessons/x?a=b c",
+      "/teacher/classes/c-1",
+      "/admin",
+      "/student",
+      "student/lessons/x",
+      "",
+    ]) {
+      expect(returnPathOf(elsewhere)).toBeNull();
+    }
+  });
+
+  it("never takes a value that is not one string", () => {
+    for (const odd of [null, undefined, 42, ["/student/lessons/x"], {}]) {
+      expect(returnPathOf(odd)).toBeNull();
+    }
   });
 });
 

@@ -345,7 +345,9 @@ function holdIfWithdrawn(status: number, detail: unknown): void {
  * A child the server will not let learn until onboarding is finished
  * (409 `onboarding_required`, SCRUM-244) goes to finish it, rather than
  * meeting the lesson's "Something went wrong". The decision is
- * `onboardingDoor`; this acts on it, once, behind the same latch.
+ * `onboardingDoor`; this acts on it, once, behind the same latch. The page
+ * that was refused goes with them, query and all, so finishing takes them
+ * back to the lesson they tapped Start on (20 Oct production run).
  */
 function finishOnboardingIfRequired(status: number, detail: unknown): void {
   if (typeof window === "undefined" || redirecting) return;
@@ -354,6 +356,7 @@ function finishOnboardingIfRequired(status: number, detail: unknown): void {
     status,
     detail,
     window.location.pathname,
+    window.location.search,
   );
   if (!door) return;
   redirecting = true;

@@ -51,6 +51,10 @@ export function InteractiveSegment({
           <li key={i}>
             <button
               type="button"
+              // Named on the button itself, as the visible card reads: its
+              // text sits only in nested spans, the pattern the 20 Oct
+              // production run's accessibility read found unnamed.
+              aria-label={`Step ${i + 1}: ${step}`}
               aria-pressed={done[i]}
               onClick={() => toggle(i)}
               className={cn(

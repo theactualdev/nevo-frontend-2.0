@@ -157,12 +157,12 @@ function signIn(userId = "student-1") {
  * module registry is reset before the route is mounted again. The tab's
  * `sessionStorage` is all that survives, as it would.
  */
-async function arriveAgain() {
+async function arriveAgain(props: { returnTo?: string } = {}) {
   cleanup();
   replace.mockClear();
   vi.resetModules();
   const { OnboardingResume: Fresh } = await import("./OnboardingResume");
-  return render(<Fresh />);
+  return render(<Fresh {...props} />);
 }
 
 beforeEach(() => {
@@ -474,5 +474,167 @@ describe("a visitor with no session", () => {
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/auth/login"));
     expect(readiness).not.toHaveBeenCalled();
+  });
+
+  it("is sent there even with a lesson to go back to", async () => {
+    clearSession();
+    render(<OnboardingResume returnTo="/student/lessons/les-1" />);
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/auth/login"));
+    expect(replace).not.toHaveBeenCalledWith("/student/lessons/les-1");
+  });
+});
+
+/*
+ * BACK TO THE LESSON THEY TAPPED START ON, from the 20 Oct production run: a
+ * child sent here by a lesson's refusal finished the probe and landed on
+ * Home. Every way out that means "onboarding is done" goes back; the
+ * nothing-state's own button still goes Home.
+ */
+describe("the way back to the page that was refused", () => {
+  const LESSON = "/student/lessons/les-1?assignment=asg-1";
+
+  it("goes back for a child with all four done on arrival", async () => {
+    readiness.mockResolvedValue(ALL_DONE);
+    render(<OnboardingResume returnTo={LESSON} />);
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
+    expect(replace).not.toHaveBeenCalledWith(HOME);
+  });
+
+  it("goes back once Module 4 is sat", async () => {
+    readiness.mockResolvedValue(THREE_DONE);
+    render(<OnboardingResume returnTo={LESSON} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "after probe" }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
+    expect(replace).not.toHaveBeenCalledWith(HOME);
+  });
+
+  it("goes back when the server already holds Module 4", async () => {
+    // The three and the probe held, readiness not yet saying complete.
+    readiness.mockResolvedValue({ ...ALL_DONE, complete: false });
+    render(<OnboardingResume returnTo={LESSON} />);
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("goes back on the one-time move on, and offers Home the next time", async () => {
+    readiness.mockResolvedValue(NOTHING_TO_ASK);
+    render(<OnboardingResume returnTo={LESSON} />);
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
+
+    // The lesson refused again: here again, and this time they stay.
+    await arriveAgain({ returnTo: LESSON });
+
+    const home = await screen.findByRole("button", { name: "Home" });
+    await act(async () => {});
+    expect(replace).not.toHaveBeenCalled();
+    fireEvent.click(home);
+    expect(replace).toHaveBeenCalledWith(HOME);
+  });
+
+  it("goes back once, then Home, while the lesson still refuses a child readiness calls done", async () => {
+    /*
+     * 21 Oct on-screen check: readiness `complete: true`, the lesson's read
+     * still 409 `onboarding_required` - lesson, here, lesson, here, every few
+     * seconds, for ever. The second arrival goes Home, as before the way back.
+     */
+    readiness.mockResolvedValue(ALL_DONE);
+    render(<OnboardingResume returnTo={LESSON} />);
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
+
+    await arriveAgain({ returnTo: LESSON });
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
+    expect(replace).not.toHaveBeenCalledWith(LESSON);
+    // Home, not the nothing-state: readiness says onboarding is done.
+    expect(screen.queryByRole("button", { name: "Home" })).toBeNull();
+  });
+
+  it("goes Home the next time after Module 4 is sat, if the lesson still refuses", async () => {
+    readiness.mockResolvedValue(THREE_DONE);
+    render(<OnboardingResume returnTo={LESSON} />);
+    fireEvent.click(await screen.findByRole("button", { name: "after probe" }));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
+
+    readiness.mockResolvedValue(ALL_DONE);
+    await arriveAgain({ returnTo: LESSON });
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
+    expect(replace).not.toHaveBeenCalledWith(LESSON);
+  });
+
+  it("keeps its first answer through a re-render before the page has left", async () => {
+    // The claim is spent when it is read: the effect running again on the
+    // same arrival must not read it twice and turn the way back into Home.
+    readiness.mockResolvedValue(ALL_DONE);
+    const { rerender } = render(<OnboardingResume returnTo={LESSON} />);
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
+
+    rerender(<OnboardingResume returnTo={LESSON} />);
+    await act(async () => {});
+
+    expect(replace).not.toHaveBeenCalledWith(HOME);
+  });
+
+  it("still goes back to another lesson the child is refused", async () => {
+    readiness.mockResolvedValue(ALL_DONE);
+    render(<OnboardingResume returnTo={LESSON} />);
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
+
+    await arriveAgain({ returnTo: "/student/lessons/les-2" });
+
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith("/student/lessons/les-2"),
+    );
+  });
+
+  it("still goes back for another child on the same tablet", async () => {
+    readiness.mockResolvedValue(ALL_DONE);
+    render(<OnboardingResume returnTo={LESSON} />);
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
+
+    clearSession();
+    signIn("student-2");
+    await arriveAgain({ returnTo: LESSON });
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
+  });
+
+  it("goes Home when the way back cannot be recorded", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    readiness.mockResolvedValue(ALL_DONE);
+    try {
+      render(<OnboardingResume returnTo={LESSON} />);
+
+      await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
+      expect(replace).not.toHaveBeenCalledWith(LESSON);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("goes Home when there is nothing to go back to", async () => {
+    readiness.mockResolvedValue(ALL_DONE);
+    render(<OnboardingResume />);
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
+  });
+
+  it("keeps the nothing-state's button Home, a lesson to go back to or not", async () => {
+    readiness.mockRejectedValue(new ApiError(0, "offline"));
+    render(<OnboardingResume returnTo={LESSON} />);
+
+    const home = await screen.findByRole("button", { name: "Home" });
+    await act(async () => {});
+    expect(replace).not.toHaveBeenCalled();
+    fireEvent.click(home);
+    expect(replace).toHaveBeenCalledWith(HOME);
+    expect(replace).not.toHaveBeenCalledWith(LESSON);
   });
 });
