@@ -83,8 +83,12 @@ export function FormatGroup({
             aria-pressed={isCurrent}
             data-recommended={marked || undefined}
             onClick={() => onPick(format)}
+            // NO TRANSITION (the 21 Oct brief: the marker "never animates"). A
+            // colour fade moved the lavender fill over 150ms whenever the
+            // recommendation or the current pill changed - the on-screen
+            // check of 21 Oct caught it. Changes land at once.
             className={cn(
-              "flex h-11 cursor-pointer items-center justify-center rounded-full px-4 text-[13px] font-medium whitespace-nowrap transition-colors",
+              "flex h-11 cursor-pointer items-center justify-center rounded-full px-4 text-[13px] font-medium whitespace-nowrap",
               isCurrent && "bg-nevo-navy text-nevo-cream",
               marked && "bg-nevo-violet/50 text-nevo-near-black",
               !isCurrent &&
