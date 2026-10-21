@@ -514,12 +514,14 @@ export function LessonPlayer({
   const [ending, setEnding] = useState<SessionOutcome | null>(null);
   /*
    * WHAT THE CHILD SAW APPLIED (B42), counted where it reaches the screen:
-   * the system's reshape of the text, a modality change from an offer taken,
-   * a hint, and since B74 (8 Oct) a Socratic panel rendered and a density
-   * spacing changed mid-session - not the one the lesson opened on. Not
-   * offers, not instructions the screen could not show, and not the child's
-   * own picks. The count rides the session envelope and the
-   * moment feeds the engine's cooldown - see `AppliedAdaptations`.
+   * the system's reshape of the text, a hint, and since B74 (8 Oct) a
+   * Socratic panel rendered and a density spacing changed mid-session - not
+   * the one the lesson opened on. Not offers, not instructions the screen
+   * could not show, and not the child's own picks - which since 21 Oct is
+   * every change of format: the engine's offer a modality change came from
+   * is gone, and its recommendation is only a marker in the format group.
+   * The count rides the session envelope and the moment feeds the engine's
+   * cooldown - see `AppliedAdaptations`.
    */
   const applied = useRef<AppliedAdaptations>({ count: 0, lastAt: null });
   const noteApplied = useCallback(() => {
@@ -1117,9 +1119,9 @@ export function LessonPlayer({
    * THE ENGINE'S NEWEST WORD ON A SEGMENT, over what it said at load.
    *
    * Merged rather than replaced: an in-lesson row carries the segment's
-   * modality, scaffold and suggestion, and nothing about breaks - so the
-   * load-time plan's planned and offered breaks survive the engine
-   * reconsidering the rest.
+   * modality, scaffold, formats and recommendation, and nothing about
+   * breaks - so the load-time plan's planned and offered breaks survive the
+   * engine reconsidering the rest.
    */
   const livePlanFor = (segmentId: string) => {
     const base = planFor(segmentId);
@@ -1217,8 +1219,8 @@ export function LessonPlayer({
    * D148: "SEGMENT 3 OF 10" IS SAID ONCE, WHEN THE SEGMENT OPENS - "not on
    * every interaction inside it" (design, 8 Oct). It is the group's name, so a
    * screen reader says it whenever focus lands on the group or comes back
-   * into it. Two things inside a segment did that: a modality taken from the
-   * suggestion rebuilds the body and focus lands on it again, and a child who
+   * into it. Two things inside a segment did that: a format picked in the
+   * format group rebuilds the body and focus lands on it again, and a child who
    * stepped out to the chips or the hint and came back walked into it again.
    * So the name is dropped for the rest of the visit once focus has left the
    * group, and a rebuild for a new modality comes up without it. A new
