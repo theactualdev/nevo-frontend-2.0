@@ -394,7 +394,38 @@ describe("planProbe, for the lesson a child was refused", () => {
     ]);
   });
 
-  it("reads readiness again for the lesson, when the lesson's subject has nothing to ask", async () => {
+  /*
+   * The 21 Oct dead end: "available" is per subject, the lesson-scoped `next`
+   * serves only the lesson's concepts, so a lesson whose concepts have no
+   * items answers ProbeEmpty beside an "available" readiness. Teslim's answer
+   * 3: "If another eligible subject has questions, use that subject; an empty
+   * subject alone must not waive module 4."
+   */
+  it("asks another subject, unscoped, when the lesson has nothing to ask", async () => {
+    next.mockImplementation(async (id: string, lessonId?: string) =>
+      lessonId || id !== "sub-maths" ? empty(id) : item(id, "maths-1"),
+    );
+    readiness.mockResolvedValue(forLesson([MATHS, BIOLOGY], "available", "sub-bio"));
+
+    const plan = await planProbe(
+      forLesson([MATHS, BIOLOGY], "available", "sub-bio"),
+      LESSON,
+    );
+
+    expect(plan).toEqual({
+      kind: "ask",
+      openings: [{ subject: MATHS, item: item("sub-maths", "maths-1"), suggested: false }],
+    });
+    // Run unscoped throughout: the opening carries no lesson for its answers.
+    expect(plan.kind === "ask" && "lessonId" in plan.openings[0]).toBe(false);
+    // The lesson's subject with the lesson, then every subject without it.
+    expect(next.mock.calls).toEqual([["sub-bio", LESSON], ["sub-maths"], ["sub-bio"]]);
+    // A subject had questions: nothing to read again, nothing to report.
+    expect(readiness).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it("reads readiness again for the lesson and follows it when neither the lesson nor any subject has anything to ask", async () => {
     next.mockImplementation(async (id: string) => empty(id));
     readiness.mockResolvedValue(noBank());
 
@@ -402,7 +433,26 @@ describe("planProbe, for the lesson a child was refused", () => {
       planProbe(forLesson([MATHS, BIOLOGY], "available", "sub-bio"), LESSON),
     ).resolves.toEqual({ kind: "unavailable" });
     expect(readiness.mock.calls).toEqual([[LESSON]]);
+    expect(next.mock.calls).toEqual([["sub-bio", LESSON], ["sub-maths"], ["sub-bio"]]);
+  });
+
+  it("reads readiness again, asking no other subject, when the lesson's run is finished before a question", async () => {
+    // Every finish from `next` has just recorded Module 4 (`probe._finish`):
+    // Teslim's answer 2, "Read onboarding again for the authoritative next
+    // step" - not a probe in another subject for a module already in.
+    next.mockImplementation(async (id: string, lessonId?: string) =>
+      lessonId ? finished(id) : item(id, `first-${id}`),
+    );
+    readiness.mockResolvedValue({
+      ...forLesson([MATHS, BIOLOGY], "available", "sub-bio"),
+      ...ready([MATHS, BIOLOGY], true),
+    });
+
+    await expect(
+      planProbe(forLesson([MATHS, BIOLOGY], "available", "sub-bio"), LESSON),
+    ).resolves.toEqual({ kind: "held" });
     expect(next.mock.calls).toEqual([["sub-bio", LESSON]]);
+    expect(readiness.mock.calls).toEqual([[LESSON]]);
   });
 
   it("asks the child's subjects without the lesson when the lesson's subject cannot be asked, and moves nobody on for it", async () => {
@@ -435,9 +485,14 @@ describe("planProbe, for the lesson a child was refused", () => {
   });
 
   it("is failed - no other subject asked in its place - when the server refuses the lesson's subject", async () => {
-    next.mockRejectedValue(
-      new ApiError(409, "x", { detail: { code: "probe_subject_mismatch" } }),
-    );
+    // A refusal is not an empty bank: no fallback, though Mathematics, asked
+    // unscoped, would have had a question.
+    next.mockImplementation(async (id: string, lessonId?: string) => {
+      if (lessonId) {
+        throw new ApiError(409, "x", { detail: { code: "probe_subject_mismatch" } });
+      }
+      return item(id, `first-${id}`);
+    });
 
     await expect(
       planProbe(forLesson([MATHS, BIOLOGY], "available", "sub-bio"), LESSON),

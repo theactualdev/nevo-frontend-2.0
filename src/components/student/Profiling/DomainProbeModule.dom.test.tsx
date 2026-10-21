@@ -784,4 +784,30 @@ describe("a probe for the lesson a child was refused", () => {
     expect(readiness).toHaveBeenCalledWith(LESSON);
     expect(next.mock.calls).toEqual([["sub-maths", LESSON]]);
   });
+
+  it("asks another subject, and sends its answers without the lesson, when the lesson has nothing to ask", async () => {
+    // The 21 Oct dead end: English is "available", but has nothing on the
+    // lesson's concepts. Teslim's answer 3: use another subject with
+    // questions. Its run is unscoped: with the lesson, the server would
+    // refuse a subject that is not the lesson's.
+    readiness.mockResolvedValue({
+      ...ready([MATHS, ENGLISH]),
+      probeSubjectId: "sub-eng",
+      lessonProbeStatus: "available",
+      returnTo: LESSON_PATH,
+    });
+    next.mockImplementation(async (id: string, lessonId?: string) =>
+      lessonId || id !== "sub-maths" ? { ...EMPTY, subjectId: id } : Q1,
+    );
+    answer.mockReturnValue(new Promise(() => {}));
+    renderStep({ lessonId: LESSON });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Cat" }));
+
+    expect(next.mock.calls).toEqual([["sub-eng", LESSON], ["sub-maths"], ["sub-eng"]]);
+    expect(answer.mock.calls).toStrictEqual([
+      ["sub-maths", { itemId: "item-1", chosenOption: "opt-cat" }],
+    ]);
+    expect(onDone).not.toHaveBeenCalled();
+  });
 });

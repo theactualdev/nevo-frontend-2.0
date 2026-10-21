@@ -57,7 +57,9 @@ export interface ProbeOpening {
   /**
    * The lesson this subject's run is asked about, sent on every `next` and
    * `answer` of it (SCRUM-266) - present only when readiness, read for that
-   * lesson, says its subject is this one and has items (`lessonScope`).
+   * lesson, says its subject is this one and has items (`lessonScope`), and
+   * the lesson's own read gave this item. Absent on the unscoped fallback
+   * (`planFrom`), whose answers the server would refuse with the lesson.
    */
   lessonId?: string;
 }
@@ -104,8 +106,9 @@ export type ProbeOpenings = [ProbeOpening, ...ProbeOpening[]];
  * limit items to the lesson's concepts - and refuse any other subject with
  * 409 `probe_subject_mismatch`. So a run is for the lesson ONLY WHEN THE
  * SERVER SAYS ITS SUBJECT CAN BE: `lessonProbeStatus: "available"`, with
- * that subject as `probeSubjectId`. Then that subject alone is asked, with
- * the lesson - every other would be refused - and it is the suggested one.
+ * that subject as `probeSubjectId`. Then that subject alone is asked first,
+ * with the lesson - every other would be refused - and it is the suggested
+ * one. (If it has nothing on the lesson's concepts, see `planFrom`.)
  *
  * `unavailable` or `subject_unmapped` - the lesson's subject has no items, or
  * is none of the child's - is the lesson saying nothing about Module 4, which
@@ -123,23 +126,95 @@ function lessonScope(
   return subjectId ? { lessonId, subjectId } : null;
 }
 
+/** What one round of first reads found, before it is a plan. */
+interface FirstReads {
+  /** The subjects that answered with an item, each with that item. */
+  openings: ProbeOpening[];
+  /** A read was refused or never landed. */
+  failed: boolean;
+  /** A subject's run was finished before anything was asked. */
+  finished: boolean;
+}
+
+/**
+ * Each subject's first `next`, in parallel - with the lesson, when given one.
+ *
+ * `next` is the server's read of where this child's run is (`probe.
+ * next_question`), so it is asked of every subject handed in, and a subject
+ * is offered only if it answered with an item.
+ */
+async function readFirsts(
+  readiness: LearningReadiness,
+  subjects: OnboardingSubject[],
+  lessonId?: string,
+): Promise<FirstReads> {
+  const firsts = await Promise.allSettled(
+    subjects.map((s) =>
+      lessonId ? probeApi.next(s.subjectId, lessonId) : probeApi.next(s.subjectId),
+    ),
+  );
+  const found: FirstReads = { openings: [], failed: false, finished: false };
+  firsts.forEach((first, i) => {
+    if (first.status === "rejected") {
+      found.failed = true;
+      return;
+    }
+    const kind = probeStepKind(first.value);
+    if (kind === "finished") found.finished = true;
+    if (kind !== "question") return;
+    found.openings.push({
+      subject: subjects[i],
+      item: first.value as ProbeQuestion,
+      suggested: subjects[i].subjectId === readiness.probeSubjectId,
+      ...(lessonId ? { lessonId } : {}),
+    });
+  });
+  return found;
+}
+
+/** Ask what answered; failed if nothing did and a read failed; else nothing. */
+function planOf({ openings, failed }: FirstReads): ProbePlan | undefined {
+  const [first, ...rest] = openings;
+  if (first) return { kind: "ask", openings: [first, ...rest] };
+  return failed ? { kind: "failed" } : undefined;
+}
+
 /**
  * One readiness, read through: the server's status, then each subject it
- * says has items - only the lesson's own, when the server says the lesson
+ * says has items - the lesson's own first, when the server says the lesson
  * can be asked about (`lessonScope`). Undefined when nothing gave a question
  * and no read failed - the case Teslim's 21 Oct answers send back to
  * readiness.
- *
- * `next` is the server's read of where this child's run is - a GET that writes
- * nothing (`probe.next_question`) - so it is asked of every subject the
- * readiness says has items, in parallel, and a subject is offered only if it
- * answered with an item.
  *
  * UNAVAILABLE BEFORE COMPLETED. The server sends a probe with no bank as
  * `completed: true, status: "unavailable"` (Teslim, 19 Oct). Read as held,
  * it ended Module 4 as sat, and the quest map kept a fourth stop for a
  * module that never ran - against design's 9 Oct rule, "A child who will do
  * three sees three segments".
+ *
+ * A LESSON WITH NOTHING TO ASK FALLS BACK TO ANY SUBJECT THAT HAS. The
+ * server's `lessonProbeStatus: "available"` is per subject - the lesson's
+ * subject has items somewhere - while its lesson-scoped `next` serves only
+ * items on the lesson's own concepts. So a lesson whose concepts have none
+ * answers `ProbeEmpty` beside an "available" readiness, and before this
+ * fallback that was the 21 Oct dead end: the re-read said the same,
+ * `nothingToAsk`, the nothing-state, and the child could never open the
+ * lesson - where, unscoped, another subject had questions. Teslim's answer
+ * 3, 21 Oct: "If another eligible subject has questions, use that subject;
+ * an empty subject alone must not waive module 4." So an empty lesson-scoped
+ * read is asked once more UNSCOPED - every subject with items, no lesson
+ * sent, as with no lesson at all - and a subject that answers is run
+ * unscoped throughout (the server would refuse its answers sent with the
+ * lesson). Readiness keeps the lesson either way, so the way back is still
+ * the lesson.
+ *
+ * NOT A REFUSAL, A FAILURE OR A FINISH. 409 `probe_subject_mismatch`, or a
+ * read that never landed, is `failed`: a refusal is not an empty bank. And a
+ * `ProbeFinished` before any question is not one either: every finish the
+ * server sends from `next` has just recorded `domain_probe` as done
+ * (`probe._finish`), so another subject would be a probe for a module
+ * already in - Teslim's answer 2, "Read onboarding again for the
+ * authoritative next step", which the caller does.
  */
 async function planFrom(
   readiness: LearningReadiness,
@@ -147,34 +222,19 @@ async function planFrom(
 ): Promise<ProbePlan | undefined> {
   if (moduleUnavailable(readiness, DOMAIN_PROBE)) return { kind: "unavailable" };
   if (moduleCompleted(readiness, DOMAIN_PROBE)) return { kind: "held" };
+  const open = readiness.subjects.filter((s) => s.probeAvailable);
   const scope = lessonScope(readiness, lessonId);
-  const open = readiness.subjects.filter(
-    (s) => s.probeAvailable && (!scope || s.subjectId === scope.subjectId),
-  );
-
-  const firsts = await Promise.allSettled(
-    open.map((s) =>
-      scope
-        ? probeApi.next(s.subjectId, scope.lessonId)
-        : probeApi.next(s.subjectId),
-    ),
-  );
-  const openings: ProbeOpening[] = [];
-  let failed = false;
-  firsts.forEach((first, i) => {
-    if (first.status === "rejected") failed = true;
-    else if (probeStepKind(first.value) === "question") {
-      openings.push({
-        subject: open[i],
-        item: first.value as ProbeQuestion,
-        suggested: open[i].subjectId === readiness.probeSubjectId,
-        ...(scope ? { lessonId: scope.lessonId } : {}),
-      });
-    }
-  });
-  const [first, ...rest] = openings;
-  if (first) return { kind: "ask", openings: [first, ...rest] };
-  return failed ? { kind: "failed" } : undefined;
+  if (scope) {
+    const forLesson = await readFirsts(
+      readiness,
+      open.filter((s) => s.subjectId === scope.subjectId),
+      scope.lessonId,
+    );
+    const emptyForLesson =
+      !forLesson.openings.length && !forLesson.failed && !forLesson.finished;
+    if (!emptyForLesson) return planOf(forLesson);
+  }
+  return planOf(await readFirsts(readiness, open));
 }
 
 /**
