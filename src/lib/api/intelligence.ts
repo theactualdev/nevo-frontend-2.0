@@ -160,6 +160,14 @@ export interface SegmentAdaptationResponse {
   /** `ScaffoldingLevel` - none | light | standard | strong. */
   scaffolding: string;
   priority: number;
+  /**
+   * SCRUM-272, 21 Oct: the same availability and recommendation as the
+   * lesson read's section (`LessonSegment.availableFormats`), as of this
+   * answer - so the fresher of the two is read. Optional: an answer from
+   * before them carries neither.
+   */
+  availableFormats?: string[];
+  recommendedFormat?: string | null;
 }
 
 export interface BreakSuggestionResponse {
@@ -215,6 +223,11 @@ export interface AdaptResponse {
      */
     segmentId?: string | null;
   } | null;
+  /**
+   * DEPRECATED AND ALWAYS NULL since 21 Oct: "Retired separate pill. Use each
+   * segment's recommendedFormat in its format control" (spec). Read by
+   * nothing - the pill it fed is gone (SCRUM-271/272).
+   */
   modalitySuggestion: ModalitySuggestionResponse | null;
 }
 

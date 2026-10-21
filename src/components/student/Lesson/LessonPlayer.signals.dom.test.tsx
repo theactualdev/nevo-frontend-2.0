@@ -83,7 +83,7 @@ const sent = (type: string) =>
     .map(([, payload]) => payload as Record<string, unknown>);
 
 const next = () => fireEvent.click(screen.getByRole("button", { name: "Next" }));
-/** The offer pills open a beat after they mount. */
+/** The break offer pill opens a beat after it mounts. */
 const beat = () =>
   act(() => {
     vi.advanceTimersByTime(1600);
@@ -109,7 +109,7 @@ afterEach(() => {
    * EVERY PAYLOAD EVERY TEST HERE DROVE OUT OF THE PLAYER, unmount included,
    * held to the keys the catalogue declares. The source scan in
    * `signals.catalogue.test.ts` cannot read a call whose type is a variable -
-   * the suggestion outcomes, the density chips - and these tests reach them.
+   * the density chips - and these tests reach them.
    */
   expect(offendingCalls(trackEvent.mock.calls)).toEqual([]);
 });
@@ -347,97 +347,68 @@ describe("every break event, against the catalogue", () => {
   });
 });
 
-describe("what became of a modality offer", () => {
-  const engineSuggests = (segmentId: string): typeof runtime.value => ({
+describe("the engine's recommendation, now there is no offer (21 Oct)", () => {
+  /*
+   * SCRUM-271 amended: the separate suggestion pill is gone, and the
+   * recommendation is a quiet marker in the format group with nothing to
+   * take, turn down or leave. So no `modality_suggestion_*` goes up, the
+   * engine is told nothing was offered or declined, and a pick - the
+   * child's own - sends no `modality_manual_switch`: the server writes that
+   * for a choice it stores (Teslim, 21 Oct).
+   */
+  const recommends = (segmentId: string): typeof runtime.value => ({
     offeredBreak: null,
     reason: null,
     forSegmentId: segmentId,
-    plan: { lessonId: "l-1", segments: [], suggestModality: "audio" },
+    plan: {
+      lessonId: "l-1",
+      segments: [
+        {
+          segmentId,
+          startModality: "text",
+          formats: ["text", "audio"],
+          recommendedFormat: "audio",
+        },
+      ],
+    },
   });
 
-  it("is sent when shown and when turned down, and the engine is told", () => {
-    runtime.value = engineSuggests("seg-1");
+  it("sends no offer events, whatever the child does with the marker", () => {
+    runtime.value = recommends("seg-1");
     render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
 
-    expect(sent("modality_suggestion_shown")).toEqual([
-      { segmentId: "seg-1", suggested: "audio" },
-    ]);
-    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
-    expect(sent("modality_suggestion_declined")).toEqual([
-      { segmentId: "seg-1", suggested: "audio" },
-    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Audio" }));
+    fireEvent.click(screen.getByRole("button", { name: "Text" }));
+    next();
+
+    const types = trackEvent.mock.calls.map(([t]) => t as string);
+    expect(types.filter((t) => t.startsWith("modality_suggestion"))).toEqual([]);
+    expect(types).not.toContain("modality_manual_switch");
+  });
+
+  it("tells the engine nothing was offered and nothing declined", () => {
+    runtime.value = recommends("seg-1");
+    render(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+    // A pick against the recommendation is not a decline of it.
+    fireEvent.click(screen.getByRole("button", { name: "Text" }));
+    next();
 
     const state = runtimeArgs.at(-1)![4] as Record<string, unknown>;
-    expect(state.sessionDeclineCount).toBe(1);
-    expect(state.declinedModalities).toEqual(["audio"]);
-  });
-
-  it("is sent as ignored when the child moves on past it", () => {
-    runtime.value = engineSuggests("seg-1");
-    render(<LessonPlayer lesson={THREE} plan={null} live />);
-    beat();
-
-    next();
-
-    expect(sent("modality_suggestion_ignored")).toEqual([
-      { segmentId: "seg-1", suggested: "audio" },
-    ]);
-  });
-
-  it("does not report one the player held back - the server writes that itself", () => {
-    runtime.value = engineSuggests("seg-1");
-    const { rerender } = render(<LessonPlayer lesson={THREE} plan={null} live />);
-    beat();
-    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
-    next();
-
-    // The engine suggests again for the very next segment - which the player
-    // never offers twice in a row.
-    runtime.value = engineSuggests("seg-2");
-    rerender(<LessonPlayer lesson={THREE} plan={null} live />);
-
-    // `adaptation_suppressed` is server-written (B37); sending it doubled the
-    // engine's count. The offer is still held back - it just isn't reported.
-    expect(sent("adaptation_suppressed")).toEqual([]);
-    expect(screen.queryByRole("button", { name: "Not now" })).toBeNull();
-  });
-
-  it("offers the engine's one load-time suggestion once, not on every other segment", () => {
-    const plan: AdaptationPlan = {
-      lessonId: "l-1",
-      segments: [],
-      suggestModality: "audio",
-    };
-    render(<LessonPlayer lesson={THREE} plan={plan} />);
-    beat();
-    expect(screen.getByRole("button", { name: "Yes, try it" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
-
-    next();
-    next(); // seg-3: not consecutive, and the old copy-per-row offered here
-    beat();
-
-    expect(screen.queryByRole("button", { name: "Yes, try it" })).toBeNull();
+    expect(state.sessionDeclineCount).toBe(0);
+    expect(state.declinedModalities).toEqual([]);
+    expect(state.sameSegmentSuggestionShown).toBe(false);
+    expect(state.segmentsSinceLastSuggestion).toBeNull();
   });
 });
 
 describe("what became of a switch the child took (B73/B104)", () => {
-  /** Takes the engine's offer of audio on seg-1 at `at` ms, and lets it land. */
+  /** Picks audio on seg-1 at `at` ms, in the format group. */
   const takeSwitch = (at: number) => {
-    runtime.value = {
-      offeredBreak: null,
-      reason: null,
-      forSegmentId: "seg-1",
-      plan: { lessonId: "l-1", segments: [], suggestModality: "audio" },
-    };
     const view = render(<LessonPlayer lesson={THREE} plan={null} live />);
-    beat();
     now = at;
-    fireEvent.click(screen.getByRole("button", { name: "Yes, try it" }));
-    act(() => {
-      vi.advanceTimersByTime(300);
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Audio" }));
     return view;
   };
 
@@ -476,16 +447,10 @@ describe("what became of a switch the child took (B73/B104)", () => {
     ]);
   });
 
-  it("is not sent for an offer turned down or never answered", () => {
-    runtime.value = {
-      offeredBreak: null,
-      reason: null,
-      forSegmentId: "seg-1",
-      plan: { lessonId: "l-1", segments: [], suggestModality: "audio" },
-    };
+  it("is not sent for a segment the child left in the format it opened in", () => {
     const { unmount } = render(<LessonPlayer lesson={THREE} plan={null} live />);
-    beat();
-    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    // The pill already on screen is no switch.
+    fireEvent.click(screen.getByRole("button", { name: "Text" }));
     next();
     unmount();
 
@@ -668,32 +633,6 @@ describe("a wait the system owns", () => {
 
     expect(sent("system_busy")).toEqual([
       { reason: "blocked_by_modal", durationMs: 800 },
-    ]);
-  });
-
-  it("goes up for a switch the child left before it finished", () => {
-    /*
-     * "Yes, try it" opens the switch's window and the switch itself closes
-     * it, a beat later. Leaving inside that beat clears the switch, so only
-     * the player's own unmount can send the wait - with no length, it would
-     * have no way to go up at all.
-     */
-    runtime.value = {
-      offeredBreak: null,
-      reason: null,
-      forSegmentId: "seg-1",
-      plan: { lessonId: "l-1", segments: [], suggestModality: "audio" },
-    };
-    const { unmount } = render(<LessonPlayer lesson={THREE} plan={null} live />);
-    beat();
-    now = 5_000;
-    fireEvent.click(screen.getByRole("button", { name: "Yes, try it" }));
-
-    now = 5_120;
-    unmount();
-
-    expect(sent("system_busy")).toEqual([
-      { reason: "modality_switch", durationMs: 120 },
     ]);
   });
 });

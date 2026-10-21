@@ -43,6 +43,7 @@ import type {
   DensityLevel,
   Lesson,
   LessonSegment,
+  SegmentAdaptation,
 } from "@/lib/types";
 import { cn, randomId } from "@/lib/utils";
 import {
@@ -104,11 +105,11 @@ import { BreakScreen } from "./BreakScreen";
 import { CalculationBoundary } from "./CalculationBoundary";
 import { CalculationSolver, type StepGiven } from "./CalculationSolver";
 import { FeedbackStrip } from "./FeedbackStrip";
+import { FormatGroup } from "./FormatGroup";
 import { InteractiveSegment } from "./InteractiveSegment";
 import { LeaveLessonDialog } from "./LeaveLessonDialog";
 import { LessonComplete } from "./LessonComplete";
 import { LessonMessage } from "./LessonMessage";
-import { ModalitySuggestionPill } from "./ModalitySuggestionPill";
 import { ModuleBoundaryScreen } from "./ModuleBoundaryScreen";
 import { OfflineBanner } from "./OfflineBanner";
 import { ONE_MORE_BIT, PressedLine } from "./PressedLine";
@@ -178,6 +179,12 @@ const FEEDBACK_MS = 3500;
 const COMPLETED: SessionOutcome = { completionStatus: "completed" };
 
 /**
+ * Every sitting's declined modalities now there is no offer to decline. One
+ * array, so the engine's request is not rebuilt for a new empty one.
+ */
+const NONE_DECLINED: string[] = [];
+
+/**
  * SCRUM-181's nothing-landed screen (design D35), verbatim. ONE ACTION, AND
  * IT GOES FORWARD (Lydia, D155, 13 Oct): "Start again" read as though the
  * work just done had been thrown away, when the child is going into a
@@ -234,11 +241,23 @@ function hasContent(segment: LessonSegment, modality: Modality): boolean {
   }
 }
 
-/** The modality a segment opens in: the plan's choice, else the first renderable one. */
+/**
+ * The modality a segment opens in: the child's own choice for it, else the
+ * plan's, else the first renderable one.
+ *
+ * THE CHILD'S CHOICE OUTRANKS THE ENGINE FOR THAT SEGMENT (Lydia, 21 Oct): a
+ * plan row naming another format - at load or mid-lesson - does not move a
+ * child off the one they picked. Only for that segment: the next opens as
+ * the plan says. And with no pick the opening is exactly what it was before
+ * the format group - "don't change format selection logic yet, the cold
+ * start is a decision I am making separately" (same message).
+ */
 function openingModality(
   segment: LessonSegment,
   planned: Modality | undefined,
+  chosen?: Modality,
 ): Modality {
+  if (chosen && hasContent(segment, chosen)) return chosen;
   if (planned && hasContent(segment, planned)) return planned;
   return (
     segment.modalities.find((m) => hasContent(segment, m)) ?? MODALITY.TEXT
@@ -246,8 +265,40 @@ function openingModality(
 }
 
 /**
+ * The format group's pills for a segment (SCRUM-272), in the server's order:
+ * its freshest `availableFormats` - an engine answer's over the lesson's own
+ * read - and, for a payload with none and for the authored walkthrough, the
+ * segment's `modalities` as before. Only what can be drawn here: a
+ * calculation is the solver alone, and a picture that failed its own review
+ * is not offered whatever a list says.
+ */
+function formatsOf(
+  segment: LessonSegment,
+  row: SegmentAdaptation | undefined,
+): Modality[] {
+  const listed = row?.formats ?? segment.formats ?? segment.modalities;
+  return [...new Set(listed)].filter((m) => hasContent(segment, m));
+}
+
+/**
+ * The format the server recommends for a segment, from the same read the
+ * pills came from - or none. NEVER WORKED OUT HERE (Lydia, 21 Oct: "do not
+ * derive it in the player"), and none at all where the pills are the
+ * segment's own `modalities`: a payload with no formats list carries no
+ * recommendation to go with it.
+ */
+function recommendationOf(
+  segment: LessonSegment,
+  row: SegmentAdaptation | undefined,
+): Modality | null {
+  if (row?.formats) return row.recommendedFormat ?? null;
+  if (segment.formats) return segment.recommendedFormat ?? null;
+  return null;
+}
+
+/**
  * Lesson Player (screen 17) — the immersive reading/learning shell. Slices 1–4:
- * the spine, all four modalities, reading density, the modality suggestion, the
+ * the spine, all four modalities, reading density, the format group, the
  * inline Quick Check, the after-lesson assessment, completion, the leave dialog,
  * and system states. Slice 5 wires signal collection (`useSignals`) across every
  * interaction and publishes the session into `LessonContext`.
@@ -500,14 +551,19 @@ export function LessonPlayer({
     segmentId: string;
     level: DensityLevel | null;
   }>(() => ({ segmentId: first.id, level: firstPlan?.densityLevel ?? null }));
-  const [modality, setModality] = useState<Modality>(
-    openingModality(first, firstPlan?.startModality),
+  /*
+   * THE FORMAT THE CHILD CHOSE FOR EACH SEGMENT, this sitting (SCRUM-272).
+   *
+   * Segment-level and nothing more (rule 1): a choice is about one section
+   * of one lesson, and it opens that section in it again - a return visit, or
+   * (with the server's copy) a reload. It never carries to the next segment,
+   * and nothing here describes the child.
+   */
+  const [chosen, setChosen] = useState<ReadonlyMap<string, Modality>>(
+    () => new Map(),
   );
-  // The system gets ONE suggestion per segment; taking or declining it spends it.
-  const [suggestionSpent, setSuggestionSpent] = useState(false);
-  // …and never offers on consecutive segments (17 doc page).
-  const [lastSuggestedIndex, setLastSuggestedIndex] = useState<number | null>(
-    null,
+  const [modality, setModality] = useState<Modality>(() =>
+    openingModality(first, firstPlan?.startModality, chosen.get(first.id)),
   );
 
   // Segments whose Quick Check has been answered correctly — only a correct
@@ -881,13 +937,17 @@ export function LessonPlayer({
    * WHAT THE ENGINE IS TOLD THE CHILD DID, as counts - see `RuntimeState`.
    * State rather than refs because the request is built from what renders.
    */
+  /*
+   * NO OFFER IS COUNTED ANY MORE. The declines, the offer shown on this
+   * segment and the segments since one was described the engine's separate
+   * suggestion pill, which is gone (SCRUM-271 amended, 21 Oct) - so they go up
+   * as what is now true of every sitting: nothing declined, nothing shown,
+   * none since. A pick in the format group is the child's own and is not a
+   * decline of anything, whatever the marker sits on.
+   */
   const [observed, setObserved] = useState({
     replays: 0,
     consecutiveErrors: 0,
-    declined: [] as Modality[],
-    declines: 0,
-    shownHere: false,
-    sinceShown: null as number | null,
     breaksTaken: 0,
   });
   const noteAnswer = (correct: boolean) =>
@@ -895,13 +955,6 @@ export function LessonPlayer({
       ...o,
       consecutiveErrors: correct ? 0 : o.consecutiveErrors + 1,
     }));
-  // The engine answer whose modality offer has been spent - see `suggested`.
-  const [spentSuggestionOf, setSpentSuggestionOf] =
-    useState<AdaptationPlan | null>(null);
-  // The offer on screen right now, for `ignored` when the child moves on.
-  const shownSuggestion = useRef<{ segmentId: string; suggested: Modality } | null>(
-    null,
-  );
   // Transient post-answer note that greets the next segment, then fades.
   const [feedback, setFeedback] = useState<string | null>(null);
   // Calculation segments the student has co-constructed to completion — the
@@ -956,10 +1009,11 @@ export function LessonPlayer({
       midpointReached: index >= Math.floor(lesson.segments.length / 2),
       replayCountOnSegment: observed.replays,
       consecutiveErrors: observed.consecutiveErrors,
-      declinedModalities: observed.declined,
-      sessionDeclineCount: observed.declines,
-      sameSegmentSuggestionShown: observed.shownHere,
-      segmentsSinceLastSuggestion: observed.sinceShown,
+      // No suggestion pill, so nothing offered or declined - see `observed`.
+      declinedModalities: NONE_DECLINED,
+      sessionDeclineCount: 0,
+      sameSegmentSuggestionShown: false,
+      segmentsSinceLastSuggestion: null,
       breaksTaken: observed.breaksTaken,
     },
     lesson,
@@ -1129,16 +1183,6 @@ export function LessonPlayer({
       const shownMs =
         clock.shownMs +
         (clock.since === null ? 0 : performance.now() - clock.since);
-      // An offer still on screen as the child moves on was neither taken nor
-      // turned down.
-      const offer = shownSuggestion.current;
-      if (offer?.segmentId === segId) {
-        shownSuggestion.current = null;
-        trackEvent(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_IGNORED, {
-          segmentId: segId,
-          suggested: offer.suggested,
-        });
-      }
       // B45: the text version on screen as the child left, stamped with the
       // segment like `chunkRead`. Unknown is left out rather than guessed.
       const depth =
@@ -1570,8 +1614,8 @@ export function LessonPlayer({
   // `offerHint` marks it as the hint is offered; the solver's own, as shown.
 
   // Break OFFERS (B.7): the plan names a break type to OFFER on this segment,
-  // or the engine suggests one mid-lesson. One ask on screen at a time - an
-  // offered break outranks (and suppresses) the modality suggestion.
+  // or the engine suggests one mid-lesson. The only ask the player puts on
+  // screen now the modality suggestion is gone (21 Oct).
   //
   // `offerBreak` BEING PRESENT IS THE INSTRUCTION now. It used to be gated on
   // the frustration state as well, so the plan could name a break and be
@@ -1596,59 +1640,33 @@ export function LessonPlayer({
   const offerTrigger = showOfferedBreak ? "affect_offer" : "engine_offer";
 
   /*
-   * THE ENGINE'S SUGGESTION IS ONE OFFER PER ANSWER. It is lesson-level (see
-   * `toAdaptationPlan`), so a mid-lesson answer is offered on the segment it
-   * was asked about, and the load-time one wherever it can first be drawn -
-   * once, and spent by being taken, turned down or left on screen. The
-   * per-segment `suggestModality` is the authored seam and keeps its own
-   * per-segment rule.
+   * THE FORMAT GROUP (SCRUM-272; Nevo Lesson Player Frame, 51b9e2a), where
+   * the engine's separate suggestion pill used to be. The pill is gone, and
+   * its accept-and-decline flow with it (SCRUM-271 amended, 21 Oct): the
+   * section's formats, the one on screen, and the server's recommendation -
+   * read, never worked out - which the group marks only where it differs
+   * from the one on screen. A single-format section has no group and no
+   * marker. The newest read of either wins: an engine answer over the
+   * lesson's own (`livePlanFor`).
    */
-  const engineSuggests = runtime.plan
-    ? runtime.forSegmentId === segment.id
-      ? (runtime.plan.suggestModality ?? null)
-      : null
-    : (plan?.suggestModality ?? null);
-  const authoredSuggests = segPlan?.suggestModality ?? null;
-  const suggestionFromEngine =
-    authoredSuggests === null && engineSuggests !== null && engine !== spentSuggestionOf;
-
-  // Offer the plan's suggestion only while it's renderable and not already
-  // showing. Rate-limits: never on consecutive segments, never on the first
-  // segment after a module boundary (SCRUM-101 - the student just made a
-  // transition decision; don't stack an adaptation offer on top of it), and
-  // never alongside a break offer.
-  const suggested = authoredSuggests ?? (suggestionFromEngine ? engineSuggests : null);
-  const offerable =
-    !suggestionSpent &&
-    suggested !== null &&
-    suggested !== modality &&
-    hasContent(segment, suggested);
-  const consecutive = lastSuggestedIndex === index - 1;
-  const afterBoundary = opensLaterModule(lesson, index);
-  const showSuggestion =
-    offerable && !showBreakOffer && !consecutive && !afterBoundary;
-
+  const formatsHere = formatsOf(segment, segPlan);
+  const recommendedHere = recommendationOf(segment, segPlan);
+  const showFormats = formatsHere.length >= 2;
   /*
-   * AN OFFER THE PLAYER'S OWN RULES HOLD BACK IS NOT REPORTED FROM HERE.
-   * `adaptation_suppressed` is server-written (backend, 5 Oct, B37): this
-   * player sent it too, from #623 until 6 Oct, which doubled every
-   * suppression the engine counted. See `SERVER_WRITTEN_EVENT_TYPES`.
+   * THE FORMAT ROW'S HEIGHT IS THE LESSON'S, as the chip row's is (below): a
+   * section with one format has no group, and taking the row away there
+   * would lift the position line and the progress between one section and
+   * the next. Held, unseen, wherever the lesson has a group anywhere - but
+   * not on the solver, which draws no row and needs the room.
    */
+  const formatsInLesson = useMemo(
+    () => lesson.segments.some((s) => formatsOf(s, undefined).length >= 2),
+    [lesson],
+  );
 
   const go = (next: number) => {
     if (next < 0 || next >= total) return;
-    // Leaving a segment that had a live offer counts as that segment having
-    // suggested — the next segment must stay quiet (never consecutive).
-    if (showSuggestion) setLastSuggestedIndex(index);
-    // An engine offer left on screen is spent with the segment it was on.
-    if (suggestionFromEngine && shownSuggestion.current?.segmentId === segment.id)
-      setSpentSuggestionOf(engine);
-    setObserved((o) => ({
-      ...o,
-      replays: 0,
-      shownHere: false,
-      sinceShown: o.sinceShown === null ? null : o.sinceShown + 1,
-    }));
+    setObserved((o) => ({ ...o, replays: 0 }));
     const nextSegment = asEntered(lesson.segments[next]);
     const nextPlan = livePlanFor(nextSegment.id);
     setIndex(next);
@@ -1679,8 +1697,13 @@ export function LessonPlayer({
      * default - the pick is not cleared, so it applies again on the next
      * segment that can.
      */
-    setModality(openingModality(nextSegment, nextPlan?.startModality));
-    setSuggestionSpent(false);
+    setModality(
+      openingModality(
+        nextSegment,
+        nextPlan?.startModality,
+        chosen.get(nextSegment.id),
+      ),
+    );
     /*
      * A PLAN'S DENSITY IS NOT A TRIGGER. This sent the authored per-segment
      * density as `simplify_trigger` / `expand_trigger` / `slower_trigger` with
@@ -2026,69 +2049,39 @@ export function LessonPlayer({
     spacingShown.current = spacingOnScreen;
   }, [spacingOnScreen, noteApplied]);
 
-  /** What became of the offer: said to the engine, and the offer spent. */
-  const settleSuggestion = useCallback(
-    (outcome: SignalEventType) => {
-      shownSuggestion.current = null;
-      if (suggestionFromEngine) setSpentSuggestionOf(engine);
-      trackEvent(outcome, { segmentId: segment.id, suggested });
-    },
-    [suggestionFromEngine, engine, trackEvent, segment.id, suggested],
-  );
+  /**
+   * The child picks a format in the group (SCRUM-272).
+   *
+   * THEIR OWN CHOICE, NOT AN ADAPTATION APPLIED: nothing here counts it with
+   * the system's (B42), and no client event names it - the server writes
+   * `modality_manual_switch` for a choice it stores (Teslim, 21 Oct). What
+   * became of the switch still goes up as the segment is left (B73/B104).
+   *
+   * It is the format for this segment from now on: kept with the segment, so
+   * a return visit opens in it, and outranking any plan row for it - see
+   * `openingModality`. No copy, no animation and no correction, whether or not
+   * it is the one the marker sits on.
+   */
+  const pickFormat = (to: Modality) => {
+    if (to === modality || !formatsHere.includes(to)) return;
+    setChosen((prev) => new Map(prev).set(segment.id, to));
+    switchFormat(segment.id, to);
+  };
 
-  const acceptSuggestion = useCallback(() => {
-    if (suggested) setModality(suggested);
-    // The body comes back in the new modality without its position (D148).
-    setPositionSaidOn(segment.id);
-    setLastSuggestedIndex(index);
-    setSuggestionSpent(true);
-    settleSuggestion(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_ACCEPTED);
-    // The accept beat is over and the new modality is on screen.
-    trackBusy(BUSY_REASON.MODALITY_SWITCH, BUSY_PHASE.END);
-    // A modality change, applied (B42).
-    if (suggested) noteApplied();
+  /** Puts a picked format on screen, for the segment it was picked on. */
+  const switchFormat = (segmentId: string, to: Modality) => {
+    if (segmentId !== segment.id) return;
+    // The body comes back in the new format without its position (D148).
+    setPositionSaidOn(segmentId);
     // Its outcome goes up as this segment is left (B73/B104).
-    if (suggested && suggested !== modality)
-      switched.current = {
-        segmentId: segment.id,
-        from: modality,
-        to: suggested,
-        atShownMs: shownSoFar(),
-      };
-  }, [
-    suggested,
-    index,
-    trackBusy,
-    settleSuggestion,
-    noteApplied,
-    modality,
-    segment.id,
-    shownSoFar,
-  ]);
-
-  const dismissSuggestion = useCallback(() => {
-    setLastSuggestedIndex(index);
-    setSuggestionSpent(true);
-    settleSuggestion(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_DECLINED);
-    if (suggested)
-      setObserved((o) => ({
-        ...o,
-        declines: o.declines + 1,
-        declined: o.declined.includes(suggested)
-          ? o.declined
-          : [...o.declined, suggested],
-      }));
-  }, [index, settleSuggestion, suggested]);
-
-  const suggestionShown = useCallback(() => {
-    if (!suggested) return;
-    shownSuggestion.current = { segmentId: segment.id, suggested };
-    setObserved((o) => ({ ...o, shownHere: true, sinceShown: 0 }));
-    trackEvent(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_SHOWN, {
-      segmentId: segment.id,
-      suggested,
-    });
-  }, [segment.id, suggested, trackEvent]);
+    switched.current = {
+      segmentId,
+      from: modality,
+      to,
+      atShownMs: shownSoFar(),
+    };
+    setModality(to);
+  };
 
   /*
    * AN ASSESSMENT WITH NO QUESTIONS IS NOT AN ASSESSMENT.
@@ -2276,6 +2269,10 @@ export function LessonPlayer({
   const calcShowing =
     modality === MODALITY.INTERACTIVE && isCalculation(segment);
   const calcBlocking = calcShowing && !solvedCalcs.has(segment.id);
+  // The control column's two rows, drawn or held - see the header.
+  const formatRow = showFormats || (formatsInLesson && !calcShowing);
+  const densityRow =
+    densitySegments.length > 0 || (chipsInLesson && !calcShowing);
   /*
    * THE SUPPORT LEVEL, ONE VALUE FOR THE DOTS AND THE SOLVER (B116). The
    * engine config's starting level is "client-applied ... Support dots only
@@ -2687,35 +2684,68 @@ export function LessonPlayer({
           */}
           <ScaffoldIndicator key={`scaf-${segment.id}`} level={supportLevel} />
         </div>
-        {/* Frame: the density toggle sits alone on its own right-aligned row.
-            Absent entirely when the segment has no reshapes to offer, rather
-            than an empty pill rail.
-
-            HELD, UNSEEN, WHERE THIS SCREEN HAS NO CHIPS IN A LESSON THAT HAS
-            THEM - over a picture or a recording, or on a segment whose text
-            offers none (`chipsInLesson`): taking the row away lifted the
-            position line and the progress 62px between one segment and the
-            next - a change of version is felt, not seen (rule 7). Not on the
-            solver: 17a draws no row there, and it needs the room. */}
-        {(densitySegments.length > 0 || (chipsInLesson && !calcShowing)) && (
-          <div
-            className={cn(
-              "flex justify-end",
-              densitySegments.length === 0 && "invisible",
+        {/* THE CONTROL COLUMN (Nevo Lesson Player Frame, 51b9e2a): right
+            aligned under the title row, 8px apart - the format group, then
+            the depth chips. The dots stay in the row above, beside the title,
+            untouched: a different shape in a different place doing a
+            different job from the format marker. */}
+        {(formatRow || densityRow) && (
+          <div className="flex flex-col items-end gap-2">
+            {/* The format group, only for a section with two formats or more.
+                HELD, UNSEEN, on a section with fewer in a lesson that has a
+                group anywhere (`formatsInLesson`), as the chip row is held
+                below - not on the solver. Its height is one pill row. */}
+            {formatRow && (
+              <div
+                className={cn("flex justify-end", !showFormats && "invisible")}
+                aria-hidden={!showFormats || undefined}
+                inert={!showFormats}
+              >
+                {showFormats ? (
+                  <FormatGroup
+                    formats={formatsHere}
+                    current={modality}
+                    recommended={recommendedHere}
+                    onPick={pickFormat}
+                  />
+                ) : (
+                  <div className="h-[52px]" />
+                )}
+              </div>
             )}
-            aria-hidden={densitySegments.length === 0 || undefined}
-            inert={densitySegments.length === 0}
-          >
-            <AdaptiveToggleBar
-              segments={
-                densitySegments.length > 0
-                  ? densitySegments
-                  : textChips.length > 0
-                    ? textChips
-                    : HELD_CHIPS
-              }
-              onSelect={pickDensity}
-            />
+            {/* Frame: the density toggle sits on its own right-aligned row,
+                below the formats and only on the text - it reshapes text.
+                Absent entirely when the segment has no reshapes to offer,
+                rather than an empty pill rail.
+
+                HELD, UNSEEN, WHERE THIS SCREEN HAS NO CHIPS IN A LESSON THAT
+                HAS THEM - over a picture or a recording, or on a segment whose
+                text offers none (`chipsInLesson`): taking the row away lifted
+                the position line and the progress 62px between one segment
+                and the next - a change of version is felt, not seen (rule 7).
+                Not on the solver: 17a draws no row there, and it needs the
+                room. */}
+            {densityRow && (
+              <div
+                className={cn(
+                  "flex justify-end",
+                  densitySegments.length === 0 && "invisible",
+                )}
+                aria-hidden={densitySegments.length === 0 || undefined}
+                inert={densitySegments.length === 0}
+              >
+                <AdaptiveToggleBar
+                  segments={
+                    densitySegments.length > 0
+                      ? densitySegments
+                      : textChips.length > 0
+                        ? textChips
+                        : HELD_CHIPS
+                  }
+                  onSelect={pickDensity}
+                />
+              </div>
+            )}
           </div>
         )}
       </header>
@@ -2746,26 +2776,6 @@ export function LessonPlayer({
 
       {/* Calm banner while the device is offline — the cached lesson stays usable */}
       <OfflineBanner />
-
-      {/* Anchor for the modality suggestion, just below the top bar. One ask
-          at a time: a break offer (B.7) outranks it, and is asked at the foot
-          of the lesson instead (frame 38 §3) - see below. */}
-      <div className="relative">
-        {showBreakOffer ? null : (
-          showSuggestion && (
-            <ModalitySuggestionPill
-              key={`pill-${segment.id}`}
-              modality={suggested}
-              onAccept={acceptSuggestion}
-              onAcceptStart={() =>
-                trackBusy(BUSY_REASON.MODALITY_SWITCH, BUSY_PHASE.START)
-              }
-              onShown={suggestionShown}
-              onDismiss={dismissSuggestion}
-            />
-          )
-        )}
-      </div>
 
       {/* Content — centered reading column. Its violet frame went with the
           step-up offer it accompanied (D28). */}

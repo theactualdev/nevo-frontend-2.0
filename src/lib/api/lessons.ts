@@ -230,6 +230,21 @@ export interface LessonSegment extends SegmentVariants {
   readingGroups?: ReadingGroup[];
   availableModalities: ContentModality[];
   /**
+   * SCRUM-272 (Teslim's handoff §5, 21 Oct): the formats this section can
+   * actually be sent in - "derived from actual payloads, not just the
+   * declared modality list": a picture with a current safety stamp and a URL,
+   * audio with a recording - in the authored opening order. What the format
+   * group offers. Absent on a payload from before it (and on a mock), which
+   * falls back to `availableModalities` with no recommendation.
+   */
+  availableFormats?: ContentModality[];
+  /**
+   * The format the engine recommends for this section in the child's latest
+   * sitting, or null for none. The format group's quiet marker reads this and
+   * nothing else; the player never derives one.
+   */
+  recommendedFormat?: ContentModality | null;
+  /**
    * Typed as of 3 Sep. `answerKey` is NULLABLE for lessons parsed before the
    * contract existed - see `api/checkpoints.ts`, which is the only thing that
    * should mark one.

@@ -435,6 +435,19 @@ export interface LessonSegment {
    * which is the solver alone (Lydia, 17 Oct; Teslim, 19 Oct).
    */
   modalities: Modality[];
+  /**
+   * The format group's pills (SCRUM-272): the server's `availableFormats` for
+   * this section, in its order, narrowed to what this app can draw. ABSENT
+   * on a payload from before the field and on the authored walkthrough,
+   * where the group offers `modalities` instead and marks nothing.
+   */
+  formats?: Modality[];
+  /**
+   * The server's `recommendedFormat`, where `formats` came with it - one of
+   * them, or null for none. Read for the group's quiet marker and never
+   * worked out here.
+   */
+  recommendedFormat?: Modality | null;
   text?: TextContent;
   visual?: VisualContent;
   audio?: AudioContent;
@@ -586,8 +599,18 @@ export interface SegmentAdaptation {
   startModality: Modality;
   /** Active reading density, if any. */
   density?: Density | null;
-  /** One system-suggested modality to surface via the calm pill (never chained). */
-  suggestModality?: Modality | null;
+  /*
+   * NO `suggestModality` ANY MORE. The engine's separate suggestion pill is
+   * gone (SCRUM-271 amended, 21 Oct): its recommendation is the quiet marker
+   * inside the format group, read from `recommendedFormat` below.
+   */
+  /**
+   * The engine's answer's `availableFormats` and `recommendedFormat` for this
+   * section (SCRUM-272), carried only where the answer had them, so the
+   * fresher read wins over the lesson's own. Absent, the lesson's stand.
+   */
+  formats?: Modality[];
+  recommendedFormat?: Modality | null;
   /**
    * Break module (frame 18) inserted after the student leaves this segment
    * forward. Break decisions are confirmed server-side (FE Architecture §5);
@@ -649,12 +672,6 @@ export interface AdaptationPlan {
    * engine fills.
    */
   adjustment?: AdjustmentAction | null;
-  /**
-   * The engine's one modality suggestion for this answer, lesson-level like
-   * the wire's `modalitySuggestion`. The per-segment `suggestModality` is the
-   * authored seam; this is offered once, where it can render.
-   */
-  suggestModality?: Modality | null;
   /**
    * The hint `offer_hint` shows, when the engine sent one.
    *

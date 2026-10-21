@@ -188,7 +188,41 @@ export function asSourceText(
   delete fallback.calculation;
   delete fallback.calculationVariant;
   delete fallback.visual;
+  // The server listed the calculation's own formats - interactive, which this
+  // segment no longer has - so the group offers the fallback's instead.
+  delete fallback.formats;
+  delete fallback.recommendedFormat;
   return fallback;
+}
+
+/**
+ * The format group's pills and its marker, as the server sent them
+ * (SCRUM-272): `availableFormats` in its own order - "authored opening order
+ * is preserved among available formats" - narrowed to what `modalitiesFor`
+ * found this app can draw, so a picture that failed its own review stays out
+ * whatever the list says. `recommendedFormat` only where it names one of
+ * them; nothing here works one out.
+ *
+ * NOTHING AT ALL for a payload with no `availableFormats`: the player then
+ * offers `modalities`, as it did before the field, and marks nothing.
+ */
+function formatsFor(
+  segment: ContentSegment,
+  drawable: readonly Modality[],
+): Pick<LessonSegment, "formats" | "recommendedFormat"> {
+  if (!Array.isArray(segment.availableFormats)) return {};
+  const formats = [
+    ...new Set(
+      segment.availableFormats.filter((f): f is Modality =>
+        (drawable as readonly string[]).includes(f),
+      ),
+    ),
+  ];
+  const recommended = segment.recommendedFormat;
+  return {
+    formats,
+    recommendedFormat: formats.find((f) => f === recommended) ?? null,
+  };
 }
 
 /**
@@ -1170,9 +1204,11 @@ function segmentFor(
   const interactive = interactiveFor(segment, lessonTitle);
   const verdict = calculationFor(segment);
   const calculation = verdict?.calculation;
+  const modalities = modalitiesFor(segment, calculation);
   const built: LessonSegment = {
     id: segment.id,
-    modalities: modalitiesFor(segment, calculation),
+    modalities,
+    ...formatsFor(segment, modalities),
     text: textFor(segment, lessonTitle),
     // Omitted rather than null: the player's `hasContent` tests presence.
     ...(visual ? { visual } : {}),
