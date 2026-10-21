@@ -33,6 +33,7 @@ const {
   trackEvent,
   flush,
   report,
+  finish,
 } = vi.hoisted(() => ({
   replace: vi.fn(),
   readiness: vi.fn(),
@@ -41,6 +42,8 @@ const {
   trackEvent: vi.fn(),
   flush: vi.fn(),
   report: vi.fn(),
+  /** The way back Module 4's finish names, for the button that sends it. */
+  finish: { navigatesTo: "" },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -82,17 +85,23 @@ vi.mock("@/components/student/Profiling/DomainProbeModule", () => ({
     onDone,
     stretchFirst,
     openings,
+    lessonId,
   }: {
-    onDone: (outcome: "sat" | "absent" | "failed") => void;
+    onDone: (outcome: "sat" | "absent" | "failed", navigatesTo?: string) => void;
     stretchFirst: boolean;
     openings?: { item: { itemId: string } }[];
+    lessonId?: string;
   }) => (
     <div
       data-testid="module-four"
       data-stretch-first={String(stretchFirst)}
       data-items={openings ? openings.map((o) => o.item.itemId).join(",") : "unread"}
+      data-lesson={lessonId ?? "(none)"}
     >
       <button onClick={() => onDone("sat")}>after probe</button>
+      <button onClick={() => onDone("sat", finish.navigatesTo)}>
+        after probe, the server naming the way back
+      </button>
       <button onClick={() => onDone("absent")}>nothing to probe</button>
       <button onClick={() => onDone("failed")}>probe failed</button>
     </div>
@@ -712,5 +721,135 @@ describe("the way back to the page that was refused", () => {
     fireEvent.click(home);
     expect(replace).toHaveBeenCalledWith(HOME);
     expect(replace).not.toHaveBeenCalledWith(LESSON);
+  });
+});
+
+/*
+ * SCRUM-266, Teslim 21 Oct. Readiness read for the lesson a child was refused
+ * "returns a preferred matching probeSubjectId, lessonProbeStatus ... and
+ * returnTo", and the probe is asked about that lesson. "ProbeFinished returns
+ * navigatesTo for the remembered lesson. The frontend still has to follow
+ * that destination." In that order: the finish's way back, readiness's, the
+ * refused page, Home - each checked, and still once per tab.
+ */
+describe("the lesson a child was refused, and the server's way back", () => {
+  const L1 = "9c1e77aa-1111-4222-8333-444455556666";
+  const L2 = "7d2f1e4b-1111-4222-8333-999988887777";
+  const L1_PAGE = `/student/lessons/${L1}`;
+  const L1_LINK = `${L1_PAGE}?assignment=asg-1`;
+  const L2_PAGE = `/student/lessons/${L2}`;
+
+  /** Readiness, read for a lesson whose subject the probe can ask. */
+  const forLesson = (base: ReturnType<typeof ready>, returnTo: string | null) => ({
+    ...base,
+    probeSubjectId: "sub-maths",
+    lessonProbeStatus: "available" as const,
+    returnTo,
+  });
+
+  it("reads readiness for the lesson, asks about it, and hands it to Module 4 - and sends no lesson for a page that is not one", async () => {
+    readiness.mockResolvedValue(forLesson(THREE_DONE, L1_PAGE));
+    render(<OnboardingResume returnTo={L1_LINK} />);
+
+    const four = await screen.findByTestId("module-four");
+    expect(readiness.mock.calls).toEqual([[L1]]);
+    expect(next.mock.calls).toEqual([["sub-maths", L1]]);
+    expect(four).toHaveAttribute("data-lesson", L1);
+
+    // Home refused, and a lesson id the server would refuse: no lesson.
+    for (const page of ["/student/dashboard", "/student/lessons/les-1"]) {
+      readiness.mockClear();
+      next.mockClear();
+      readiness.mockResolvedValue(THREE_DONE);
+      await arriveAgain({ returnTo: page });
+
+      const plain = await screen.findByTestId("module-four");
+      expect(readiness.mock.calls).toEqual([[]]);
+      expect(next.mock.calls).toEqual([["sub-maths"]]);
+      expect(plain).toHaveAttribute("data-lesson", "(none)");
+    }
+  });
+
+  it("follows the way back Module 4's finish names, ahead of readiness's and the refused page", async () => {
+    readiness.mockResolvedValue(forLesson(THREE_DONE, L2_PAGE));
+    finish.navigatesTo = L1_PAGE;
+    render(<OnboardingResume returnTo="/student/dashboard" />);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "after probe, the server naming the way back",
+      }),
+    );
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(L1_PAGE));
+    expect(replace).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips a way back it would not follow, for the next in line", async () => {
+    // A full URL - the server sends a bare path - and any address off the
+    // student app are not followed; readiness's way back is.
+    readiness.mockResolvedValue(forLesson(THREE_DONE, L2_PAGE));
+    finish.navigatesTo = `https://evil.example${L1_PAGE}`;
+    render(<OnboardingResume returnTo="/student/dashboard" />);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "after probe, the server naming the way back",
+      }),
+    );
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(L2_PAGE));
+
+    // Neither the server's: the refused page.
+    readiness.mockResolvedValue(forLesson(THREE_DONE, "/teacher/classes"));
+    finish.navigatesTo = "/student/onboarding/continue";
+    await arriveAgain({ returnTo: L1_LINK });
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "after probe, the server naming the way back",
+      }),
+    );
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(L1_LINK));
+    expect(replace).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes back where readiness says when nothing else names a way, ahead of the refused page", async () => {
+    readiness.mockResolvedValue({ ...ALL_DONE, returnTo: L2_PAGE });
+    render(<OnboardingResume returnTo="/student/dashboard" />);
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(L2_PAGE));
+    expect(replace).not.toHaveBeenCalledWith("/student/dashboard");
+
+    // The same lesson the child was refused: their link, assignment and all.
+    readiness.mockResolvedValue({ ...ALL_DONE, returnTo: L1_PAGE });
+    await arriveAgain({ returnTo: L1_LINK });
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(L1_LINK));
+  });
+
+  it("still goes back once, then Home, when the lesson the server names still refuses", async () => {
+    readiness.mockResolvedValue(forLesson(THREE_DONE, null));
+    finish.navigatesTo = L1_PAGE;
+    render(<OnboardingResume />);
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "after probe, the server naming the way back",
+      }),
+    );
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(L1_PAGE));
+
+    // The lesson refuses again: back here, readiness naming the same lesson.
+    readiness.mockResolvedValue({ ...ALL_DONE, returnTo: L1_PAGE });
+    await arriveAgain({ returnTo: L1_PAGE });
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
+    expect(replace).not.toHaveBeenCalledWith(L1_PAGE);
+  });
+
+  it("keeps the nothing-state's button Home, whatever the server names", async () => {
+    readiness.mockResolvedValue({ ...NOTHING_TO_ASK, returnTo: L1_PAGE });
+    render(<OnboardingResume returnTo={L1_LINK} />);
+
+    const home = await screen.findByRole("button", { name: "Home" });
+    await act(async () => {});
+    fireEvent.click(home);
+    expect(replace.mock.calls).toEqual([[HOME]]);
   });
 });

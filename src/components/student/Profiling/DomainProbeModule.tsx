@@ -2,11 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { TrackEvent } from "@/hooks";
+import { apiErrorCode } from "@/lib/api/client";
 import {
   DOMAIN_PROBE,
+  PROBE_SUBJECT_MISMATCH,
   probeApi,
   probeStepKind,
   type OnboardingSubject,
+  type ProbeFinished,
   type ProbeQuestion,
   type ProbeStep,
 } from "@/lib/api/probe";
@@ -35,10 +38,29 @@ import { StretchInterstitial } from "./StretchInterstitial";
  * `failed` - nothing was asked and this device cannot say why it should move
  * on: a read failed, readiness still holds the probe as owed with nothing to
  * ask (`nothingToAsk`), or the server ended the run before a question was
- * shown. None of the three is a claim that the server recorded the module;
- * only the server's gate says that (`onboardingGate`).
+ * shown, or refused the subject for the lesson (409 `probe_subject_mismatch`).
+ * None of the three is a claim that the server recorded the module; only the
+ * server's gate says that (`onboardingGate`).
  */
 export type DomainProbeOutcome = "sat" | "absent" | "failed";
+
+/**
+ * How Module 4 ended, and - when the server's finish named one - the way back
+ * it names (`ProbeFinished.navigatesTo`, SCRUM-266), passed on as sent: the
+ * caller checks it before following it (`wayBack`). Passed only when there is
+ * one.
+ */
+export type DomainProbeDone = (
+  outcome: DomainProbeOutcome,
+  navigatesTo?: string,
+) => void;
+
+/** Whether a refusal is the server's "not this subject, for this lesson". */
+const subjectRefused = (err: unknown) =>
+  !!err &&
+  typeof err === "object" &&
+  (err as { status?: unknown }).status === 409 &&
+  apiErrorCode((err as { detail?: unknown }).detail) === PROBE_SUBJECT_MISMATCH;
 
 /**
  * What a plan with nothing to ask ends Module 4 as, without presenting it.
@@ -81,15 +103,23 @@ const CHOOSE_FIRST: readonly AgeBand[] = [AGE_BANDS.JSS, AGE_BANDS.SS];
  */
 export function DomainProbeStep({
   openings: known,
+  lessonId,
   stretchFirst,
   track,
   onDone,
 }: {
   /** What to ask, when the caller has already planned it (`planProbe`). */
   openings?: ProbeOpenings;
+  /**
+   * The lesson onboarding is being finished for (`lessonIdOf`), when this
+   * plans for itself: readiness is read for it, and the probe asked about it
+   * when the server says it can be (`planProbe`). Absent, nothing about a
+   * lesson is sent.
+   */
+  lessonId?: string;
   stretchFirst: boolean;
   track?: TrackEvent;
-  onDone: (outcome: DomainProbeOutcome) => void;
+  onDone: DomainProbeDone;
 }) {
   const hydrated = useHydrated();
   const roster = useRosterBand(
@@ -105,7 +135,7 @@ export function DomainProbeStep({
   useEffect(() => {
     if (known) return;
     let cancelled = false;
-    void readProbePlan().then((plan) => {
+    void readProbePlan(lessonId).then((plan) => {
       if (cancelled) return;
       if (plan.kind === "ask") setRead(plan.openings);
       else onDoneRef.current(ENDS_AS[plan.kind]);
@@ -176,6 +206,16 @@ type Stage =
  * server lists when it suggests none this device can ask. The frame draws no
  * choice for Primary.
  *
+ * FOR THE LESSON, WHEN THERE IS ONE (SCRUM-266). An opening the plan scoped
+ * to a lesson carries its `lessonId`, and every `next` and `answer` of that
+ * subject sends it, so the items are the lesson's concepts. The server
+ * refuses a subject that is not the lesson's with 409
+ * `probe_subject_mismatch` and puts no other subject's questions in its
+ * place (Teslim, 21 Oct) - and neither does this: no other subject is asked
+ * instead, and the module ends `failed`, the caller's nothing-state, with the
+ * server's gate deciding what opens. The finish's `navigatesTo` is handed to
+ * the caller as sent, to check and follow.
+ *
  * Only ever presented with something to ask: absence is the caller's to act
  * on (rule 5), before this is drawn (`DomainProbeStep`).
  */
@@ -198,10 +238,13 @@ export function DomainProbeModule({
   stretchFirst: boolean;
   /** The `profiling` stream's markers, as the other three modules send. */
   track?: TrackEvent;
-  onDone: (outcome: DomainProbeOutcome) => void;
+  onDone: DomainProbeDone;
 }) {
   /** The subject run without a choice: the server's suggestion, else its first. */
   const runs = openings.find((o) => o.suggested) ?? openings[0];
+  /** The lesson a subject's run is asked about, as the plan scoped it. */
+  const lessonOf = (subjectId: string) =>
+    openings.find((o) => o.subject.subjectId === subjectId)?.lessonId;
   /** After the stretch, or instead of it: the choice, or the first item as read. */
   const opening = (): Stage =>
     CHOOSE_FIRST.includes(band) && openings.length > 1
@@ -239,10 +282,11 @@ export function DomainProbeModule({
     });
   }, [stage, track]);
 
-  const end = (outcome: DomainProbeOutcome) => {
+  const end = (outcome: DomainProbeOutcome, navigatesTo?: string | null) => {
     if (ended.current || !alive.current) return;
     ended.current = true;
-    onDoneRef.current(outcome);
+    if (navigatesTo) onDoneRef.current(outcome, navigatesTo);
+    else onDoneRef.current(outcome);
   };
 
   /** What `next` or `answer` said, put on screen or ended on. */
@@ -275,18 +319,31 @@ export function DomainProbeModule({
     track?.(ONBOARDING_SIGNAL_TYPES.BASELINE_MODULE_COMPLETE, {
       moduleId: DOMAIN_PROBE,
     });
-    end("sat");
+    // The server's way back, when its finish names one: the caller's to check.
+    end(
+      "sat",
+      probeStepKind(step) === "finished"
+        ? (step as ProbeFinished).navigatesTo
+        : undefined,
+    );
   };
 
   /** Read the item the server is on for this subject, after an answer did not land. */
   const ask = (subjectId: string) => {
     setStage({ at: "asking", subjectId, item: null, picked: null });
-    probeApi.next(subjectId).then(
+    const lessonId = lessonOf(subjectId);
+    (lessonId
+      ? probeApi.next(subjectId, lessonId)
+      : probeApi.next(subjectId)
+    ).then(
       (step) => take(subjectId, step),
       // Nothing to put on screen. A child part-way through is placed on what
       // they answered, and the server resumes the run from it next time.
-      // Before any question it is a read that failed, not "no bank".
-      () => end(shown.current ? "sat" : "failed"),
+      // Before any question it is a read that failed, not "no bank". The
+      // subject refused for the lesson is a failed read however far in:
+      // nothing about it is "sat", and no other subject stands in.
+      (err) =>
+        end(shown.current && !subjectRefused(err) ? "sat" : "failed"),
     );
   };
 
@@ -303,18 +360,30 @@ export function DomainProbeModule({
     if (answering.current) return;
     answering.current = true;
     setStage({ at: "asking", subjectId, item, picked: value });
+    const lessonId = lessonOf(subjectId);
     probeApi
-      .answer(subjectId, { itemId: item.itemId, chosenOption: value })
+      .answer(subjectId, {
+        itemId: item.itemId,
+        chosenOption: value,
+        ...(lessonId ? { lessonId } : {}),
+      })
       .then(
         (step) => {
           answering.current = false;
           take(subjectId, step);
         },
-        // A stale item (409 `probe_item_stale`), or the answer not reaching
-        // the server: ask again what the current item is. It is the same
-        // item when the pick was lost, the next one when it landed.
-        () => {
+        (err) => {
           answering.current = false;
+          // The subject refused for the lesson (409 `probe_subject_mismatch`):
+          // the server recorded nothing and will ask nothing of it for this
+          // lesson. Not asked again, and no other subject asked instead.
+          if (subjectRefused(err)) {
+            end("failed");
+            return;
+          }
+          // A stale item (409 `probe_item_stale`), or the answer not reaching
+          // the server: ask again what the current item is. It is the same
+          // item when the pick was lost, the next one when it landed.
           ask(subjectId);
         },
       );
