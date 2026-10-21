@@ -27,6 +27,7 @@ import {
 import type { CheckpointScalar } from "@/lib/api/checkpoints";
 import { isStoredAnswer } from "./storedAnswer";
 import { chunksForBody } from "./chunk";
+import { chosenFrom } from "./segmentChoice";
 import { MODALITY, type Modality } from "@/lib/constants";
 import type {
   Assessment,
@@ -1205,10 +1206,19 @@ function segmentFor(
   const verdict = calculationFor(segment);
   const calculation = verdict?.calculation;
   const modalities = modalitiesFor(segment, calculation);
+  /*
+   * WHAT THE CHILD CHOSE FOR THIS SECTION, from the sitting the read came
+   * from (K4): read before the first frame, so a reload opens in it with no
+   * visible change (rules 6 and 7). `deliveryPreference`, never
+   * `primaryModality`, which reads as the first format where nothing was
+   * chosen - see `LessonSegment.primaryModality`.
+   */
+  const chosen = chosenFrom(segment.deliveryPreference);
   const built: LessonSegment = {
     id: segment.id,
     modalities,
     ...formatsFor(segment, modalities),
+    ...(chosen ? { chosen } : {}),
     text: textFor(segment, lessonTitle),
     // Omitted rather than null: the player's `hasContent` tests presence.
     ...(visual ? { visual } : {}),

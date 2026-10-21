@@ -428,6 +428,20 @@ export interface CalculationSegment {
 
 // ── Segment + lesson ────────────────────────────────────────────────────────
 
+/**
+ * What the child chose for ONE segment in this sitting (K4, Lydia 21 Oct):
+ * its format, and its pace for the text. Held on the server per section and
+ * per sitting, and read back so a reload opens the section in it - never on
+ * the child, and never a description of them (rule 1).
+ *
+ * `density` null is the standard text, chosen; absent is no choice about
+ * pace. See `lib/lessons/segmentChoice`.
+ */
+export interface ChosenVersion {
+  modality?: Modality;
+  density?: Density | null;
+}
+
 export interface LessonSegment {
   id: string;
   /**
@@ -448,6 +462,12 @@ export interface LessonSegment {
    * worked out here.
    */
   recommendedFormat?: Modality | null;
+  /**
+   * What the child chose for this segment in the sitting the lesson was read
+   * from (its `deliveryPreference`), so the section opens in it before its
+   * first frame. Absent is no choice - and on the authored walkthrough.
+   */
+  chosen?: ChosenVersion;
   text?: TextContent;
   visual?: VisualContent;
   audio?: AudioContent;

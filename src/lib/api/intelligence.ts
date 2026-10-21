@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { SegmentChoice } from "./lessons";
 import type { AccommodationType } from "./students";
 
 /**
@@ -168,6 +169,14 @@ export interface SegmentAdaptationResponse {
    */
   availableFormats?: string[];
   recommendedFormat?: string | null;
+  /**
+   * The child's own choice for this section echoed back (K4): the engine
+   * "respects the explicit format, returns chosenDepth/slower". TYPED, NOT
+   * READ - the choice is read from the lesson and the sitting, and an echo
+   * of it is not a second source.
+   */
+  chosenDepth?: "original" | "simplified" | "expanded" | null;
+  slower?: boolean | null;
 }
 
 export interface BreakSuggestionResponse {
@@ -327,6 +336,18 @@ export interface SessionDelivery {
   engineConfig: EngineConfig;
   accommodations: AccommodationType[];
   capturedAt: string;
+  /**
+   * What the child chose for each section of this sitting (K4, 21 Oct), keyed
+   * by the segment's own id. "It survives session resume/reload and does not
+   * apply to other segments." Absent on a sitting from before it.
+   */
+  segmentChoices?: Record<string, SegmentChoice>;
+  /**
+   * The engine's standing recommendation per section, keyed the same way.
+   * TYPED, NOT READ: each section's own `recommendedFormat` already says it,
+   * on the lesson read and on every engine answer.
+   */
+  recommendations?: Record<string, string>;
 }
 
 /**
