@@ -97,3 +97,29 @@ describe("canOpen", () => {
     expect(canOpen("/admin/roster", scopes("it_sso"))).toBe(true);
   });
 });
+
+/**
+ * SCRUM-260, D29: the safeguarding list is a Learning Support holder's, and
+ * for anyone else the rail item is ABSENT - not locked, not greyed.
+ */
+describe("Safeguarding on the rail", () => {
+  const labels = (s: PermissionScope[], holds = false) => navForScopes(s, holds).map((i) => i.label);
+
+  it("is absent for anyone who doesn't hold Learning Support, whatever their scopes", () => {
+    expect(labels(scopes("oversight", "roster", "senco", "billing", "it_sso"))).not.toContain("Safeguarding");
+  });
+
+  it("sits in Support, straight after Learning Support, for a holder", () => {
+    const rail = labels(scopes("oversight", "senco"), true);
+    expect(rail.indexOf("Safeguarding")).toBe(rail.indexOf("Learning Support") + 1);
+  });
+
+  it("follows the role, not a scope", () => {
+    expect(labels(scopes("billing"), true)).toContain("Safeguarding");
+  });
+
+  it("is only a link for a holder", () => {
+    expect(canOpen("/admin/safeguarding", scopes("oversight", "senco"))).toBe(false);
+    expect(canOpen("/admin/safeguarding", scopes("oversight", "senco"), true)).toBe(true);
+  });
+});

@@ -13,6 +13,7 @@ import { NotificationsPanel } from "../Notifications/NotificationsPanel";
 import { READ_STATE_EVENT, unreadFrom } from "../Notifications/readState";
 import { AdminSignOutModal } from "./AdminSignOutModal";
 import { activeNavLabel, navForScopes, scopeSummary } from "./adminNav";
+import { useLearningSupport } from "../LearningSupport/useLearningSupport";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 
 /**
@@ -87,6 +88,14 @@ const ICONS: Record<string, React.ReactNode> = {
   "Learning Support": (
     <svg {...GLYPH} aria-hidden>
       <path d="M12 20s-6.5-4.2-9-8A4.7 4.7 0 0 1 12 6.3 4.7 4.7 0 0 1 21 12c-2.5 3.8-9 8-9 8z" />
+    </svg>
+  ),
+  // The sidebar frame's own glyph: a shield with a mark (96cd4b4).
+  Safeguarding: (
+    <svg {...GLYPH} aria-hidden>
+      <path d="M12 3l7 3v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6z" />
+      <path d="M12 8.5v4" />
+      <path d="M12 15.5h.01" />
     </svg>
   ),
   Reports: (
@@ -203,10 +212,12 @@ export function AdminSidebar() {
   }, [refreshUnread]);
 
   const active = activeNavLabel(pathname);
+  /** Whether this admin holds Learning Support - Safeguarding is theirs alone. */
+  const { holders: ls } = useLearningSupport();
   // Until scopes land there is nothing truthful to filter by, so the rail
   // shows its chrome and no rows rather than a nav that rearranges itself
   // under the reader a moment later.
-  const items = resolved ? navForScopes(scopes) : [];
+  const items = resolved ? navForScopes(scopes, ls?.viewerHoldsIt === true) : [];
   // A failed read is not an answer about this admin's access, so the footer
   // offers a retry instead of `scopeSummary`'s "No access yet" - which was a
   // claim about them produced by a broken GET.
