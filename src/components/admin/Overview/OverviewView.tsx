@@ -43,6 +43,7 @@ import { currentTerm, startOfDay } from "../Adaptations/logWindow";
 import { intelligenceApi, type AttentionFlag } from "@/lib/api/intelligence";
 import { invitesApi } from "@/lib/api/invites";
 import { studentsApi, type AdminStudentRow } from "@/lib/api/students";
+import { ageChecksApi, type AgeCheck } from "@/lib/api/ageChecks";
 import { failureKind } from "../NoAccess";
 import { scopeName } from "../Team/adminScopes";
 import { useCanOpen } from "../Shell/useCanOpen";
@@ -223,6 +224,8 @@ export function OverviewView() {
    * which is correct here: we have not asked yet, so we have nothing to say.
    */
   const [roster, setRoster] = useState<AdminStudentRow[] | null>(null);
+  /** Children held for a date of birth check. Null when unread - no row. */
+  const [holds, setHolds] = useState<AgeCheck[] | null>(null);
   /** Read for the getting-started sign-in row only. Null means unread. */
   const [flags, setFlags] = useState<AttentionFlag[] | null>(null);
 
@@ -323,6 +326,11 @@ export function OverviewView() {
       .then(setRoster)
       .catch(() => setRoster(null));
 
+    ageChecksApi
+      .held()
+      .then(setHolds)
+      .catch(() => setHolds(null));
+
     intelligenceApi
       .allFlags()
       // `complete: false` means we could not read them all, and a count off a
@@ -412,7 +420,7 @@ export function OverviewView() {
    * flatly untrue of a school in its third term.
    */
   const early = adaptationTotal === 0;
-  const glance = early ? [] : glanceRows(roster, flags, classActivity);
+  const glance = early ? [] : glanceRows(roster, flags, classActivity, holds);
   /*
    * THE SCHOOL RECORD'S NAME FIRST. This took the name from the compliance
    * audit alone, so when that one read failed the title - and the board pack

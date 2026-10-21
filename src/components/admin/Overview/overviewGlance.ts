@@ -1,3 +1,4 @@
+import type { AgeCheck } from "@/lib/api/ageChecks";
 import type { AttentionFlag } from "@/lib/api/intelligence";
 import type { ClassActivity } from "@/lib/api/school";
 import type { AdminStudentRow } from "@/lib/api/students";
@@ -84,6 +85,8 @@ export function glanceRows(
   students: AdminStudentRow[] | null,
   flags: AttentionFlag[] | null,
   activity: ClassActivity[] | null = null,
+  /** The checks holding an account (SCRUM-243), on the server's `blocksAccess`. */
+  holds: AgeCheck[] | null = null,
 ): GlanceRow[] {
   const rows: GlanceRow[] = [];
 
@@ -98,6 +101,22 @@ export function glanceRows(
         sub: "They're learning as normal; your school's consent record is what's outstanding.",
         action: "Review in Students",
         href: "/admin/students",
+      });
+    }
+  }
+
+  // D04 (96cd4b4), second: children held for a date of birth check. A
+  // deletion nobody can see coming is what must not happen, so the school
+  // learns of it here as well as on Students.
+  if (holds) {
+    const n = holds.length;
+    if (n > 0) {
+      rows.push({
+        key: "dob",
+        title: `${n} ${n === 1 ? "student is" : "students are"} on hold for a date of birth check`,
+        sub: "Their accounts can’t start until the date is confirmed or corrected.",
+        action: "Open date of birth checks",
+        href: "/admin/students/date-of-birth",
       });
     }
   }
