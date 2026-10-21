@@ -27,11 +27,10 @@ import type { Back } from "../back";
  * nothing happens. Weight, not red - a held account is not a fault.
  *
  * WHAT THIS SCREEN DOES NOT DECIDE. Whether a hold can clear is the server's
- * `clearable`, on backend main but not deployed (21 Oct). Until it arrives
- * every hold gets the ordinary re-check - confirm or correct - and the screen
- * says nothing either way about whether that will be enough. When the server
- * says `clearable: false`, the confirm goes and the screen says plainly that
- * the account won't activate on either date as things stand.
+ * `clearable` (live 21 Oct). True: the ordinary re-check - confirm or
+ * correct. False: the confirm goes, and the screen says plainly that the
+ * account won't activate on either date as things stand; correcting stays,
+ * because a correction can bring the dates inside the rule.
  *
  * CORRECTING IS THE RE-CHECK WITH A NEW DATE. Design routes "Correct it in the
  * roster" to the student's page, but no route edits a student's date of birth
@@ -227,7 +226,7 @@ function RecheckCard({
   const [date, setDate] = useState(check.schoolDateOfBirth ?? "");
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
-  // `false` only when the SERVER says so; absent is unknown, not false.
+  // The SERVER'S word, read as sent - nothing here works it out.
   const cannotClear = check.clearable === false;
   const schoolDate = longDate(check.schoolDateOfBirth);
   const removal = longDay(check.deletionDueAt);

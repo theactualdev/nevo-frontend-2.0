@@ -26,8 +26,8 @@ import { DobHoldView } from "./DobHoldView";
 /**
  * D30 Date of birth checks (SCRUM-243 as rewritten 20 Oct). The school sees
  * its own date - never the parent's - the one thing to do, and when the
- * record is removed. Whether a hold can clear is the server's `clearable`;
- * absent, the screen claims nothing either way.
+ * record is removed. Whether a hold can clear is the server's `clearable`
+ * (live 21 Oct), read as sent.
  */
 
 const check = (over: Partial<AgeCheck> = {}): AgeCheck => ({
@@ -44,6 +44,7 @@ const check = (over: Partial<AgeCheck> = {}): AgeCheck => ({
   deletionDueAt: "2026-11-19T10:00:00Z",
   schoolRecheckedAt: null,
   parentReconfirmedAt: null,
+  clearable: true,
   ...over,
 });
 
@@ -105,14 +106,6 @@ describe("a hold waiting on the school", () => {
 });
 
 describe("whether it can clear is the server's to say", () => {
-  it("with no `clearable` from the server, offers both and claims nothing either way", async () => {
-    render(<DobHoldView />);
-    const c = await card();
-    expect(within(c).getByRole("button", { name: "This date is correct" })).toBeInTheDocument();
-    expect(within(c).getByRole("button", { name: "Correct it" })).toBeInTheDocument();
-    expect(c.textContent).not.toMatch(/won.t activate/);
-  });
-
   it("when the server says it can't clear, drops the confirm and says so plainly", async () => {
     held.mockResolvedValue([check({ clearable: false })]);
     render(<DobHoldView />);
@@ -125,10 +118,13 @@ describe("whether it can clear is the server's to say", () => {
     expect(within(c).getByRole("button", { name: "Correct it" })).toBeInTheDocument();
   });
 
-  it("when the server says it can clear, is the ordinary re-check", async () => {
+  it("when the server says it can clear, is the ordinary re-check, and claims nothing more", async () => {
     held.mockResolvedValue([check({ clearable: true })]);
     render(<DobHoldView />);
-    expect(within(await card()).getByRole("button", { name: "This date is correct" })).toBeInTheDocument();
+    const c = await card();
+    expect(within(c).getByRole("button", { name: "This date is correct" })).toBeInTheDocument();
+    expect(within(c).getByRole("button", { name: "Correct it" })).toBeInTheDocument();
+    expect(c.textContent).not.toMatch(/won.t activate/);
   });
 });
 
