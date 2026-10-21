@@ -51,6 +51,7 @@ const check = (over: Partial<AgeCheck> = {}): AgeCheck => ({
   deletionDueAt: "2026-11-19T10:00:00Z",
   schoolRecheckedAt: "2026-10-21T09:00:00Z",
   parentReconfirmedAt: null,
+  clearable: true,
   ...over,
 });
 
