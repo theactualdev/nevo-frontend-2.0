@@ -145,10 +145,19 @@ export interface InteractiveActivityStep {
 export interface InteractiveActivityVariant {
   type: "activity";
   title: string;
+  /**
+   * "Source context shown before the actionable steps, not a task" (spec, 21
+   * Oct). Optional and nullable: an activity stored before it has none.
+   */
+  introduction?: string | null;
   /** What is needed. Often empty. */
   materials: string[];
   steps: InteractiveActivityStep[];
-  /** What should happen by the end. */
+  /**
+   * What should happen by the end - ONE line. The server's default is "You
+   * have completed the activity." There is no second, while-you-work form of
+   * it: see `InteractiveContent.outcome`.
+   */
   outcome: string;
 }
 

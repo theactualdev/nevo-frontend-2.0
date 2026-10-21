@@ -90,30 +90,35 @@ export function InteractiveSegment({
         ))}
       </ol>
 
-      {/* Outcome — resolves once every step is ticked (never a pass/fail flip) */}
-      <div className="mt-4 rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1">
-        <p className="font-mono text-[11px] tracking-[0.06em] text-nevo-navy uppercase">
-          What you should see
-        </p>
-        <div className="mt-2.5 flex items-start gap-3">
-          {allDone && (
-            <span className="mt-px flex size-6 shrink-0 items-center justify-center rounded-full bg-nevo-navy">
-              <Check
-                className="size-[13px] text-nevo-cream"
-                strokeWidth={2.8}
-              />
-            </span>
-          )}
-          <p
-            className={cn(
-              "text-base leading-[1.65] sm:text-[18px] lg:text-[19px]",
-              allDone ? "text-nevo-near-black" : "text-nevo-near-black/70",
-            )}
-          >
-            {allDone ? content.outcome.done : content.outcome.pending}
+      {/* Outcome — resolves once every step is ticked (never a pass/fail flip).
+          A live activity's card waits for the last tick: its one outcome is
+          the result, and it has no guide line to show before - see
+          `InteractiveContent.outcome`. None at all, no card. */}
+      {content.outcome && (allDone || content.outcome.pending) && (
+        <div className="mt-4 rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1">
+          <p className="font-mono text-[11px] tracking-[0.06em] text-nevo-navy uppercase">
+            What you should see
           </p>
+          <div className="mt-2.5 flex items-start gap-3">
+            {allDone && (
+              <span className="mt-px flex size-6 shrink-0 items-center justify-center rounded-full bg-nevo-navy">
+                <Check
+                  className="size-[13px] text-nevo-cream"
+                  strokeWidth={2.8}
+                />
+              </span>
+            )}
+            <p
+              className={cn(
+                "text-base leading-[1.65] sm:text-[18px] lg:text-[19px]",
+                allDone ? "text-nevo-near-black" : "text-nevo-near-black/70",
+              )}
+            >
+              {allDone ? content.outcome.done : content.outcome.pending}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
     </article>
   );
 }

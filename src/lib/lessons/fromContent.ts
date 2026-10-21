@@ -15,13 +15,14 @@ import { toQuickCheck } from "@/lib/api/checkpoints";
  * is checked against the wrong one - which is how `variant.answer` came back
  * as "does not exist" on a type that plainly has it.
  */
-import type {
-  CalculationScaffold as WireCalculationScaffold,
-  CalculationVariant as WireCalculationVariant,
-  CalculationStep as WireCalculationStep,
-  EquationCallout,
-  KeyTerm,
-  Manipulative,
+import {
+  isActivity,
+  type CalculationScaffold as WireCalculationScaffold,
+  type CalculationVariant as WireCalculationVariant,
+  type CalculationStep as WireCalculationStep,
+  type EquationCallout,
+  type KeyTerm,
+  type Manipulative,
 } from "@/lib/api/variants";
 import type { CheckpointScalar } from "@/lib/api/checkpoints";
 import { isStoredAnswer } from "./storedAnswer";
@@ -40,6 +41,7 @@ import type {
   LessonModule,
   LessonSegment,
   AudioContent,
+  InteractiveContent,
   QuickCheck,
   TextContent,
   VisualContent,
@@ -77,11 +79,16 @@ import type {
  * one, which for a child who finds reading effortful is the channel that
  * matters most.
  *
- * STILL OFF, OR ONLY PART-WAY ON, and why:
- *   - INTERACTIVE does not map at all. The wire's `InteractiveVariant` is a
- *     QUESTION (`prompt`, `options`, `answerKey`); the player's
- *     `InteractiveContent` is tickable STEPS with an outcome. Two different
- *     things sharing a name - a design question, not a wiring one.
+ * ON as of 21 Oct: THE ACTIVITY (SCRUM-268). The wire's `interactiveVariant`
+ * comes in two forms (Teslim, 14 Oct), and the ACTIVITY - a title, what is
+ * needed, ordered steps and the outcome - is the player's tickable steps, so
+ * it maps; see `interactiveFor`. Until this it never reached a child: the
+ * channel was not renderable here, so Osmosis's section 4 activity arrived
+ * and was dropped on the device. The QUESTION form still does not map - a
+ * prompt and an answer key are not steps - and the server does not offer it
+ * as a format either.
+ *
+ * ONLY PART-WAY ON, and why:
  *   - CALCULATION is on where `calculationFor` can build every step from the
  *     payload SCRUM-177 delivered: each step's `input`, its stored answers,
  *     `assembles` and `equationState`, and the `scaffold` drawing where a
@@ -104,6 +111,7 @@ const RENDERABLE: readonly Modality[] = [
   MODALITY.TEXT,
   MODALITY.VISUAL,
   MODALITY.AUDIO,
+  MODALITY.INTERACTIVE,
 ];
 
 /**
@@ -142,7 +150,9 @@ function modalitiesFor(
       // exactly that for months, listing `visual` with a null `visualVariant`.
       // Claiming is not having.
       (m !== MODALITY.VISUAL || visualFor(segment, "") !== undefined) &&
-      (m !== MODALITY.AUDIO || audioFor(segment, "") !== undefined),
+      (m !== MODALITY.AUDIO || audioFor(segment, "") !== undefined) &&
+      // The activity alone: a question is offered as nothing (SCRUM-268).
+      (m !== MODALITY.INTERACTIVE || interactiveFor(segment, "") !== undefined),
   );
   return offered.length > 0 ? offered : [MODALITY.TEXT];
 }
@@ -411,6 +421,51 @@ function audioFor(
     ...(typeof variant.durationMs === "number" && variant.durationMs > 0
       ? { durationSec: Math.round(variant.durationMs / 1000) }
       : {}),
+  };
+}
+
+/**
+ * The segment's activity, as the player's tickable steps - or nothing.
+ *
+ * SCRUM-268, 21 Oct: the activity card was not reaching the child, and it
+ * was ours - it arrived on the wire and this adapter dropped it. Read field
+ * for field, nothing added: `title` is the heading, `introduction` the line
+ * under it, `materials` what is needed, and each step's `instruction` a step.
+ *
+ * ONLY THE ACTIVITY FORM. The question form (`isActivity` false) is a prompt
+ * with an answer key, not steps, and is left unmapped as it always was.
+ *
+ * NO STEP, NO ACTIVITY. A step with no words is not drawn - a card to tick
+ * with nothing on it - and an activity with none left is not offered at all,
+ * by the rule at the top: a channel offered and found blank is worse than one
+ * never offered. The server offers `interactive` only where there are steps.
+ *
+ * THE OUTCOME IS ONE LINE, and is the result: see `InteractiveContent`. Its
+ * guide line while the steps are under way has no field, so none is written.
+ */
+function interactiveFor(
+  segment: ContentSegment,
+  lessonTitle: string,
+): InteractiveContent | undefined {
+  const variant = segment.interactiveVariant;
+  if (!variant || !isActivity(variant)) return undefined;
+  const steps = textsOf(
+    Array.isArray(variant.steps) ? variant.steps.map((s) => s?.instruction) : [],
+  );
+  if (!steps) return undefined;
+  const title = typeof variant.title === "string" ? variant.title.trim() : "";
+  const intro =
+    typeof variant.introduction === "string"
+      ? variant.introduction.trim()
+      : "";
+  const needs = textsOf(variant.materials);
+  const done = typeof variant.outcome === "string" ? variant.outcome.trim() : "";
+  return {
+    heading: title || (segment.title ?? lessonTitle),
+    ...(intro ? { intro } : {}),
+    ...(needs ? { needs } : {}),
+    steps,
+    ...(done ? { outcome: { done } } : {}),
   };
 }
 
@@ -1112,6 +1167,7 @@ function segmentFor(
   const quickCheck = quickCheckFor(segment);
   const visual = visualFor(segment, lessonTitle);
   const audio = audioFor(segment, lessonTitle);
+  const interactive = interactiveFor(segment, lessonTitle);
   const verdict = calculationFor(segment);
   const calculation = verdict?.calculation;
   const built: LessonSegment = {
@@ -1121,6 +1177,7 @@ function segmentFor(
     // Omitted rather than null: the player's `hasContent` tests presence.
     ...(visual ? { visual } : {}),
     ...(audio ? { audio } : {}),
+    ...(interactive ? { interactive } : {}),
     // Omitted rather than set undefined: the player tests `segment.quickCheck`
     // for presence, and an absent check must not gate progress.
     ...(quickCheck ? { quickCheck } : {}),
