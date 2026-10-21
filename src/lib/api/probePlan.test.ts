@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "./client";
 import { planProbe, readProbePlan } from "./probePlan";
 
 /**
@@ -331,6 +332,129 @@ describe("planProbe, when no subject gives a question", () => {
 
     await expect(planProbe(ready([MATHS]))).resolves.toEqual({ kind: "failed" });
     expect(report).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * SCRUM-266, Teslim 21 Oct: readiness read for a lesson "returns a preferred
+ * matching probeSubjectId, lessonProbeStatus (available/unavailable/
+ * subject_unmapped)", and the probe's `next` with the lesson limits items to
+ * its concepts - and refuses any other subject, 409 `probe_subject_mismatch`.
+ * The module itself is still owed on "one available subject, not every
+ * subject": the lesson's status moves nobody on.
+ */
+describe("planProbe, for the lesson a child was refused", () => {
+  const LESSON = "9c1e77aa-1111-4222-8333-444455556666";
+  const BIOLOGY = { subjectId: "sub-bio", name: "Biology", probeAvailable: true };
+
+  /** Readiness read for the lesson: its subject's status, and its subject. */
+  function forLesson(
+    subjects: (typeof MATHS)[],
+    lessonProbeStatus: "available" | "unavailable" | "subject_unmapped",
+    probeSubjectId: string | null,
+  ) {
+    return {
+      ...owed(subjects, probeSubjectId),
+      lessonProbeStatus,
+      returnTo: `/student/lessons/${LESSON}`,
+    };
+  }
+
+  it("asks only the lesson's subject, with the lesson, when the server says it can - and no lesson goes without one", async () => {
+    next.mockImplementation(async (id: string) => item(id, `first-${id}`));
+
+    const plan = await planProbe(
+      forLesson([MATHS, BIOLOGY], "available", "sub-bio"),
+      LESSON,
+    );
+
+    expect(plan).toEqual({
+      kind: "ask",
+      openings: [
+        {
+          subject: BIOLOGY,
+          item: item("sub-bio", "first-sub-bio"),
+          suggested: true,
+          lessonId: LESSON,
+        },
+      ],
+    });
+    // Mathematics would be refused for an osmosis lesson: not asked at all.
+    expect(next.mock.calls).toEqual([["sub-bio", LESSON]]);
+
+    // The same readiness with no lesson in hand: every subject, nothing sent.
+    next.mockClear();
+    const unscoped = await planProbe(
+      forLesson([MATHS, BIOLOGY], "available", "sub-bio"),
+    );
+    expect(next.mock.calls).toEqual([["sub-maths"], ["sub-bio"]]);
+    expect(unscoped.kind === "ask" && unscoped.openings.map((o) => o.lessonId)).toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it("reads readiness again for the lesson, when the lesson's subject has nothing to ask", async () => {
+    next.mockImplementation(async (id: string) => empty(id));
+    readiness.mockResolvedValue(noBank());
+
+    await expect(
+      planProbe(forLesson([MATHS, BIOLOGY], "available", "sub-bio"), LESSON),
+    ).resolves.toEqual({ kind: "unavailable" });
+    expect(readiness.mock.calls).toEqual([[LESSON]]);
+    expect(next.mock.calls).toEqual([["sub-bio", LESSON]]);
+  });
+
+  it("asks the child's subjects without the lesson when the lesson's subject cannot be asked, and moves nobody on for it", async () => {
+    // `unavailable`: Biology is the child's, with no items. `subject_unmapped`:
+    // the lesson's subject is none of the child's. Either way Module 4 is still
+    // owed on any one subject with items, and asked with the lesson every one
+    // would be refused - so it runs as with no lesson.
+    next.mockImplementation(async (id: string) => item(id, `first-${id}`));
+    const NO_BIO = { ...BIOLOGY, probeAvailable: false };
+
+    for (const status of ["unavailable", "subject_unmapped"] as const) {
+      next.mockClear();
+      const plan = await planProbe(forLesson([MATHS, NO_BIO], status, null), LESSON);
+
+      expect(plan).toEqual({
+        kind: "ask",
+        openings: [
+          { subject: MATHS, item: item("sub-maths", "first-sub-maths"), suggested: false },
+        ],
+      });
+      expect(next.mock.calls).toEqual([["sub-maths"]]);
+    }
+
+    // A server that does not say what the lesson's subject has - one from
+    // before the lesson-scoped probe, suggesting its first subject as it did -
+    // is not told about the lesson either.
+    next.mockClear();
+    await planProbe(owed([MATHS, BIOLOGY], "sub-maths"), LESSON);
+    expect(next.mock.calls).toEqual([["sub-maths"], ["sub-bio"]]);
+  });
+
+  it("is failed - no other subject asked in its place - when the server refuses the lesson's subject", async () => {
+    next.mockRejectedValue(
+      new ApiError(409, "x", { detail: { code: "probe_subject_mismatch" } }),
+    );
+
+    await expect(
+      planProbe(forLesson([MATHS, BIOLOGY], "available", "sub-bio"), LESSON),
+    ).resolves.toEqual({ kind: "failed" });
+    expect(next.mock.calls).toEqual([["sub-bio", LESSON]]);
+    expect(readiness).not.toHaveBeenCalled();
+  });
+
+  it("reads readiness for the lesson when it plans for itself", async () => {
+    readiness.mockResolvedValue(forLesson([MATHS, BIOLOGY], "available", "sub-bio"));
+    next.mockImplementation(async (id: string) => item(id, `first-${id}`));
+
+    const plan = await readProbePlan(LESSON);
+
+    expect(readiness.mock.calls).toEqual([[LESSON]]);
+    expect(next.mock.calls).toEqual([["sub-bio", LESSON]]);
+    expect(plan.kind === "ask" && plan.openings[0].lessonId).toBe(LESSON);
   });
 });
 

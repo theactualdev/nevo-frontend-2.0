@@ -54,6 +54,12 @@ export interface ProbeOpening {
    * so a child who does not choose runs it. Never this device's pick.
    */
   suggested: boolean;
+  /**
+   * The lesson this subject's run is asked about, sent on every `next` and
+   * `answer` of it (SCRUM-266) - present only when readiness, read for that
+   * lesson, says its subject is this one and has items (`lessonScope`).
+   */
+  lessonId?: string;
 }
 
 /**
@@ -90,9 +96,39 @@ export type ProbePlan =
 export type ProbeOpenings = [ProbeOpening, ...ProbeOpening[]];
 
 /**
+ * The lesson Module 4 is asked about, and the one subject that asks it - or
+ * null, and the probe runs as it does with no lesson (SCRUM-266).
+ *
+ * Teslim, 21 Oct: with a `lessonId`, readiness "returns a preferred matching
+ * probeSubjectId, lessonProbeStatus", and the probe's `next` and `answer`
+ * limit items to the lesson's concepts - and refuse any other subject with
+ * 409 `probe_subject_mismatch`. So a run is for the lesson ONLY WHEN THE
+ * SERVER SAYS ITS SUBJECT CAN BE: `lessonProbeStatus: "available"`, with
+ * that subject as `probeSubjectId`. Then that subject alone is asked, with
+ * the lesson - every other would be refused - and it is the suggested one.
+ *
+ * `unavailable` or `subject_unmapped` - the lesson's subject has no items, or
+ * is none of the child's - is the lesson saying nothing about Module 4, which
+ * the server still owes on any one subject with items (`refresh_onboarding`:
+ * the module's `status` is the one no-bank signal). Asked with the lesson,
+ * every subject would be refused; so it is asked without, as with no lesson,
+ * and the server's module status alone decides whether it runs.
+ */
+function lessonScope(
+  readiness: LearningReadiness,
+  lessonId: string | undefined,
+): { lessonId: string; subjectId: string } | null {
+  if (!lessonId || readiness.lessonProbeStatus !== "available") return null;
+  const subjectId = readiness.probeSubjectId;
+  return subjectId ? { lessonId, subjectId } : null;
+}
+
+/**
  * One readiness, read through: the server's status, then each subject it
- * says has items. Undefined when nothing gave a question and no read failed -
- * the case Teslim's 21 Oct answers send back to readiness.
+ * says has items - only the lesson's own, when the server says the lesson
+ * can be asked about (`lessonScope`). Undefined when nothing gave a question
+ * and no read failed - the case Teslim's 21 Oct answers send back to
+ * readiness.
  *
  * `next` is the server's read of where this child's run is - a GET that writes
  * nothing (`probe.next_question`) - so it is asked of every subject the
@@ -107,13 +143,21 @@ export type ProbeOpenings = [ProbeOpening, ...ProbeOpening[]];
  */
 async function planFrom(
   readiness: LearningReadiness,
+  lessonId?: string,
 ): Promise<ProbePlan | undefined> {
   if (moduleUnavailable(readiness, DOMAIN_PROBE)) return { kind: "unavailable" };
   if (moduleCompleted(readiness, DOMAIN_PROBE)) return { kind: "held" };
-  const open = readiness.subjects.filter((s) => s.probeAvailable);
+  const scope = lessonScope(readiness, lessonId);
+  const open = readiness.subjects.filter(
+    (s) => s.probeAvailable && (!scope || s.subjectId === scope.subjectId),
+  );
 
   const firsts = await Promise.allSettled(
-    open.map((s) => probeApi.next(s.subjectId)),
+    open.map((s) =>
+      scope
+        ? probeApi.next(s.subjectId, scope.lessonId)
+        : probeApi.next(s.subjectId),
+    ),
   );
   const openings: ProbeOpening[] = [];
   let failed = false;
@@ -124,6 +168,7 @@ async function planFrom(
         subject: open[i],
         item: first.value as ProbeQuestion,
         suggested: open[i].subjectId === readiness.probeSubjectId,
+        ...(scope ? { lessonId: scope.lessonId } : {}),
       });
     }
   });
@@ -143,18 +188,27 @@ async function planFrom(
  * or a `next` that rejects with nothing asked, is `failed`. Still nothing, and
  * it is `nothingToAsk`, reported once for the page - not a third read, and
  * not a move on.
+ *
+ * `lessonId` - onboarding finished because of that lesson (`lessonIdOf`) -
+ * is the one `readiness` was read with, and the re-read is read with it too.
+ * Absent, nothing about a lesson is sent anywhere.
  */
-export async function planProbe(readiness: LearningReadiness): Promise<ProbePlan> {
-  const plan = await planFrom(readiness);
+export async function planProbe(
+  readiness: LearningReadiness,
+  lessonId?: string,
+): Promise<ProbePlan> {
+  const plan = await planFrom(readiness, lessonId);
   if (plan) return plan;
 
   let reread: LearningReadiness;
   try {
-    reread = await probeApi.readiness();
+    reread = await (lessonId
+      ? probeApi.readiness(lessonId)
+      : probeApi.readiness());
   } catch {
     return { kind: "failed" };
   }
-  const followed = await planFrom(reread);
+  const followed = await planFrom(reread, lessonId);
   if (followed) return followed;
 
   reportProbeNothingToAsk({
@@ -170,15 +224,17 @@ export async function planProbe(readiness: LearningReadiness): Promise<ProbePlan
  * Readiness, then the plan. A readiness that cannot be read is `failed`.
  *
  * With no session - the signed-out walkthrough - there is nothing to ask and
- * nothing is read at all. Never rejects.
+ * nothing is read at all. Never rejects. `lessonId` as for `planProbe`.
  */
-export async function readProbePlan(): Promise<ProbePlan> {
+export async function readProbePlan(lessonId?: string): Promise<ProbePlan> {
   if (!getToken()) return { kind: "unavailable" };
   let readiness: LearningReadiness;
   try {
-    readiness = await probeApi.readiness();
+    readiness = await (lessonId
+      ? probeApi.readiness(lessonId)
+      : probeApi.readiness());
   } catch {
     return { kind: "failed" };
   }
-  return planProbe(readiness);
+  return planProbe(readiness, lessonId);
 }
