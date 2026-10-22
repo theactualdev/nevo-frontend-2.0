@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { ApiError } from "@/lib/api/client";
 import {
   isOnboardingRequired,
+  lessonIdOf,
   ONBOARDING_CONTINUE_ROUTE,
   onboardingDoor,
   onboardingPath,
   returnPathOf,
+  wayBack,
 } from "./onboardingGate";
 
 /**
@@ -207,5 +209,91 @@ describe("isOnboardingRequired", () => {
     expect(isOnboardingRequired(new ApiError(404, "x", GATE))).toBe(false);
     expect(isOnboardingRequired(new Error("x"))).toBe(false);
     expect(isOnboardingRequired(null)).toBe(false);
+  });
+});
+
+/*
+ * SCRUM-266, Teslim 21 Oct: Module 4 is asked about the lesson a child was
+ * refused, and finishing it goes back where the server says - "ProbeFinished
+ * returns navigatesTo for the remembered lesson. The frontend still has to
+ * follow that destination."
+ */
+const UUID = "9c1e77aa-1111-4222-8333-444455556666";
+const OTHER = "7d2f1e4b-1111-4222-8333-999988887777";
+
+describe("lessonIdOf - only the lesson player's route names a lesson", () => {
+  it("takes the lesson's id, with or without its assignment", () => {
+    expect(lessonIdOf(`/student/lessons/${UUID}`)).toBe(UUID);
+    expect(lessonIdOf(`/student/lessons/${UUID}?assignment=${OTHER}`)).toBe(UUID);
+    expect(lessonIdOf(`/student/lessons/${UUID.toUpperCase()}`)).toBe(
+      UUID.toUpperCase(),
+    );
+  });
+
+  it("names no lesson for any other page, or an id the server would refuse", () => {
+    for (const other of [
+      "/student/dashboard",
+      "/student/lessons",
+      `/student/lessons/${UUID}/review`,
+      `/student/lessons/${UUID}/summary`,
+      "/student/lessons/les-1",
+      `/student/lessons/${UUID}x`,
+      `/student/lessons/${UUID.replace(/-/g, "")}`,
+      `/student/onboarding/continue?next=/student/lessons/${UUID}`,
+      `https://evil.example/student/lessons/${UUID}`,
+      `//evil.example/student/lessons/${UUID}`,
+      undefined,
+      null,
+      "",
+    ]) {
+      expect(lessonIdOf(other)).toBeNull();
+    }
+  });
+});
+
+describe("wayBack - the server's way back, then the refused page", () => {
+  const SERVER = `/student/lessons/${UUID}`;
+  const REFUSED = `/student/lessons/${OTHER}?assignment=asg-1`;
+
+  it("takes the first way back the server names, ahead of the refused page", () => {
+    expect(wayBack([SERVER, `/student/lessons/${OTHER}`], "/student/dashboard")).toBe(
+      SERVER,
+    );
+    expect(wayBack([null, SERVER], REFUSED)).toBe(SERVER);
+    expect(wayBack([undefined, SERVER], undefined)).toBe(SERVER);
+  });
+
+  it("falls back to the refused page, and then to nothing, when the server names none", () => {
+    expect(wayBack([null, undefined], REFUSED)).toBe(REFUSED);
+    expect(wayBack([], REFUSED)).toBe(REFUSED);
+    expect(wayBack([null, null], undefined)).toBeNull();
+  });
+
+  it("skips a way back it would not send a child to, for the next in line", () => {
+    for (const bad of [
+      `https://evil.example/student/lessons/${UUID}`,
+      `https://nevolearning.com/student/lessons/${UUID}`,
+      `//evil.example/student/lessons/${UUID}`,
+      "/student/onboarding/continue",
+      "/teacher/classes",
+      "/student/../admin",
+      42,
+      "",
+    ]) {
+      expect(wayBack([bad, SERVER], REFUSED)).toBe(SERVER);
+      expect(wayBack([bad, null], REFUSED)).toBe(REFUSED);
+      expect(wayBack([bad], undefined)).toBeNull();
+    }
+  });
+
+  it("never takes a refused page it would not send a child to", () => {
+    expect(wayBack([], "https://evil.example/student/lessons/x")).toBeNull();
+    expect(wayBack([], "/student/onboarding/continue")).toBeNull();
+  });
+
+  it("keeps the refused link's assignment when the server names that same lesson", () => {
+    const same = `/student/lessons/${UUID}?assignment=asg-1`;
+    expect(wayBack([SERVER], same)).toBe(same);
+    expect(wayBack([null, SERVER], same)).toBe(same);
   });
 });

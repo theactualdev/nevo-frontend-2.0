@@ -13,7 +13,12 @@ import {
   type LearningReadiness,
 } from "@/lib/api/probe";
 import { planProbe, type ProbePlan } from "@/lib/api/probePlan";
-import { claimMoveOn, claimReturn } from "@/lib/auth/onboardingGate";
+import {
+  claimMoveOn,
+  claimReturn,
+  lessonIdOf,
+  wayBack,
+} from "@/lib/auth/onboardingGate";
 import { getSession, getToken } from "@/lib/auth/session";
 import { ONBOARDING_SIGNAL_TYPES } from "@/lib/constants";
 import { flushPendingBaseline } from "@/lib/profiling/pendingBaseline";
@@ -118,6 +123,20 @@ function afterModuleFour(outcome: DomainProbeOutcome): "home" | "nothing" {
  * check): a page that still refuses after readiness says done sends the
  * child Home the second time, as before the way back, not round again.
  *
+ * THE SERVER'S WAY BACK COMES FIRST (SCRUM-266, Teslim 21 Oct). The server
+ * remembers the lesson a child was refused and names it - Module 4's finish
+ * as `navigatesTo`, readiness as `returnTo` - "The frontend still has to
+ * follow that destination". So "done" opens the first of: the finish's
+ * `navigatesTo`, readiness's `returnTo`, the refused page, Home - each
+ * checked as the refused page is, a bad one skipped (`wayBack`), and the one
+ * taken still once per tab (`claimReturn`).
+ *
+ * AND MODULE 4 IS ASKED ABOUT THAT LESSON (SCRUM-266). A child refused a
+ * lesson - the refused page is the lesson player's - has readiness read for
+ * that lesson (`lessonIdOf`), and the probe asks the lesson's subject, about
+ * its concepts, when the server says it can (`planProbe`). With no lesson -
+ * Home refused, or a plain visit - nothing about a lesson is sent.
+ *
  * NO QUESTION BANK MOVES THE CHILD ON (Olayinka, 19 Oct: "an unavailable
  * probe moves the child on, never to a dead end"; Teslim's 19 Oct
  * no-question-bank exception): straight on, replacing this route, rather than
@@ -147,7 +166,9 @@ export function OnboardingResume({
 }: {
   /**
    * The student page the child was refused, already checked by the route
-   * (`returnPathOf`). Absent: Home.
+   * (`returnPathOf`): where "done" goes when the server names nowhere, and
+   * - when it is the lesson player's - the lesson Module 4 is asked about
+   * (`lessonIdOf`). Absent: Home, and no lesson.
    */
   returnTo?: string;
 } = {}) {
@@ -155,7 +176,12 @@ export function OnboardingResume({
   const hydrated = useHydrated();
   const owner = hydrated ? (getSession()?.userId ?? null) : null;
   const signedOut = hydrated && !getToken();
-  const run = useCallback(() => probeApi.readiness(), []);
+  /** The lesson onboarding is being finished for, or none. */
+  const lessonId = lessonIdOf(returnTo) ?? undefined;
+  const run = useCallback(
+    () => (lessonId ? probeApi.readiness(lessonId) : probeApi.readiness()),
+    [lessonId],
+  );
   const readiness = useLiveQuery(run, [run]);
   const data = readiness.data;
   /** Whether Module 4 will run, once readiness says it is not yet done. */
@@ -184,7 +210,7 @@ export function OnboardingResume({
   useEffect(() => {
     if (!data || data.complete) return;
     let cancelled = false;
-    void planProbe(data).then((p) => {
+    void planProbe(data, lessonId).then((p) => {
       if (cancelled) return;
       setPlan(p);
       // Only Module 4 left, and no bank: on, not a screen to dismiss.
@@ -193,7 +219,12 @@ export function OnboardingResume({
     return () => {
       cancelled = true;
     };
-  }, [data]);
+  }, [data, lessonId]);
+
+  /** The way back Module 4's finish named, as sent - checked on the way out. */
+  const finishedTo = useRef<string | null>(null);
+  /** The way back readiness names, as sent - checked on the way out. */
+  const serverReturn = data?.returnTo;
 
   /*
    * Where "done" goes, settled once per arrival: the claim is spent when it
@@ -205,15 +236,15 @@ export function OnboardingResume({
     // A visitor with no session has nothing to finish here, and reads nothing.
     if (signedOut) router.replace(SIGN_IN);
     else if (step === "home") {
-      // Done: back to the page they were refused, once per tab - a page that
-      // still refuses sends them Home, not round again (`claimReturn`).
+      // Done: the server's way back, else the page they were refused, once
+      // per tab - a page that still refuses sends them Home, not round again
+      // (`claimReturn`).
+      const back = wayBack([finishedTo.current, serverReturn], returnTo);
       leaving.current ??=
-        returnTo && claimReturn(getSession()?.userId, returnTo)
-          ? returnTo
-          : HOME;
+        back && claimReturn(getSession()?.userId, back) ? back : HOME;
       router.replace(leaving.current);
     }
-  }, [signedOut, step, router, returnTo]);
+  }, [signedOut, step, router, returnTo, serverReturn]);
 
   if (signedOut || step === null || step === "home") {
     // Reading, or on the way out: nothing to show for a moment.
@@ -304,9 +335,11 @@ export function OnboardingResume({
           // What the plan found to ask, shown as read. A plan that failed
           // before the baseline run is read again by the step itself.
           openings={plan?.kind === "ask" ? plan.openings : undefined}
+          lessonId={lessonId}
           stretchFirst={afterBaseline}
           track={profiling.trackEvent}
-          onDone={(outcome) => {
+          onDone={(outcome, navigatesTo) => {
+            finishedTo.current = navigatesTo ?? null;
             profiling.flush();
             setMoved(afterModuleFour(outcome));
           }}
