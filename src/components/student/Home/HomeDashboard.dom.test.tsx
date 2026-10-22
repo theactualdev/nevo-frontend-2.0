@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -32,6 +33,17 @@ import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
 const dashboard = vi.hoisted(() => ({ useStudentDashboard: vi.fn() }));
 vi.mock("@/hooks/useStudentDashboard", () => dashboard);
 
+// The child's full assignment list, finished ones included - which the
+// dashboard leaves out. Unread (failed) unless a test says otherwise.
+const assignments = vi.hoisted(() => ({ list: vi.fn() }));
+vi.mock("@/lib/api/assignments", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/assignments")>();
+  return {
+    ...actual,
+    assignmentsApi: { ...actual.assignmentsApi, list: assignments.list },
+  };
+});
+
 // Today's cards open the lesson preview, whose Start navigates.
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -51,6 +63,8 @@ beforeEach(() => {
   // the mark. Failing fast keeps them in their catch instead of pending.
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("no network")));
   dashboard.useStudentDashboard.mockReset();
+  assignments.list.mockReset();
+  assignments.list.mockRejectedValue(new Error("no network"));
   router.push.mockReset();
   clearSession();
   // The warm-up's done-flag lives in localStorage and outlives a test by
@@ -1005,6 +1019,90 @@ describe("what Home says when there is nothing, or nothing left", () => {
 
     expect(screen.queryByText(/your first lesson/)).toBeNull();
     expect(screen.queryByText(/caught up/)).toBeNull();
+  });
+
+  /*
+   * 22 OCT PRODUCTION RUN: AMINA FINISHED OSMOSIS, HER ONLY LESSON, and Home
+   * told her "Your teacher is setting up your first lesson". The dashboard
+   * leaves completed assignments out, so it had none to show. Her row said
+   * `completed` with a `completedAt`, and `GET /api/v1/assignments` listed
+   * the assignment completed. Home draws no lesson area for her and says
+   * nothing about it: where finished work goes is SCRUM-146's.
+   */
+  describe("when the dashboard leaves the finished lesson out", () => {
+    const osmosis = { ...done, id: "as-osmosis", lesson: { id: "l-osmosis", title: "Osmosis", segmentCount: 9 } };
+    const finishedRow = {
+      lessonId: "l-osmosis",
+      status: "completed",
+      segmentPosition: 8,
+      updatedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      title: "Osmosis",
+    };
+    const noLessonArea = () => {
+      expect(screen.queryByText(/your first lesson/)).toBeNull();
+      expect(screen.queryByText(/Today's lessons/)).toBeNull();
+      expect(screen.queryByText("Pick up where you left off")).toBeNull();
+      expect(screen.queryByText("Osmosis")).toBeNull();
+    };
+
+    it("does not say a first lesson is coming, from the full list and her row", async () => {
+      signIn();
+      live([], [finishedRow]);
+      assignments.list.mockResolvedValue([osmosis]);
+
+      const { container } = render(<HomeDashboard />);
+      await settled(container);
+      await waitFor(() =>
+        expect(screen.queryByText(/your first lesson/)).toBeNull(),
+      );
+
+      noLessonArea();
+      expect(assignments.list).toHaveBeenCalled();
+    });
+
+    it("nor from the full list alone, once her row has aged out of the feed", async () => {
+      signIn();
+      live([], []);
+      assignments.list.mockResolvedValue([osmosis]);
+
+      const { container } = render(<HomeDashboard />);
+      await settled(container);
+
+      await waitFor(() =>
+        expect(screen.queryByText(/your first lesson/)).toBeNull(),
+      );
+      noLessonArea();
+    });
+
+    it("nor from her row alone, when the full list cannot be read", async () => {
+      signIn();
+      live([], [finishedRow]);
+
+      const { container } = render(<HomeDashboard />);
+      await settled(container);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      noLessonArea();
+    });
+
+    it("still says it for a child whose only assignment was cancelled", async () => {
+      signIn();
+      live([], []);
+      assignments.list.mockResolvedValue([{ ...osmosis, status: "cancelled" }]);
+
+      const { container } = render(<HomeDashboard />);
+      await settled(container);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(
+        screen.getByText("Your teacher is setting up your first lesson"),
+      ).toBeInTheDocument();
+    });
   });
 
   it("says nothing about being caught up beside a ready lesson, with nothing part-way", async () => {
