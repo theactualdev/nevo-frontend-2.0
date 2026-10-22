@@ -1136,6 +1136,8 @@ export function LessonPlayer({
   const columnRef = useRef<HTMLDivElement | null>(null);
   /** The foot of the screen, under the arrows, where the solver docks its pad. */
   const [padDock, setPadDock] = useState<HTMLDivElement | null>(null);
+  /** The row above the arrows, where the Socratic panel opens (SCRUM-275). */
+  const [panelDock, setPanelDock] = useState<HTMLDivElement | null>(null);
   /**
    * The segment whose body is CHUNKED, reported by the body itself.
    *
@@ -3121,7 +3123,13 @@ export function LessonPlayer({
                       ? () => setCheckOpen(true)
                       : undefined
                   }
+                  /*
+                   * Keep going is on the panel from the moment it opens
+                   * (SCRUM-275). After a hand-off it goes on, as Next does
+                   * there; on a panel the child opened it only closes it.
+                   */
                   onKeepGoing={handoffHere ? keepGoingAfterHandoff : undefined}
+                  dock={panelDock}
                   onShown={(promptIds) => {
                     // Reached through the panel is not reached first time: a
                     // check answered after it reports as after help (B28).
@@ -3481,6 +3489,16 @@ export function LessonPlayer({
           </PressedLine>
         </div>
       )}
+      {/*
+        THE SOCRATIC PANEL OPENS HERE, ABOVE BACK AND NEXT AND NEVER OVER THEM
+        (Lydia, SCRUM-275, over the frames' sheet at the foot). A row of this
+        column like the pad's dock below: empty, and no height, until the
+        panel opens into it. It may shrink and the reading column above it
+        has no height of its own to keep, so the panel takes its room from the
+        reading - up to its own cap, then scrolling inside - and the arrow row
+        stays on screen at every width.
+      */}
+      <div ref={setPanelDock} data-panel-dock className="flex min-h-0 flex-col" />
       <nav
         aria-hidden={partsLeft || undefined}
         inert={partsLeft}
