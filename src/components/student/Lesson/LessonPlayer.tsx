@@ -1630,11 +1630,19 @@ export function LessonPlayer({
    * child submits a step with it on screen (B130) - not here.
    */
   const solverShowing = modality === MODALITY.INTERACTIVE && isCalculation(segment);
+  /*
+   * WHILE THE CHECK IS OPEN THE HINT IS IN IT, with its question (Lydia,
+   * SCRUM-275, 21 Oct) - never under the segment behind the sheet, and never
+   * held for the sheet to close. Where it goes is all this decides: whether
+   * there is a hint at all, after however many misses, is the engine's
+   * (`hintHere`), and nothing here counts them. Closed, it is where it was.
+   */
+  const hintInSheet = checkOpen && Boolean(segment.quickCheck);
   const hintOnScreen =
     segmentShowing &&
     hintHere &&
     Boolean(hintText) &&
-    !solverShowing &&
+    (hintInSheet || !solverShowing) &&
     seenHints.has(hintKey);
   const offeredHints = useRef<Set<string>>(new Set());
   const usedHints = useRef<Set<string>>(new Set());
@@ -2879,6 +2887,24 @@ export function LessonPlayer({
     }
   }
 
+  /*
+   * §4 `offer_hint`: the unrequested hint, drawn in one place at a time - in
+   * the open check with its question (`hintInSheet`), or under the content,
+   * or, on the solver, in its step's hint place (17a), passed in.
+   */
+  const hintCard =
+    hintHere && hintText ? (
+      <HintOverlay
+        hint={hintText}
+        onClose={() => setClosedHints((prev) => new Set(prev).add(hintKey))}
+        onSeen={() =>
+          setSeenHints((prev) =>
+            prev.has(hintKey) ? prev : new Set(prev).add(hintKey),
+          )
+        }
+      />
+    ) : null;
+
   return (
     /*
      * ONE SCREEN HIGH, AND ONLY THE COLUMN SCROLLS - the player frame's
@@ -3208,7 +3234,9 @@ export function LessonPlayer({
                 padDock={padDock}
                 supportLevel={supportLevel}
                 onSystemScroll={systemScrolled}
-                engineHint={hintHere && hintText ? hintText : undefined}
+                engineHint={
+                  hintHere && hintText && !hintInSheet ? hintText : undefined
+                }
                 onEngineHintClosed={() =>
                   setClosedHints((prev) => new Set(prev).add(hintKey))
                 }
@@ -3359,21 +3387,8 @@ export function LessonPlayer({
                 }}
               />
             </div>
-            {/* §4 `offer_hint`: the unrequested hint under the content - or,
-                on the solver, in its step's hint place (17a), passed in. */}
-            {hintHere && hintText && !calcShowing && (
-              <HintOverlay
-                hint={hintText}
-                onClose={() =>
-                  setClosedHints((prev) => new Set(prev).add(hintKey))
-                }
-                onSeen={() =>
-                  setSeenHints((prev) =>
-                    prev.has(hintKey) ? prev : new Set(prev).add(hintKey),
-                  )
-                }
-              />
-            )}
+            {/* §4 `offer_hint`: under the content, while no check is open. */}
+            {!calcShowing && !hintInSheet && hintCard}
           </div>
         </div>
       </div>
@@ -3384,6 +3399,9 @@ export function LessonPlayer({
           check={segment.quickCheck}
           open={checkOpen}
           onOpenChange={setCheckOpen}
+          // The engine's hint for this segment, with its question - see
+          // `hintInSheet`.
+          hint={hintInSheet ? hintCard : null}
           reading={readingOn}
           onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
           onAnswered={(correct, answered) => {
