@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/shared";
 import type { QuickCheck } from "@/lib/types";
@@ -41,6 +41,14 @@ function msSince(start: number | null): number | null {
  * A SPOKEN CHECK (B16) says its question aloud on opening, with the printed
  * question still in place - see `SpokenPrompt`. The reading accommodation's
  * typographic half reaches the question, the answers and the note (D30).
+ *
+ * THE ENGINE'S HINT, WHILE THE CHECK IS OPEN, IS HERE WITH ITS QUESTION
+ * (Lydia, SCRUM-275, 21 Oct): "a hint that arrives after the moment it was
+ * for is worse than no hint, and away from its question it does not read."
+ * Under the sheet it sat behind the scrim, unseen, until the check closed and
+ * the segment moved on. The player decides whether there is one (`hint`);
+ * this only gives it its place, under the question and over the answers, as
+ * the Lesson Player frame's answer sheet draws its hint.
  */
 export function QuickCheckSheet({
   check,
@@ -50,12 +58,15 @@ export function QuickCheckSheet({
   onContinue,
   reading = false,
   onAudioBusy,
+  hint,
 }: {
   check: QuickCheck;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The reading accommodation is on - see `readingSupport`. */
   reading?: boolean;
+  /** The engine's hint for this check's segment, as the player draws it. */
+  hint?: ReactNode;
   /** `system_busy` bracket while a spoken question plays. */
   onAudioBusy?: (phase: "start" | "end") => void;
   /**
@@ -130,6 +141,7 @@ export function QuickCheckSheet({
         >
           {check.question}
         </SheetTitle>
+        {hint}
 
         <div className="mt-[18px] flex flex-col gap-2.5">
           {check.options.map((option) => (

@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import type { Lesson } from "@/lib/types";
 
@@ -16,8 +23,9 @@ import type { Lesson } from "@/lib/types";
  * stood in for.
  */
 
-const { getAdaptation, progress } = vi.hoisted(() => ({
+const { getAdaptation, saveAttempt, progress } = vi.hoisted(() => ({
   getAdaptation: vi.fn(),
+  saveAttempt: vi.fn(),
   progress: { sessionId: null as string | null },
 }));
 
@@ -25,6 +33,17 @@ vi.mock("@/lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
   intelligenceApi: { getAdaptation },
 }));
+vi.mock("@/lib/api/lessons", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/lessons")>();
+  return {
+    ...actual,
+    lessonsApi: {
+      ...actual.lessonsApi,
+      saveAttempt: (...a: unknown[]) => saveAttempt(...a),
+      attempts: vi.fn().mockResolvedValue([]),
+    },
+  };
+});
 vi.mock("@/hooks", () => ({
   useLesson: () => ({ setActiveLesson: vi.fn() }),
   useSignals: () => ({ trackEvent: vi.fn() }),
@@ -73,6 +92,7 @@ const player = () => (
 afterEach(() => {
   cleanup();
   getAdaptation.mockReset();
+  saveAttempt.mockReset();
   progress.sessionId = null;
 });
 
@@ -96,6 +116,132 @@ describe("the mid-lesson read and the lesson session", () => {
       mode: "in_lesson",
       sessionId: "5b1e0c3a-aaaa-4bbb-8ccc-ddddeeeeffff",
       signals: { currentSegmentId: "seg-1" },
+    });
+  });
+});
+
+/*
+ * SCRUM-275, the 21 Oct run: AFTER AN ANSWER, THE ASK GOES ONCE THAT ANSWER
+ * IS STORED. The miss was written and counted in the same tap, and the count
+ * changing asked at once, beside the write - while the engine reads its error
+ * streak from the answers it has stored. So it could read one miss where
+ * there were two, and hold the hint they earn. A write that fails still lets
+ * the ask go: the engine is never left silent for it.
+ */
+describe("the mid-lesson read after an answer", () => {
+  const SESSION = "5b1e0c3a-aaaa-4bbb-8ccc-ddddeeeeffff";
+  const CHECKED = {
+    id: "9c1e77aa-1111-4222-8333-444455556666",
+    title: "Fractions",
+    segments: [
+      {
+        id: "seg-1",
+        modalities: ["text"],
+        text: { heading: "Numerators", body: { default: "The top number." } },
+        quickCheck: {
+          id: "cp-1",
+          question: "Which number is on top?",
+          options: [
+            { id: "a", label: "The numerator", value: "a" },
+            { id: "b", label: "The denominator", value: "b" },
+          ],
+          correctId: "a",
+          correctNote: "Yes.",
+          recoveryNote: "Not quite.",
+        },
+      },
+      {
+        id: "seg-2",
+        modalities: ["text"],
+        text: { heading: "Denominators", body: { default: "The bottom." } },
+      },
+    ],
+  } as unknown as Lesson;
+  const CHECKED_SEGMENTS = [
+    { id: "seg-1", segmentType: "explanation" as const, availableModalities: ["text"] },
+    { id: "seg-2", segmentType: "explanation" as const, availableModalities: ["text"] },
+  ];
+  const stored = {
+    id: "att-1",
+    lessonId: CHECKED.id,
+    sessionId: SESSION,
+    questionId: "cp-1",
+    segmentId: "seg-1",
+    source: "checkpoint",
+    attemptNumber: 1,
+    question: {},
+    answer: "b",
+    correct: false,
+    submittedAt: "2026-10-21T10:00:00Z",
+    resultState: "nothing_landed",
+    handoffTo: null,
+    guidedPrompts: [],
+    advanceAfterHandoff: false,
+  };
+
+  /** Into the check, with the first ask already made, then a miss. */
+  const missWhileWriting = async (order: string[]) => {
+    let land!: () => void;
+    let fail!: (e: unknown) => void;
+    saveAttempt.mockImplementation(() =>
+      new Promise<void>((res, rej) => {
+        land = res;
+        fail = rej;
+      }).then(() => {
+        order.push("written");
+        return stored;
+      }),
+    );
+    getAdaptation.mockImplementation(async () => {
+      order.push("ask");
+      return answer;
+    });
+    progress.sessionId = SESSION;
+    render(
+      <LessonPlayer
+        lesson={CHECKED}
+        plan={null}
+        live
+        adaptSegments={CHECKED_SEGMENTS}
+      />,
+    );
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /The denominator/ }),
+    );
+    expect(saveAttempt).toHaveBeenCalledTimes(1);
+    // However long the write takes, the ask about the miss waits for it.
+    await act(() => new Promise((r) => setTimeout(r, 30)));
+    expect(getAdaptation).toHaveBeenCalledTimes(1);
+    return { land: () => land(), fail: (e: unknown) => fail(e) };
+  };
+
+  it("goes once the answer's write has landed, so the engine's count includes it", async () => {
+    const order: string[] = [];
+    const write = await missWhileWriting(order);
+
+    write.land();
+
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(2));
+    expect(order).toEqual(["ask", "written", "ask"]);
+    expect(getAdaptation.mock.calls[1]![2]).toMatchObject({
+      mode: "in_lesson",
+      sessionId: SESSION,
+      signals: { currentSegmentId: "seg-1", consecutiveErrors: 1 },
+    });
+  });
+
+  it("still goes when the write fails", async () => {
+    const order: string[] = [];
+    const write = await missWhileWriting(order);
+
+    write.fail(new Error("offline"));
+
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(2));
+    expect(order).toEqual(["ask", "ask"]);
+    expect(getAdaptation.mock.calls[1]![2]).toMatchObject({
+      signals: { consecutiveErrors: 1 },
     });
   });
 });

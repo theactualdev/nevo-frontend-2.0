@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 import { NevoKeyboard } from "@/components/shared";
 import { cn } from "@/lib/utils";
@@ -142,26 +143,48 @@ export type PanelEntry = "self" | "handoff";
  * 38's answered tint, and stays a target - opening it again and sending is the
  * child asking the same question again (`asked_again`).
  *
- * TWO ENDINGS, AND THE PANEL IS TOLD WHICH (SCRUM-241, frame 38 §4 and 38a).
- * Once every answerable prompt has been answered the panel closes on one:
+ * KEEP GOING FROM THE MOMENT IT OPENS (Lydia, SCRUM-275, 21 Oct): "The panel
+ * is support, not a test, and a child has to be able to leave it." So frame
+ * 38's Keep going is at the panel's foot, pressable, before anything is
+ * answered and whichever way the panel was reached. It closes the panel, and
+ * then does what the way in says (`onKeepGoing`): on into the next segment
+ * after a hand-off, nothing more on a panel the child opened, which is theirs
+ * to close - no completion condition, nothing to answer first.
+ *
+ * TWO ENDING LINES, AND THE PANEL IS TOLD WHICH (SCRUM-241, frame 38 §4 and
+ * 38a). Once every answerable prompt has been answered, above Keep going:
  * - "self", the child opened it from the confusion prompt: "Want to try the
  *   question again now?" and Try again, the way back to the question. Only
- *   where there is a question to go back to (`onTryAgain`); otherwise the
- *   panel simply stays as it is.
+ *   where there is a question to go back to (`onTryAgain`); otherwise no
+ *   line, and Keep going alone.
  * - "handoff", the system handed the child off after repeated attempts at the
  *   check: the panel arrives open, with nothing to accept or decline, and
- *   ends on "Let's keep going." and Keep going, on into the next segment. No
- *   Try again: sending this child back to the question is the loop the
- *   hand-off exists to break.
+ *   ends on "Let's keep going." over the same Keep going. No Try again:
+ *   sending this child back to the question is the loop the hand-off exists
+ *   to break.
  * Which one is never worked out from what the child does in here. The backend
  * owns the hand-off and the front end never counts attempts.
+ *
+ * ABOVE BACK AND NEXT, NEVER OVER THEM (Lydia, SCRUM-275, over frame 38's
+ * sheet at the foot): "A panel that covers the only way onward, at the moment
+ * a child is already struggling, breaks the rule that no screen leaves
+ * someone with only the browser's back button." The player hands it the row
+ * above its arrows (`dock`), where it takes its height from the reading
+ * column - up to its own 85dvh and never past the arrows - and scrolls
+ * inside. In flow at every width, so nothing pins it over the arrow row.
+ *
+ * NOTHING WITHOUT A QUESTION (rule 5). The server sends no dialogue when the
+ * failed question has no guided questions of its own (Teslim, 21 Oct), and
+ * none is made up here: with no prompts there is no panel, not a sheet with
+ * a heading, an ending and nothing to think about.
  *
  * NOT RENDERED from the frame's endings: the "You've got it" label and the
  * sentence naming the idea ("That's photosynthesis."). Guided answers are not
  * marked, so nothing says the child got it, and no field names the idea.
  *
  * Leaving a prompt the child had opened without sending is `abandoned`, said
- * once - on the panel's close, or as the segment moves on under it.
+ * once - on the panel's close, Keep going, or as the segment moves on under
+ * it.
  */
 export function SocraticPanel({
   prompts,
@@ -171,14 +194,24 @@ export function SocraticPanel({
   onShown,
   onAnswer,
   onAbandon,
+  dock,
 }: {
   prompts: PanelPrompt[];
   /** How the panel was reached. Told at the way in, never inferred. */
   entry?: PanelEntry;
   /** The self-opened ending's way back to the question. */
   onTryAgain?: () => void;
-  /** The handed-off ending's way on into the next segment. */
+  /**
+   * What Keep going does after it closes the panel: on into the next segment
+   * for a hand-off. Absent, Keep going only closes it.
+   */
   onKeepGoing?: () => void;
+  /**
+   * The player's row above Back and Next, which the open panel is drawn
+   * into. Without one it is drawn where it is mounted, in flow - never over
+   * the screen.
+   */
+  dock?: HTMLElement | null;
   /**
    * The panel opened, first time only, with these answerable prompts on
    * screen - none when it lists only bare questions.
@@ -232,8 +265,9 @@ export function SocraticPanel({
 
   // Said once, the first time the panel is on screen: opened by the child, or
   // arriving open on a hand-off.
+  // A panel with no questions is not drawn, so it is never shown either.
   useEffect(() => {
-    if (!open || shown.current) return;
+    if (!open || prompts.length === 0 || shown.current) return;
     shown.current = true;
     onShown?.(prompts.flatMap((p) => (p.id ? [p.id] : [])));
   }, [open, prompts, onShown]);
@@ -247,30 +281,32 @@ export function SocraticPanel({
     leave(opened.current, onAbandon);
   };
 
+  /** Keep going: the panel closes, then whatever the way in leads on to. */
+  const keepGoing = () => {
+    closePanel();
+    onKeepGoing?.();
+  };
+
   /*
    * WORKED THROUGH: every prompt that can be answered has been. A panel of
-   * bare questions has nothing to answer, so only a hand-off - which must
-   * always have a way on - counts it as worked through from the start.
+   * bare questions has nothing to answer, so only a hand-off counts it as
+   * worked through from the start, and says its line at once.
    */
   const answerable = prompts.flatMap((p) => (p.id ? [p.id] : []));
   const workedThrough =
     answerable.length > 0
       ? answerable.every((id) => answered.has(id))
       : entry === "handoff";
-  const ending =
+  const ending: { line: string; tryAgain?: () => void } | undefined =
     workedThrough && active === null
       ? entry === "handoff"
-        ? onKeepGoing && {
-            line: "Let's keep going.",
-            action: "Keep going",
-            go: onKeepGoing,
-          }
+        ? { line: "Let's keep going." }
         : onTryAgain && {
             line: "Want to try the question again now?",
-            action: "Try again",
-            go: onTryAgain,
+            tryAgain: onTryAgain,
           }
       : undefined;
+  const tryAgain = ending?.tryAgain;
 
   const toggle = (id: string) => {
     // An answered prompt opened again is not abandoned if it is left: it was
@@ -322,6 +358,13 @@ export function SocraticPanel({
       (p) => p.id !== undefined && p.id === active && !p.options?.length,
     )?.id ?? null;
 
+  // No questions sent, none made up: no panel (rule 5).
+  if (prompts.length === 0) return null;
+
+  /** Into the player's row above the arrows, or where it is mounted. */
+  const place = (sheet: ReactNode) =>
+    dock ? createPortal(sheet, dock) : sheet;
+
   return (
     <>
       <div className="mb-4 flex justify-center">
@@ -344,8 +387,13 @@ export function SocraticPanel({
           </span>
         </button>
       </div>
-      {open && (
-        <div className="fixed inset-x-0 bottom-0 z-30 max-h-[85dvh] overflow-y-auto rounded-t-[16px] bg-[#e5dfd3] px-[22px] pt-4 pb-[22px] shadow-[0_-8px_28px_rgba(43,43,47,0.14)] motion-safe:animate-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-300 motion-safe:ease-nevo-slide">
+      {open &&
+        place(
+        /* In flow, not fixed: the dock is a row of the player's column, so
+           the sheet's height comes out of the reading column and the arrows
+           stay below it. Positioned only so its shadow paints over the
+           column's text. */
+        <div className="relative max-h-[85dvh] min-h-0 w-full overflow-y-auto rounded-t-[16px] bg-[#e5dfd3] px-[22px] pt-4 pb-[22px] shadow-[0_-8px_28px_rgba(43,43,47,0.14)] motion-safe:animate-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-300 motion-safe:ease-nevo-slide">
           {/* Frame: drag handle, then the small violet uppercase label. The 44px
               dismiss is our audited addition (the panel never blocks, so it
               needs a visible close) - kept beside the label. */}
@@ -492,7 +540,8 @@ export function SocraticPanel({
                 );
               })}
             </div>
-            {/* 38's ending: Nevo's line in navy, then the one way on. */}
+            {/* 38's ending: Nevo's line in navy, and the way back where there
+                is a question to go back to. */}
             {ending && (
               <>
                 <p
@@ -501,18 +550,30 @@ export function SocraticPanel({
                 >
                   {ending.line}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    closePanel();
-                    ending.go();
-                  }}
-                  className={cn(SEND, "mt-3.5")}
-                >
-                  {ending.action}
-                </button>
+                {tryAgain && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closePanel();
+                      tryAgain();
+                    }}
+                    className={cn(SEND, "mt-3.5")}
+                  >
+                    Try again
+                  </button>
+                )}
               </>
             )}
+            {/* 38's Keep going, there and pressable from the moment the
+                panel opens (SCRUM-275) - never greyed out, never held for an
+                answer. */}
+            <button
+              type="button"
+              onClick={keepGoing}
+              className={cn(SEND, "mt-3.5")}
+            >
+              Keep going
+            </button>
             {/* Inside the sheet, edge to edge at its foot, and never the
                 device's own keyboard. It hides itself where a real keyboard
                 exists, and stays in reach when the sheet scrolls. */}
@@ -526,8 +587,8 @@ export function SocraticPanel({
               />
             )}
           </div>
-        </div>
-      )}
+        </div>,
+        )}
     </>
   );
 }
