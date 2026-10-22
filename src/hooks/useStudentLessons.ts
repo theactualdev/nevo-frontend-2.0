@@ -7,6 +7,7 @@ import type {
   LessonSummary,
 } from "@/components/student/Lessons/lessonCatalog";
 import { unavailableReason } from "@/lib/lessons/availability";
+import { isFinishedRow } from "@/lib/lessons/finishedRow";
 import { segmentPlace } from "@/lib/lessons/segmentPlace";
 import { useStudentDashboard } from "./useStudentDashboard";
 
@@ -38,9 +39,17 @@ import { useStudentDashboard } from "./useStudentDashboard";
  * partway has started it, whatever the backend calls that.
  */
 
-/** Backend `LessonCompletionStatus` -> the calm indicator the cards draw. */
-function statusFrom(raw: string | undefined): LessonStatus {
-  if (raw === "completed") return "completed";
+/**
+ * The child's progress row -> the calm indicator the cards draw. A row
+ * carrying `completedAt` is finished whatever its status says (Teslim, 21
+ * Oct) - see `isFinishedRow` - so it files under Completed, with the card's
+ * own check and "Look again", and no new words.
+ */
+function statusFrom(
+  row: Parameters<typeof isFinishedRow>[0],
+): LessonStatus {
+  if (isFinishedRow(row)) return "completed";
+  const raw = row?.status;
   if (raw === "in_progress" || raw === "exited") return "in_progress";
   return "not_started";
 }
@@ -92,7 +101,7 @@ export function useStudentLessons(): StudentLessons {
         // activity, not a full history, so a lesson finished a while ago may
         // have no row left in it - and read "Not started".
         const status =
-          a.status === "completed" ? "completed" : statusFrom(row?.status);
+          a.status === "completed" ? "completed" : statusFrom(row);
         const count = a.lesson.segmentCount;
         /*
          * ZERO AND ABSENT BOTH MEAN "NO ESTIMATE", and neither may be drawn as
