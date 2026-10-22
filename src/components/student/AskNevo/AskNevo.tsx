@@ -12,6 +12,8 @@ import { useHasSession } from "@/hooks/useHasSession";
 import { askNevoApi, asUuid } from "@/lib/api";
 import {
   allowanceSpent,
+  safetyStop,
+  type SafetyStop,
   type ThreadSummary,
   type ThreadTranscript,
 } from "@/lib/api/askNevo";
@@ -142,8 +144,8 @@ function replyFor(text: string): Message {
  * Always reachable from the app tabs, never interruptive: a docked button on
  * mobile, a corner pill on desktop, opening a full-width bottom sheet (mobile)
  * or right side drawer (tablet/desktop). Suggested prompts, conversation,
- * "Nevo is thinking" dots, the cannot-help hand-to-teacher state and Nevo
- * Keyboard entry (A.12). Typed only: no microphone (SCRUM-256, at the composer).
+ * "Nevo is thinking" dots, the cannot-help hand-to-teacher state, the safety
+ * stop (SCRUM-259, `StopScreen`) and Nevo Keyboard entry (A.12). Typed only: no microphone (SCRUM-256, at the composer).
  */
 export function AskNevo() {
   const router = useRouter();
@@ -194,6 +196,14 @@ export function AskNevo() {
    * the composer below never leaves.
    */
   const [view, setView] = useState<"chat" | "history">("chat");
+  /*
+   * THE SAFETY STOP (SCRUM-259), held apart from `messages` on purpose. It is
+   * not a turn in the conversation: the ticket says it is "not written into
+   * the child's visible conversation history as a failed turn that invites
+   * another attempt", so it takes the drawer's body until the child asks
+   * something new. See `StopScreen`.
+   */
+  const [stop, setStop] = useState<SafetyStop | null>(null);
   const signedIn = useHasSession();
   const history = useAskNevoHistory(open && signedIn);
   const kb = useNevoKeyboardDock();
@@ -227,7 +237,12 @@ export function AskNevo() {
      */
     setView("chat");
     history.closeThread();
-    setMessages((m) => [...m, { who: "user", text }]);
+    // Something new clears a stop: the composer is how a child moves on.
+    setStop(null);
+    // Kept by reference so a stop can take exactly this question back off
+    // the screen, whatever else the thread holds.
+    const asked: Message = { who: "user", text };
+    setMessages((m) => [...m, asked]);
     setThinking(true);
 
     // Live assistant first. When the backend can't answer, a signed-in child
@@ -243,6 +258,8 @@ export function AskNevo() {
     later(() => controller.abort(), LIVE_TIMEOUT_MS);
     /** The day's allowance is spent: not a failure, and never shown as one. */
     let spent = false;
+    /** The safety check stopped it: not a failure either, and never retried. */
+    let stopped: SafetyStop | null = null;
     const answer = askNevoApi
       .ask(
         {
@@ -259,6 +276,7 @@ export function AskNevo() {
       )
       .catch((cause) => {
         spent = allowanceSpent(cause);
+        stopped = safetyStop(cause);
         return null;
       });
     /*
@@ -288,6 +306,19 @@ export function AskNevo() {
       // ever set from an answer: one without an id must not drop a thread we
       // already hold.
       if (res?.threadId) threadId.current = res.threadId;
+      /*
+       * A SAFETY STOP IS NOT A FAILED TURN (SCRUM-259). It was shown as one -
+       * "that's on us, not you. Try asking again in a moment" - so a child who
+       * had just disclosed something was told the product broke and invited
+       * to say it again. Now the question comes back off the screen, nothing
+       * is added to the thread, and nothing ever sends it again.
+       */
+      if (stopped) {
+        setMessages((m) => m.filter((message) => message !== asked));
+        setStop(stopped);
+        setThinking(false);
+        return;
+      }
       // The server's own verdict, reported here rather than inside the state
       // update below, which React may run twice.
       if (res?.canHelp === false)
@@ -438,6 +469,8 @@ export function AskNevo() {
                 />
               )}
             </div>
+          ) : stop ? (
+            <StopScreen message={stop.message} />
           ) : (
           <>
           {/* Thread */}
@@ -619,6 +652,43 @@ export function AskNevo() {
         </SheetContent>
       </Sheet>
     </>
+  );
+}
+
+/**
+ * THE SAFETY STOP'S OWN SCREEN (SCRUM-259): the server's words and nothing
+ * else, in the drawer's body where the thread was.
+ *
+ * NO FRAME DRAWS THIS STATE. Frame 26's states are entry, conversation,
+ * thinking, cannot-help and the three history views. The ticket allowed it to
+ * be built without one because the retry was a line of copy, not a button, so
+ * this borrows the drawer's own centred line (frame 26, state 4) at reading
+ * strength rather than inventing a layout. Never red, never an icon (34 State
+ * Patterns).
+ *
+ * - The server's `message`, verbatim. None in the bundle - the ticket wants it
+ *   "taken from the server rather than substituted locally".
+ * - No retry, no "try again", and not the suggested prompts either: this is
+ *   not the thread, and a row of things to tap next reads as carry on.
+ * - The composer below stays, for something NEW. Frame 26 keeps the input
+ *   there "to start something new"; the blocked question was cleared from it
+ *   when it was sent and is never put back.
+ * - No message from the server is the nothing-state: the stop, empty. Never
+ *   the ordinary failure, which is exactly the screen this replaces.
+ *
+ * `role="status"` because the thread has no live region of its own, and a
+ * child using a screen reader must hear the stop as surely as anyone sees it.
+ */
+function StopScreen({ message }: { message: string | null }) {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-5 text-center">
+      <p
+        role="status"
+        className="max-w-[300px] text-[16px] leading-[1.6] text-pretty text-nevo-near-black"
+      >
+        {message}
+      </p>
+    </div>
   );
 }
 
