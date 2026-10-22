@@ -282,3 +282,41 @@ describe("an activity read from the wire with its outcome alone", () => {
     expect(article().lastElementChild?.textContent).toBe(OUTCOME);
   });
 });
+
+/*
+ * MEASURED IN THE FRAME'S SOURCE (22 Oct on-screen check, d6b9fbc). The
+ * checkbox is a 24px box with its 2px border outside - the frame sets no
+ * border-box - so 28px square, and the step text starts 56px into the card,
+ * not 52. The heading and the "STEP n" label set no line-height, so both are
+ * `normal`: a 12px line on the label, not 15, so each card is 3px shorter.
+ */
+describe("the card's measurements, as the frame draws them", () => {
+  const classes = (el: Element) => el.className.split(" ");
+
+  it("draws the checkbox 28px square", () => {
+    render(<InteractiveSegment content={activity()} />);
+    const box = screen.getByRole("button", { name: `Step 1: ${STEPS[0]}` })
+      .firstElementChild!;
+
+    expect(classes(box)).toContain("size-7");
+    expect(classes(box)).not.toContain("size-6");
+    expect(classes(box)).toContain("border-2");
+  });
+
+  it("sets the STEP label on a normal line, not the inherited 1.5", () => {
+    render(<InteractiveSegment content={activity()} />);
+    const label = screen.getByText("Step 1");
+
+    expect(classes(label)).toEqual(
+      expect.arrayContaining(["text-[10px]", "leading-[normal]"]),
+    );
+  });
+
+  it("sets the heading on a normal line", () => {
+    render(<InteractiveSegment content={activity()} />);
+    const heading = screen.getByRole("heading", { name: "Grow a bean" });
+
+    expect(classes(heading)).toContain("leading-[normal]");
+    expect(classes(heading)).not.toContain("leading-[1.3]");
+  });
+});

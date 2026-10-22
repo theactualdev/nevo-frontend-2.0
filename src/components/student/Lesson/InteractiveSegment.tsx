@@ -13,6 +13,13 @@ import type { InteractiveContent } from "@/lib/types";
  * NO INTRO PARAGRAPH (frame d6b9fbc): the frame removed it, and trimmed the
  * spacing round the strip and the steps, so the in-progress line fits on a
  * phone. `content.intro` is kept, and not drawn.
+ *
+ * MEASURED IN THE FRAME'S SOURCE (22 Oct on-screen check, d6b9fbc). Its
+ * heading and its "STEP n" label set no line-height, so both take `normal`:
+ * on 10px type that is a 12px line, not the 15px the inherited 1.5 gave, and
+ * each step card is 3px shorter for it. Its checkbox is a 24px box with a 2px
+ * border outside it - the frame does not set border-box - so it is 28px
+ * square, and the step text starts 56px into the card.
  */
 export function InteractiveSegment({
   content,
@@ -43,7 +50,7 @@ export function InteractiveSegment({
 
   return (
     <article>
-      <h2 className="text-[22px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black sm:text-[26px] lg:text-[28px]">
+      <h2 className="text-[22px] font-semibold leading-[normal] tracking-[-0.01em] text-nevo-near-black sm:text-[26px] lg:text-[28px]">
         {content.heading}
       </h2>
 
@@ -76,7 +83,7 @@ export function InteractiveSegment({
             >
               <span
                 className={cn(
-                  "mt-px flex size-6 shrink-0 items-center justify-center rounded-[7px] border-2 transition-colors duration-150",
+                  "mt-px flex size-7 shrink-0 items-center justify-center rounded-[7px] border-2 transition-colors duration-150",
                   done[i]
                     ? "border-nevo-navy bg-nevo-navy"
                     : "border-nevo-near-black/25 bg-transparent",
@@ -90,7 +97,7 @@ export function InteractiveSegment({
                 )}
               </span>
               <span className="flex flex-col gap-0.5">
-                <span className="font-mono text-[10px] tracking-[0.06em] text-nevo-near-black/50 uppercase">
+                <span className="font-mono text-[10px] leading-[normal] tracking-[0.06em] text-nevo-near-black/50 uppercase">
                   Step {i + 1}
                 </span>
                 <span className="text-base leading-[1.5] text-nevo-near-black sm:text-[18px] lg:text-[19px]">
