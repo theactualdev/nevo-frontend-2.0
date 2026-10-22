@@ -245,10 +245,10 @@ export interface LessonSegment extends SegmentVariants {
    */
   recommendedFormat?: ContentModality | null;
   /**
-   * What the child chose for this section in their latest sitting on this
-   * lesson (K4, Lydia 21 Oct) - format, depth and Slower - or null for no
-   * choice. Keyed by this segment's own id on the server. What a reload opens
-   * the section in, before its first frame. See `SegmentChoice`.
+   * What this section is delivered in, in the child's in-progress sitting on
+   * this lesson (K4, Lydia 21 Oct) - its own format, and the sitting's depth
+   * and Slower as they take effect here (741685e) - or null for no choice.
+   * What a reload opens in, before its first frame. See `SegmentChoice`.
    */
   deliveryPreference?: SegmentChoice | null;
   /**
@@ -291,12 +291,17 @@ export interface LessonSegment extends SegmentVariants {
 export type ChoiceDepth = "original" | "simplified" | "expanded";
 
 /**
- * `SegmentChoice` - what one child chose for ONE section of ONE sitting
- * (SCRUM-272 / K4, Teslim's handoff §5, 21 Oct). Held in the sitting's
- * delivery state on the server, keyed by the segment's id: it survives a
- * reload, applies to no other section, and "no preference is written as a
- * permanent learner-profile label" - it is never a modality on a child
- * (rule 1). Null on a field is no choice there.
+ * `SegmentChoice` - what ONE section of ONE sitting is delivered in, as the
+ * child chose it (SCRUM-272 / K4, Teslim's handoff §5, 21 Oct; 741685e,
+ * 22 Oct). "No preference is written as a permanent learner-profile label" -
+ * it is never a modality on a child (rule 1). Null on a field is no choice
+ * there.
+ *
+ * TWO SCOPES SINCE 741685e (Lydia, 22 Oct: "depth holds for the lesson,
+ * format is per section"). `modality` is this section's own. `depth` and
+ * `slower` are the SITTING's (`LessonChoice`), shown here as they take
+ * effect on this section: `depth` reads `original` on a section with no
+ * approved rewrite at the sitting's depth, while the sitting keeps it.
  */
 export interface SegmentChoice {
   modality?: ContentModality | null;
@@ -307,9 +312,34 @@ export interface SegmentChoice {
 }
 
 /**
+ * `LessonChoice` - the sitting's depth and Slower (741685e, 22 Oct): one
+ * value each for the whole sitting, whichever section it was picked on.
+ * `deliveryState.lessonPreferences` on `POST /session`, and on every
+ * preference write's answer. Null or absent is no choice; `original` and
+ * `false` are the standard text chosen.
+ */
+export interface LessonChoice {
+  depth?: ChoiceDepth | null;
+  slower?: boolean | null;
+  /** The server's, never ours. */
+  updatedAt?: string | null;
+}
+
+/**
+ * `SegmentFormatChoice` - one section's own entry in the sitting's
+ * `segmentChoices` (741685e): its format and nothing else. Depth and Slower
+ * are the sitting's - `LessonChoice`.
+ */
+export interface SegmentFormatChoice {
+  modality?: ContentModality | null;
+  updatedAt?: string | null;
+}
+
+/**
  * `SegmentChoiceWrite` - the body of `PUT .../segments/{id}/preferences`.
  * PARTIAL: "omitted fields are preserved and null clears that particular
- * override". So a write carries only what changed.
+ * override". So a write carries only what changed. `modality` is held for
+ * the addressed section; `depth` and `slower` for the whole sitting.
  */
 export interface SegmentChoiceWrite {
   modality?: ContentModality | null;
@@ -317,8 +347,13 @@ export interface SegmentChoiceWrite {
   slower?: boolean | null;
 }
 
-/** What a stored choice comes back as: the whole choice, and the section's formats now. */
+/**
+ * What a stored choice comes back as: the section's effective choice, the
+ * sitting's depth and Slower, and the section's formats now. TYPED, NOT
+ * READ: what was written is the child's own pick, already on screen.
+ */
 export interface SegmentChoiceResponse extends SegmentChoice {
+  lessonPreferences?: LessonChoice;
   availableFormats: string[];
   recommendedFormat?: string | null;
 }
@@ -559,9 +594,11 @@ export interface LessonSessionResponse {
    * (rules 6 and 7); whether the session opens first and this becomes the
    * source is a question to Teslim (20 Oct contract check).
    *
-   * Its `segmentChoices` ARE READ (K4, 21 Oct): the sitting's own word on
-   * what the child chose, section by section, which wins over the lesson
-   * read's for every section but the one already on screen - see the player.
+   * Its `segmentChoices` and `lessonPreferences` ARE READ (K4, 21 Oct;
+   * 741685e, 22 Oct): the sitting's own word on what the child chose - the
+   * format section by section, the depth and Slower for the sitting - which
+   * wins over the lesson read's everywhere but the section already on
+   * screen - see the player.
    */
   deliveryState?: SessionDelivery | null;
   /**
@@ -815,6 +852,18 @@ export interface LessonQuestionAttempt {
    * means there is none (B128), so the player opens no panel without it.
    */
   advanceAfterHandoff?: boolean;
+  /**
+   * THE GRACE WINDOW (backend 7d97248, Teslim's answer 6, 22 Oct): the
+   * moment the server will hand this question off, once a run of three
+   * misses exists and it is not yet time - so the third miss can come back
+   * with no `handoffTo` and this instead. Counted from the FIRST miss of the
+   * run, by age band (`question_support.guidance_deadline`). The spec: "re-read
+   * attempts then if the question is still unresolved" - the server pushes
+   * nothing when its clock passes it. A SERVER timestamp: waited for on the
+   * server's clock (`msUntilServerTime`), never compared with this device's.
+   * Null or absent: no deadline, and nothing is scheduled (rule 5).
+   */
+  handoffAvailableAt?: string | null;
 }
 
 /** `SocraticHandoffPrompt` - one guided question a hand-off opens with. */

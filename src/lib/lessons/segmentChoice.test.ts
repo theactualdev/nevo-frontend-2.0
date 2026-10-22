@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { chosenFrom, paceWrite, withSessionChoices } from "./segmentChoice";
+import {
+  chosenFrom,
+  lessonPace,
+  paceOf,
+  paceWrite,
+  withSessionChoices,
+} from "./segmentChoice";
 import type { ChosenVersion } from "@/lib/types";
 
 /**
  * K4 (Lydia, 21 Oct): the child's chosen version - format, depth and Slower -
- * held on the server per section. The wire keeps depth and Slower apart; the
- * player's chips are one pace. These are the two directions between them.
+ * held on the server: the format per section, depth and Slower for the
+ * sitting (Lydia, 22 Oct; 741685e). The wire keeps depth and Slower apart;
+ * the player's chips are one pace. These are the two directions between them.
  */
 
 describe("a stored choice, as the player reads it", () => {
@@ -63,25 +70,48 @@ describe("the write a pick makes", () => {
   });
 });
 
-describe("the sitting's own word, over the lesson read's", () => {
+describe("the sitting's own word on each format, over the lesson read's", () => {
   const read = new Map<string, ChosenVersion>([
     ["a", { modality: "audio" }],
-    ["b", { density: "simplify" }],
+    ["b", { modality: "audio", density: "simplify" }],
     ["c", { modality: "visual" }],
   ]);
 
-  it("wins for each section, and a section it names nothing for has none", () => {
+  it("wins for each section's format, and a section it names none for has none", () => {
     const merged = withSessionChoices(
       read,
-      { a: { modality: "visual" }, d: { slower: true } },
+      { a: { modality: "visual" }, d: { modality: "audio" } },
       ["a", "b", "c", "d"],
       () => false,
     );
 
     expect(Object.fromEntries(merged)).toEqual({
       a: { modality: "visual" },
-      d: { density: "slower" },
+      b: { density: "simplify" },
+      d: { modality: "audio" },
     });
+  });
+
+  it("never wipes a pace for carrying none: its entries are the format alone (741685e)", () => {
+    const merged = withSessionChoices(
+      read,
+      { b: { modality: "text", updatedAt: "2026-10-22T14:00:00Z" } },
+      ["b"],
+      () => false,
+    );
+
+    expect(merged.get("b")).toEqual({ modality: "text", density: "simplify" });
+  });
+
+  it("reads no pace from an entry, even one from an older sitting that still has it", () => {
+    const merged = withSessionChoices(
+      new Map(),
+      { d: { slower: true, depth: "expanded" } as never },
+      ["d"],
+      () => false,
+    );
+
+    expect(merged.has("d")).toBe(false);
   });
 
   it("leaves alone the sections it is told to keep", () => {
@@ -92,6 +122,42 @@ describe("the sitting's own word, over the lesson read's", () => {
       (id) => id === "b",
     );
 
-    expect(Object.fromEntries(merged)).toEqual({ b: { density: "simplify" } });
+    expect(Object.fromEntries(merged)).toEqual({
+      b: { modality: "audio", density: "simplify" },
+    });
+  });
+});
+
+describe("the sitting's pace (741685e: depth and Slower hold for the sitting)", () => {
+  it("is what POST /session's lessonPreferences names, or none", () => {
+    expect(paceOf({ depth: "simplified", slower: null })).toBe("simplify");
+    expect(paceOf({ depth: "expanded" })).toBe("expand");
+    expect(paceOf({ slower: true, depth: null })).toBe("slower");
+    expect(paceOf({ depth: "original", slower: false })).toBeNull();
+    // A new sitting inherits nothing.
+    expect(paceOf({})).toBeNull();
+    expect(paceOf({ depth: null, slower: null, updatedAt: null })).toBeNull();
+    expect(paceOf(undefined)).toBeNull();
+  });
+
+  it("is the one the lesson read's sections show", () => {
+    expect(
+      lessonPace([{ density: "simplify" }, { density: "simplify" }, undefined]),
+    ).toBe("simplify");
+    expect(lessonPace([{ modality: "audio" }, { density: "slower" }])).toBe(
+      "slower",
+    );
+    expect(lessonPace([undefined, { modality: "visual" }])).toBeNull();
+    expect(lessonPace([])).toBeNull();
+  });
+
+  it("is not cleared by a section showing the standard text for want of an approved rewrite", () => {
+    // The server reads `depth: "original"` there while the sitting keeps
+    // Simplify - first, last or in between.
+    expect(
+      lessonPace([{ density: null }, { density: "simplify" }, { density: null }]),
+    ).toBe("simplify");
+    expect(lessonPace([{ density: "expand" }, { density: null }])).toBe("expand");
+    expect(lessonPace([{ density: null }, { density: null }])).toBeNull();
   });
 });

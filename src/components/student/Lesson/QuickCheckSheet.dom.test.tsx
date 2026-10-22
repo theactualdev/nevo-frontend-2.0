@@ -54,6 +54,7 @@ const mount = () =>
       onOpenChange={() => {}}
       onAnswered={() => {}}
       onContinue={() => {}}
+      onLeave={() => {}}
     />,
   );
 
@@ -91,6 +92,7 @@ describe("a spoken check (B16)", () => {
         onOpenChange={() => {}}
         onAnswered={() => {}}
         onContinue={() => {}}
+        onLeave={() => {}}
       />,
     );
 
@@ -132,6 +134,7 @@ describe("the reading accommodation on a quick check (D30)", () => {
         onOpenChange={() => {}}
         onAnswered={() => {}}
         onContinue={() => {}}
+        onLeave={() => {}}
       />,
     );
 
@@ -191,4 +194,128 @@ describe("the sheet's look (design, 13 Oct)", () => {
     expect(note.className.split(" ")).toContain("text-nevo-violet-text");
     expect(note.className.split(" ")).not.toContain("text-nevo-violet");
   });
+});
+
+/**
+ * SCRUM-275, LYDIA 22 OCT: "The check sheet gets its own Keep going. A child
+ * whose only way past is the right answer is trapped." And: "Two identical
+ * navy buttons is a defect, not a choice. One primary per sheet and it is the
+ * action that progresses the check, so Try again or Send. Keep going is
+ * secondary, not navy, not full-width."
+ */
+const classes = (el: Element) => (el.getAttribute("class") ?? "").split(/\s+/);
+/** A navy, full-width button: what only the primary may be. */
+const navyFullWidth = () =>
+  screen
+    .getAllByRole("button")
+    .filter(
+      (b) => classes(b).includes("bg-nevo-navy") && classes(b).includes("w-full"),
+    );
+const keepGoing = () => screen.getByRole("button", { name: "Keep going" });
+
+const mountWith = (handlers: {
+  onAnswered?: () => void;
+  onContinue?: () => void;
+  onLeave?: () => void;
+}) =>
+  render(
+    <QuickCheckSheet
+      check={CHECK}
+      open
+      onOpenChange={() => {}}
+      onAnswered={handlers.onAnswered ?? (() => {})}
+      onContinue={handlers.onContinue ?? (() => {})}
+      onLeave={handlers.onLeave ?? (() => {})}
+    />,
+  );
+
+describe("the sheet's own Keep going (SCRUM-275)", () => {
+  it("is there and pressable the moment the sheet opens, before any answer", () => {
+    const onAnswered = vi.fn();
+    const onContinue = vi.fn();
+    const onLeave = vi.fn();
+    mountWith({ onAnswered, onContinue, onLeave });
+
+    expect(keepGoing()).toBeEnabled();
+    fireEvent.click(keepGoing());
+
+    expect(onLeave).toHaveBeenCalledOnce();
+    // It answers nothing, and claims no right answer.
+    expect(onAnswered).not.toHaveBeenCalled();
+    expect(onContinue).not.toHaveBeenCalled();
+  });
+
+  it("stands beside Try again after a miss, and still leaves the check unpassed", () => {
+    const onContinue = vi.fn();
+    const onLeave = vi.fn();
+    mountWith({ onContinue, onLeave });
+
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+    fireEvent.click(keepGoing());
+
+    expect(onLeave).toHaveBeenCalledOnce();
+    expect(onContinue).not.toHaveBeenCalled();
+  });
+
+  it("is the frame's way on after a right answer, and is drawn once", () => {
+    const onContinue = vi.fn();
+    const onLeave = vi.fn();
+    mountWith({ onContinue, onLeave });
+
+    fireEvent.click(screen.getByRole("button", { name: "Carbon dioxide" }));
+    expect(screen.getAllByRole("button", { name: "Keep going" })).toHaveLength(1);
+    fireEvent.click(keepGoing());
+
+    expect(onContinue).toHaveBeenCalledOnce();
+    expect(onLeave).not.toHaveBeenCalled();
+  });
+});
+
+describe("one navy primary per sheet (SCRUM-275)", () => {
+  const states = [
+    ["as it opens", () => {}],
+    [
+      "after a miss",
+      () => fireEvent.click(screen.getByRole("button", { name: "Oxygen" })),
+    ],
+    [
+      "after a right answer",
+      () =>
+        fireEvent.click(screen.getByRole("button", { name: "Carbon dioxide" })),
+    ],
+  ] as const;
+
+  it.each(states)("has no more than one navy full-width button %s", (_, reach) => {
+    mount();
+    reach();
+
+    expect(navyFullWidth().length).toBeLessThanOrEqual(1);
+  });
+
+  it("makes Try again the one primary after a miss", () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+
+    expect(navyFullWidth()).toEqual([
+      screen.getByRole("button", { name: "Try again" }),
+    ]);
+  });
+
+  it.each(states)(
+    "draws Keep going secondary %s: not navy, not full width, 44px, a pointer",
+    (_, reach) => {
+      mount();
+      reach();
+
+      const own = classes(keepGoing());
+      expect(own).not.toContain("bg-nevo-navy");
+      expect(own).not.toContain("w-full");
+      expect(own).toContain("w-fit");
+      expect(own).toContain("h-11");
+      expect(own).toContain("cursor-pointer");
+      // Named on the button itself, not only in a child span.
+      expect(keepGoing().firstChild?.nodeType).toBe(Node.TEXT_NODE);
+    },
+  );
 });

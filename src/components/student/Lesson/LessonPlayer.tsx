@@ -79,7 +79,13 @@ import {
   type SegmentChoiceWrite,
 } from "@/lib/api/lessons";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
-import { paceWrite, withSessionChoices } from "@/lib/lessons/segmentChoice";
+import { msUntilServerTime } from "@/lib/api/serverClock";
+import {
+  lessonPace,
+  paceOf,
+  paceWrite,
+  withSessionChoices,
+} from "@/lib/lessons/segmentChoice";
 import { schedulerApi, type ReviewOutcome } from "@/lib/api/scheduler";
 import { answerFor, calculationAttemptFor } from "@/lib/lessons/attempts";
 import { holdAnswer, retryable } from "@/lib/lessons/pendingProgress";
@@ -611,17 +617,18 @@ export function LessonPlayer({
     level: DensityLevel | null;
   }>(() => ({ segmentId: first.id, level: firstPlan?.densityLevel ?? null }));
   /*
-   * WHAT THE CHILD CHOSE FOR EACH SEGMENT, this sitting (SCRUM-272, K4):
-   * its format, and its pace for the text.
+   * WHAT THE CHILD CHOSE, this sitting (SCRUM-272, K4): each segment's
+   * format, and the pace of the text for the whole lesson.
    *
-   * Segment-level and nothing more (rule 1): a choice is about one section
-   * of one lesson, and it opens that section in it again - a return visit,
-   * or a reload. Lydia, 21 Oct: "A reload keeps the child's chosen version
-   * ... scoped to the segment ... held server-side rather than in browser
-   * storage." So it is held on the server (`saveSegmentChoice`) and read back
-   * from there: from the lesson read, which is in hand BEFORE THIS FIRST
-   * FRAME, so a reload opens in it with nothing changing on screen (rules 6
-   * and 7) - and then from the sitting itself, below. Never from the device.
+   * TWO SCOPES (Lydia, 22 Oct: "depth holds for the lesson, format is per
+   * section"; the server since 741685e). Never about the child (rule 1): a
+   * format is about one section of one lesson, and a pace about this one
+   * lesson. Lydia, 21 Oct: "A reload keeps the child's chosen version ...
+   * held server-side rather than in browser storage." So both are held on
+   * the server (`saveSegmentChoice`) and read back from there: from the
+   * lesson read, which is in hand BEFORE THIS FIRST FRAME, so a reload opens
+   * in them with nothing changing on screen (rules 6 and 7) - and then from
+   * the sitting itself, below. Never from the device.
    *
    * Only for a live lesson the child is working through. A review, or a
    * finished lesson opened again, is a new sitting on work that ended - the
@@ -632,12 +639,32 @@ export function LessonPlayer({
    * one, and that sitting's own word arrives with it, below.
    */
   const choicesHeld = live && !review && !finished;
+  const readHeld = choicesHeld && depth === undefined;
+  /*
+   * THE CHILD'S PACE (the navy chip), FOR THE LESSON: Simplify, Expand or
+   * Slower, "holds for the current lesson and resets after" (design 18 Sep;
+   * Lydia, 17 and 22 Oct). Separate from the system's density - the engine's
+   * instruction or the segment plan's, and NOTHING when neither gave one
+   * (D23, below) - which renders as the violet chip and supplies the view
+   * until the child overrides. Both can show at once.
+   *
+   * The sitting's one value (`LessonChoice`), as the read shows it on its
+   * sections - see `lessonPace`: a section showing the standard text only
+   * because it has no approved rewrite does not clear it.
+   */
+  const [density, setDensity] = useState<Density | null>(() =>
+    readHeld ? lessonPace(given.segments.map((s) => s.chosen)) : null,
+  );
+  // Each segment's FORMAT. The read's pace is the lesson's, above, so none
+  // is kept per segment here.
   const [chosen, setChosen] = useState<ReadonlyMap<string, ChosenVersion>>(
     () =>
       new Map(
-        choicesHeld && depth === undefined
+        readHeld
           ? given.segments.flatMap((s) =>
-              s.chosen ? [[s.id, s.chosen] as const] : [],
+              s.chosen?.modality
+                ? [[s.id, { modality: s.chosen.modality }] as const]
+                : [],
             )
           : [],
       ),
@@ -1054,27 +1081,62 @@ export function LessonPlayer({
   const segment = asEntered(lesson.segments[index]);
 
   /*
-   * THE SITTING'S OWN WORD ON WHAT WAS CHOSEN (K4): `POST /session`'s
-   * `deliveryState.segmentChoices`, which answers a moment after the first
-   * frame. Where it differs from the lesson read, it wins - but not on the
-   * section already on screen, which is never flipped under the child (rule
-   * 7), and not on one the child has picked on since. Taken once per answer,
-   * as it lands, rather than in an effect, so no frame shows the older read.
+   * THE PACE HELD ON THE SECTION ON SCREEN as the sitting's word lands with a
+   * different one (rule 7, below) - for this visit to it and no longer: it
+   * goes as the child moves on, or picks a pace of their own.
    */
-  const sittingChoices = choicesHeld
-    ? progress.opened?.deliveryState?.segmentChoices
-    : undefined;
-  const [choicesTaken, setChoicesTaken] = useState<object | null>(null);
-  if (sittingChoices && choicesTaken !== sittingChoices) {
-    setChoicesTaken(sittingChoices);
-    setChosen((prev) =>
-      withSessionChoices(
-        prev,
-        sittingChoices,
-        lesson.segments.map((s) => s.id),
-        (id) => id === segment.id || pickedOn.has(id),
-      ),
-    );
+  const [paceHeld, setPaceHeld] = useState<{
+    segmentId: string;
+    density: Density | null;
+  } | null>(null);
+  // A pace the child picked since the lesson opened: newer than either read.
+  const [pacePicked, setPacePicked] = useState(false);
+  /*
+   * THE PACE ON THIS SEGMENT: the lesson's (above), unless the sitting's
+   * word landed with another while this segment was on screen - then the one
+   * it was showing, until the child leaves it.
+   */
+  const manualDensity: Density | null =
+    paceHeld?.segmentId === segment.id ? paceHeld.density : density;
+
+  /*
+   * THE SITTING'S OWN WORD ON WHAT WAS CHOSEN (K4): `POST /session`'s
+   * `deliveryState`, which answers a moment after the first frame - each
+   * section's format in `segmentChoices`, and the lesson's pace in
+   * `lessonPreferences` (741685e). Where it differs from the lesson read, it
+   * wins - but not on the section already on screen, which is never flipped
+   * under the child (rule 7), and not where the child has picked since.
+   * Taken once per answer, as it lands, rather than in an effect, so no
+   * frame shows the older read.
+   *
+   * `segmentChoices` carry the format and nothing else now, so they never
+   * touch the pace. A sitting that says nothing about pace (a server from
+   * before `lessonPreferences`) leaves the read's.
+   */
+  const sittingState = choicesHeld ? progress.opened?.deliveryState : undefined;
+  const [sittingTaken, setSittingTaken] = useState<object | null>(null);
+  if (sittingState && sittingTaken !== sittingState) {
+    setSittingTaken(sittingState);
+    const formats = sittingState.segmentChoices;
+    if (formats) {
+      setChosen((prev) =>
+        withSessionChoices(
+          prev,
+          formats,
+          lesson.segments.map((s) => s.id),
+          (id) => id === segment.id || pickedOn.has(id),
+        ),
+      );
+    }
+    const pace = sittingState.lessonPreferences
+      ? paceOf(sittingState.lessonPreferences)
+      : undefined;
+    if (pace !== undefined && !pacePicked && pace !== density) {
+      if (paceHeld?.segmentId !== segment.id) {
+        setPaceHeld({ segmentId: segment.id, density: manualDensity });
+      }
+      setDensity(pace);
+    }
   }
 
   /*
@@ -1584,7 +1646,11 @@ export function LessonPlayer({
   /*
    * The engine's NEWEST answer wins, and its silence counts: once it has
    * answered mid-lesson, an absent instruction means none now (rule 5), not
-   * "keep whatever it said at load".
+   * "keep whatever it said at load" - unless the answer says `retain`, when
+   * the help on screen is still its word, and stays with the section it was
+   * given for (`withDisposition`, 22 Oct). Help resent under its decision id
+   * is the same hint, reshape or panel: every once-only rule below is keyed
+   * on what it shows, so it is not offered, counted or opened again.
    */
   const engine = runtime.plan ?? plan;
   const action = engine?.adjustment ?? segPlan?.adjustment ?? null;
@@ -1844,11 +1910,30 @@ export function LessonPlayer({
       level: nextPlan?.densityLevel ?? null,
     });
     /*
-     * THE CHILD'S PACE PICK STAYS ON ITS OWN SECTION (Lydia, 21 Oct), as
-     * their format pick always has. Nothing about pace is set here: the
-     * section being opened shows its own stored or picked pace, else the
-     * standard text - see `manualDensity`.
+     * THE CHILD'S PACE CHOICE HOLDS FOR THE REST OF THE LESSON (Lydia,
+     * 22 Oct, restating 17 Oct: "depth holds for the lesson, format is per
+     * section" - her 21 Oct note was about format only).
+     *
+     * This used to clear it on every segment. Design's ruling, 18 Sep:
+     * "Resetting it every segment would be maddening, and storing it would
+     * make it an accommodation, which is exactly what we just said it is not.
+     * It holds for the current lesson and resets after."
+     *
+     * So the pace is the lesson's: never written to the profile, never sent
+     * back to the engine as a value, and gone at the next sign-in because a
+     * new lesson is a new player. What the engine still learns is that the
+     * child asked, from the trigger the chip sends.
+     *
+     * HELD FOR THE SITTING (741685e): whichever section it was picked on,
+     * the server keeps it for every section, so a reload opens each one in
+     * it - see `density`. Never the device. Only a pace held on the section
+     * that was on screen as the sitting's word landed is let go here.
+     *
+     * A segment that cannot deliver the chosen density simply renders its
+     * default - the pick is not cleared, so it applies again on the next
+     * segment that can.
      */
+    setPaceHeld(null);
     setModality(
       openingModality(
         nextSegment,
@@ -1969,7 +2054,7 @@ export function LessonPlayer({
    * hand-off at all, whatever else it carries: no panel, and the check stays
    * the way on. There is no panel that ends nowhere.
    */
-  const handOffFrom = (segmentId: string, stored: LessonQuestionAttempt) => {
+  const openHandoff = (segmentId: string, stored: LessonQuestionAttempt) => {
     if (stored.handoffTo !== "socratic_panel") return;
     if (stored.advanceAfterHandoff !== true) return;
     if (answeredRight.current.has(segmentId)) return;
@@ -1990,6 +2075,98 @@ export function LessonPlayer({
       run: (prev?.run ?? 0) + 1,
       prompts,
     }));
+  };
+
+  /*
+   * THE GRACE WINDOW (Teslim, 22 Oct, answer 6; backend 7d97248): the panel
+   * now waits for the age band's window, counted by the server from the first
+   * of three misses in a row on the question. So the third miss can come back
+   * with no `handoffTo` and a `handoffAvailableAt` instead - and the server
+   * pushes nothing when its clock passes that moment. Its spec: "re-read
+   * attempts then if the question is still unresolved". Without that read the
+   * panel would wait for the child to act again, and a child who has missed
+   * three times may well not.
+   *
+   * So ONE read of the sitting's stored answers
+   * (`GET /api/v1/lessons/{id}/attempts?sessionId=`, whose rows carry the same
+   * hand-off the write's answer does) at the moment the server named, and its
+   * answer followed exactly as a write's is (`openHandoff`): a hand-off opens
+   * the panel; none, and nothing happens. No retry and no second read - the
+   * moment is the server's, and so is what happens at it. Nothing here counts
+   * misses or holds a window of its own (rule 3).
+   *
+   * THE WAIT IS ON THE SERVER'S CLOCK: its timestamp less the device's "now"
+   * corrected by the `Date` header skew (`msUntilServerTime`), so a tablet
+   * with a wrong clock waits as long as the server means. Rule 4 is not
+   * touched: nothing timed is sent from here - the wait only decides when to
+   * ask, and what is asked is a read.
+   *
+   * ONLY WHILE THE QUESTION IS STILL OPEN: its check is up on that section,
+   * unpassed and not handed off. Answering it right, a hand-off arriving,
+   * the sheet closing (Keep going), leaving the section or the lesson
+   * unmounting each ends that, and the read with it - see `unresolvedCheck`.
+   * A read already on its way when that happens is not followed.
+   */
+  const reread = useRef<{ timer: ReturnType<typeof setTimeout> | null } | null>(
+    null,
+  );
+  const cancelReread = useCallback(() => {
+    const pending = reread.current;
+    if (pending?.timer != null) clearTimeout(pending.timer);
+    reread.current = null;
+  }, []);
+  // The section whose check is up and still unresolved, or null.
+  const unresolvedCheck =
+    phase === "segments" &&
+    checkOpen &&
+    !passedChecks.has(segment.id) &&
+    !handedOff.has(segment.id)
+      ? segment.id
+      : null;
+  const openCheck = useRef<string | null>(null);
+  useEffect(() => {
+    openCheck.current = unresolvedCheck;
+    return () => {
+      openCheck.current = null;
+      cancelReread();
+    };
+  }, [unresolvedCheck, cancelReread]);
+
+  const rereadAt = (segmentId: string, stored: LessonQuestionAttempt) => {
+    if (stored.correct !== false || stored.handoffTo) return;
+    if (!stored.handoffAvailableAt) return;
+    // An answer that lands after the child has moved off the question.
+    if (openCheck.current !== segmentId) return;
+    const wait = msUntilServerTime(stored.handoffAvailableAt);
+    if (wait === null) return;
+    // Exactly one: a later miss names the same moment (the run's first miss
+    // sets it), and replaces the read waiting for it.
+    cancelReread();
+    const mine: { timer: ReturnType<typeof setTimeout> | null } = {
+      timer: null,
+    };
+    reread.current = mine;
+    mine.timer = setTimeout(() => {
+      mine.timer = null;
+      void lessonsApi.attempts(lesson.id, stored.sessionId).then(
+        (rows) => {
+          if (reread.current !== mine) return;
+          reread.current = null;
+          const now = rows.findLast((r) => r.questionId === stored.questionId);
+          if (now) openHandoff(segmentId, now);
+        },
+        () => {
+          // A read that failed is no hand-off, and is not asked again.
+          if (reread.current === mine) reread.current = null;
+        },
+      );
+    }, wait);
+  };
+
+  /** What the server's answer to a quick check leads to: now, or later. */
+  const handOffFrom = (segmentId: string, stored: LessonQuestionAttempt) => {
+    openHandoff(segmentId, stored);
+    rereadAt(segmentId, stored);
   };
 
   /*
@@ -2053,69 +2230,40 @@ export function LessonPlayer({
     );
   };
 
-  /*
-   * THE CHILD'S MANUAL PACE ON THIS SEGMENT (the navy chip): the segment's
-   * own choice - stored on the server, or picked here this visit - and
-   * otherwise none, the standard text. Separate from the system's density -
-   * the engine's instruction or the segment plan's, and NOTHING when neither
-   * gave one (D23, below) - which renders as the violet chip and supplies the
-   * view until the child overrides it. Both can show at once.
-   *
-   * A PICK STAYS ON ITS OWN SECTION (Lydia, 21 Oct, her newest written rule:
-   * the choice "is scoped to the segment, so a choice on one segment does not
-   * carry to the next"). That is what the server stores, too - per section,
-   * per sitting - so a reload changes nothing the child sees: moving on opens
-   * the next section exactly as a reload would, in its own stored or picked
-   * pace or else the standard text, and coming back opens a section in the
-   * pick made on it. Formats never carried.
-   *
-   * This replaces the carry through the lesson, which "holds for the current
-   * lesson and resets after" (design 18 Sep; Lydia's 21 Sep rule, restated
-   * 17 Oct): carried in component state, it showed a child a pace on the
-   * next section that a reload then took away. The hub has asked Lydia to
-   * confirm the 21 Oct rule over the 17 Oct one; the demo does not hold on
-   * it. What the engine learns is still only that the child asked, from the
-   * trigger the chip sends.
-   */
-  const manualDensity: Density | null = chosen.get(segment.id)?.density ?? null;
-  /** Which pick on a segment is the newest, for a refusal that lands late. */
-  const paceTickets = useRef(new Map<string, number>());
+  /** Which pace pick is the newest, for a refusal that lands late. */
+  const paceTicket = useRef(0);
 
   const pickDensity = (id: string) => {
     const d = id as Density;
     const segmentId = segment.id;
     const next = manualDensity === d ? null : d;
-    const before = chosen.get(segmentId)?.density;
-    keepChoice(segmentId, { density: next });
+    // The sitting's pace, which the server holds for every section - not
+    // whatever this one was holding on screen.
+    const before = density;
+    setPacePicked(true);
+    setPaceHeld(null);
+    setDensity(next);
     // A tap that sets (not clears) a density is the child asking - the only
     // thing these triggers mean, so no `source` rides with it.
     if (next) {
       trackEvent(DENSITY_TRIGGER[next], { segmentId });
     }
     /*
-     * HELD ON THE SERVER for this segment: only what changed, and the
-     * standard text as a clear (`paceWrite`). The chips switch at once, as
-     * they always have; the write follows. Refused as `depth_unavailable` -
-     * a rewrite the server does not hold as cleared - the segment goes back
-     * to the pace it had, with no message. Any other failure is honoured on
-     * screen and simply not kept past this visit.
+     * HELD ON THE SERVER for the sitting (741685e), through this segment's
+     * address: only what changed, and the standard text as a clear
+     * (`paceWrite`). The chips switch at once, as they always have; the
+     * write follows. Refused as `depth_unavailable` - a rewrite the server
+     * does not hold as cleared - the lesson goes back to the pace it had,
+     * with no message. Any other failure is honoured on screen and simply
+     * not kept past this visit.
      */
     const write = paceWrite(before, next);
     if (!write) return;
-    const ticket = (paceTickets.current.get(segmentId) ?? 0) + 1;
-    paceTickets.current.set(segmentId, ticket);
+    const ticket = ++paceTicket.current;
     void choiceWrite(segmentId, write)?.catch((cause: unknown) => {
       if (refusalOf(cause) !== "depth_unavailable") return;
-      if (paceTickets.current.get(segmentId) !== ticket) return;
-      setChosen((prev) => {
-        const back = new Map(prev);
-        const restored: ChosenVersion = { ...back.get(segmentId) };
-        if (before === undefined) delete restored.density;
-        else restored.density = before;
-        if (Object.keys(restored).length > 0) back.set(segmentId, restored);
-        else back.delete(segmentId);
-        return back;
-      });
+      if (paceTicket.current !== ticket) return;
+      setDensity((now) => (now === next ? before : now));
     });
   };
 
@@ -3494,6 +3642,25 @@ export function LessonPlayer({
             setCheckOpen(false);
             // Lydia's words (D185, 13 Oct): about the work, not the child.
             setFeedback("That's it. Here's what's next.");
+            advancePastSegment();
+          }}
+          /*
+           * THE SHEET'S OWN KEEP GOING, BEFORE THE CHECK IS PASSED (Lydia,
+           * SCRUM-275, 22 Oct: "A child whose only way past is the right
+           * answer is trapped"). It does what Next does on a segment with no
+           * check in the way: on, through `advancePastSegment` - so a planned
+           * break, the module boundary and the after-lesson check all still
+           * come, exactly as they would. Closing alone would leave Next to
+           * open the same check again.
+           *
+           * The check stays unpassed and nothing is recorded: no answer, no
+           * correctness, no line about it. The catalogue has no event for
+           * leaving a check, and none is made up; the segment's own
+           * `time_on_segment` still goes as it is left. A return visit asks
+           * it again, with this same way out.
+           */
+          onLeave={() => {
+            setCheckOpen(false);
             advancePastSegment();
           }}
         />

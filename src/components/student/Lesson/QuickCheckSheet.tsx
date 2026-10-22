@@ -5,6 +5,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/shared";
 import type { QuickCheck } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { KeepGoingButton } from "./AffectiveLayer";
 import { AnswerCheck, AnswerDot, AnswerOption } from "./AnswerOption";
 import { READING_BODY, READING_HEADING } from "./readingSupport";
 import { SpokenPrompt } from "./SpokenPrompt";
@@ -36,7 +37,20 @@ function msSince(start: number | null): number | null {
  * child step round the check the player gates on - and the player recorded
  * every one of those scrim taps as `tap_blocked` while they were doing the
  * opposite. Outside taps and Esc are refused now, so the record is true. The
- * ways out are the ones the frame draws: Keep going and Try again.
+ * ways out are the sheet's own: Keep going and Try again.
+ *
+ * ITS OWN KEEP GOING, FROM THE MOMENT IT OPENS (Lydia, SCRUM-275, 22 Oct): "A
+ * child whose only way past is the right answer is trapped, and with no
+ * guided questions there is no support on that screen at all." So Keep going
+ * is there before any answer, beside Try again after a miss, and alone after
+ * a right one. Before the check is passed it leaves it (`onLeave`): the sheet
+ * closes and the child moves on, the check unpassed, nothing recorded - no
+ * answer, no correctness, and no event (the catalogue has none for leaving a
+ * check). After a right answer it is the frame's Keep going (`onContinue`).
+ *
+ * ONE PRIMARY (Lydia, same ruling): Try again, navy and full width, is the
+ * action that progresses the check. Keep going is secondary - see
+ * `KeepGoingButton` - so two identical navy buttons never stand together.
  *
  * A SPOKEN CHECK (B16) says its question aloud on opening, with the printed
  * question still in place - see `SpokenPrompt`. The reading accommodation's
@@ -56,6 +70,7 @@ export function QuickCheckSheet({
   onOpenChange,
   onAnswered,
   onContinue,
+  onLeave,
   reading = false,
   onAudioBusy,
   hint,
@@ -79,6 +94,11 @@ export function QuickCheckSheet({
   ) => void;
   /** "Keep going" after a correct answer — close the sheet and advance. */
   onContinue: () => void;
+  /**
+   * "Keep going" before the check is passed - close the sheet and move on,
+   * the check left unpassed. Nothing is recorded for it.
+   */
+  onLeave: () => void;
 }) {
   const [chosenId, setChosenId] = useState<string | null>(null);
   const resolved = chosenId !== null;
@@ -183,16 +203,17 @@ export function QuickCheckSheet({
           </p>
         )}
 
-        {resolved &&
-          (correct ? (
-            <Button className="mt-5 w-full" onClick={onContinue}>
-              Keep going
-            </Button>
-          ) : (
-            <Button className="mt-5 w-full" onClick={() => setChosenId(null)}>
-              Try again
-            </Button>
-          ))}
+        {resolved && !correct && (
+          <Button className="mt-5 w-full" onClick={() => setChosenId(null)}>
+            Try again
+          </Button>
+        )}
+        {/* One Keep going, whatever has happened: the way on after a right
+            answer, and the way out before one. */}
+        <KeepGoingButton
+          onClick={correct ? onContinue : onLeave}
+          className={resolved && !correct ? "mt-3" : "mt-5"}
+        />
       </SheetContent>
     </Sheet>
   );

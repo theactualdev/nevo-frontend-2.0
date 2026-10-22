@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { SegmentChoice } from "./lessons";
+import type { LessonChoice, SegmentFormatChoice } from "./lessons";
 import type { AccommodationType } from "./students";
 
 /**
@@ -238,6 +238,41 @@ export interface AdaptResponse {
    * nothing - the pill it fed is gone (SCRUM-271/272).
    */
   modalitySuggestion: ModalitySuggestionResponse | null;
+  /**
+   * The decision the instruction was recorded under. Help still active is
+   * RESENT WITH ITS EXISTING ID (Teslim, 22 Oct, answer 3), so a resend is
+   * the same help, not a new offer. TYPED, NOT READ: a resend carries the
+   * same instruction and the same words, and the player's once-only rules -
+   * `hint_offered` once per hint per section, the reshape and the panel
+   * counted once as applied, a closed hint staying closed - are already
+   * keyed on those, so a second key would decide nothing differently.
+   */
+  decisionId?: string | null;
+  /**
+   * WHAT BECOMES OF THE HELP ON SCREEN (backend 864dff0, Teslim's answer 3):
+   * `apply` shows the new instruction; `retain` keeps what is on screen, even
+   * when `proactiveAdjustment` is null - "null alone no longer means
+   * dismiss"; `clear` removes it. The contract's default is `clear`, so an
+   * answer without it reads as before. See `useRuntimeAdaptation`.
+   */
+  adjustmentDisposition?: "apply" | "retain" | "clear";
+  /**
+   * When the engine's adaptation cooldown ends. INFORMATION ONLY - TYPED, NOT
+   * READ: Teslim asked for no re-read at it, and a cooldown is not a
+   * dismissal (`retain` says so).
+   */
+  cooldownUntil?: string | null;
+  /**
+   * When the question's grace window ends (backend 7d97248) - the same
+   * moment as the attempt's `handoffAvailableAt` for the question in front
+   * of the child: both are `guidance_deadline` over the same run of misses.
+   * TYPED, NOT READ: the player already reads the attempts once at that
+   * moment, which hands the panel off (`rereadAt` in the player); a second
+   * ask, of the engine, could only offer its own panel for the same question
+   * - which the player does not draw while the hand-off's is open - or say
+   * `retain`, which nothing on screen needs at that point.
+   */
+  supportGraceUntil?: string | null;
 }
 
 /**
@@ -337,11 +372,18 @@ export interface SessionDelivery {
   accommodations: AccommodationType[];
   capturedAt: string;
   /**
-   * What the child chose for each section of this sitting (K4, 21 Oct), keyed
-   * by the segment's own id. "It survives session resume/reload and does not
-   * apply to other segments." Absent on a sitting from before it.
+   * The format the child chose for each section of this sitting (K4, 21 Oct),
+   * keyed by the segment's own id - the format ONLY since 741685e: depth and
+   * Slower are the sitting's, in `lessonPreferences`. Absent on a sitting
+   * from before it.
    */
-  segmentChoices?: Record<string, SegmentChoice>;
+  segmentChoices?: Record<string, SegmentFormatChoice>;
+  /**
+   * The sitting's depth and Slower (741685e, 22 Oct): one value for every
+   * section, however many it was picked on. Absent on a server from before
+   * it; empty for a new sitting, which inherits nothing.
+   */
+  lessonPreferences?: LessonChoice;
   /**
    * The engine's standing recommendation per section, keyed the same way.
    * TYPED, NOT READ: each section's own `recommendedFormat` already says it,

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
-import { NevoKeyboard } from "@/components/shared";
+import { Button, NevoKeyboard } from "@/components/shared";
 import { cn } from "@/lib/utils";
 import { FOCUS_ON_SHAPE } from "./focusOnShape";
 
@@ -48,6 +48,44 @@ const PROMPT_IDLE = "text-nevo-near-black/50";
 /** 38's Send: full width, 44px, navy - never greyed out. */
 const SEND =
   "flex h-11 w-full cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy text-[14px] font-semibold text-nevo-cream transition-[filter,transform] hover:brightness-108 active:scale-[0.985]";
+
+/**
+ * KEEP GOING IS SECONDARY, WHEREVER IT IS (Lydia, SCRUM-275, 22 Oct): "Two
+ * identical navy buttons is a defect, not a choice. One primary per sheet and
+ * it is the action that progresses the check, so Try again or Send. Keep
+ * going is secondary, not navy, not full-width. Navy stays reserved for the
+ * primary action."
+ *
+ * No frame draws it yet, so it is the student app's own secondary: the
+ * design system's ghost button (`Button`, Design System v2 §6), as the lesson
+ * already pairs it under a navy primary - "Leave for now", "Back to my
+ * lessons", "Review answers" - at the system's 44px (`md`) and sized to its
+ * words rather than the sheet. Navy words, no fill.
+ *
+ * Shared by the quick check's sheet and the Socratic panel, so the one
+ * action looks the same in both. Where it stands alone - the hand-off's
+ * "Let's keep going.", a check answered right - it is still not promoted:
+ * there is no check left to progress, so there is no primary.
+ */
+export function KeepGoingButton({
+  onClick,
+  className,
+}: {
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="md"
+      onClick={onClick}
+      className={cn("mx-auto flex w-fit px-6 text-[15px]", className)}
+    >
+      Keep going
+    </Button>
+  );
+}
 
 /** `GuidedAnswerRequest.responseLength` is 0 to 10000 on the contract. */
 const MAX_RESPONSE_LENGTH = 10_000;
@@ -149,7 +187,9 @@ export type PanelEntry = "self" | "handoff";
  * answered and whichever way the panel was reached. It closes the panel, and
  * then does what the way in says (`onKeepGoing`): on into the next segment
  * after a hand-off, nothing more on a panel the child opened, which is theirs
- * to close - no completion condition, nothing to answer first.
+ * to close - no completion condition, nothing to answer first. It is the
+ * SECONDARY action, never a second navy one (Lydia, SCRUM-275, 22 Oct): Send
+ * and Try again are the primary - see `KeepGoingButton`.
  *
  * TWO ENDING LINES, AND THE PANEL IS TOLD WHICH (SCRUM-241, frame 38 §4 and
  * 38a). Once every answerable prompt has been answered, above Keep going:
@@ -566,14 +606,8 @@ export function SocraticPanel({
             )}
             {/* 38's Keep going, there and pressable from the moment the
                 panel opens (SCRUM-275) - never greyed out, never held for an
-                answer. */}
-            <button
-              type="button"
-              onClick={keepGoing}
-              className={cn(SEND, "mt-3.5")}
-            >
-              Keep going
-            </button>
+                answer. Secondary beside Send or Try again, and alone. */}
+            <KeepGoingButton onClick={keepGoing} className="mt-3.5" />
             {/* Inside the sheet, edge to edge at its foot, and never the
                 device's own keyboard. It hides itself where a real keyboard
                 exists, and stays in reach when the sheet scrolls. */}
