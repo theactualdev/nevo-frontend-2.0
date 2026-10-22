@@ -815,6 +815,18 @@ export interface LessonQuestionAttempt {
    * means there is none (B128), so the player opens no panel without it.
    */
   advanceAfterHandoff?: boolean;
+  /**
+   * THE GRACE WINDOW (backend 7d97248, Teslim's answer 6, 22 Oct): the
+   * moment the server will hand this question off, once a run of three
+   * misses exists and it is not yet time - so the third miss can come back
+   * with no `handoffTo` and this instead. Counted from the FIRST miss of the
+   * run, by age band (`question_support.guidance_deadline`). The spec: "re-read
+   * attempts then if the question is still unresolved" - the server pushes
+   * nothing when its clock passes it. A SERVER timestamp: waited for on the
+   * server's clock (`msUntilServerTime`), never compared with this device's.
+   * Null or absent: no deadline, and nothing is scheduled (rule 5).
+   */
+  handoffAvailableAt?: string | null;
 }
 
 /** `SocraticHandoffPrompt` - one guided question a hand-off opens with. */
