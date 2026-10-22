@@ -10,6 +10,8 @@ import {
 import { LessonPlayer } from "./LessonPlayer";
 import { ApiError } from "@/lib/api/client";
 import { clearSession, setSession } from "@/lib/auth/session";
+import type { SegmentChoice } from "@/lib/api/lessons";
+import { chosenFrom } from "@/lib/lessons/segmentChoice";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
 
 /**
@@ -542,5 +544,123 @@ describe("a reload opens each section in what the server holds for it", () => {
 
     expect(text()).toContain("Simple seg-2.");
     expect(chip("Simplify")).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+/*
+ * A PACE PICK STAYS ON ITS OWN SECTION. Lydia, 21 Oct, her newest written
+ * rule: the choice "is scoped to the segment, so a choice on one segment
+ * does not carry to the next". That is what the server holds, too, so a
+ * visit and a reload open every section the same. It replaces the carry
+ * through the lesson (17 Oct: "holds for the lesson and resets after"),
+ * which showed a pace on the next section that a reload then took away. The
+ * hub has asked her to confirm; the demo does not hold on it.
+ */
+describe("a pace pick stays on its own section", () => {
+  const PACES = [
+    ["Simplify", "Simple"],
+    ["Expand", "Longer"],
+    ["Slower", "Slow"],
+  ] as const;
+  const VERSIONS = ["Standard", "Simple", "Longer", "Slow"];
+  const pacing = () =>
+    within(screen.getByRole("group", { name: "Lesson pacing" })).getAllByRole(
+      "button",
+    );
+  /** The pacing chips that are on, navy or violet. */
+  const chipsOn = () =>
+    pacing()
+      .filter((b) => b.getAttribute("aria-pressed") === "true")
+      .map((b) => b.textContent);
+  /** Which version of a section's text is on screen, and the chips that are on. */
+  const onScreen = (id: string) => ({
+    version: VERSIONS.filter((v) => text().includes(`${v} ${id}.`)),
+    chips: chipsOn(),
+  });
+
+  it.each(PACES)(
+    "%s on section 1, then Next: section 2 opens in the standard text, its chips off",
+    async (name, word) => {
+      render(<LessonPlayer lesson={TWO} plan={null} live />);
+      fireEvent.click(chip(name));
+      await settle();
+      expect(text()).toContain(`${word} seg-1.`);
+
+      next();
+
+      expect(onScreen("seg-2")).toEqual({ version: ["Standard"], chips: [] });
+      // Nothing is held for section 2: the pick was made on section 1 alone.
+      expect(saveSegmentChoice.mock.calls.map((c) => c[2])).toEqual(["seg-1"]);
+    },
+  );
+
+  it.each(PACES)(
+    "%s is still on when the child comes back to section 1",
+    async (name, word) => {
+      render(<LessonPlayer lesson={TWO} plan={null} live />);
+      fireEvent.click(chip(name));
+      await settle();
+      next();
+      expect(chip(name)).toHaveAttribute("aria-pressed", "false");
+
+      prev();
+
+      expect(onScreen("seg-1")).toEqual({ version: [word], chips: [name] });
+    },
+  );
+
+  it.each(PACES)(
+    "%s: a visit and a reload open both sections the same",
+    async (name) => {
+      render(<LessonPlayer lesson={TWO} plan={null} live />);
+      fireEvent.click(chip(name));
+      await settle();
+      const visit1 = onScreen("seg-1");
+      next();
+      const visit2 = onScreen("seg-2");
+      prev();
+      expect(onScreen("seg-1")).toEqual(visit1);
+
+      // What the server now holds for each section, as the lesson read
+      // brings it back after a reload: the pick for section 1, and nothing
+      // for section 2.
+      const held = new Map(
+        saveSegmentChoice.mock.calls.map((c) => [
+          c[2] as string,
+          chosenFrom(c[3] as SegmentChoice),
+        ]),
+      );
+      const reloaded = lesson(
+        seg("seg-1", { chosen: held.get("seg-1") }),
+        seg("seg-2", { chosen: held.get("seg-2") }),
+      );
+      cleanup();
+      render(<LessonPlayer lesson={reloaded} plan={null} live />);
+      expect(onScreen("seg-1")).toEqual(visit1);
+      next();
+      expect(onScreen("seg-2")).toEqual(visit2);
+
+      // And a reload while on section 2 opens it as the visit showed it.
+      cleanup();
+      render(<LessonPlayer lesson={reloaded} plan={null} live startAt={1} />);
+      expect(onScreen("seg-2")).toEqual(visit2);
+    },
+  );
+
+  it("leaves the engine's own density on the next section as it was (D23)", async () => {
+    // The violet chip is the engine's instruction, not a pick: it reaches
+    // section 2 whatever the child picked on section 1, and alone.
+    const plan: AdaptationPlan = {
+      lessonId: "lesson-1",
+      segments: [{ segmentId: "seg-2", startModality: "text", density: "expand" }],
+    };
+    render(<LessonPlayer lesson={TWO} plan={plan} live />);
+    fireEvent.click(chip("Simplify"));
+    await settle();
+
+    next();
+
+    expect(onScreen("seg-2")).toEqual({ version: ["Longer"], chips: ["Expand"] });
+    expect(chip("Expand").className).toMatch(/bg-nevo-violet/);
   });
 });

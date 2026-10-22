@@ -73,7 +73,7 @@ describe("an activity reaches the player", () => {
         "Wait twenty minutes.",
         "Press each slice with a finger.",
       ],
-      // One line, the result: the contract has no guide line to show first.
+      // The outcome is the line once done; this one sends no in-progress line.
       outcome: { done: "The slice in salt water is soft; the other is firm." },
     });
   });
@@ -134,6 +134,48 @@ describe("an activity reaches the player", () => {
     const seg = built({ interactiveVariant: activity({ outcome: "" }) });
 
     expect(seg.interactive).not.toHaveProperty("outcome");
+  });
+});
+
+/*
+ * SCRUM-273 (backend acc5b27; spec 22 Oct): `inProgress` and `outcome` are
+ * the activity's two "what you should see" lines, each copied from the source
+ * and each omitted when absent. `pending` is the line while the child works,
+ * `done` the line once every step is ticked.
+ */
+describe("the activity's two lines", () => {
+  const WHILE = "Watch the slice in salt water start to bend.";
+  const DONE = "The slice in salt water is soft; the other is firm.";
+
+  it("maps `inProgress` to the line while working and `outcome` to the line once done", () => {
+    const seg = built({
+      interactiveVariant: activity({ inProgress: WHILE, outcome: DONE }),
+    });
+
+    expect(seg.interactive?.outcome).toEqual({ pending: WHILE, done: DONE });
+  });
+
+  it("carries each line only when it was sent, and writes nothing in its place", () => {
+    // Undefined is a line the server omitted, as it does for every absent one.
+    const cases: [Record<string, unknown>, unknown][] = [
+      [{ inProgress: WHILE, outcome: undefined }, { pending: WHILE }],
+      [{ outcome: DONE }, { done: DONE }],
+      [{ inProgress: "  ", outcome: DONE }, { done: DONE }],
+      [{ inProgress: WHILE, outcome: null }, { pending: WHILE }],
+      // Neither: no lines at all, not an empty pair.
+      [{ outcome: undefined }, undefined],
+      [{ inProgress: null, outcome: "" }, undefined],
+    ];
+    for (const [over, outcome] of cases) {
+      const variant = activity(over) as Record<string, unknown>;
+      for (const key of ["inProgress", "outcome"]) {
+        if (variant[key] === undefined) delete variant[key];
+      }
+      const seg = built({ interactiveVariant: variant as never });
+
+      if (outcome === undefined) expect(seg.interactive).not.toHaveProperty("outcome");
+      else expect(seg.interactive?.outcome).toEqual(outcome);
+    }
   });
 });
 

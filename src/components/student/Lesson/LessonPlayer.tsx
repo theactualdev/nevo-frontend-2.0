@@ -595,13 +595,6 @@ export function LessonPlayer({
   const first = lesson.segments[opening];
   const firstPlan = planFor(first.id);
 
-  // The student's MANUAL density pick (navy chip). Separate from the system's
-  // density - the engine's instruction or the segment plan's, and NOTHING
-  // when neither gave one (D23, below) - which renders as the violet chip and
-  // supplies the view until the student overrides. Both can show at once.
-  // This is the pick carried through the lesson; a section's own stored
-  // choice comes first on that section - see `manualDensity`.
-  const [density, setDensity] = useState<Density | null>(null);
   /*
    * THE ENGINE'S DENSITY LEVEL, READ ON THE WAY INTO A SEGMENT (D25), and held
    * for that visit.
@@ -1838,27 +1831,10 @@ export function LessonPlayer({
       level: nextPlan?.densityLevel ?? null,
     });
     /*
-     * THE CHILD'S PACE CHOICE HOLDS FOR THE REST OF THE LESSON.
-     *
-     * This used to clear it on every segment. Design's ruling, 18 Sep:
-     * "Resetting it every segment would be maddening, and storing it would
-     * make it an accommodation, which is exactly what we just said it is not.
-     * It holds for the current lesson and resets after."
-     *
-     * So the carried pick lives in component state: never written to the
-     * profile, never sent back to the engine as a value, and gone at the next
-     * sign-in because a new lesson is a new player. What the engine still
-     * learns is that the child asked, from the trigger the chip sends.
-     *
-     * WHAT IS HELD IS THE SEGMENT'S OWN (K4, Lydia 21 Oct): the pick made on
-     * a segment goes to the sitting on the server for that segment, so a
-     * reload opens it in that pick - and since it is "scoped to the segment",
-     * a pick only carried onto this one is not held for it. A segment's own
-     * stored pick comes first on it (`manualDensity`). Never the device.
-     *
-     * A segment that cannot deliver the chosen density simply renders its
-     * default - the pick is not cleared, so it applies again on the next
-     * segment that can.
+     * THE CHILD'S PACE PICK STAYS ON ITS OWN SECTION (Lydia, 21 Oct), as
+     * their format pick always has. Nothing about pace is set here: the
+     * section being opened shows its own stored or picked pace, else the
+     * standard text - see `manualDensity`.
      */
     setModality(
       openingModality(
@@ -2065,16 +2041,30 @@ export function LessonPlayer({
   };
 
   /*
-   * THE PACE ON THIS SEGMENT: its own choice where it has one - stored on
-   * the server, or picked here this visit - and otherwise the pick carried
-   * through the lesson, which "holds for the current lesson and resets after"
-   * (design 18 Sep; Lydia, 17 Oct). What a reload keeps is the segment's own
-   * (Lydia, 21 Oct: "scoped to the segment"), so a carried pick the child did
-   * not make on this segment opens it in the standard text after a reload.
+   * THE CHILD'S MANUAL PACE ON THIS SEGMENT (the navy chip): the segment's
+   * own choice - stored on the server, or picked here this visit - and
+   * otherwise none, the standard text. Separate from the system's density -
+   * the engine's instruction or the segment plan's, and NOTHING when neither
+   * gave one (D23, below) - which renders as the violet chip and supplies the
+   * view until the child overrides it. Both can show at once.
+   *
+   * A PICK STAYS ON ITS OWN SECTION (Lydia, 21 Oct, her newest written rule:
+   * the choice "is scoped to the segment, so a choice on one segment does not
+   * carry to the next"). That is what the server stores, too - per section,
+   * per sitting - so a reload changes nothing the child sees: moving on opens
+   * the next section exactly as a reload would, in its own stored or picked
+   * pace or else the standard text, and coming back opens a section in the
+   * pick made on it. Formats never carried.
+   *
+   * This replaces the carry through the lesson, which "holds for the current
+   * lesson and resets after" (design 18 Sep; Lydia's 21 Sep rule, restated
+   * 17 Oct): carried in component state, it showed a child a pace on the
+   * next section that a reload then took away. The hub has asked Lydia to
+   * confirm the 21 Oct rule over the 17 Oct one; the demo does not hold on
+   * it. What the engine learns is still only that the child asked, from the
+   * trigger the chip sends.
    */
-  const ownDensity = chosen.get(segment.id)?.density;
-  const manualDensity: Density | null =
-    ownDensity !== undefined ? ownDensity : density;
+  const manualDensity: Density | null = chosen.get(segment.id)?.density ?? null;
   /** Which pick on a segment is the newest, for a refusal that lands late. */
   const paceTickets = useRef(new Map<string, number>());
 
@@ -2083,8 +2073,6 @@ export function LessonPlayer({
     const segmentId = segment.id;
     const next = manualDensity === d ? null : d;
     const before = chosen.get(segmentId)?.density;
-    const carried = density;
-    setDensity(next);
     keepChoice(segmentId, { density: next });
     // A tap that sets (not clears) a density is the child asking - the only
     // thing these triggers mean, so no `source` rides with it.
@@ -2115,7 +2103,6 @@ export function LessonPlayer({
         else back.delete(segmentId);
         return back;
       });
-      setDensity((now) => (now === next ? carried : now));
     });
   };
 
@@ -3051,14 +3038,21 @@ export function LessonPlayer({
           full-width row directly above the progress bar (frame: 0 16px 7px).
           It wraps rather than cutting off: at a larger text size a phone
           has no room for "Module 2 of 3 · Segment 1 of 4 in this module",
-          and "…in this modu…" told the child nothing. */}
+          and "…in this modu…" told the child nothing.
+
+          THE ROW IS THE FRAME'S LINE BOX (d6b9fbc, measured in its source
+          on the 22 Oct on-screen check): the 11px text runs inline in a row
+          of the player's own type, every line at `normal` - so the row is
+          the 16px line, 27px with its padding, the text sits on its
+          baseline, and the bar starts 3px lower than when the text was a
+          block of its own on the inherited 1.5. */}
       <div
         className={cn(
-          "shrink-0 px-4 pb-[7px]",
+          "shrink-0 px-4 pb-[7px] leading-[normal] text-pretty",
           secondaryDim(attentionOn),
         )}
       >
-        <span className="block min-w-0 font-mono text-[11px] tracking-[0.02em] text-pretty text-nevo-near-black/50">
+        <span className="font-mono text-[11px] leading-[normal] tracking-[0.02em] text-nevo-near-black/50">
           {positionLine(lesson, index)}
         </span>
       </div>
@@ -3066,6 +3060,7 @@ export function LessonPlayer({
       {/* Progress line — the bar tracks the whole lesson, continuous across
           module boundaries; the text above carries the module breakdown. */}
       <ProgressBar
+        lesson
         value={(index + 1) / total}
         className={cn("shrink-0", secondaryDim(attentionOn))}
         aria-label={positionLine(lesson, index)}
@@ -3086,7 +3081,16 @@ export function LessonPlayer({
             // stops well above the chevrons. `sm:p-8` and `lg:p-10` reset it
             // on their own, because their media rules come after the base
             // utility.
-            "mx-auto w-full max-w-full p-6 pb-[88px] sm:max-w-[620px] sm:p-8 lg:max-w-[680px] lg:p-10",
+            //
+            // THE FRAME'S COLUMN IS 620px (tablet) AND 680px (desktop) INSIDE
+            // ITS 32px AND 40px SIDE PADDING, not including it (d6b9fbc,
+            // measured in its source on the 22 Oct on-screen check): the
+            // padding is on the scroll area and the max width on the column
+            // in it. So this box is the column plus its padding, 684px and
+            // 760px - at 820 wide the text is 620 at x100, at 1280 it is 680
+            // at x300 - and below those widths it is the screen less the
+            // padding, as the frame's is.
+            "mx-auto w-full max-w-full p-6 pb-[88px] sm:max-w-[684px] sm:p-8 lg:max-w-[760px] lg:p-10",
           )}
         >
           {/* The frame's mid-switch cue (51b9e2a): a quiet ring and "One
@@ -3510,7 +3514,7 @@ export function LessonPlayer({
       {/* In line with the step above it: the reading column's box, then
           the solver's narrower one. */}
       {nextHeld && (
-        <div className="mx-auto w-full max-w-full shrink-0 px-6 pt-2 sm:max-w-[620px] sm:px-8 lg:max-w-[680px] lg:px-10">
+        <div className="mx-auto w-full max-w-full shrink-0 px-6 pt-2 sm:max-w-[684px] sm:px-8 lg:max-w-[760px] lg:px-10">
           <PressedLine
             reading={readingOn}
             className="mx-auto text-center sm:max-w-[560px] lg:max-w-[600px]"
