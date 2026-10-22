@@ -1113,6 +1113,9 @@ export function LessonPlayer({
     },
     lesson,
     applied,
+    // An ask after an answer goes once that answer's write has landed, so
+    // the engine's count of stored answers includes it (SCRUM-275).
+    attemptWrites,
   );
 
   /*

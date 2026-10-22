@@ -22,7 +22,8 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  * zero; frontend §1 has the state read "after every interaction event".
  * Nothing is asked on a timer and nothing while a child simply reads. The
  * clock is read when the request is built, never during render. And nothing
- * is asked before the backend's lesson session exists - see the request.
+ * is asked before the backend's lesson session exists, nor before the answers
+ * already given have landed - see the request.
  */
 
 /**
@@ -147,6 +148,12 @@ export function useRuntimeAdaptation(
   lesson: Lesson | null = null,
   /** What the player has applied - see `AppliedAdaptations`. */
   applied: RefObject<AppliedAdaptations> | null = null,
+  /**
+   * The answers the player has sent to `POST /lessons/{id}/attempts`, landed
+   * or still on their way. An ask waits for the ones on their way - see the
+   * request.
+   */
+  answerWrites: RefObject<Promise<unknown>[]> | null = null,
 ): RuntimeAdaptation {
   const [result, setResult] = useState<RuntimeAdaptation>({
     offeredBreak: null,
@@ -250,16 +257,7 @@ export function useRuntimeAdaptation(
     )
       return;
     let active = true;
-    /*
-     * BUILT A MICROTASK LATER, once every effect in this commit has run. The
-     * player notes what reached the screen in its own effects, which run
-     * after this hook's - so a reshape applied as the child arrives on a
-     * segment would otherwise be missing from the request that arrival
-     * makes, and the engine would read a lesson that had just been
-     * rearranged as one that had not been, for one answer.
-     */
-    queueMicrotask(() => {
-      if (!active) return;
+    const ask = () => {
       // Monotonic (rule 4): every duration below is sent to the engine, and a
       // wall clock that jumps would send negatives or fail validation.
       const now = performance.now();
@@ -329,6 +327,37 @@ export function useRuntimeAdaptation(
           if (active)
             setResult((prev) => ({ ...prev, offeredBreak: null, reason: null }));
         });
+    };
+
+    /*
+     * BUILT A MICROTASK LATER, once every effect in this commit has run. The
+     * player notes what reached the screen in its own effects, which run
+     * after this hook's - so a reshape applied as the child arrives on a
+     * segment would otherwise be missing from the request that arrival
+     * makes, and the engine would read a lesson that had just been
+     * rearranged as one that had not been, for one answer.
+     *
+     * AND ONLY ONCE THE ANSWERS ALREADY GIVEN HAVE LANDED (SCRUM-275, the 21
+     * Oct run). An answer is written and then counted here, and the count
+     * changing is what asks - so the ask went beside the write, not after
+     * it. The engine reads its error streak from the answers it has stored,
+     * not from this count, and the two routes do not wait for each other: it
+     * could read one miss where there were two, and hold the hint two misses
+     * earn. So the ask waits for every write still on its way - landed, or
+     * failed, because a write that failed is no reason for the engine to say
+     * nothing. A newer reason to ask, in the meantime, replaces this one
+     * (`active`), and asks once the writes have landed in its turn.
+     */
+    queueMicrotask(() => {
+      if (!active) return;
+      const owed = answerWrites?.current ?? [];
+      if (owed.length === 0) {
+        ask();
+        return;
+      }
+      void Promise.allSettled(owed).then(() => {
+        if (active) ask();
+      });
     });
 
     return () => {
@@ -344,6 +373,7 @@ export function useRuntimeAdaptation(
     errors,
     declines,
     applied,
+    answerWrites,
   ]);
 
   return result;
