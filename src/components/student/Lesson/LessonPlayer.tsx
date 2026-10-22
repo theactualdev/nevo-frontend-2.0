@@ -3000,14 +3000,21 @@ export function LessonPlayer({
           full-width row directly above the progress bar (frame: 0 16px 7px).
           It wraps rather than cutting off: at a larger text size a phone
           has no room for "Module 2 of 3 · Segment 1 of 4 in this module",
-          and "…in this modu…" told the child nothing. */}
+          and "…in this modu…" told the child nothing.
+
+          THE ROW IS THE FRAME'S LINE BOX (d6b9fbc, measured in its source
+          on the 22 Oct on-screen check): the 11px text runs inline in a row
+          of the player's own type, every line at `normal` - so the row is
+          the 16px line, 27px with its padding, the text sits on its
+          baseline, and the bar starts 3px lower than when the text was a
+          block of its own on the inherited 1.5. */}
       <div
         className={cn(
-          "shrink-0 px-4 pb-[7px]",
+          "shrink-0 px-4 pb-[7px] leading-[normal] text-pretty",
           secondaryDim(attentionOn),
         )}
       >
-        <span className="block min-w-0 font-mono text-[11px] tracking-[0.02em] text-pretty text-nevo-near-black/50">
+        <span className="font-mono text-[11px] leading-[normal] tracking-[0.02em] text-nevo-near-black/50">
           {positionLine(lesson, index)}
         </span>
       </div>
@@ -3015,6 +3022,7 @@ export function LessonPlayer({
       {/* Progress line — the bar tracks the whole lesson, continuous across
           module boundaries; the text above carries the module breakdown. */}
       <ProgressBar
+        lesson
         value={(index + 1) / total}
         className={cn("shrink-0", secondaryDim(attentionOn))}
         aria-label={positionLine(lesson, index)}
@@ -3035,7 +3043,16 @@ export function LessonPlayer({
             // stops well above the chevrons. `sm:p-8` and `lg:p-10` reset it
             // on their own, because their media rules come after the base
             // utility.
-            "mx-auto w-full max-w-full p-6 pb-[88px] sm:max-w-[620px] sm:p-8 lg:max-w-[680px] lg:p-10",
+            //
+            // THE FRAME'S COLUMN IS 620px (tablet) AND 680px (desktop) INSIDE
+            // ITS 32px AND 40px SIDE PADDING, not including it (d6b9fbc,
+            // measured in its source on the 22 Oct on-screen check): the
+            // padding is on the scroll area and the max width on the column
+            // in it. So this box is the column plus its padding, 684px and
+            // 760px - at 820 wide the text is 620 at x100, at 1280 it is 680
+            // at x300 - and below those widths it is the screen less the
+            // padding, as the frame's is.
+            "mx-auto w-full max-w-full p-6 pb-[88px] sm:max-w-[684px] sm:p-8 lg:max-w-[760px] lg:p-10",
           )}
         >
           {/* The frame's mid-switch cue (51b9e2a): a quiet ring and "One
@@ -3459,7 +3476,7 @@ export function LessonPlayer({
       {/* In line with the step above it: the reading column's box, then
           the solver's narrower one. */}
       {nextHeld && (
-        <div className="mx-auto w-full max-w-full shrink-0 px-6 pt-2 sm:max-w-[620px] sm:px-8 lg:max-w-[680px] lg:px-10">
+        <div className="mx-auto w-full max-w-full shrink-0 px-6 pt-2 sm:max-w-[684px] sm:px-8 lg:max-w-[760px] lg:px-10">
           <PressedLine
             reading={readingOn}
             className="mx-auto text-center sm:max-w-[560px] lg:max-w-[600px]"
