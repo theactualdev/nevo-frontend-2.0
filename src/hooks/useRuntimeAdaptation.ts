@@ -17,9 +17,9 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  * engine's call (rule 3, and frontend §5b: "No local timer").
  *
  * ASKED AT SEGMENT BOUNDARIES, and again when the child does something the
- * request reports - a replay, an answer, a declined offer. Those counts are
- * about the segment the child is on, so asked only on the way in they were
- * always zero; frontend §1 has the state read "after every interaction event".
+ * request reports - a replay or an answer. Those counts are about the
+ * segment the child is on, so asked only on the way in they were always
+ * zero; frontend §1 has the state read "after every interaction event".
  * Nothing is asked on a timer and nothing while a child simply reads. The
  * clock is read when the request is built, never during render. And nothing
  * is asked before the backend's lesson session exists - see the request.
@@ -58,7 +58,11 @@ export interface RuntimeState {
   consecutiveErrors: number;
   /** Modalities offered and turned down this session, each once. */
   declinedModalities: string[];
-  /** Every "Not now" to a modality offer this session. */
+  /**
+   * Every "Not now" to a modality offer this session. Always 0 since 21 Oct,
+   * with the two fields below false and null: the separate suggestion pill
+   * is gone (SCRUM-271 amended), so nothing is offered to decline.
+   */
   sessionDeclineCount: number;
   /** Whether an offer has been on screen on this segment. */
   sameSegmentSuggestionShown: boolean;
@@ -84,7 +88,7 @@ export interface RuntimeAdaptation {
    * EVERYTHING ELSE THE ENGINE SAID MID-LESSON, which used to be discarded.
    *
    * The `in_lesson` response carries the same instruction, hint, guided
-   * questions, scaffolding and modality suggestion as the load-time one - and
+   * questions, scaffolding and formats as the load-time one - and
    * only `breakSuggestion` was kept. So a simplify, a slower, a hint or a
    * Socratic prompt decided while the child was working never reached them.
    * Translated through `toAdaptationPlan`, so it gets exactly the load-time
@@ -110,9 +114,9 @@ export interface RuntimeAdaptation {
 /**
  * THE ADAPTATIONS A CHILD SAW APPLIED, kept by the player because only the
  * player knows when something reached the screen (B42): a reshape of the text
- * the system chose, a modality change from an offer taken, a hint, a
- * Socratic panel rendered, a density spacing changed mid-session (B74). Not
- * offers, and not instructions the screen could not show.
+ * the system chose, a hint, a Socratic panel rendered, a density spacing
+ * changed mid-session (B74). Not offers, not instructions the screen could
+ * not show, and not the child's own picks - a format chosen in the group.
  *
  * `lastAt` is `performance.now()` at that moment (rule 4). Held in a ref and
  * read only when a request or a batch is built, never while rendering.
@@ -203,9 +207,10 @@ export function useRuntimeAdaptation(
   }, [segmentId]);
 
   /*
-   * A SHIFT IS A CHANGE WITHIN A SEGMENT - an offer taken. Every segment opens
-   * in its own modality, and counting those openings reported a child who
-   * changed nothing as one who had switched at every segment.
+   * A SHIFT IS A CHANGE WITHIN A SEGMENT - since 21 Oct, a format the child
+   * picks in the format group. Every segment opens in its own modality,
+   * and counting those openings reported a child who changed nothing as one
+   * who had switched at every segment.
    *
    * Counted for the whole session and never reset, however the change came
    * about - backend's definition (B42): it caps how often one session may be

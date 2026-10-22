@@ -81,25 +81,20 @@ export const SIGNAL_EVENT_TYPES = {
    * never scored; skipping is a legitimate answer.
    */
   FEELING_CHECKIN: "feeling_checkin",
-  /**
-   * What happened to an offer the engine made. Each is in the ingest enum,
-   * and at first none was sent, so a "Not now" left no trace and the engine
-   * could not tell an offer a child turned down from one it never saw.
-   * Payload { segmentId, suggested } / { breakType, trigger } for the three
-   * break ones.
-   *
-   * `ignored` is the pill still on screen when the child left the segment -
-   * neither taken nor turned down. A break offer left on screen has no type:
-   * it stays no answer, which is what `break_declined` exists to tell apart.
+  /*
+   * NO `modality_suggestion_*` ANY MORE (shown, accepted, declined, ignored).
+   * They said what became of the engine's separate suggestion pill, and the
+   * pill is gone (SCRUM-271 amended, 21 Oct): the recommendation is a quiet
+   * marker in the format group with nothing to take, turn down or leave, so
+   * there is no offer for any of them to describe. Not here, so nothing can
+   * send them.
    */
-  MODALITY_SUGGESTION_SHOWN: "modality_suggestion_shown",
-  MODALITY_SUGGESTION_ACCEPTED: "modality_suggestion_accepted",
-  MODALITY_SUGGESTION_DECLINED: "modality_suggestion_declined",
-  MODALITY_SUGGESTION_IGNORED: "modality_suggestion_ignored",
   /**
-   * What became of a switch the child took (B73/B104, 8 Oct): sent once, as
+   * What became of a switch the child made (B73/B104, 8 Oct): sent once, as
    * the segment shown in the new modality is left - in this player, the one
-   * the switch was taken on. Payload { segmentId, from, to, timeOnSegment },
+   * the switch was made on. Since 21 Oct the switch is the child's own pick
+   * in the format group, and only the newest on a segment is described.
+   * Payload { segmentId, from, to, timeOnSegment },
    * the time in ms from the switch to the way out (ms confirmed, 9 Oct). Its
    * optional `outcome` (better, worse, no change) and its two scores are
    * never sent. The server takes the scores as supplied aggregates and works
@@ -125,8 +120,12 @@ export const SIGNAL_EVENT_TYPES = {
   ENGAGEMENT_SIGNAL: "engagement_signal",
   /*
    * DECLARED IN THE CATALOGUE AND DELIBERATELY NOT SENT:
-   * - `modality_manual_switch`. A child has no way to change modality
-   *   themselves; the frames draw only the engine's offer (17 §C).
+   * - `modality_manual_switch`. A child does change format themselves now,
+   *   in the format group (SCRUM-272), and the SERVER writes this event,
+   *   `source: student_control`, for every format choice the preferences
+   *   route stores. Teslim, 21 Oct: "The frontend should not additionally
+   *   send the same manual event for a successful preferences write." A pick
+   *   that is not stored goes up as nothing beyond the switch's outcome.
    */
   BREAK_SUGGESTED: "break_suggested",
   BREAK_TAKEN: "break_taken",

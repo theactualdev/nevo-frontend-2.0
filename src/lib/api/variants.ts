@@ -145,11 +145,27 @@ export interface InteractiveActivityStep {
 export interface InteractiveActivityVariant {
   type: "activity";
   title: string;
+  /**
+   * "Source context shown before the actionable steps, not a task" (spec, 21
+   * Oct). Optional and nullable: an activity stored before it has none.
+   * Typed, and not drawn: frame d6b9fbc removed the intro paragraph.
+   */
+  introduction?: string | null;
   /** What is needed. Often empty. */
   materials: string[];
   steps: InteractiveActivityStep[];
-  /** What should happen by the end. */
-  outcome: string;
+  /**
+   * THE TWO "WHAT YOU SHOULD SEE" LINES (SCRUM-273, backend acc5b27; spec 22
+   * Oct): what to watch for while the child works, and what should be seen
+   * once the steps are done. Each is copied from the uploaded source and
+   * each is optional - an absent line is OMITTED, never null, "" or a generic
+   * sentence, though the spec still types both as nullable. The server's old
+   * default, "You have completed the activity.", is suppressed on reads and
+   * removed from stored activities, and nothing here stands in for it. See
+   * `InteractiveContent.outcome`.
+   */
+  inProgress?: string | null;
+  outcome?: string | null;
 }
 
 /**

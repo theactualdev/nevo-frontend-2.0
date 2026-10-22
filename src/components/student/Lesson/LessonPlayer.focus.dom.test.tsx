@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  act,
   cleanup,
   fireEvent,
   render,
@@ -213,7 +212,7 @@ describe("LessonPlayer — the position is said once per opening (D148)", () => 
    * name is what a screen reader says each time focus lands on it or comes
    * back into it.
    */
-  const group = () => screen.getByRole("group", { name: /^(?!Lesson pacing)/ });
+  const group = () => screen.getByRole("group", { name: /^(?!Lesson pacing|Lesson format)/ });
   const body = () =>
     document.activeElement?.getAttribute("role") === "group"
       ? (document.activeElement as HTMLElement)
@@ -259,7 +258,6 @@ describe("LessonPlayer — the position is said once per opening (D148)", () => 
   });
 
   it("is not said again when a new way of showing it rebuilds the segment", () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const both = {
       ...LESSON,
       segments: LESSON.segments.map((s) => ({
@@ -268,25 +266,14 @@ describe("LessonPlayer — the position is said once per opening (D148)", () => 
         audio: { title: s.id, transcript: `Transcript of ${s.id}.` },
       })),
     } as unknown as Lesson;
-    render(
-      <LessonPlayer
-        lesson={both}
-        plan={{ lessonId: "lesson-1", segments: [], suggestModality: "audio" }}
-      />,
-    );
-    act(() => {
-      vi.advanceTimersByTime(1600);
-    });
+    render(<LessonPlayer lesson={both} plan={null} />);
     expect(group().getAttribute("aria-label")).toMatch(/Segment 1 of 3/);
 
-    fireEvent.click(screen.getByRole("button", { name: "Yes, try it" }));
-    act(() => {
-      vi.advanceTimersByTime(300);
-    });
+    // The child picks another format in the format group.
+    fireEvent.click(screen.getByRole("button", { name: "Audio" }));
 
     // Rebuilt and focused for the child, without its position.
     expect(body()).not.toBeNull();
     expect(body()!.getAttribute("aria-label")).toBeNull();
-    vi.useRealTimers();
   });
 });

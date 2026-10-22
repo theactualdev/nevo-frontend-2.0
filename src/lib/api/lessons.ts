@@ -230,6 +230,35 @@ export interface LessonSegment extends SegmentVariants {
   readingGroups?: ReadingGroup[];
   availableModalities: ContentModality[];
   /**
+   * SCRUM-272 (Teslim's handoff §5, 21 Oct): the formats this section can
+   * actually be sent in - "derived from actual payloads, not just the
+   * declared modality list": a picture with a current safety stamp and a URL,
+   * audio with a recording - in the authored opening order. What the format
+   * group offers. Absent on a payload from before it (and on a mock), which
+   * falls back to `availableModalities` with no recommendation.
+   */
+  availableFormats?: ContentModality[];
+  /**
+   * The format the engine recommends for this section in the child's latest
+   * sitting, or null for none. The format group's quiet marker reads this and
+   * nothing else; the player never derives one.
+   */
+  recommendedFormat?: ContentModality | null;
+  /**
+   * What the child chose for this section in their latest sitting on this
+   * lesson (K4, Lydia 21 Oct) - format, depth and Slower - or null for no
+   * choice. Keyed by this segment's own id on the server. What a reload opens
+   * the section in, before its first frame. See `SegmentChoice`.
+   */
+  deliveryPreference?: SegmentChoice | null;
+  /**
+   * The chosen format where there is one - and NOT READ, because where there
+   * is none the server fills it with the section's first available format
+   * (`LessonSegmentResponse`'s validator), so it cannot tell a child's choice
+   * from the default. `deliveryPreference.modality` can.
+   */
+  primaryModality?: ContentModality | null;
+  /**
    * Typed as of 3 Sep. `answerKey` is NULLABLE for lessons parsed before the
    * contract existed - see `api/checkpoints.ts`, which is the only thing that
    * should mark one.
@@ -253,6 +282,45 @@ export interface LessonSegment extends SegmentVariants {
    */
   approved: boolean;
   approvedAt: string | null;
+}
+
+/**
+ * A depth the child chose for a section (K4): its standard text, or one of
+ * its two rewrites. `simplified` and `expanded` are the `depthVariants` keys.
+ */
+export type ChoiceDepth = "original" | "simplified" | "expanded";
+
+/**
+ * `SegmentChoice` - what one child chose for ONE section of ONE sitting
+ * (SCRUM-272 / K4, Teslim's handoff §5, 21 Oct). Held in the sitting's
+ * delivery state on the server, keyed by the segment's id: it survives a
+ * reload, applies to no other section, and "no preference is written as a
+ * permanent learner-profile label" - it is never a modality on a child
+ * (rule 1). Null on a field is no choice there.
+ */
+export interface SegmentChoice {
+  modality?: ContentModality | null;
+  depth?: ChoiceDepth | null;
+  slower?: boolean | null;
+  /** The server's, never ours. */
+  updatedAt?: string | null;
+}
+
+/**
+ * `SegmentChoiceWrite` - the body of `PUT .../segments/{id}/preferences`.
+ * PARTIAL: "omitted fields are preserved and null clears that particular
+ * override". So a write carries only what changed.
+ */
+export interface SegmentChoiceWrite {
+  modality?: ContentModality | null;
+  depth?: ChoiceDepth | null;
+  slower?: boolean | null;
+}
+
+/** What a stored choice comes back as: the whole choice, and the section's formats now. */
+export interface SegmentChoiceResponse extends SegmentChoice {
+  availableFormats: string[];
+  recommendedFormat?: string | null;
 }
 
 /**
@@ -486,10 +554,14 @@ export interface LessonSessionResponse {
   /**
    * What the server froze for this session's delivery (`SessionDeliveryResponse`,
    * 18 Oct): the engine config with the active accommodations applied, as it
-   * was at `capturedAt`. TYPED, NOT READ. It answers after the first frame,
-   * so applying it would reshape a screen the child already sees (rules 6
-   * and 7); whether the session opens first and this becomes the source is a
-   * question to Teslim (20 Oct contract check).
+   * was at `capturedAt`. The config is TYPED, NOT READ. It answers after the
+   * first frame, so applying it would reshape a screen the child already sees
+   * (rules 6 and 7); whether the session opens first and this becomes the
+   * source is a question to Teslim (20 Oct contract check).
+   *
+   * Its `segmentChoices` ARE READ (K4, 21 Oct): the sitting's own word on
+   * what the child chose, section by section, which wins over the lesson
+   * read's for every section but the one already on screen - see the player.
    */
   deliveryState?: SessionDelivery | null;
   /**
@@ -856,6 +928,29 @@ export const lessonsApi = {
   saveProgress: (lessonId: string, body: LessonProgressRequest) =>
     api.put<LessonProgressResponse>(
       `/api/v1/lessons/${lessonId}/progress`,
+      body,
+    ),
+
+  /**
+   * Hold the child's choice for one section of this sitting on the server
+   * (K4, Lydia 21 Oct: "held server-side rather than in browser storage").
+   * PUT /api/v1/lessons/{id}/sessions/{session}/segments/{segment}/preferences
+   *
+   * `sessionId` is the BACKEND's sitting (`POST /session`), and `segmentId`
+   * the segment's own id. Partial - send what changed. 409 `format_unavailable`
+   * or `depth_unavailable` refuses a choice the section does not have, and
+   * `lesson_session_ended` a sitting that has closed. A stored format choice
+   * puts `modality_manual_switch` on the signal stream server-side, so the
+   * client sends none of its own.
+   */
+  saveSegmentChoice: (
+    lessonId: string,
+    sessionId: string,
+    segmentId: string,
+    body: SegmentChoiceWrite,
+  ) =>
+    api.put<SegmentChoiceResponse>(
+      `/api/v1/lessons/${lessonId}/sessions/${sessionId}/segments/${segmentId}/preferences`,
       body,
     ),
 };
