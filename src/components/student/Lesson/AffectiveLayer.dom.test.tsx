@@ -345,3 +345,112 @@ describe("the offered hint's panel (Lesson Player frame, 13 Oct)", () => {
     expect(screen.getByRole("button", { name: "Close hint" }).textContent).toBe("Close");
   });
 });
+
+/**
+ * SCRUM-275, LYDIA 22 OCT: "Two identical navy buttons is a defect, not a
+ * choice. One primary per sheet and it is the action that progresses the
+ * check, so Try again or Send. Keep going is secondary, not navy, not
+ * full-width. Navy stays reserved for the primary action."
+ *
+ * Keep going is secondary in every state, the hand-off's "Let's keep going."
+ * included, where it stands alone: there is no check left to progress there,
+ * so there is no primary to promote it to.
+ */
+describe("one navy primary per panel state (SCRUM-275)", () => {
+  const classes = (el: Element) =>
+    (el.getAttribute("class") ?? "").split(/\s+/);
+  const navyFullWidth = () =>
+    screen
+      .getAllByRole("button")
+      .filter(
+        (b) =>
+          classes(b).includes("bg-nevo-navy") && classes(b).includes("w-full"),
+      );
+  const keepGoing = () => screen.getByRole("button", { name: "Keep going" });
+  const openSelf = () => {
+    render(<SocraticPanel prompts={PROMPTS} entry="self" onTryAgain={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Which part is unclear?" }));
+  };
+  const expandPrompt = () =>
+    fireEvent.click(screen.getByRole("button", { name: PROMPTS[0].prompt }));
+
+  const states = [
+    ["a panel the child opened", openSelf],
+    [
+      "a prompt being answered, with Send",
+      () => {
+        openSelf();
+        expandPrompt();
+      },
+    ],
+    [
+      "the self ending, with Try again",
+      () => {
+        openSelf();
+        answerAll();
+      },
+    ],
+    [
+      "a hand-off as it arrives",
+      () =>
+        render(
+          <SocraticPanel prompts={PROMPTS} entry="handoff" onKeepGoing={() => {}} />,
+        ),
+    ],
+    [
+      "the hand-off's ending, where Keep going is alone",
+      () => {
+        render(
+          <SocraticPanel prompts={PROMPTS} entry="handoff" onKeepGoing={() => {}} />,
+        );
+        answerAll();
+      },
+    ],
+  ] as const;
+
+  it.each(states)("has no more than one navy full-width button: %s", (_, reach) => {
+    reach();
+
+    expect(navyFullWidth().length).toBeLessThanOrEqual(1);
+  });
+
+  it("keeps Send the primary while a prompt is answered", () => {
+    openSelf();
+    expandPrompt();
+
+    expect(navyFullWidth()).toEqual([screen.getByRole("button", { name: "Send" })]);
+  });
+
+  it("keeps Try again the primary on the self ending", () => {
+    openSelf();
+    answerAll();
+
+    expect(navyFullWidth()).toEqual([
+      screen.getByRole("button", { name: "Try again" }),
+    ]);
+  });
+
+  it("does not promote a lone Keep going on the hand-off's ending", () => {
+    render(<SocraticPanel prompts={PROMPTS} entry="handoff" onKeepGoing={() => {}} />);
+    answerAll();
+
+    expect(screen.getByRole("status")).toHaveTextContent(HANDOFF);
+    expect(navyFullWidth()).toEqual([]);
+  });
+
+  it.each(states)(
+    "draws Keep going secondary: not navy, not full width, 44px, a pointer: %s",
+    (_, reach) => {
+      reach();
+
+      const own = classes(keepGoing());
+      expect(own).not.toContain("bg-nevo-navy");
+      expect(own).not.toContain("w-full");
+      expect(own).toContain("w-fit");
+      expect(own).toContain("h-11");
+      expect(own).toContain("cursor-pointer");
+      expect(keepGoing().firstChild?.nodeType).toBe(Node.TEXT_NODE);
+      expect(keepGoing()).toBeEnabled();
+    },
+  );
+});

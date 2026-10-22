@@ -3547,6 +3547,25 @@ export function LessonPlayer({
             setFeedback("That's it. Here's what's next.");
             advancePastSegment();
           }}
+          /*
+           * THE SHEET'S OWN KEEP GOING, BEFORE THE CHECK IS PASSED (Lydia,
+           * SCRUM-275, 22 Oct: "A child whose only way past is the right
+           * answer is trapped"). It does what Next does on a segment with no
+           * check in the way: on, through `advancePastSegment` - so a planned
+           * break, the module boundary and the after-lesson check all still
+           * come, exactly as they would. Closing alone would leave Next to
+           * open the same check again.
+           *
+           * The check stays unpassed and nothing is recorded: no answer, no
+           * correctness, no line about it. The catalogue has no event for
+           * leaving a check, and none is made up; the segment's own
+           * `time_on_segment` still goes as it is left. A return visit asks
+           * it again, with this same way out.
+           */
+          onLeave={() => {
+            setCheckOpen(false);
+            advancePastSegment();
+          }}
         />
       )}
 
