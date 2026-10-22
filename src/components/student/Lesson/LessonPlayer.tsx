@@ -1592,7 +1592,11 @@ export function LessonPlayer({
   /*
    * The engine's NEWEST answer wins, and its silence counts: once it has
    * answered mid-lesson, an absent instruction means none now (rule 5), not
-   * "keep whatever it said at load".
+   * "keep whatever it said at load" - unless the answer says `retain`, when
+   * the help on screen is still its word, and stays with the section it was
+   * given for (`withDisposition`, 22 Oct). Help resent under its decision id
+   * is the same hint, reshape or panel: every once-only rule below is keyed
+   * on what it shows, so it is not offered, counted or opened again.
    */
   const engine = runtime.plan ?? plan;
   const action = engine?.adjustment ?? segPlan?.adjustment ?? null;
