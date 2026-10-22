@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { SegmentChoice } from "./lessons";
+import type { LessonChoice, SegmentFormatChoice } from "./lessons";
 import type { AccommodationType } from "./students";
 
 /**
@@ -337,11 +337,18 @@ export interface SessionDelivery {
   accommodations: AccommodationType[];
   capturedAt: string;
   /**
-   * What the child chose for each section of this sitting (K4, 21 Oct), keyed
-   * by the segment's own id. "It survives session resume/reload and does not
-   * apply to other segments." Absent on a sitting from before it.
+   * The format the child chose for each section of this sitting (K4, 21 Oct),
+   * keyed by the segment's own id - the format ONLY since 741685e: depth and
+   * Slower are the sitting's, in `lessonPreferences`. Absent on a sitting
+   * from before it.
    */
-  segmentChoices?: Record<string, SegmentChoice>;
+  segmentChoices?: Record<string, SegmentFormatChoice>;
+  /**
+   * The sitting's depth and Slower (741685e, 22 Oct): one value for every
+   * section, however many it was picked on. Absent on a server from before
+   * it; empty for a new sitting, which inherits nothing.
+   */
+  lessonPreferences?: LessonChoice;
   /**
    * The engine's standing recommendation per section, keyed the same way.
    * TYPED, NOT READ: each section's own `recommendedFormat` already says it,

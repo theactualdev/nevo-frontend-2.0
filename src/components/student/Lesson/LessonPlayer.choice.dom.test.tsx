@@ -423,15 +423,54 @@ describe("a pace the child picks is held on the server", () => {
   });
 });
 
-describe("a reload opens each section in what the server holds for it", () => {
-  const stored = lesson(
-    seg("seg-1", { chosen: { modality: "audio" } }),
+/**
+ * TWO SCOPES (Lydia, 22 Oct: "depth holds for the lesson, format is per
+ * section"; the server since 741685e). A section's `deliveryPreference`
+ * carries its own format and the SITTING's depth and Slower as they take
+ * effect there - `original` on a section with no approved rewrite, while
+ * the sitting keeps the target. `POST /session`'s `segmentChoices` carry the
+ * format alone, and its `lessonPreferences` the sitting's depth and Slower.
+ */
+const opened = (state: Record<string, unknown>) => ({
+  sessionId: SITTING,
+  resumed: true,
+  deliveryState: {
+    engineConfig: {},
+    accommodations: [],
+    capturedAt: "2026-10-22T14:00:00Z",
+    ...state,
+  },
+});
+let shownLesson: Lesson;
+/** `POST /session` answers, a moment after the first frame. */
+const lands = (
+  view: ReturnType<typeof render>,
+  state: Record<string, unknown>,
+  props: Partial<Parameters<typeof LessonPlayer>[0]> = {},
+) => {
+  progress.opened = opened(state);
+  view.rerender(
+    <LessonPlayer lesson={shownLesson} plan={null} live {...props} />,
+  );
+};
+const play = (
+  l: Lesson,
+  props: Partial<Parameters<typeof LessonPlayer>[0]> = {},
+) => {
+  shownLesson = l;
+  return render(<LessonPlayer lesson={l} plan={null} live {...props} />);
+};
+
+describe("a reload opens each section in what the server holds", () => {
+  /** Simplify for the sitting: every section with an approved rewrite shows it. */
+  const simplified = lesson(
+    seg("seg-1", { chosen: { modality: "audio", density: "simplify" } }),
     seg("seg-2", { chosen: { density: "simplify" } }),
-    seg("seg-3"),
+    seg("seg-3", { chosen: { density: "simplify" } }),
   );
 
   it("in its chosen format, from the first frame", () => {
-    render(<LessonPlayer lesson={stored} plan={null} live />);
+    play(simplified);
 
     expect(pressed()).toEqual(["Audio"]);
     expect(text()).not.toContain("Standard seg-1.");
@@ -442,27 +481,27 @@ describe("a reload opens each section in what the server holds for it", () => {
       lessonId: "lesson-1",
       segments: [{ segmentId: "seg-1", startModality: "visual" }],
     };
-    render(<LessonPlayer lesson={stored} plan={plan} live />);
+    render(<LessonPlayer lesson={simplified} plan={plan} live />);
 
     expect(pressed()).toEqual(["Audio"]);
   });
 
-  it("in its chosen pace, from the first frame", () => {
-    render(<LessonPlayer lesson={stored} plan={null} live startAt={1} />);
+  it("in the lesson's pace, from the first frame", () => {
+    play(simplified, { startAt: 1 });
 
     expect(chip("Simplify")).toHaveAttribute("aria-pressed", "true");
     expect(text()).toContain("Simple seg-2.");
   });
 
-  it("and each section in its own: none carries to the next", () => {
-    render(<LessonPlayer lesson={stored} plan={null} live />);
+  it("the format on its own section, the pace through the lesson", () => {
+    play(simplified);
 
     next();
     expect(pressed()).toEqual(["Text"]);
     expect(text()).toContain("Simple seg-2.");
     next();
     expect(pressed()).toEqual(["Text"]);
-    expect(text()).toContain("Standard seg-3.");
+    expect(text()).toContain("Simple seg-3.");
   });
 
   it("leaves a section with nothing chosen to open as it always has", () => {
@@ -470,77 +509,214 @@ describe("a reload opens each section in what the server holds for it", () => {
       lessonId: "lesson-1",
       segments: [{ segmentId: "seg-3", startModality: "visual" }],
     };
+    const stored = lesson(
+      seg("seg-1", { chosen: { modality: "audio" } }),
+      seg("seg-2"),
+      seg("seg-3"),
+    );
     render(<LessonPlayer lesson={stored} plan={plan} live startAt={2} />);
 
     expect(pressed()).toEqual(["Picture"]);
+    expect(text()).not.toContain("Simple seg-3.");
   });
 
   it("but not a review or a finished lesson, whose sitting has ended", () => {
-    render(<LessonPlayer lesson={stored} plan={null} live finished />);
+    render(<LessonPlayer lesson={simplified} plan={null} live finished />);
     expect(pressed()).toEqual(["Text"]);
     cleanup();
 
-    render(<LessonPlayer lesson={stored} plan={null} live review />);
+    render(<LessonPlayer lesson={simplified} plan={null} live review />);
     fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
     expect(pressed()).toEqual(["Text"]);
+    expect(text()).toContain("Standard seg-1.");
   });
 
   it("nor the rerouted sitting 'Let's try it another way' opens", () => {
-    render(<LessonPlayer lesson={stored} plan={null} live depth="standard" />);
+    play(simplified, { depth: "standard" });
 
     expect(pressed()).toEqual(["Text"]);
-  });
-
-  it("takes the sitting's own word for the sections after the one on screen", () => {
-    const view = render(<LessonPlayer lesson={stored} plan={null} live />);
-    expect(pressed()).toEqual(["Audio"]);
-
-    // `POST /session` answers: the sitting holds Picture for seg-1 and
-    // Expand for seg-3, and nothing for seg-2.
-    progress.opened = {
-      sessionId: SITTING,
-      resumed: true,
-      deliveryState: {
-        engineConfig: {},
-        accommodations: [],
-        capturedAt: "2026-10-21T10:00:00Z",
-        segmentChoices: {
-          "seg-1": { modality: "visual" },
-          "seg-3": { depth: "expanded" },
-        },
-      },
-    };
-    view.rerender(<LessonPlayer lesson={stored} plan={null} live />);
-
-    // The section on screen is not flipped under the child.
-    expect(pressed()).toEqual(["Audio"]);
     next();
     expect(text()).toContain("Standard seg-2.");
-    next();
-    expect(text()).toContain("Longer seg-3.");
   });
 
-  it("never changes the version on screen as the sitting's word lands", () => {
-    const view = render(
-      <LessonPlayer lesson={stored} plan={null} live startAt={1} />,
+  it("a section showing the standard text for want of an approved rewrite does not clear the lesson's pace", () => {
+    // seg-1 has no Simplify of its own, so the server reads `original` there.
+    const l = lesson(
+      seg("seg-1", {
+        chosen: { density: null },
+        text: {
+          heading: "seg-1",
+          body: { default: "Standard seg-1.", slower: "Slow seg-1." },
+        },
+      }),
+      seg("seg-2", { chosen: { density: "simplify" } }),
     );
-    expect(text()).toContain("Simple seg-2.");
+    play(l);
 
-    progress.opened = {
-      sessionId: SITTING,
-      resumed: true,
-      deliveryState: {
-        engineConfig: {},
-        accommodations: [],
-        capturedAt: "2026-10-21T10:00:00Z",
-        segmentChoices: { "seg-2": { depth: "expanded" } },
-      },
-    };
-    view.rerender(
-      <LessonPlayer lesson={stored} plan={null} live startAt={1} />,
-    );
-
-    expect(text()).toContain("Simple seg-2.");
+    expect(text()).toContain("Standard seg-1.");
+    next();
     expect(chip("Simplify")).toHaveAttribute("aria-pressed", "true");
+    expect(text()).toContain("Simple seg-2.");
+  });
+});
+
+describe("the sitting's word, as POST /session lands (741685e)", () => {
+  const four = () =>
+    lesson(
+      seg("seg-1", { chosen: { density: "simplify" } }),
+      seg("seg-2", { chosen: { density: "simplify" } }),
+      seg("seg-3", { chosen: { density: "simplify" } }),
+      seg("seg-4"),
+    );
+
+  it.each([
+    ["with the sitting's Simplify", { lessonPreferences: { depth: "simplified", slower: null } }],
+    ["from a server that sends no lessonPreferences", {}],
+  ])(
+    "keeps the read's Simplify on sections 1-3 when segmentChoices carry only the format, %s",
+    (_, prefs) => {
+      const view = play(four());
+      expect(text()).toContain("Simple seg-1.");
+
+      lands(view, {
+        segmentChoices: {
+          "seg-1": { modality: "text", updatedAt: "2026-10-22T13:59:00Z" },
+          "seg-2": { modality: "text", updatedAt: "2026-10-22T13:59:00Z" },
+          "seg-3": { modality: "text", updatedAt: "2026-10-22T13:59:00Z" },
+        },
+        ...prefs,
+      });
+
+      expect(text()).toContain("Simple seg-1.");
+      next();
+      expect(chip("Simplify")).toHaveAttribute("aria-pressed", "true");
+      expect(text()).toContain("Simple seg-2.");
+      next();
+      expect(text()).toContain("Simple seg-3.");
+      next();
+      expect(text()).toContain("Simple seg-4.");
+    },
+  );
+
+  it.each([
+    ["Expand", { depth: "expanded", slower: null }, "Longer seg-2."],
+    ["Slower", { depth: null, slower: true }, null],
+  ])(
+    "takes the sitting's %s as the lesson's pace from its lessonPreferences",
+    (name, lessonPreferences, shown) => {
+      // A read that shows no pace - the sitting's word is all there is.
+      const view = play(lesson(seg("seg-1"), seg("seg-2"), seg("seg-3")));
+
+      lands(view, { segmentChoices: {}, lessonPreferences });
+
+      // The section on screen is not flipped under the child (rule 7).
+      expect(text()).toContain("Standard seg-1.");
+      expect(chip(name)).toHaveAttribute("aria-pressed", "false");
+      next();
+      expect(chip(name)).toHaveAttribute("aria-pressed", "true");
+      if (shown) expect(text()).toContain(shown);
+      // And on the section that was on screen, once it is opened again.
+      prev();
+      expect(chip(name)).toHaveAttribute("aria-pressed", "true");
+    },
+  );
+
+  it("wins over the read's pace from the next section on: a new sitting inherits nothing", () => {
+    const view = play(four());
+
+    lands(view, { segmentChoices: {}, lessonPreferences: {} });
+
+    expect(text()).toContain("Simple seg-1.");
+    expect(chip("Simplify")).toHaveAttribute("aria-pressed", "true");
+    next();
+    expect(chip("Simplify")).toHaveAttribute("aria-pressed", "false");
+    expect(text()).toContain("Standard seg-2.");
+  });
+
+  it("keeps the format per section: the sitting's own for each, none carried", async () => {
+    const view = play(
+      lesson(
+        seg("seg-1", { chosen: { modality: "audio" } }),
+        seg("seg-2"),
+        seg("seg-3"),
+      ),
+    );
+
+    lands(view, {
+      segmentChoices: {
+        "seg-1": { modality: "visual" },
+        "seg-3": { modality: "visual" },
+      },
+      lessonPreferences: { depth: "simplified", slower: null },
+    });
+
+    // seg-1 is on screen: not flipped.
+    expect(pressed()).toEqual(["Audio"]);
+    next();
+    expect(pressed()).toEqual(["Text"]);
+    expect(text()).toContain("Simple seg-2.");
+    fireEvent.click(pill("Audio"));
+    await settle();
+    next();
+    expect(pressed()).toEqual(["Picture"]);
+    prev();
+    expect(pressed()).toEqual(["Audio"]);
+  });
+
+  it("never overrides a pace the child picked before it landed", () => {
+    progress.sessionId = null;
+    const view = play(lesson(seg("seg-1"), seg("seg-2")));
+
+    fireEvent.click(chip("Expand"));
+    lands(view, {
+      segmentChoices: {},
+      lessonPreferences: { depth: "simplified", slower: null },
+    });
+
+    expect(text()).toContain("Longer seg-1.");
+    next();
+    expect(chip("Expand")).toHaveAttribute("aria-pressed", "true");
+    expect(text()).toContain("Longer seg-2.");
+  });
+});
+
+describe("a pace picked after a reload is the lesson's", () => {
+  const writes = () => saveSegmentChoice.mock.calls.map((c) => c[3]);
+
+  it("holds on every section, over the pace the read showed on each", () => {
+    play(
+      lesson(
+        seg("seg-1", { chosen: { density: "simplify" } }),
+        seg("seg-2", { chosen: { density: "simplify" } }),
+      ),
+    );
+
+    fireEvent.click(chip("Expand"));
+    next();
+
+    expect(chip("Expand")).toHaveAttribute("aria-pressed", "true");
+    expect(text()).toContain("Longer seg-2.");
+  });
+
+  it("is written against the sitting's pace, not what one section showed", async () => {
+    // seg-1 shows the standard text for want of a Simplify rewrite, while the
+    // sitting holds Simplify: Slower must clear that depth for the lesson.
+    play(
+      lesson(
+        seg("seg-1", {
+          chosen: { density: null },
+          text: {
+            heading: "seg-1",
+            body: { default: "Standard seg-1.", slower: "Slow seg-1." },
+          },
+        }),
+        seg("seg-2", { chosen: { density: "simplify" } }),
+      ),
+    );
+
+    fireEvent.click(chip("Slower"));
+    await settle();
+
+    expect(writes()).toEqual([{ depth: null, slower: true }]);
   });
 });
