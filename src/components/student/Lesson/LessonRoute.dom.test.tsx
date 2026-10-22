@@ -283,6 +283,20 @@ describe("the loading skeleton", () => {
     const bar = screen.getByRole("progressbar");
     expect(bar.getAttribute("aria-valuetext")).toBe("Loading lesson");
   });
+
+  it("sits in the player's own column and on its track, so the swap moves nothing (d6b9fbc)", () => {
+    render(<LessonLoadingSkeleton />);
+    const classes = (el: Element) => el.className.split(" ");
+    const column = document.querySelector(".overflow-y-auto > div")!;
+    const track = screen.getByRole("progressbar");
+
+    // The frame's 620px and 680px column, with its padding outside it.
+    expect(classes(column)).toEqual(
+      expect.arrayContaining(["sm:max-w-[684px]", "lg:max-w-[760px]"]),
+    );
+    expect(classes(track)).toContain("bg-nevo-near-black/10");
+    expect(classes(track)).not.toContain("rounded-full");
+  });
 });
 
 describe("starting again after the server rerouted the lesson (SCRUM-178)", () => {

@@ -82,7 +82,7 @@ import type {
  *
  * ON as of 21 Oct: THE ACTIVITY (SCRUM-268). The wire's `interactiveVariant`
  * comes in two forms (Teslim, 14 Oct), and the ACTIVITY - a title, what is
- * needed, ordered steps and the outcome - is the player's tickable steps, so
+ * needed, ordered steps and its two lines - is the player's tickable steps, so
  * it maps; see `interactiveFor`. Until this it never reached a child: no
  * `segment.interactive` was built, so Osmosis's section 4 activity arrived
  * and was dropped on the device. The QUESTION form still does not map - a
@@ -474,7 +474,8 @@ function audioFor(
  * SCRUM-268, 21 Oct: the activity card was not reaching the child, and it
  * was ours - it arrived on the wire and this adapter dropped it. Read field
  * for field, nothing added: `title` is the heading, `introduction` the line
- * under it, `materials` what is needed, and each step's `instruction` a step.
+ * under it (kept, though frame d6b9fbc no longer draws it), `materials` what
+ * is needed, and each step's `instruction` a step.
  *
  * ONLY THE ACTIVITY FORM. The question form (`isActivity` false) is a prompt
  * with an answer key, not steps, and is left unmapped as it always was.
@@ -484,8 +485,12 @@ function audioFor(
  * by the rule at the top: a channel offered and found blank is worse than one
  * never offered. The server offers `interactive` only where there are steps.
  *
- * THE OUTCOME IS ONE LINE, and is the result: see `InteractiveContent`. Its
- * guide line while the steps are under way has no field, so none is written.
+ * THE TWO LINES, EACH ONLY WHEN SENT (SCRUM-273): `inProgress` is the line
+ * while the steps are under way, `outcome` the line once they are done - see
+ * `InteractiveContent.outcome`. Either may be absent, and one with no words
+ * is no line. Nothing is written for a line the server did not send: no
+ * guide line, no generic "you have completed" - the server dropped its own
+ * default (acc5b27), and this adapter never had one.
  */
 function interactiveFor(
   segment: ContentSegment,
@@ -503,14 +508,28 @@ function interactiveFor(
       ? variant.introduction.trim()
       : "";
   const needs = textsOf(variant.materials);
-  const done = typeof variant.outcome === "string" ? variant.outcome.trim() : "";
+  const pending = lineOf(variant.inProgress);
+  const done = lineOf(variant.outcome);
   return {
     heading: title || (segment.title ?? lessonTitle),
     ...(intro ? { intro } : {}),
     ...(needs ? { needs } : {}),
     steps,
-    ...(done ? { outcome: { done } } : {}),
+    ...(pending || done
+      ? {
+          outcome: {
+            ...(pending ? { pending } : {}),
+            ...(done ? { done } : {}),
+          },
+        }
+      : {}),
   };
+}
+
+/** A line with words in it, or nothing. */
+function lineOf(value: unknown): string | undefined {
+  const line = typeof value === "string" ? value.trim() : "";
+  return line || undefined;
 }
 
 /**

@@ -115,27 +115,30 @@ export interface AudioContent {
   transcript: string;
 }
 
-/** Interactive modality — tickable steps that reveal an outcome once all done. */
+/** Interactive modality — tickable steps, and a line to watch for. */
 export interface InteractiveContent {
   heading: string;
-  /** One-line orientation under the heading ("…there's no rush."). */
+  /**
+   * One-line orientation under the heading ("…there's no rush."). NOT DRAWN
+   * since frame d6b9fbc, which removed the intro paragraph so the in-progress
+   * line fits on a phone. Kept, as the server keeps `introduction`.
+   */
   intro?: string;
   /** "YOU'LL NEED" items. */
   needs?: string[];
   steps: string[];
   /**
-   * "WHAT YOU SHOULD SEE". Absent draws no card.
-   *
-   * BUILT REDUCED FOR A LIVE ACTIVITY (SCRUM-268, 21 Oct). The frame draws
-   * two lines: a guide while the steps are under way ("Once you've done the
-   * steps, look for...") and the result once they are done. The contract
-   * carries ONE `outcome`, "what should happen by the end", so a live
-   * activity has `done` alone and the card waits for the last tick - no
-   * guide line is written for it here, and the result is never shown before
-   * the steps are done. The pending form is raised with Teslim and design.
-   * The authored walkthrough keeps both of its lines.
+   * The two "what you should see" lines (SCRUM-273, frame d6b9fbc), each
+   * authored per activity and each optional: `pending` while the child works
+   * (the wire's `inProgress`), `done` once every step is ticked (the wire's
+   * `outcome`). Whichever the moment calls for is drawn in its box, with no
+   * label, no tick and one tone; where that line is absent there is no box
+   * at all, and nothing written to stand in for it. So the four supply
+   * states - both, in-progress only, completion only, neither - are just
+   * what is here. Absent altogether when the activity has neither. The
+   * authored walkthrough carries both of its lines.
    */
-  outcome?: { done: string; pending?: string };
+  outcome?: { pending?: string; done?: string };
 }
 
 // ── Comprehension check (inline Quick Check) ────────────────────────────────

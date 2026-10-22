@@ -329,15 +329,15 @@ describe("the chip row's height is the lesson's, not the segment's", () => {
   });
 });
 
-describe("the choice holds for the lesson, and no further", () => {
-  it("is still in force on the next segment", () => {
+describe("the choice stays on its own section, and no further", () => {
+  it("is not in force on the next segment, and is again on the way back", () => {
     /*
-     * Design's ruling, 18 Sep: "Resetting it every segment would be maddening,
-     * and storing it would make it an accommodation, which is exactly what we
-     * just said it is not. It holds for the current lesson and resets after."
-     *
-     * Before this, the pick was cleared on every segment change - a child who
-     * wanted less at a time had to ask again, and again, all the way through.
+     * Lydia, 21 Oct, her newest written rule: the choice "is scoped to the
+     * segment, so a choice on one segment does not carry to the next". It
+     * replaces the carry through the lesson (design 18 Sep; Lydia, 17 Oct:
+     * "holds for the lesson and resets after"), which a reload took away -
+     * the server holds a pick for its own section alone. The hub has asked
+     * her to confirm; the demo does not hold on it.
      */
     render(
       <LessonPlayer
@@ -357,12 +357,18 @@ describe("the choice holds for the lesson, and no further", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
+    expect(continueChip()).toBeNull();
+    expect(slowerChip()).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+
+    expect(slowerChip()).toHaveAttribute("aria-pressed", "true");
     expect(continueChip()).toBeInTheDocument();
   });
 
   it("is gone when the next lesson opens", () => {
-    // "Resets after." It lives in component state and nowhere else, so a new
-    // lesson is a new player - never the profile, never the device.
+    // A new lesson is a new player, and the walkthrough has no sitting to
+    // hold a pick under - never the profile, never the device.
     const lesson = lessonWith({
       heading: "Inside a leaf",
       body: { default: THREE },
