@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api, ApiError, apiErrorCode } from "./client";
 import type {
   CheckpointScalar,
   ComprehensionCheckpoint,
@@ -568,9 +568,44 @@ export interface LessonSessionResponse {
    * Where the server starts this session, zero-based (defaults to 0). For a
    * fresh lesson it can be past the first segment, chosen by next-work. TYPED,
    * NOT READ: whether a lesson opens part-way is a question to Teslim and
-   * design (20 Oct contract check).
+   * design (20 Oct contract check). Always 0 on a review sitting, where the
+   * player already opens at the top - see `reviewMode`.
    */
   segmentPosition?: number;
+  /**
+   * TESLIM'S REVIEW MODE (21 Oct, SCRUM-275 #3): this lesson was completed,
+   * and the sitting handed back is the COMPLETED one, reopened "for review,
+   * not as a new adaptive sitting". The lesson stays completed whatever is
+   * written against it. The player takes it as a finished lesson reopened
+   * (D22): no in-lesson adapt asks against it, nothing written that would
+   * demote it, no choices held. Defaults to false.
+   */
+  reviewMode?: boolean;
+  /**
+   * The completed sitting whose saved attempts a review would show. TYPED,
+   * NOT READ: the player replays the lesson for review (D22, D100 "Look
+   * again"), and no frame draws a review of the saved answers.
+   */
+  reviewOfSessionId?: string | null;
+  /** When the lesson was completed, on a review sitting. TYPED, NOT READ. */
+  completedAt?: string | null;
+}
+
+/**
+ * `POST /session`'s 409 for a lesson completed whose completed sitting cannot
+ * be found. The server will not make the lesson unfinished to answer it ("a
+ * missing review sitting never resets a completed lesson"), so there is
+ * nothing to open, and asking again finds the same.
+ */
+export const COMPLETED_SESSION_UNAVAILABLE = "completed_session_unavailable";
+
+/** Whether a refused session open was that 409 - read by shape. */
+export function isCompletedSessionUnavailable(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    err.status === 409 &&
+    apiErrorCode(err.detail) === COMPLETED_SESSION_UNAVAILABLE
+  );
 }
 
 /**
