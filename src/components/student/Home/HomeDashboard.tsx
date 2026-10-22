@@ -19,6 +19,7 @@ import {
 } from "@/components/student/Shell/TabPage";
 import { cn } from "@/lib/utils";
 import { useHasSession } from "@/hooks/useHasSession";
+import { useStudentAssignments } from "@/hooks/useStudentAssignments";
 import { useStudentDashboard } from "@/hooks/useStudentDashboard";
 import { TodaysWarmUpCard } from "@/components/student/Profiling/WarmUpCard";
 import { LessonPreviewSheet } from "@/components/student/Lessons/LessonPreviewSheet";
@@ -173,6 +174,9 @@ export function HomeDashboard() {
   const signedIn = useHasSession();
   const hydrated = useHydrated();
   const { data: live, failed, loading } = useStudentDashboard();
+  // Every assignment, finished ones included - the dashboard leaves those
+  // out. Read once here, for `everSet` alone. See `useStudentAssignments`.
+  const { data: everyAssignment } = useStudentAssignments();
   const [preview, setPreview] = useState<LessonSummary | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -310,6 +314,16 @@ export function HomeDashboard() {
 
       // Finished work is still work that was set: a child who has done
       // everything is caught up, not waiting on a first lesson.
+      /*
+       * AND THE DASHBOARD LEAVES FINISHED WORK OUT. A child whose only lesson
+       * was finished had no assignment on it at all, and Home told them
+       * "Your teacher is setting up your first lesson" (22 Oct production
+       * run). So any assignment open to them in the full list counts, finished
+       * ones included, and so does a progress row that says a lesson was
+       * finished. Where finished work goes on Home, and what is said about
+       * it, stays with SCRUM-146: Home simply stops saying a first lesson is
+       * coming, and draws no lesson area.
+       */
       everSet =
         today.length > 0 ||
         pickup.length > 0 ||
@@ -318,7 +332,9 @@ export function HomeDashboard() {
             unavailableReason(a) === null &&
             (a.status === "completed" ||
               isFinishedRow(latest.get(a.lesson.id))),
-        );
+        ) ||
+        (everyAssignment ?? []).some((a) => unavailableReason(a) === null) ||
+        [...latest.values()].some((row) => isFinishedRow(row));
     } else {
       today = [];
       pickup = [];
