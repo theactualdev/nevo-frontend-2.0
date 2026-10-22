@@ -114,6 +114,7 @@ import { InteractiveSegment } from "./InteractiveSegment";
 import { LeaveLessonDialog } from "./LeaveLessonDialog";
 import { LessonComplete } from "./LessonComplete";
 import { LessonMessage } from "./LessonMessage";
+import { LessonNotOpened } from "./LessonNotOpened";
 import { ModuleBoundaryScreen } from "./ModuleBoundaryScreen";
 import { OfflineBanner } from "./OfflineBanner";
 import { ONE_MORE_BIT, PressedLine } from "./PressedLine";
@@ -348,7 +349,7 @@ export function LessonPlayer({
   reviewConceptId,
   reviewBack,
   live = false,
-  finished = false,
+  finished: finishedOnOpen = false,
   partial = false,
   assignmentId,
   startAt = 0,
@@ -384,6 +385,9 @@ export function LessonPlayer({
    * back over it (design D22, 1 Oct). Writes no `in_progress` or `exited`, for
    * the same reason a review writes neither: a finished lesson reopened is
    * never marked unfinished. Finishing it again still reports completion.
+   *
+   * What the dashboard said before the first frame. A review sitting
+   * (`reviewMode` on `POST /session`) is the same case - see `finished`.
    */
   finished?: boolean;
   /**
@@ -501,6 +505,23 @@ export function LessonPlayer({
   const progress = useLessonProgress(lesson.id, live, assignmentId);
   const { report: reportProgress } = progress;
   /*
+   * A REVIEW SITTING IS A FINISHED LESSON REOPENED (Teslim's review mode,
+   * 21 Oct; SCRUM-275 #3 with SCRUM-146). On a completed lesson `POST
+   * /session` hands back the COMPLETED sitting with `reviewMode: true`, to
+   * be opened "for review, not as a new adaptive sitting", and the lesson
+   * stays completed. That is D22's "Look again" - `finished` - and not
+   * `review`, which is 37d's spaced retrieval on one concept: its entry
+   * screen, REVIEW marker, skipped check and scheduler outcome belong to a
+   * due review, and no frame draws them on a finished lesson looked at again.
+   *
+   * The dashboard normally said so before the first frame - the server
+   * decides a review from the same row (`isFinishedRow`) - so the opening
+   * is already the top, and the opening is never moved once drawn. The
+   * session's word covers what follows it: no in-lesson asks against the
+   * ended sitting, nothing written that could demote it, no choices held.
+   */
+  const finished = finishedOnOpen || progress.opened?.reviewMode === true;
+  /*
    * The server's reroute (SCRUM-178), off the completion write's answer: it
    * only ever comes back on a completed row, so the session it closes ended
    * completed - and says so even if the child starts again from the result,
@@ -548,9 +569,12 @@ export function LessonPlayer({
   }, [lesson.id, sessionId, plan, setActiveLesson]);
 
   // Resuming opens on the saved segment; a review session replays the whole
-  // thing, so it ignores the saved position.
+  // thing, so it ignores the saved position - and so does a finished lesson
+  // reopened (D22, D100 "Look again"), which opens at the top.
   const opening =
-    !review && startAt > 0 && startAt < lesson.segments.length ? startAt : 0;
+    !review && !finishedOnOpen && startAt > 0 && startAt < lesson.segments.length
+      ? startAt
+      : 0;
   const [index, setIndex] = useState(opening);
 
   /*
@@ -1085,8 +1109,11 @@ export function LessonPlayer({
     lesson.id,
     adaptSegments,
     // Not for a visit that opened in the check (B82): the child never sees a
-    // segment, and the engine must not be told they arrived on one.
-    live && !review && checkOpensAt === null,
+    // segment, and the engine must not be told they arrived on one. Nor for a
+    // finished lesson reopened, whose sitting has ended (Teslim, 21 Oct: "use
+    // review mode rather than sending in-lesson adaptation calls against that
+    // ended sitting") - see `finished`.
+    live && !review && !finished && checkOpensAt === null,
     // The BACKEND's sitting, not the local correlation id above: the engine
     // refuses an `in_lesson` read without it - see `useRuntimeAdaptation`.
     progress.sessionId,
@@ -2557,6 +2584,17 @@ export function LessonPlayer({
    */
   const partsLeft =
     attentionOn && modality === MODALITY.TEXT && partsLeftOn === segment.id;
+
+  /*
+   * A COMPLETED LESSON WHOSE SITTING CANNOT BE FOUND (409
+   * `completed_session_unavailable`, Teslim 21 Oct). The server keeps the
+   * lesson completed and has nothing to open it under, so there is nothing
+   * to play: frame 28's D90 screen, the nothing-state the route draws for a
+   * lesson nothing resolved, with its one way back and no retry.
+   */
+  if (progress.unavailable) {
+    return <LessonNotOpened onBack={() => exitTo(LESSONS_HREF)} />;
+  }
 
   /*
    * SCRUM-181: "THAT VERSION DIDN'T WORK." - when the completion write comes

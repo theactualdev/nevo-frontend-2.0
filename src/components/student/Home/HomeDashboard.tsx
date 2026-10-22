@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { isOpenToStudent, unavailableReason } from "@/lib/lessons/availability";
+import { isFinishedRow } from "@/lib/lessons/finishedRow";
 import { lessonHref } from "@/lib/lessons/lessonHref";
 import { segmentPlace, type SegmentPlace } from "@/lib/lessons/segmentPlace";
 import { BookOpen, ChevronRight, Clock, Play, Shapes } from "lucide-react";
@@ -206,9 +207,17 @@ export function HomeDashboard() {
       // `exited` counts as part-way. A child who deliberately left a lesson is
       // still partway through it - the status records HOW they left, not
       // whether they are done. `useStudentLessons` folds the two the same way.
+      /*
+       * AND A ROW CARRYING `completedAt` IS NOT PART-WAY, whatever its status
+       * (Teslim, 21 Oct). Reopening a finished lesson used to set its row back
+       * to `in_progress`, so it came back here as unfinished work. It leaves
+       * this list and nothing more: where finished work goes, and what is
+       * said about it, is SCRUM-146's, not this screen's to invent.
+       */
       const partWay = (lessonId: string) => {
-        const status = latest.get(lessonId)?.status;
-        return status === "in_progress" || status === "exited";
+        const row = latest.get(lessonId);
+        if (isFinishedRow(row)) return false;
+        return row?.status === "in_progress" || row?.status === "exited";
       };
 
       const assigned = open
@@ -308,7 +317,7 @@ export function HomeDashboard() {
           (a) =>
             unavailableReason(a) === null &&
             (a.status === "completed" ||
-              latest.get(a.lesson.id)?.status === "completed"),
+              isFinishedRow(latest.get(a.lesson.id))),
         );
     } else {
       today = [];

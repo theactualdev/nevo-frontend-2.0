@@ -484,6 +484,84 @@ describe("Home's two lists", () => {
     ).toBeInTheDocument();
   });
 
+  /*
+   * TESLIM, 21 OCT: THE ROW CARRIES `completedAt`. Reopening a finished lesson
+   * set its row back to `in_progress` at the last segment, so it came back
+   * here as unfinished work to pick up (RUN21 finding 3). It leaves the list,
+   * and nothing more: where finished work goes is SCRUM-146's.
+   */
+  it("leaves a finished lesson off Pick up where you left off, though its row says in progress", async () => {
+    signIn();
+    live(
+      [
+        assignment("done", "Finished Fractions"),
+        assignment("mid", "Halfway Fractions"),
+      ],
+      [
+        row("done", "in_progress", 2, 3, { completedAt: at(60) }),
+        row("mid", "in_progress", 5),
+      ],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    const pickup = section(/Pick up where you left off/);
+    expect(within(pickup).getByText("Halfway Fractions")).toBeInTheDocument();
+    expect(screen.queryByText("Finished Fractions")).toBeNull();
+  });
+
+  it("leaves a finished library lesson off the same way", async () => {
+    signIn();
+    live(
+      [],
+      [
+        row("lib", "in_progress", 2, 4, {
+          title: "Volcanoes",
+          completedAt: at(60),
+        }),
+      ],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.queryByText("Volcanoes")).toBeNull();
+  });
+
+  it("still lists a part-way lesson with no completedAt, a finish with nothing marked included", async () => {
+    // `not_attempted` stays in progress on the server, with no completedAt.
+    signIn();
+    live(
+      [assignment("mid", "Halfway Fractions")],
+      [row("mid", "in_progress", 5, 3, { completedAt: null })],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(
+      within(section(/Pick up where you left off/)).getByText(
+        "Halfway Fractions",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("does not tell a child whose only lesson is finished that a first one is coming", async () => {
+    // It left Pick up, so it must still count as set work finished - as a
+    // `completed` row already did - or Home would say nothing was ever set.
+    signIn();
+    live(
+      [assignment("done", "Finished Fractions")],
+      [row("done", "in_progress", 2, 3, { completedAt: at(60) })],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.queryByText(/your first lesson/)).toBeNull();
+  });
+
   it("shows at most five, the most recently touched first", async () => {
     signIn();
     const ids = ["a", "b", "c", "d", "e", "f"];
