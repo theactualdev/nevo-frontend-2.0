@@ -548,6 +548,17 @@ describe("the session's interpretation context", () => {
     expect(payload?.formFactor).toBe("tablet");
   });
 
+  it("tags a 375px touch phone as a phone, the contract's word, never mobile", async () => {
+    const payload = await contextOf(() => {
+      vi.spyOn(window, "matchMedia").mockImplementation(
+        (q: string) =>
+          ({ matches: q === "(pointer: coarse)", media: q }) as MediaQueryList,
+      );
+      vi.spyOn(window, "innerWidth", "get").mockReturnValue(375);
+    });
+    expect(payload?.formFactor).toBe("phone");
+  });
+
   it("counts the child's own reduced-motion switch, not only the OS's", async () => {
     document.documentElement.dataset.reducedMotion = "true";
     try {

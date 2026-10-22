@@ -609,10 +609,21 @@ describe("baselineRunContext - what the run was built for and sat on (B76)", () 
       return baselineRunContext(c);
     };
 
-    expect(of("p13", "mobile")).toMatchObject({ ageBand: "early_primary", formFactor: "mobile_touch" });
+    expect(of("p13", "phone")).toMatchObject({ ageBand: "early_primary", formFactor: "phone_touch" });
     expect(of("p46", "tablet")).toMatchObject({ ageBand: "upper_primary", formFactor: "tablet_touch" });
     expect(of("jss", "desktop")).toMatchObject({ ageBand: "junior_secondary", formFactor: "desktop_cursor" });
     expect(of("ss", "tablet")).toMatchObject({ ageBand: "senior_secondary" });
+  });
+
+  it("names a phone phone_touch, the server's own word, a run recorded as mobile before 22 Oct too", () => {
+    const of = (formFactor: string) => {
+      const c = new BaselineCapture("r9");
+      c.record("run_start", { band: "jss", formFactor });
+      return baselineRunContext(c).formFactor;
+    };
+
+    expect(of("phone")).toBe("phone_touch");
+    expect(of("mobile")).toBe("phone_touch");
   });
 
   it("says the motor step was skipped where the capture recorded the skip", () => {
@@ -629,11 +640,11 @@ describe("baselineRunContext - what the run was built for and sat on (B76)", () 
 
   it("leaves the motor step out of a warm-up, which has none", () => {
     const c = new BaselineCapture("w1");
-    c.record("warmup_start", { dimension: "wmc", band: "p13", formFactor: "mobile" });
+    c.record("warmup_start", { dimension: "wmc", band: "p13", formFactor: "phone" });
 
     expect(baselineRunContext(c)).toEqual({
       ageBand: "early_primary",
-      formFactor: "mobile_touch",
+      formFactor: "phone_touch",
     });
   });
 
