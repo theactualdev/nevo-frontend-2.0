@@ -79,6 +79,7 @@ import {
   type SegmentChoiceWrite,
 } from "@/lib/api/lessons";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
+import { msUntilServerTime } from "@/lib/api/serverClock";
 import {
   lessonPace,
   paceOf,
@@ -1645,7 +1646,11 @@ export function LessonPlayer({
   /*
    * The engine's NEWEST answer wins, and its silence counts: once it has
    * answered mid-lesson, an absent instruction means none now (rule 5), not
-   * "keep whatever it said at load".
+   * "keep whatever it said at load" - unless the answer says `retain`, when
+   * the help on screen is still its word, and stays with the section it was
+   * given for (`withDisposition`, 22 Oct). Help resent under its decision id
+   * is the same hint, reshape or panel: every once-only rule below is keyed
+   * on what it shows, so it is not offered, counted or opened again.
    */
   const engine = runtime.plan ?? plan;
   const action = engine?.adjustment ?? segPlan?.adjustment ?? null;
@@ -2049,7 +2054,7 @@ export function LessonPlayer({
    * hand-off at all, whatever else it carries: no panel, and the check stays
    * the way on. There is no panel that ends nowhere.
    */
-  const handOffFrom = (segmentId: string, stored: LessonQuestionAttempt) => {
+  const openHandoff = (segmentId: string, stored: LessonQuestionAttempt) => {
     if (stored.handoffTo !== "socratic_panel") return;
     if (stored.advanceAfterHandoff !== true) return;
     if (answeredRight.current.has(segmentId)) return;
@@ -2070,6 +2075,98 @@ export function LessonPlayer({
       run: (prev?.run ?? 0) + 1,
       prompts,
     }));
+  };
+
+  /*
+   * THE GRACE WINDOW (Teslim, 22 Oct, answer 6; backend 7d97248): the panel
+   * now waits for the age band's window, counted by the server from the first
+   * of three misses in a row on the question. So the third miss can come back
+   * with no `handoffTo` and a `handoffAvailableAt` instead - and the server
+   * pushes nothing when its clock passes that moment. Its spec: "re-read
+   * attempts then if the question is still unresolved". Without that read the
+   * panel would wait for the child to act again, and a child who has missed
+   * three times may well not.
+   *
+   * So ONE read of the sitting's stored answers
+   * (`GET /api/v1/lessons/{id}/attempts?sessionId=`, whose rows carry the same
+   * hand-off the write's answer does) at the moment the server named, and its
+   * answer followed exactly as a write's is (`openHandoff`): a hand-off opens
+   * the panel; none, and nothing happens. No retry and no second read - the
+   * moment is the server's, and so is what happens at it. Nothing here counts
+   * misses or holds a window of its own (rule 3).
+   *
+   * THE WAIT IS ON THE SERVER'S CLOCK: its timestamp less the device's "now"
+   * corrected by the `Date` header skew (`msUntilServerTime`), so a tablet
+   * with a wrong clock waits as long as the server means. Rule 4 is not
+   * touched: nothing timed is sent from here - the wait only decides when to
+   * ask, and what is asked is a read.
+   *
+   * ONLY WHILE THE QUESTION IS STILL OPEN: its check is up on that section,
+   * unpassed and not handed off. Answering it right, a hand-off arriving,
+   * the sheet closing (Keep going), leaving the section or the lesson
+   * unmounting each ends that, and the read with it - see `unresolvedCheck`.
+   * A read already on its way when that happens is not followed.
+   */
+  const reread = useRef<{ timer: ReturnType<typeof setTimeout> | null } | null>(
+    null,
+  );
+  const cancelReread = useCallback(() => {
+    const pending = reread.current;
+    if (pending?.timer != null) clearTimeout(pending.timer);
+    reread.current = null;
+  }, []);
+  // The section whose check is up and still unresolved, or null.
+  const unresolvedCheck =
+    phase === "segments" &&
+    checkOpen &&
+    !passedChecks.has(segment.id) &&
+    !handedOff.has(segment.id)
+      ? segment.id
+      : null;
+  const openCheck = useRef<string | null>(null);
+  useEffect(() => {
+    openCheck.current = unresolvedCheck;
+    return () => {
+      openCheck.current = null;
+      cancelReread();
+    };
+  }, [unresolvedCheck, cancelReread]);
+
+  const rereadAt = (segmentId: string, stored: LessonQuestionAttempt) => {
+    if (stored.correct !== false || stored.handoffTo) return;
+    if (!stored.handoffAvailableAt) return;
+    // An answer that lands after the child has moved off the question.
+    if (openCheck.current !== segmentId) return;
+    const wait = msUntilServerTime(stored.handoffAvailableAt);
+    if (wait === null) return;
+    // Exactly one: a later miss names the same moment (the run's first miss
+    // sets it), and replaces the read waiting for it.
+    cancelReread();
+    const mine: { timer: ReturnType<typeof setTimeout> | null } = {
+      timer: null,
+    };
+    reread.current = mine;
+    mine.timer = setTimeout(() => {
+      mine.timer = null;
+      void lessonsApi.attempts(lesson.id, stored.sessionId).then(
+        (rows) => {
+          if (reread.current !== mine) return;
+          reread.current = null;
+          const now = rows.findLast((r) => r.questionId === stored.questionId);
+          if (now) openHandoff(segmentId, now);
+        },
+        () => {
+          // A read that failed is no hand-off, and is not asked again.
+          if (reread.current === mine) reread.current = null;
+        },
+      );
+    }, wait);
+  };
+
+  /** What the server's answer to a quick check leads to: now, or later. */
+  const handOffFrom = (segmentId: string, stored: LessonQuestionAttempt) => {
+    openHandoff(segmentId, stored);
+    rereadAt(segmentId, stored);
   };
 
   /*

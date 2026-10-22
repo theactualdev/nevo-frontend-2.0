@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { intelligenceApi } from "@/lib/api";
 import type {
+  AdaptResponse,
   AdaptSegment,
   RuntimeSignals,
 } from "@/lib/api/intelligence";
@@ -95,6 +96,10 @@ export interface RuntimeAdaptation {
    * Translated through `toAdaptationPlan`, so it gets exactly the load-time
    * clamps: nothing a segment cannot render, no hint under the wrong action,
    * never the engine's reasoning. Null until the engine has answered.
+   *
+   * Its help - the instruction and what it shows - is the newest answer's,
+   * unless that answer says `retain`: then the help already here stays, for
+   * the section it was given for (`withDisposition`).
    */
   plan: AdaptationPlan | null;
   /**
@@ -125,6 +130,50 @@ export interface RuntimeAdaptation {
 export interface AppliedAdaptations {
   count: number;
   lastAt: number | null;
+}
+
+/**
+ * WHAT BECOMES OF THE HELP ON SCREEN, as the answer's `adjustmentDisposition`
+ * says (backend 864dff0; Teslim, 22 Oct, answer 3: "null alone no longer
+ * means dismiss").
+ *
+ * - `apply`: the answer's instruction, as it says.
+ * - `clear`, or no disposition - the contract's default: the answer as it
+ *   stands, so help it does not carry is gone. The reading before this.
+ * - `retain`: the help on screen stays. Resent with its decision id, it is
+ *   the answer's own instruction again - the same help, and the same words.
+ *   With `proactiveAdjustment` null - a cooldown, or a hand-off the server
+ *   knows is open - the instruction, hint, questions and prompts already
+ *   held are kept with the section they were given for, over the answer's
+ *   fresh rows.
+ *
+ * RETAINED FOR ITS OWN SECTION ONLY: an answer about a different section
+ * than the held help was given for keeps nothing - "retain" there is about
+ * that section's help, and it has none here. Nothing held, nothing kept:
+ * there is no help this could invent.
+ */
+export function withDisposition(
+  held: RuntimeAdaptation,
+  answer: RuntimeAdaptation,
+  res: Pick<AdaptResponse, "adjustmentDisposition" | "proactiveAdjustment">,
+  askedFor: string | null,
+): RuntimeAdaptation {
+  if (res.adjustmentDisposition !== "retain" || res.proactiveAdjustment)
+    return answer;
+  const help = held.plan;
+  if (!answer.plan || !help?.adjustment || held.forSegmentId !== askedFor)
+    return answer;
+  return {
+    ...answer,
+    plan: {
+      ...answer.plan,
+      adjustment: help.adjustment,
+      ...(help.hint ? { hint: help.hint } : {}),
+      ...(help.guidedQuestions ? { guidedQuestions: help.guidedQuestions } : {}),
+      ...(help.guidedPrompts ? { guidedPrompts: help.guidedPrompts } : {}),
+    },
+    forSegmentId: held.forSegmentId,
+  };
 }
 
 const BREAK_VALUES: readonly string[] = Object.values(BREAK_TYPES);
@@ -312,12 +361,14 @@ export function useRuntimeAdaptation(
         .then((res) => {
           if (!active) return;
           const built = lessonRef.current;
-          setResult({
+          const answer: RuntimeAdaptation = {
             offeredBreak: asBreakType(res.breakSuggestion?.breakType),
             reason: res.breakSuggestion?.reason ?? null,
             plan: built ? toAdaptationPlan(res, built) : null,
             forSegmentId: res.proactiveAdjustment?.segmentId ?? askedFor,
-          });
+          };
+          // Whether the help on screen stays is the answer's to say.
+          setResult((held) => withDisposition(held, answer, res, askedFor));
         })
         .catch(() => {
           // A failed read is not "no break needed", but it is not grounds to
