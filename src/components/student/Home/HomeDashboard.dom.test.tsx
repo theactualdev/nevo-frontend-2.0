@@ -739,13 +739,13 @@ describe("Home's two lists", () => {
     expect(screen.queryByText("Volcanoes")).toBeNull();
   });
 
-  it("shows the caught-up state below a part-way lesson when nothing new is open", async () => {
+  it("shows a part-way lesson with no Today heading and no caught-up line when nothing new is open", async () => {
     /*
      * Design D99, 6 Oct: "The part-way lesson appears in
-     * continue-where-you-left-off, and the slot below shows the caught-up
-     * state. A child with one unfinished lesson is not empty-handed." No
-     * Today heading over an empty grid (D20), and no empty state telling the
-     * child their lessons are still to come.
+     * continue-where-you-left-off". No Today heading over an empty grid
+     * (D20), and no empty state telling the child their lessons are still to
+     * come. The caught-up state D99 put below it waits on a status the
+     * backend sends (Lydia, 21 Oct, SCRUM-146).
      */
     signIn();
     live([assignment("mid", "Halfway Fractions")], [row("mid", "in_progress")]);
@@ -758,13 +758,7 @@ describe("Home's two lists", () => {
     expect(screen.queryByText(/your first lesson/)).toBeNull();
     const pickUp = section(/Pick up where you left off/);
     expect(within(pickUp).getByText("Halfway Fractions")).toBeInTheDocument();
-    const note = screen.getByText(
-      "You're all caught up. Nice and steady - come back any time.",
-    );
-    // In the slot below the list, as the frame places its note.
-    expect(
-      pickUp.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(screen.queryByText(/caught up/)).toBeNull();
   });
 
   it("keeps Today's lessons when something new is open, with no empty state and no note", async () => {
@@ -802,7 +796,7 @@ describe("Home's two lists", () => {
 
     expect(screen.queryByText("Later Decimals")).toBeNull();
     expect(screen.queryByText(/Today's lessons/)).toBeNull();
-    expect(screen.getByText(/You're all caught up/)).toBeInTheDocument();
+    expect(screen.queryByText(/caught up/)).toBeNull();
   });
 
   it("is absent entirely when nothing is part-way", async () => {
@@ -932,9 +926,7 @@ describe("what Home says when there is nothing, or nothing left", () => {
     await settled(container);
 
     expect(screen.queryByText(/your first lesson/)).toBeNull();
-    expect(
-      screen.getByText(/You're all caught up\. Nice and steady/),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/caught up/)).toBeNull();
   });
 
   it("says nothing about being caught up beside a ready lesson, with nothing part-way", async () => {
@@ -972,7 +964,9 @@ describe("what Home says when there is nothing, or nothing left", () => {
     expect(screen.queryByText(/caught up/)).toBeNull();
   });
 
-  it("shows the caught-up line once everything set is finished", async () => {
+  it("says nothing about being caught up once everything set is finished, until the backend says so", async () => {
+    // "All caught up" is a status the backend sends, not one Home works out
+    // from its lists (Lydia, 21 Oct, SCRUM-146).
     signIn();
     live([done], [
       {
@@ -988,7 +982,7 @@ describe("what Home says when there is nothing, or nothing left", () => {
 
     expect(screen.queryByText(/Today's lessons/)).toBeNull();
     expect(screen.queryByText("Pick up where you left off")).toBeNull();
-    expect(screen.getByText(/You're all caught up/)).toBeInTheDocument();
+    expect(screen.queryByText(/caught up/)).toBeNull();
   });
 
   it("says nothing about the child's week while work is outstanding", async () => {
@@ -996,8 +990,7 @@ describe("what Home says when there is nothing, or nothing left", () => {
      * The frame's line for this state ("You've been showing up this week")
      * was a claim nothing verifies, and the one that replaced it was in no
      * frame at all. Design ruled for absence (D98, 6 Oct). Outstanding is the
-     * frame's state: something new today AND something part-way - with
-     * nothing new, the caught-up note shows (D99).
+     * frame's state: something new today AND something part-way.
      */
     signIn();
     live(
