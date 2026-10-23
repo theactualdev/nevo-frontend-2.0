@@ -223,6 +223,14 @@ export interface DashboardProgressRow {
   segmentPosition: number;
   updatedAt: string;
   /**
+   * When the lesson was completed, or null/absent while it never has been
+   * (Teslim, 21 Oct). The lesson's own fact, kept through a reopen: a row
+   * demoted before review mode shipped still says `in_progress` beside it.
+   * A finish with no marked answers (`not_attempted`) never sets it. See
+   * `lib/lessons/finishedRow`.
+   */
+  completedAt?: string | null;
+  /**
    * The lesson's own title and subject (backend B52, 5 Oct), so a lesson the
    * child started from the library can sit on Home with no assignment behind
    * it. `title` defaults to "" and `subject` is nullable: blank is no title.

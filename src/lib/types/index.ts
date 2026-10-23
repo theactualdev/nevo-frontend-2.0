@@ -16,6 +16,7 @@ export type {
   ScaffoldQuantity,
   CalculationStep,
   CalculationSegment,
+  ChosenVersion,
   LessonSegment,
   AssessmentQuestion,
   Assessment,

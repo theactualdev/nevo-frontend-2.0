@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
 
@@ -281,26 +281,22 @@ describe("adaptations the child saw applied (B42)", () => {
     expect(applied().count).toBe(1);
   });
 
-  it("counts a modality change from an offer the child took, and not the offer", () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    render(
-      <LessonPlayer
-        lesson={TWO}
-        plan={{ lessonId: "l-1", segments: [], suggestModality: "audio" }}
-      />,
-    );
-    act(() => {
-      vi.advanceTimersByTime(1600);
-    });
-    expect(applied().count).toBe(0);
+  it("does not count a format the child picks, which is theirs and not the system's", () => {
+    /*
+     * The engine's offer taken was an adaptation applied. Since 21 Oct there
+     * is no offer: the child picks in the format group, and a child's own
+     * pick is not one (B42), whatever the marker sits on.
+     */
+    render(<LessonPlayer lesson={TWO} plan={null} />);
 
     now = 7_000;
-    fireEvent.click(screen.getByRole("button", { name: "Yes, try it" }));
-    act(() => {
-      vi.advanceTimersByTime(300);
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Audio" }));
 
-    expect(applied()).toEqual({ count: 1, lastAt: 7_000 });
+    expect(screen.getByRole("button", { name: "Audio" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(applied()).toEqual({ count: 0, lastAt: null });
   });
 
   /*

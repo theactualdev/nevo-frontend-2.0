@@ -269,6 +269,54 @@ export function reportCalculationFallback(fallback: CalculationFallback): void {
   send(calculationFallbackReport(fallback, window.location.pathname));
 }
 
+/** What readiness said, read again, when Module 4 still had nothing to ask. */
+export interface ProbeNothingToAsk {
+  /** The subjects it marked `probeAvailable`, by id. */
+  subjectIds: string[];
+  /** Module 4's `status` as it sent it; absent when it sent none. */
+  status?: string;
+}
+
+/**
+ * The report for a Module 4 readiness holds as owed with nothing to ask. Pure.
+ *
+ * Olayinka's order on Teslim's 21 Oct answers: a re-read readiness that still
+ * says the probe is available while no subject gives a question goes to
+ * backend, rather than the child being moved on (`planProbe`). The server's
+ * answers disagree and only backend can say which is wrong, so this names
+ * what readiness said - the subject ids it marked `probeAvailable` and the
+ * module's status - and nothing about the child: no user id, no item, no
+ * answer. The route has its values taken out, as every report's does.
+ */
+export function probeNothingToAskReport(
+  { subjectIds, status }: ProbeNothingToAsk,
+  pathname: string,
+): ClientErrorReport {
+  return {
+    message:
+      `Module 4 has nothing to ask but readiness says the probe is available: subjects [${subjectIds.join(", ")}], probe status ${status ?? "not sent"}`.slice(
+        0,
+        MESSAGE_MAX,
+      ),
+    route: pathname ? reportableRoute(pathname) : null,
+    stack: null,
+    appVersion: appVersion(),
+    surface: "student",
+    incidentId: null,
+  };
+}
+
+/**
+ * Report a Module 4 with nothing to ask that readiness still holds as owed.
+ * Sent the way a crash is - once per page, never a word on screen if it
+ * fails, and not from a development build.
+ */
+export function reportProbeNothingToAsk(found: ProbeNothingToAsk): void {
+  if (typeof window === "undefined") return;
+  if (process.env.NODE_ENV === "development") return;
+  send(probeNothingToAskReport(found, window.location.pathname));
+}
+
 /** One report, once per fault per page, fire-and-forget. */
 function send(report: ClientErrorReport): void {
   const fault = [

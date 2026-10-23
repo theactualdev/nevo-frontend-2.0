@@ -141,7 +141,7 @@ describe("every type the client can emit", () => {
  * a type through `SIGNAL_EVENT_TYPES` or `ONBOARDING_SIGNAL_TYPES`, and the
  * `{ type, payload }` the hook queues itself. The payload has to be written
  * inline for its keys to be read, and that is checked too. A call whose type
- * is a variable - the density chips, the suggestion outcomes - cannot be read
+ * is a variable - the density chips - cannot be read
  * here; the player's tests hold those to the same list (`offendingCalls`).
  */
 const SRC = join(import.meta.dirname, "..", "..");

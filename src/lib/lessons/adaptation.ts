@@ -100,6 +100,30 @@ function asDensityLevel(value: string | null | undefined): DensityLevel | null {
 }
 
 /**
+ * A row's `availableFormats` and `recommendedFormat` (SCRUM-272, 21 Oct),
+ * where the answer carried them - "adaptation responses carry the same
+ * availability/recommendation fields per segment" - so the format group
+ * reads the fresher of this and the lesson's own section. Both or neither:
+ * an answer from before them leaves the lesson's standing. The values are
+ * the engine's, in its order; the player narrows them to what it can draw.
+ */
+function formatsOf(
+  row: AdaptResponse["segments"][number],
+): Pick<SegmentAdaptation, "formats" | "recommendedFormat"> {
+  if (!Array.isArray(row.availableFormats)) return {};
+  const formats = row.availableFormats.flatMap((f) => {
+    const m = asModality(f);
+    return m ? [m] : [];
+  });
+  const recommended = asModality(row.recommendedFormat);
+  return {
+    formats,
+    recommendedFormat:
+      recommended && formats.includes(recommended) ? recommended : null,
+  };
+}
+
+/**
  * The lesson as the engine needs to see it.
  *
  * `availableModalities` is `minItems: 1` in the contract and a parsed segment
@@ -179,7 +203,12 @@ export function toAdaptationPlan(
   lesson: Lesson,
 ): AdaptationPlan {
   const offered = new Map(lesson.segments.map((s) => [s.id, s.modalities]));
-  const suggested = asModality(res.modalitySuggestion?.suggested);
+  /*
+   * `modalitySuggestion` IS NOT READ. It is deprecated and always null since
+   * 21 Oct, and the separate pill it fed is gone (SCRUM-271 amended): the
+   * engine's recommendation is each row's `recommendedFormat`, carried below
+   * for the format group's quiet marker.
+   */
   /*
    * The engine's instruction, carried for the first time.
    *
@@ -192,21 +221,27 @@ export function toAdaptationPlan(
   const adjustment = asAdjustmentAction(res.proactiveAdjustment?.action);
 
   /*
-   * THE CONTENT IS TIED TO THE INSTRUCTION IT SERVES.
+   * THE PANEL'S CONTENT IS TIED TO THE INSTRUCTION IT SERVES; THE HINT IS NOT.
    *
    * `hint` and `guidedQuestions` landed on 21 Sep and answer the two asks that
-   * left three of the four affective responses unreachable. They are carried
-   * only under the action they belong to: the action is the instruction, and a
-   * hint arriving beside `simplify` is not a hint anybody asked to show.
-   * Stopping it here beats trusting every future consumer to check.
+   * left three of the four affective responses unreachable. The questions and
+   * prompts are carried only under `show_socratic_panel`, the action they
+   * belong to.
+   *
+   * THE HINT RIDES WHATEVER THE ENGINE ASKS FOR (Teslim's gate contract,
+   * 23 Oct): "The hint is also carried in the re-teaching/proactive payload;
+   * it must not be hidden solely because the action is a pacing or chunking
+   * action." It was held to `offer_hint`, and since the gate the two-miss hint
+   * arrives under `offer_modality_shift`, `simplify`, `rechunk` or `slower` -
+   * so on 23 Oct's sweep it was sent on every miss from the second and never
+   * reached the sheet. Carried here even under an action this client does not
+   * draw: the hint is the engine's words either way, and whether there is one
+   * is still the engine's (rule 5).
    *
    * An instruction can still arrive with nothing to render - neither field is
    * required by the schema - and that is rule 5, not a fault.
    */
-  const hint =
-    adjustment === ADJUSTMENT_ACTIONS.OFFER_HINT
-      ? (res.proactiveAdjustment?.hint?.trim() ?? "")
-      : "";
+  const hint = res.proactiveAdjustment?.hint?.trim() ?? "";
   const guidedQuestions =
     adjustment === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL
       ? (res.proactiveAdjustment?.guidedQuestions ?? []).filter(
@@ -258,6 +293,7 @@ export function toAdaptationPlan(
         startModality,
         ...(scaffold ? { scaffold } : {}),
         ...(densityLevel ? { densityLevel } : {}),
+        ...formatsOf(row),
       },
     ];
   });
@@ -267,15 +303,6 @@ export function toAdaptationPlan(
   return {
     lessonId: res.lessonId,
     segments,
-    /*
-     * ONE SUGGESTION, NOT ONE PER SEGMENT. `modalitySuggestion` has no
-     * `segmentId`: the engine makes it once, for the lesson as it stands. It
-     * was copied onto every row here, and the player - which offers at most
-     * one per segment and never two in a row - turned it into an offer on
-     * every other segment for the rest of the lesson. The player decides where
-     * the one offer can be drawn; see `LessonPlayer`.
-     */
-    ...(suggested ? { suggestModality: suggested } : {}),
     ...(adjustment ? { adjustment } : {}),
     ...(hint ? { hint } : {}),
     ...(guidedQuestions.length > 0 ? { guidedQuestions } : {}),

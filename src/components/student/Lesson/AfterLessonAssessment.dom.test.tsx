@@ -489,3 +489,24 @@ describe("from the check-in (B26)", () => {
     expect(screen.queryByText(/revisit soon/)).toBeNull();
   });
 });
+
+describe("which answer is picked (21 Oct production run)", () => {
+  it("is said on the options, not only drawn as a radio", () => {
+    render(<AfterLessonAssessment assessment={ASSESSMENT} onFinish={() => {}} />);
+    start();
+
+    fireEvent.click(screen.getByRole("button", { name: "B" }));
+
+    expect(screen.getByRole("button", { name: "B" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "A" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("is no longer said once the answer is revealed", () => {
+    render(<AfterLessonAssessment assessment={ASSESSMENT} onFinish={() => {}} />);
+    start();
+
+    pick("B");
+
+    expect(screen.getByRole("button", { name: "B" }).hasAttribute("aria-pressed")).toBe(false);
+  });
+});

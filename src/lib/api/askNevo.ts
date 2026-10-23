@@ -1,4 +1,10 @@
-import { api, ApiError, apiErrorCode, type RequestOptions } from "./client";
+import {
+  api,
+  ApiError,
+  apiErrorCode,
+  apiErrorMessage,
+  type RequestOptions,
+} from "./client";
 
 /**
  * Ask Nevo endpoints (FE Architecture §1; Student B.12) - wired to the live
@@ -199,6 +205,42 @@ export function allowanceSpent(cause: unknown): boolean {
     cause.status === 429 &&
     apiErrorCode(cause.detail) === ALLOWANCE_SPENT_CODE
   );
+}
+
+/**
+ * The code on the 403 `POST /api/v1/ask-nevo/` answers when a question, or the
+ * answer it would have drawn, trips the safety check (SCRUM-259). The spec's
+ * 403 description names it first; the backend's `SafetyBlocked` sends it as
+ * `{ detail: { code, message } }`, the message written for the child.
+ */
+export const SAFETY_STOP_CODE = "content_safety_blocked";
+
+/**
+ * A safety stop, carrying the server's own words.
+ *
+ * `message` is null when the server sent none. The caller shows nothing in
+ * its place: the ticket says the wording is "taken from the server rather
+ * than substituted locally", so there is no copy of it here to fall back to.
+ */
+export interface SafetyStop {
+  message: string | null;
+}
+
+/**
+ * Was this refusal the safety check stopping the question?
+ *
+ * BY ITS CODE, NOT ITS STATUS, as with the allowance. A 403 is also a role or
+ * consent refusal, and those keep the ordinary failure; only this code is a
+ * stop, which is not a transient error and must not be shown as one.
+ */
+export function safetyStop(cause: unknown): SafetyStop | null {
+  if (
+    !(cause instanceof ApiError) ||
+    cause.status !== 403 ||
+    apiErrorCode(cause.detail) !== SAFETY_STOP_CODE
+  )
+    return null;
+  return { message: apiErrorMessage(cause.detail) };
 }
 
 export const askNevoApi = {

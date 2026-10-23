@@ -635,12 +635,18 @@ export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
   return trials;
 }
 
-/** `formFactor()`'s three, as the trials request names them: touch or cursor. */
+/**
+ * `formFactor()`'s three, as the trials request names them: touch or cursor.
+ * A phone is `phone_touch`, the server's own word for it - it rewrites
+ * `mobile_touch` to that on the way in. `mobile` is what `formFactor()` said
+ * before 22 Oct, kept for a run recorded under it and sent after.
+ */
 const CONTRACT_FORM_FACTOR: Record<
   string,
   NonNullable<BaselineRunContext["formFactor"]>
 > = {
-  mobile: "mobile_touch",
+  phone: "phone_touch",
+  mobile: "phone_touch",
   tablet: "tablet_touch",
   desktop: "desktop_cursor",
 };

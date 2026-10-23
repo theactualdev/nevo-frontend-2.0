@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api, ApiError } from "./client";
 import { SERVER_WRITTEN_EVENT_TYPES, type SignalEventType } from "@/lib/constants";
 
 /**
@@ -146,46 +146,95 @@ export const signalsApi = {
       ]);
     }
     if (known.length === 0) return Promise.resolve(null);
-    // No trailing slash: Next 308-redirects slashed API routes before the
-    // proxy runs; FastAPI's own slash redirect is followed server-side.
-    return api.post<SignalBatchReceipt>(
-      "/api/signals",
-      {
-        session: {
-          sessionId: session.sessionId,
-          lessonId: session.lessonId,
-          sessionType: session.sessionType ?? "lesson",
-          startedAt: session.startedAt,
-          ...(session.endedAt ? { endedAt: session.endedAt } : {}),
-          ...(session.completionStatus
-            ? { completionStatus: session.completionStatus }
-            : {}),
-          ...(session.exitPosition
-            ? { exitPosition: session.exitPosition.slice(0, 120) }
-            : {}),
-          ...(session.breakCount ? { breakCount: session.breakCount } : {}),
-          ...(session.proactiveAdjustmentsCount
-            ? { proactiveAdjustmentsCount: session.proactiveAdjustmentsCount }
-            : {}),
-        },
-        events: known.map((e) => ({
-          sessionId: session.sessionId,
-          eventType: e.type,
-          timestamp: e.timestamp,
-          eventData: e.payload,
-        })),
-      },
-      options.token || options.signal
-        ? {
-            ...(options.keepalive ? { keepalive: true } : {}),
-            ...(options.token
-              ? { headers: { Authorization: `Bearer ${options.token}` } }
-              : {}),
-            ...(options.signal ? { signal: options.signal } : {}),
-          }
-        : options.keepalive
-          ? { keepalive: true }
-          : undefined,
-    );
+    /*
+     * ONE REFUSED EVENT NO LONGER TAKES ITS BATCH WITH IT. The contract
+     * validates each event and refuses the whole request over any one of
+     * them, and a refused batch is dropped (`useSignals`), so a single event
+     * the server will not take cost every event beside it. On 23 Oct's sweep
+     * it was `modality_switch_outcome`, which the server refuses without
+     * scores this client may not compute (rule 3): every format switch lost
+     * that section's `time_on_segment` with it. The 422 names each refused
+     * event by its place (`["body", "events", n]`), so the rest go once more
+     * without them. Once, and only when it named some but not all: anything
+     * else is the refusal it was.
+     */
+    return postBatch(session, known, options).catch((cause: unknown) => {
+      const refused = refusedEvents(cause);
+      if (refused.size === 0 || refused.size >= known.length) throw cause;
+      return postBatch(
+        session,
+        known.filter((_, i) => !refused.has(i)),
+        options,
+      );
+    });
   },
 };
+
+/** The events a 422 names by their place in the batch, `["body", "events", n]`. */
+function refusedEvents(cause: unknown): Set<number> {
+  const places = new Set<number>();
+  if (!(cause instanceof ApiError) || cause.status !== 422) return places;
+  const errors = (cause.detail as { detail?: { errors?: unknown } } | undefined)
+    ?.detail?.errors;
+  if (!Array.isArray(errors)) return places;
+  for (const error of errors) {
+    const at = (error as { location?: unknown } | null)?.location;
+    if (
+      Array.isArray(at) &&
+      at[0] === "body" &&
+      at[1] === "events" &&
+      Number.isInteger(at[2])
+    ) {
+      places.add(at[2] as number);
+    }
+  }
+  return places;
+}
+
+function postBatch(
+  session: SignalSessionEnvelope,
+  known: SignalEvent[],
+  options: { keepalive?: boolean; token?: string; signal?: AbortSignal },
+): Promise<SignalBatchReceipt> {
+  // No trailing slash: Next 308-redirects slashed API routes before the
+  // proxy runs; FastAPI's own slash redirect is followed server-side.
+  return api.post<SignalBatchReceipt>(
+    "/api/signals",
+    {
+      session: {
+        sessionId: session.sessionId,
+        lessonId: session.lessonId,
+        sessionType: session.sessionType ?? "lesson",
+        startedAt: session.startedAt,
+        ...(session.endedAt ? { endedAt: session.endedAt } : {}),
+        ...(session.completionStatus
+          ? { completionStatus: session.completionStatus }
+          : {}),
+        ...(session.exitPosition
+          ? { exitPosition: session.exitPosition.slice(0, 120) }
+          : {}),
+        ...(session.breakCount ? { breakCount: session.breakCount } : {}),
+        ...(session.proactiveAdjustmentsCount
+          ? { proactiveAdjustmentsCount: session.proactiveAdjustmentsCount }
+          : {}),
+      },
+      events: known.map((e) => ({
+        sessionId: session.sessionId,
+        eventType: e.type,
+        timestamp: e.timestamp,
+        eventData: e.payload,
+      })),
+    },
+    options.token || options.signal
+      ? {
+          ...(options.keepalive ? { keepalive: true } : {}),
+          ...(options.token
+            ? { headers: { Authorization: `Bearer ${options.token}` } }
+            : {}),
+          ...(options.signal ? { signal: options.signal } : {}),
+        }
+      : options.keepalive
+        ? { keepalive: true }
+        : undefined,
+  );
+}

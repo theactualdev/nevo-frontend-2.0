@@ -56,7 +56,8 @@ describe("a panel the child opened", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent(SELF);
     expect(screen.queryByText(HANDOFF)).toBeNull();
-    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    // Keep going stays beside it (SCRUM-275): the child can still leave.
+    expect(screen.getByRole("button", { name: "Keep going" })).toBeEnabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
@@ -132,6 +133,156 @@ describe("a panel the system handed off to", () => {
   });
 });
 
+/*
+ * SCRUM-275 (Lydia, 21 Oct): "Keep going is present and pressable from the
+ * moment the panel opens, before anything is answered. The panel is support,
+ * not a test, and a child has to be able to leave it." And a panel the child
+ * opened, with no unpassed check, "is closed by the child. No completion
+ * condition, nothing to answer first."
+ */
+describe("Keep going, from the moment the panel opens (SCRUM-275)", () => {
+  it("is there and pressable as a hand-off arrives, before anything is answered", () => {
+    const onKeepGoing = vi.fn();
+    const onAnswer = vi.fn();
+    render(
+      <SocraticPanel
+        prompts={PROMPTS}
+        entry="handoff"
+        onKeepGoing={onKeepGoing}
+        onAnswer={onAnswer}
+      />,
+    );
+
+    const keepGoing = screen.getByRole("button", { name: "Keep going" });
+    expect(keepGoing).toBeEnabled();
+    // Not yet the ending: nothing has been worked through.
+    expect(screen.queryByText(HANDOFF)).toBeNull();
+
+    fireEvent.click(keepGoing);
+
+    expect(onKeepGoing).toHaveBeenCalledTimes(1);
+    expect(onAnswer).not.toHaveBeenCalled();
+    expect(screen.queryByText(PROMPTS[0].prompt)).toBeNull();
+  });
+
+  it("is there and pressable as the child opens it, before anything is answered", () => {
+    render(<SocraticPanel prompts={PROMPTS} entry="self" onTryAgain={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Which part is unclear?" }));
+
+    expect(screen.getByRole("button", { name: "Keep going" })).toBeEnabled();
+    // The way back to the question still waits for the dialogue.
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("is there while a prompt is being answered, too", () => {
+    render(<SocraticPanel prompts={PROMPTS} entry="handoff" onKeepGoing={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: PROMPTS[0].prompt }));
+
+    expect(screen.getByRole("button", { name: "Keep going" })).toBeEnabled();
+  });
+
+  it("closes a panel the child opened, with nothing answered, and does nothing more", () => {
+    const onTryAgain = vi.fn();
+    const onAnswer = vi.fn();
+    // No unpassed check here: no way back to a question, so no onTryAgain.
+    render(<SocraticPanel prompts={PROMPTS} entry="self" onAnswer={onAnswer} />);
+    fireEvent.click(screen.getByRole("button", { name: "Which part is unclear?" }));
+    expect(screen.getByText(PROMPTS[0].prompt)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+
+    expect(screen.queryByText(PROMPTS[0].prompt)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    expect(onAnswer).not.toHaveBeenCalled();
+    expect(onTryAgain).not.toHaveBeenCalled();
+    // Theirs to open again.
+    expect(
+      screen.getByRole("button", { name: "Which part is unclear?" }),
+    ).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("leaves an opened prompt as abandoned, as closing does", () => {
+    const onAbandon = vi.fn();
+    render(<SocraticPanel prompts={PROMPTS} entry="self" onAbandon={onAbandon} />);
+    fireEvent.click(screen.getByRole("button", { name: "Which part is unclear?" }));
+    fireEvent.click(screen.getByRole("button", { name: PROMPTS[0].prompt }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+
+    expect(onAbandon).toHaveBeenCalledTimes(1);
+    expect(onAbandon).toHaveBeenCalledWith("p-1");
+  });
+});
+
+/*
+ * Teslim, 21 Oct: the hand-off uses the failed question's own stored guided
+ * questions, and "if none are stored, no dialogue is sent". Nothing is made
+ * up in their place - not a prompt, and not a panel of nothing.
+ */
+describe("a panel with no questions (rule 5)", () => {
+  it.each(["handoff", "self"] as const)(
+    "draws nothing at all (%s)",
+    (entry) => {
+      const onShown = vi.fn();
+      const { container } = render(
+        <SocraticPanel
+          prompts={[]}
+          entry={entry}
+          onKeepGoing={() => {}}
+          onTryAgain={() => {}}
+          onShown={onShown}
+        />,
+      );
+
+      expect(container).toBeEmptyDOMElement();
+      expect(document.body.textContent).not.toMatch(
+        /think it through|keep going|which part/i,
+      );
+      expect(onShown).not.toHaveBeenCalled();
+    },
+  );
+});
+
+/*
+ * SCRUM-275: "The panel does not cover Back and Next. It sits above them."
+ * jsdom lays nothing out, so this pins what keeps it there: the panel is drawn
+ * into the row the player gives it, in flow, and nothing pins it to the
+ * screen at any width.
+ */
+describe("where the panel opens", () => {
+  /** Pinned to the screen at any breakpoint, or lifted out of the flow. */
+  const PINNED = /(^|\s)((sm|md|lg|xl|2xl):)?(fixed|absolute|inset-[^\s]+|bottom-[^\s]+|z-[^\s]+)(\s|$)/;
+
+  it("is drawn into the row it is given, in flow", () => {
+    const dock = document.createElement("div");
+    document.body.appendChild(dock);
+    const { container } = render(
+      <SocraticPanel prompts={PROMPTS} entry="handoff" onKeepGoing={() => {}} dock={dock} />,
+    );
+
+    const label = screen.getByText(/think it through/i);
+    expect(dock.contains(label)).toBe(true);
+    // The way in stays where it was mounted; only the open panel moves.
+    expect(container.contains(label)).toBe(false);
+    const sheet = dock.firstElementChild as HTMLElement;
+    expect(sheet.className).not.toMatch(PINNED);
+    // It may shrink with the row and scroll inside, under its own cap.
+    expect(sheet.className.split(" ")).toEqual(
+      expect.arrayContaining(["min-h-0", "overflow-y-auto", "max-h-[85dvh]"]),
+    );
+    dock.remove();
+  });
+
+  it("is in flow where it is mounted, when there is no row to go to", () => {
+    render(<SocraticPanel prompts={PROMPTS} entry="handoff" onKeepGoing={() => {}} />);
+
+    const sheet = screen.getByText(/think it through/i).closest(
+      ".rounded-t-\\[16px\\]",
+    ) as HTMLElement;
+    expect(sheet.className).not.toMatch(PINNED);
+  });
+});
+
 describe("either ending", () => {
   it.each(["self", "handoff"] as const)(
     "claims nothing the panel cannot know (%s)",
@@ -193,4 +344,113 @@ describe("the offered hint's panel (Lesson Player frame, 13 Oct)", () => {
     // D29: a labelled control, not the frame's nothing or a faint X.
     expect(screen.getByRole("button", { name: "Close hint" }).textContent).toBe("Close");
   });
+});
+
+/**
+ * SCRUM-275, LYDIA 22 OCT: "Two identical navy buttons is a defect, not a
+ * choice. One primary per sheet and it is the action that progresses the
+ * check, so Try again or Send. Keep going is secondary, not navy, not
+ * full-width. Navy stays reserved for the primary action."
+ *
+ * Keep going is secondary in every state, the hand-off's "Let's keep going."
+ * included, where it stands alone: there is no check left to progress there,
+ * so there is no primary to promote it to.
+ */
+describe("one navy primary per panel state (SCRUM-275)", () => {
+  const classes = (el: Element) =>
+    (el.getAttribute("class") ?? "").split(/\s+/);
+  const navyFullWidth = () =>
+    screen
+      .getAllByRole("button")
+      .filter(
+        (b) =>
+          classes(b).includes("bg-nevo-navy") && classes(b).includes("w-full"),
+      );
+  const keepGoing = () => screen.getByRole("button", { name: "Keep going" });
+  const openSelf = () => {
+    render(<SocraticPanel prompts={PROMPTS} entry="self" onTryAgain={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Which part is unclear?" }));
+  };
+  const expandPrompt = () =>
+    fireEvent.click(screen.getByRole("button", { name: PROMPTS[0].prompt }));
+
+  const states = [
+    ["a panel the child opened", openSelf],
+    [
+      "a prompt being answered, with Send",
+      () => {
+        openSelf();
+        expandPrompt();
+      },
+    ],
+    [
+      "the self ending, with Try again",
+      () => {
+        openSelf();
+        answerAll();
+      },
+    ],
+    [
+      "a hand-off as it arrives",
+      () =>
+        render(
+          <SocraticPanel prompts={PROMPTS} entry="handoff" onKeepGoing={() => {}} />,
+        ),
+    ],
+    [
+      "the hand-off's ending, where Keep going is alone",
+      () => {
+        render(
+          <SocraticPanel prompts={PROMPTS} entry="handoff" onKeepGoing={() => {}} />,
+        );
+        answerAll();
+      },
+    ],
+  ] as const;
+
+  it.each(states)("has no more than one navy full-width button: %s", (_, reach) => {
+    reach();
+
+    expect(navyFullWidth().length).toBeLessThanOrEqual(1);
+  });
+
+  it("keeps Send the primary while a prompt is answered", () => {
+    openSelf();
+    expandPrompt();
+
+    expect(navyFullWidth()).toEqual([screen.getByRole("button", { name: "Send" })]);
+  });
+
+  it("keeps Try again the primary on the self ending", () => {
+    openSelf();
+    answerAll();
+
+    expect(navyFullWidth()).toEqual([
+      screen.getByRole("button", { name: "Try again" }),
+    ]);
+  });
+
+  it("does not promote a lone Keep going on the hand-off's ending", () => {
+    render(<SocraticPanel prompts={PROMPTS} entry="handoff" onKeepGoing={() => {}} />);
+    answerAll();
+
+    expect(screen.getByRole("status")).toHaveTextContent(HANDOFF);
+    expect(navyFullWidth()).toEqual([]);
+  });
+
+  it.each(states)(
+    "draws Keep going secondary: not navy, not full width, 44px, a pointer: %s",
+    (_, reach) => {
+      reach();
+
+      const own = classes(keepGoing());
+      expect(own).not.toContain("bg-nevo-navy");
+      expect(own).not.toContain("w-full");
+      expect(own).toContain("w-fit");
+      expect(own).toContain("h-11");
+      expect(own).toContain("cursor-pointer");
+      expect(keepGoing().firstChild?.nodeType).toBe(Node.TEXT_NODE);
+      expect(keepGoing()).toBeEnabled();
+    },
+  );
 });

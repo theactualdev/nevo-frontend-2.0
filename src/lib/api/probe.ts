@@ -60,6 +60,31 @@ export interface LearningReadiness {
   probeSubjectId?: string | null;
   /** Always `one_available_subject`: one finished subject completes Module 4. */
   probePolicy?: "one_available_subject";
+  /**
+   * The lesson the server remembers this child being refused, as a bare
+   * `/student/lessons/<id>`, or null (SCRUM-266). Remembered from the
+   * `lessonId` readiness was read with, or from the lesson the child opened
+   * while onboarding was unfinished - so it comes "even without the query"
+   * (Teslim, 21 Oct). Where "done" goes, ahead of the continue route's own
+   * `?next=` (`wayBack`), and checked as that is.
+   */
+  returnTo?: string | null;
+  /**
+   * What that lesson's subject has for Module 4, when there is a lesson
+   * (Teslim, 21 Oct): `available` - the child takes the lesson's subject,
+   * which is `probeSubjectId`, and the probe is asked about the lesson
+   * (`planProbe`); `unavailable` - the lesson's subject is the child's but has
+   * no items; `subject_unmapped` - the lesson's subject is none of the
+   * child's. Null with no lesson.
+   *
+   * ABOUT THE LESSON, NEVER ABOUT THE MODULE. The server still owes Module 4
+   * on "one available subject, not every subject" (`refresh_onboarding`):
+   * only the module's own `status: "unavailable"` says there is no bank. So
+   * the last two move nobody on; they leave the probe unscoped, as with no
+   * lesson, because the server refuses every other subject asked with the
+   * lesson (409 `probe_subject_mismatch`).
+   */
+  lessonProbeStatus?: "available" | "unavailable" | "subject_unmapped" | null;
 }
 
 /** One option: the label is what the child reads, the value what is sent. */
@@ -95,6 +120,13 @@ export interface ProbeQuestion {
 export interface ProbeFinished {
   finished: true;
   subjectId: string;
+  /**
+   * The lesson the server remembers this child being refused, as a bare
+   * `/student/lessons/<id>`, or null (Teslim, 21 Oct: "ProbeFinished returns
+   * navigatesTo for the remembered lesson. The frontend still has to follow
+   * that destination"). First in line for where "done" goes (`wayBack`).
+   */
+  navigatesTo?: string | null;
 }
 
 /** A subject with no items yet, said cleanly rather than by failing. */
@@ -154,20 +186,53 @@ export const ONBOARDING_MODULES = [
   DOMAIN_PROBE,
 ] as const;
 
+/**
+ * A probe for the lesson is refused for any subject but the lesson's own, as
+ * `{ detail: { code } }` (Teslim, 21 Oct: "A mismatched subject is refused
+ * with 409 probe_subject_mismatch, not replaced with another subject's
+ * questions"). Nor is it replaced on this device.
+ */
+export const PROBE_SUBJECT_MISMATCH = "probe_subject_mismatch";
+
 const probePath = (subjectId: string, tail: "next" | "answer") =>
   `/api/v1/probe/${encodeURIComponent(subjectId)}/${tail}`;
 
+/** The lesson a read is for, as its query - or no query at all. */
+const forLesson = (lessonId?: string) =>
+  lessonId ? { params: { lessonId } } : undefined;
+
+/** A pick, with the lesson its run is for when it is for one (SCRUM-266). */
+export interface ProbeAnswerBody {
+  itemId: string;
+  chosenOption: string;
+  lessonId?: string;
+}
+
 export const probeApi = {
-  /** Which of the four this child has finished, and which subjects can be probed. */
-  readiness: () =>
-    api.get<LearningReadiness>("/api/v1/students/me/onboarding"),
-  /** The next item for this child in this subject, or what the probe concluded. */
-  next: (subjectId: string) => api.get<ProbeStep>(probePath(subjectId, "next")),
+  /**
+   * Which of the four this child has finished, and which subjects can be
+   * probed. With `lessonId` - onboarding finished because of that lesson -
+   * also what its subject has for Module 4, and the server remembers it as
+   * the way back (`lessonProbeStatus`, `returnTo`).
+   */
+  readiness: (lessonId?: string) =>
+    api.get<LearningReadiness>(
+      "/api/v1/students/me/onboarding",
+      forLesson(lessonId),
+    ),
+  /**
+   * The next item for this child in this subject, or what the probe
+   * concluded. With `lessonId`, only items on the lesson's concepts, and 409
+   * `probe_subject_mismatch` for a subject that is not the lesson's.
+   */
+  next: (subjectId: string, lessonId?: string) =>
+    api.get<ProbeStep>(probePath(subjectId, "next"), forLesson(lessonId)),
   /**
    * Record the child's pick and get the next item back. The response never
    * says whether it was right. Only an answer that FINISHES the probe makes
-   * the server record `domain_probe` as done.
+   * the server record `domain_probe` as done. `lessonId` rides in the body,
+   * as `ProbeAnswer` takes it, when the run is for a lesson.
    */
-  answer: (subjectId: string, body: { itemId: string; chosenOption: string }) =>
+  answer: (subjectId: string, body: ProbeAnswerBody) =>
     api.post<ProbeQuestion | ProbeFinished>(probePath(subjectId, "answer"), body),
 };

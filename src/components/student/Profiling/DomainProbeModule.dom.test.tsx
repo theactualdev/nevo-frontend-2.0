@@ -29,15 +29,20 @@ import { clearSession, setSession } from "@/lib/auth/session";
  * invent a completion the server never recorded.
  */
 
-const { readiness, next, answer, myDashboard } = vi.hoisted(() => ({
+const { readiness, next, answer, myDashboard, report } = vi.hoisted(() => ({
   readiness: vi.fn(),
   next: vi.fn(),
   answer: vi.fn(),
   myDashboard: vi.fn(),
+  report: vi.fn(),
 }));
 vi.mock("@/lib/api/probe", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/probe")>()),
   probeApi: { readiness, next, answer },
+}));
+vi.mock("@/lib/api/clientErrors", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/clientErrors")>()),
+  reportProbeNothingToAsk: report,
 }));
 vi.mock("@/lib/api/students", () => ({ studentsApi: { myDashboard } }));
 vi.mock("./StretchInterstitial", () => ({
@@ -530,9 +535,26 @@ describe("whether it runs is found out first (Olayinka, 19 Oct)", () => {
   });
 });
 
+/** Teslim's 19 Oct contract for no bank: `completed: true, status: "unavailable"`. */
+const NO_BANK = {
+  complete: false,
+  modules: [
+    { id: "grid_span", completed: true, status: "completed" },
+    { id: "pattern_flanker", completed: true, status: "completed" },
+    { id: "sentence_dot", completed: true, status: "completed" },
+    { id: "domain_probe", completed: true, status: "unavailable" },
+  ],
+  subjects: [],
+  nextModule: null,
+  probeSubjectId: null,
+  probePolicy: "one_available_subject",
+};
+
 describe("with nothing to ask, it is not presented (rule 5)", () => {
-  it("presents nothing when no subject has items, and claims nothing done", async () => {
-    readiness.mockResolvedValue(ready([ART, { ...MATHS, probeAvailable: false }]));
+  it("presents nothing, and ends absent, when no subject has items and readiness read again says no bank", async () => {
+    readiness
+      .mockResolvedValueOnce(ready([ART, { ...MATHS, probeAvailable: false }]))
+      .mockResolvedValueOnce(NO_BANK);
     renderStep({ stretchFirst: true });
 
     await waitFor(() => expect(onDone).toHaveBeenCalledWith("absent"));
@@ -541,11 +563,19 @@ describe("with nothing to ask, it is not presented (rule 5)", () => {
     expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
   });
 
-  it("goes on without the stretch when the subject answers with no items", async () => {
+  it("ends failed, not absent, when readiness read again still holds it owed with nothing to ask", async () => {
+    // Teslim, 21 Oct: "an empty subject alone must not waive module 4". Only
+    // the server's `unavailable` moves a child on; this is reported, and the
+    // caller's nothing-state or the server's gate decides.
     next.mockResolvedValue(EMPTY);
     renderStep({ stretchFirst: true });
 
-    await waitFor(() => expect(onDone).toHaveBeenCalledWith("absent"));
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith("failed"));
+    expect(onDone).not.toHaveBeenCalledWith("absent");
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(readiness).toHaveBeenCalledTimes(2);
+    expect(report).toHaveBeenCalledTimes(1);
+    // Not presented on the way: no stretch, no map, no marker.
     expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
     expect(screen.queryByRole("progressbar")).toBeNull();
     expect(track).not.toHaveBeenCalled();
@@ -553,11 +583,13 @@ describe("with nothing to ask, it is not presented (rule 5)", () => {
 
   it("does not count a finish it was handed before asking anything", async () => {
     // `next` answering "finished" records nothing on the server (only an
-    // answer that finishes the probe does), so neither does this.
+    // answer that finishes the probe does), so neither does this - and it is
+    // not a no-bank signal either (Teslim, 21 Oct).
     next.mockResolvedValue(FINISHED);
     renderStep({ stretchFirst: true });
 
-    await waitFor(() => expect(onDone).toHaveBeenCalledWith("absent"));
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith("failed"));
+    expect(onDone).not.toHaveBeenCalledWith("sat");
     expect(screen.queryByRole("button", { name: "take a breath" })).toBeNull();
     expect(track).not.toHaveBeenCalled();
   });
@@ -649,5 +681,133 @@ describe("the stretch before it", () => {
     expect(
       screen.getByText("Which subject would you like to start with?"),
     ).toBeInTheDocument();
+  });
+});
+
+/*
+ * SCRUM-266, Teslim 21 Oct: a probe for a lesson sends the lesson on `next`
+ * and `answer`, so its items are the lesson's concepts; a subject that is not
+ * the lesson's "is refused with 409 probe_subject_mismatch, not replaced with
+ * another subject's questions"; and "ProbeFinished returns navigatesTo for
+ * the remembered lesson. The frontend still has to follow that destination."
+ */
+describe("a probe for the lesson a child was refused", () => {
+  const LESSON = "9c1e77aa-1111-4222-8333-444455556666";
+  const LESSON_PATH = `/student/lessons/${LESSON}`;
+  /** The lesson's subject, as the plan scoped it. */
+  const FOR_LESSON: ProbeOpenings = [
+    { subject: MATHS, item: Q1, suggested: true, lessonId: LESSON },
+  ];
+  const MISMATCH = () =>
+    new ApiError(409, "x", { detail: { code: "probe_subject_mismatch" } });
+
+  it("sends the lesson with every answer, and with the re-read after one does not land", async () => {
+    answer
+      .mockRejectedValueOnce(
+        new ApiError(409, "x", { detail: { code: "probe_item_stale" } }),
+      )
+      .mockResolvedValueOnce(Q2);
+    renderModule({ openings: FOR_LESSON });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Cat" }));
+    await waitFor(() => expect(next).toHaveBeenCalledWith("sub-maths", LESSON));
+    expect(answer).toHaveBeenCalledWith("sub-maths", {
+      itemId: "item-1",
+      chosenOption: "opt-cat",
+      lessonId: LESSON,
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Fish" }));
+    await waitFor(() => expect(answer).toHaveBeenCalledTimes(2));
+    expect(answer).toHaveBeenLastCalledWith("sub-maths", {
+      itemId: "item-1",
+      chosenOption: "opt-fish",
+      lessonId: LESSON,
+    });
+  });
+
+  it("hands on the way back the server's finish names, as sent", async () => {
+    answer.mockResolvedValueOnce({ ...FINISHED, navigatesTo: LESSON_PATH });
+    renderModule({ openings: FOR_LESSON });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Fish" }));
+
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith("sat", LESSON_PATH));
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("ends failed when the server refuses the subject for the lesson, asking nothing else in its place", async () => {
+    answer.mockRejectedValueOnce(MISMATCH());
+    // Two subjects in hand: the other is still not asked instead.
+    renderModule({
+      openings: [
+        ...FOR_LESSON,
+        { subject: ENGLISH, item: QE, suggested: false, lessonId: LESSON },
+      ],
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Cat" }));
+
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith("failed"));
+    expect(onDone).toHaveBeenCalledTimes(1);
+    // Not asked again, and nothing of English shown or asked.
+    expect(next).not.toHaveBeenCalled();
+    expect(answer).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Which word names a colour?")).toBeNull();
+  });
+
+  it("ends failed, not sat, when the re-read is refused part-way through", async () => {
+    // A question has been on screen, which makes any other failed re-read
+    // "sat"; a refusal for the lesson is not one the child sat.
+    answer.mockRejectedValueOnce(
+      new ApiError(409, "x", { detail: { code: "probe_item_stale" } }),
+    );
+    next.mockRejectedValueOnce(MISMATCH());
+    renderModule({ openings: FOR_LESSON });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Cat" }));
+
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith("failed"));
+    expect(onDone).not.toHaveBeenCalledWith("sat");
+  });
+
+  it("plans for the lesson when it plans for itself", async () => {
+    readiness.mockResolvedValue({
+      ...ready([MATHS, ENGLISH]),
+      probeSubjectId: "sub-maths",
+      lessonProbeStatus: "available",
+      returnTo: LESSON_PATH,
+    });
+    renderStep({ lessonId: LESSON });
+
+    expect(await screen.findByText("Which animal lives in water?")).toBeInTheDocument();
+    expect(readiness).toHaveBeenCalledWith(LESSON);
+    expect(next.mock.calls).toEqual([["sub-maths", LESSON]]);
+  });
+
+  it("asks another subject, and sends its answers without the lesson, when the lesson has nothing to ask", async () => {
+    // The 21 Oct dead end: English is "available", but has nothing on the
+    // lesson's concepts. Teslim's answer 3: use another subject with
+    // questions. Its run is unscoped: with the lesson, the server would
+    // refuse a subject that is not the lesson's.
+    readiness.mockResolvedValue({
+      ...ready([MATHS, ENGLISH]),
+      probeSubjectId: "sub-eng",
+      lessonProbeStatus: "available",
+      returnTo: LESSON_PATH,
+    });
+    next.mockImplementation(async (id: string, lessonId?: string) =>
+      lessonId || id !== "sub-maths" ? { ...EMPTY, subjectId: id } : Q1,
+    );
+    answer.mockReturnValue(new Promise(() => {}));
+    renderStep({ lessonId: LESSON });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Cat" }));
+
+    expect(next.mock.calls).toEqual([["sub-eng", LESSON], ["sub-maths"], ["sub-eng"]]);
+    expect(answer.mock.calls).toStrictEqual([
+      ["sub-maths", { itemId: "item-1", chosenOption: "opt-cat" }],
+    ]);
+    expect(onDone).not.toHaveBeenCalled();
   });
 });

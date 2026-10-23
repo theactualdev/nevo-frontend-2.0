@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import { LESSON_STATUS } from "@/lib/api/lessons";
@@ -1108,5 +1109,94 @@ describe("from the check-in (B26)", () => {
 
     expect(screen.queryByText(/revisit soon/)).toBeNull();
     expect(document.querySelectorAll(".shadow-elevation-1")).toHaveLength(0);
+  });
+});
+
+/**
+ * SCRUM-275, LYDIA 22 OCT: "The check sheet gets its own Keep going. A child
+ * whose only way past is the right answer is trapped, and with no guided
+ * questions there is no support on that screen at all."
+ *
+ * It goes the way Next goes on a segment with no check in the way, and
+ * records nothing: no answer, no correctness, no event.
+ */
+describe("the quick check's own Keep going (SCRUM-275)", () => {
+  const sheet = () => screen.queryByRole("dialog");
+  const keepGoing = () =>
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: "Keep going",
+    });
+
+  it("is pressable the moment the check opens, and moves the child on with nothing recorded", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await screen.findByRole("dialog");
+
+    expect(keepGoing()).toBeEnabled();
+    fireEvent.click(keepGoing());
+
+    expect(sheet()).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Denominators" }),
+    ).toBeInTheDocument();
+    // No answer, held or sent, and no right answer claimed.
+    expect(saveAttempt).not.toHaveBeenCalled();
+    expect(heldAnswers()).toEqual([]);
+    expect(trackEvent.mock.calls.map(([t]) => t)).not.toContain(
+      "comprehension_response",
+    );
+    expect(screen.queryByText("That's it. Here's what's next.")).toBeNull();
+
+    // And on from there, as ever: the after-lesson check.
+    next();
+    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+  });
+
+  it("leaves the check unpassed: a return visit asks it again", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await screen.findByRole("dialog");
+    fireEvent.click(keepGoing());
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    next();
+
+    expect(
+      await screen.findByRole("heading", { name: QUICK_CHECK.question }),
+    ).toBeInTheDocument();
+    expect(keepGoing()).toBeEnabled();
+  });
+
+  it("after a miss, records the miss and nothing more", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    fireEvent.click(
+      await screen.findByRole("button", { name: /The denominator/ }),
+    );
+    fireEvent.click(keepGoing());
+
+    expect(saveAttempt).toHaveBeenCalledOnce();
+    expect(saveAttempt.mock.calls[0][1]).toMatchObject({
+      problemId: QUICK_CHECK.id,
+      answer: "b",
+    });
+    expect(
+      screen.getByRole("heading", { name: "Denominators" }),
+    ).toBeInTheDocument();
+  });
+
+  it("takes Next's way on, so a planned break still comes first", async () => {
+    const plan: AdaptationPlan = {
+      lessonId: "lesson-1",
+      segments: [
+        { segmentId: SEG_1, startModality: "text", breakAfter: "movement" },
+      ],
+    };
+    render(<LessonPlayer lesson={LESSON} plan={plan} live />);
+    next();
+    await screen.findByRole("dialog");
+    fireEvent.click(keepGoing());
+
+    expect(screen.getByRole("button", { name: "I'm done" })).toBeInTheDocument();
   });
 });

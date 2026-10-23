@@ -629,8 +629,10 @@ describe("guided prompts", () => {
       answerSecond();
 
       expect(screen.getByRole("status")).toHaveTextContent(ENDING);
-      // Not the hand-off's ending, and no verdict nothing marked.
-      expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+      // Not the hand-off's ending, and no verdict nothing marked. Keep going
+      // stays beside it, there from the panel's opening (SCRUM-275).
+      expect(screen.queryByText("Let's keep going.")).toBeNull();
+      expect(screen.getByRole("button", { name: "Keep going" })).toBeEnabled();
       expect(screen.queryByText(/got it/i)).toBeNull();
 
       fireEvent.click(screen.getByRole("button", { name: "Try again" }));
