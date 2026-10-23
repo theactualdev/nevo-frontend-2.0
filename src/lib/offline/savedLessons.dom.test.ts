@@ -92,3 +92,64 @@ describe("the offline shelf", () => {
     expect(savedLesson("ada", "l1")).toBeNull();
   });
 });
+
+/*
+ * K4, Lydia 21 Oct: the child's chosen version is "held server-side rather
+ * than in browser storage". A lesson read carries it per section since then,
+ * with the engine's recommendation for the child - and the shelf holds school
+ * content, not anything about the child.
+ */
+describe("what the child chose, and was recommended", () => {
+  const withChoices = (id: string) =>
+    ({
+      id,
+      title: `Lesson ${id}`,
+      segments: [
+        {
+          id: "seg-1",
+          body: "Water moves.",
+          availableFormats: ["text", "audio"],
+          recommendedFormat: "audio",
+          deliveryPreference: { modality: "audio", slower: true },
+          primaryModality: "audio",
+        },
+      ],
+    }) as unknown as LessonDetailResponse;
+  const stored = () => window.localStorage.getItem("nevo.offline.lessons.ada") ?? "";
+
+  it("is never kept on the shelf, saved or refreshed", () => {
+    saveLesson("ada", withChoices("l1"));
+    expect(stored()).not.toMatch(/deliveryPreference|primaryModality|recommendedFormat/);
+
+    refreshSavedLesson("ada", withChoices("l1"));
+    expect(stored()).not.toMatch(/deliveryPreference|primaryModality|recommendedFormat/);
+  });
+
+  it("keeps what the section has, which is content", () => {
+    saveLesson("ada", withChoices("l1"));
+
+    expect(savedLesson("ada", "l1")?.detail.segments[0]).toMatchObject({
+      body: "Water moves.",
+      availableFormats: ["text", "audio"],
+    });
+  });
+
+  it("is not read back from a copy kept before this", () => {
+    window.localStorage.setItem(
+      "nevo.offline.lessons.ada",
+      JSON.stringify({
+        l1: {
+          lessonId: "l1",
+          title: "Lesson l1",
+          savedAt: "2026-10-21T09:00:00Z",
+          detail: withChoices("l1"),
+        },
+      }),
+    );
+
+    const seg = savedLesson("ada", "l1")?.detail.segments[0];
+    expect(seg).not.toHaveProperty("deliveryPreference");
+    expect(seg).not.toHaveProperty("primaryModality");
+    expect(seg).not.toHaveProperty("recommendedFormat");
+  });
+});

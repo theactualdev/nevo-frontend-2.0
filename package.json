@@ -11,6 +11,7 @@
     "architecture:warn": "node scripts/architecture-check.mjs --warn",
     "contract": "node scripts/contract-check.mjs",
     "contract:warn": "node scripts/contract-check.mjs --warn",
+    "licences": "node scripts/third-party-licences.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",

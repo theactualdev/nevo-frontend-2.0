@@ -75,6 +75,32 @@ export function isPartialCopy(detail: LessonDetailResponse): boolean {
   );
 }
 
+/**
+ * THE LESSON, WITHOUT WHAT THIS CHILD CHOSE IN IT OR WAS RECOMMENDED.
+ *
+ * Since 21 Oct a lesson read carries, per section, the child's own choice in
+ * their latest sitting (`deliveryPreference`, `primaryModality`) and the
+ * engine's recommendation for them (`recommendedFormat`). Those are held on
+ * the server and nowhere else - Lydia, 21 Oct: "held server-side rather than
+ * in browser storage" - and this shelf "holds school content, not anything
+ * about the child". So every copy is kept without them, and one stored
+ * before this is read without them too. What the section has
+ * (`availableFormats`) is content, and stays.
+ */
+function withoutChoices(detail: LessonDetailResponse): LessonDetailResponse {
+  if (!Array.isArray(detail.segments)) return detail;
+  return {
+    ...detail,
+    segments: detail.segments.map((segment) => {
+      const kept = { ...segment };
+      delete kept.deliveryPreference;
+      delete kept.primaryModality;
+      delete kept.recommendedFormat;
+      return kept;
+    }),
+  };
+}
+
 /** A shelf, not an archive - device storage is small and shared. */
 export const MAX_SAVED_LESSONS = 10;
 
@@ -86,9 +112,16 @@ function read(userId: string): Record<string, SavedLesson> {
   try {
     const raw = window.localStorage.getItem(keyFor(userId));
     const parsed: unknown = raw ? JSON.parse(raw) : null;
-    return parsed && typeof parsed === "object"
-      ? (parsed as Record<string, SavedLesson>)
-      : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    // A copy kept before `withoutChoices` existed is read without them.
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, SavedLesson>).map(
+        ([id, held]) => [
+          id,
+          held?.detail ? { ...held, detail: withoutChoices(held.detail) } : held,
+        ],
+      ),
+    );
   } catch {
     // Unreadable is empty: the child can save again, and nothing breaks.
     return {};
@@ -140,7 +173,7 @@ export function saveLesson(
     lessonId: detail.id,
     title: detail.title,
     savedAt: new Date().toISOString(),
-    detail,
+    detail: withoutChoices(detail),
     ...(pkg?.sizeBytes ? { sizeBytes: pkg.sizeBytes } : {}),
     ...(typeof pkg?.includesMedia === "boolean"
       ? { includesMedia: pkg.includesMedia }
@@ -162,7 +195,11 @@ export function refreshSavedLesson(
   const shelf = read(userId);
   const held = shelf[detail.id];
   if (!held) return;
-  shelf[detail.id] = { ...held, title: detail.title, detail };
+  shelf[detail.id] = {
+    ...held,
+    title: detail.title,
+    detail: withoutChoices(detail),
+  };
   write(userId, shelf);
 }
 

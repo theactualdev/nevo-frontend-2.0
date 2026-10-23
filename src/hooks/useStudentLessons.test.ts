@@ -258,6 +258,64 @@ describe("a lesson the child has finished", () => {
 
     expect(result.current.lessons[0].status).toBe("completed");
   });
+
+  /*
+   * TESLIM, 21 OCT: THE ROW CARRIES `completedAt`. Opening a completed lesson
+   * used to set its row back to `in_progress` at the last segment, and the
+   * assignment says `assigned` when the lesson was finished from the library -
+   * so a finished lesson read "In progress" here. `completedAt` files it under
+   * Completed, with the card's own check: no new words.
+   */
+  it("reads Completed off a row carrying completedAt, though it says in progress", () => {
+    dashboard.mockReturnValue({
+      data: {
+        assignments: [assignment("done")],
+        recentProgress: [
+          {
+            lessonId: "done",
+            status: "in_progress",
+            segmentPosition: 3,
+            segmentCount: 4,
+            updatedAt: new Date().toISOString(),
+            completedAt: "2026-10-21T15:00:00Z",
+          },
+        ],
+      },
+      loading: false,
+      failed: false,
+    });
+
+    const card = renderHook(() => useStudentLessons()).result.current
+      .lessons[0];
+
+    expect(card.status).toBe("completed");
+    // A finished lesson wears its check, never a ring.
+    expect(card).not.toHaveProperty("place");
+  });
+
+  it("keeps a finish with nothing marked in progress: no completedAt", () => {
+    // `not_attempted` stays `in_progress` on the server, with no completedAt.
+    dashboard.mockReturnValue({
+      data: {
+        assignments: [assignment("mid")],
+        recentProgress: [
+          {
+            lessonId: "mid",
+            status: "in_progress",
+            segmentPosition: 3,
+            updatedAt: new Date().toISOString(),
+            completedAt: null,
+          },
+        ],
+      },
+      loading: false,
+      failed: false,
+    });
+
+    const { result } = renderHook(() => useStudentLessons());
+
+    expect(result.current.lessons[0].status).toBe("in_progress");
+  });
 });
 
 describe("the preview's what-you'll-do line", () => {

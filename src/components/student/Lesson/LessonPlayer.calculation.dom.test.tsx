@@ -572,8 +572,9 @@ describe("a calculation's signals", () => {
     const classes = (el: Element) => el.className.split(" ");
 
     // It spanned the screen less 14px a side, wider than the step above it.
-    // Now the reading column's widths and side padding...
-    const widths = ["max-w-full", "sm:max-w-[620px]", "lg:max-w-[680px]"];
+    // Now the reading column's widths and side padding - the frame's 620px
+    // and 680px column with its 32px and 40px padding outside it (d6b9fbc)...
+    const widths = ["max-w-full", "sm:max-w-[684px]", "lg:max-w-[760px]"];
     expect(classes(column)).toEqual(expect.arrayContaining(widths));
     expect(classes(row)).toEqual(expect.arrayContaining(widths));
     expect(classes(column)).toEqual(

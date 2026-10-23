@@ -7,7 +7,9 @@ import type {
   LessonSummary,
 } from "@/components/student/Lessons/lessonCatalog";
 import { unavailableReason } from "@/lib/lessons/availability";
+import { isFinishedRow } from "@/lib/lessons/finishedRow";
 import { segmentPlace } from "@/lib/lessons/segmentPlace";
+import { useStudentAssignments } from "./useStudentAssignments";
 import { useStudentDashboard } from "./useStudentDashboard";
 
 /**
@@ -20,6 +22,10 @@ import { useStudentDashboard } from "./useStudentDashboard";
  * lesson summary nested, and the student's own recent progress, which is
  * exactly the two halves this screen needs. Home already reads it, so this
  * costs no extra call.
+ *
+ * EXCEPT FINISHED WORK, which the dashboard leaves out. So the child's full
+ * assignment list is read beside it (`useStudentAssignments`), and a lesson
+ * they finished stays on their list under Completed (22 Oct production run).
  *
  * WHAT THE CONTRACT CANNOT ANSWER, corrected 21 Sep. This said assignments
  * carry no subject and no time estimate, and both halves were out of date: the
@@ -38,9 +44,17 @@ import { useStudentDashboard } from "./useStudentDashboard";
  * partway has started it, whatever the backend calls that.
  */
 
-/** Backend `LessonCompletionStatus` -> the calm indicator the cards draw. */
-function statusFrom(raw: string | undefined): LessonStatus {
-  if (raw === "completed") return "completed";
+/**
+ * The child's progress row -> the calm indicator the cards draw. A row
+ * carrying `completedAt` is finished whatever its status says (Teslim, 21
+ * Oct) - see `isFinishedRow` - so it files under Completed, with the card's
+ * own check and "Look again", and no new words.
+ */
+function statusFrom(
+  row: Parameters<typeof isFinishedRow>[0],
+): LessonStatus {
+  if (isFinishedRow(row)) return "completed";
+  const raw = row?.status;
   if (raw === "in_progress" || raw === "exited") return "in_progress";
   return "not_started";
 }
@@ -55,6 +69,14 @@ export interface StudentLessons {
 
 export function useStudentLessons(): StudentLessons {
   const { data, failed, loading } = useStudentDashboard();
+  /*
+   * AND EVERY ASSIGNMENT, FINISHED ONES INCLUDED - which the dashboard leaves
+   * out (22 Oct production run: a child whose only lesson was finished read
+   * "Your lessons will show up here soon"). A supplement only: the dashboard
+   * alone still decides loading and failure, so this read never holds the
+   * tab or fails it. See `useStudentAssignments`.
+   */
+  const { data: everyAssignment } = useStudentAssignments();
 
   // Memoised so the array identity is stable between renders - callers put it
   // straight into a `useMemo`, and a fresh array every render defeats theirs.
@@ -84,7 +106,19 @@ export function useStudentLessons(): StudentLessons {
      * A FINISHED ONE STAYS, under Completed. Not `isOpenToStudent`, which
      * means "still to do" and so drops it - this is the child's whole list.
      */
-    return data.assignments
+    /*
+     * THE DASHBOARD'S ASSIGNMENTS, AND THE ONES IT LEAVES OUT: the full list's
+     * by assignment id, where the dashboard's own entry stands when both carry
+     * it. The filter below is the same for both, so a cancelled one, or one
+     * not open yet, stays out whichever read brought it.
+     */
+    const onDashboard = new Set(data.assignments.map((a) => a.id));
+    const assignments = [
+      ...data.assignments,
+      ...(everyAssignment ?? []).filter((a) => !onDashboard.has(a.id)),
+    ];
+
+    const cards = assignments
       .filter((a) => unavailableReason(a) === null)
       .map<LessonSummary>((a) => {
         const row = latest.get(a.lesson.id);
@@ -92,7 +126,7 @@ export function useStudentLessons(): StudentLessons {
         // activity, not a full history, so a lesson finished a while ago may
         // have no row left in it - and read "Not started".
         const status =
-          a.status === "completed" ? "completed" : statusFrom(row?.status);
+          a.status === "completed" ? "completed" : statusFrom(row);
         const count = a.lesson.segmentCount;
         /*
          * ZERO AND ABSENT BOTH MEAN "NO ESTIMATE", and neither may be drawn as
@@ -134,7 +168,52 @@ export function useStudentLessons(): StudentLessons {
           status,
         };
       });
-  }, [data]);
+
+    /*
+     * UNTIL THE FULL LIST HAS ANSWERED - or when it could not be read - a
+     * finished lesson is still known from the child's own progress row, so it
+     * is filed under Completed from that: a row that `isFinishedRow`, for a
+     * lesson no dashboard assignment names (one that does was decided above,
+     * cancelled included). Its title and subject are the row's own (B52), as
+     * Home's library pick-up reads them; a row with no title is left off, as
+     * there. Its length is the row's section count, or nothing when the row
+     * does not say. No assignment rides its link, since none is known.
+     */
+    const fromRows: LessonSummary[] = everyAssignment
+      ? []
+      : [...latest.values()]
+          .filter((row) => isFinishedRow(row))
+          .filter((row) => !data.assignments.some((a) => a.lesson.id === row.lessonId))
+          .flatMap((row) => {
+            const title = row.title?.trim();
+            if (!title) return [];
+            const subject = row.subject?.trim();
+            const count = row.segmentCount ?? 0;
+            return [
+              {
+                id: row.lessonId,
+                lessonId: row.lessonId,
+                title,
+                timeEstimate:
+                  count > 0
+                    ? `${count} ${count === 1 ? "section" : "sections"}`
+                    : "",
+                ...(subject ? { subject } : {}),
+                status: "completed" as const,
+              },
+            ];
+          });
+
+    // ONE CARD A LESSON. A lesson can be set for a child more than once, and
+    // the two reads overlap; the first card for a lesson stands, so the
+    // dashboard's comes before the full list's and both before a row's.
+    const seen = new Set<string>();
+    return [...cards, ...fromRows].filter((card) => {
+      if (seen.has(card.lessonId)) return false;
+      seen.add(card.lessonId);
+      return true;
+    });
+  }, [data, everyAssignment]);
 
   if (!data) return { lessons, live: false, loading, failed };
   return { lessons, live: true, loading: false, failed: false };

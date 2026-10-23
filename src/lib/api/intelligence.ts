@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { LessonChoice, SegmentFormatChoice } from "./lessons";
 import type { AccommodationType } from "./students";
 
 /**
@@ -160,6 +161,22 @@ export interface SegmentAdaptationResponse {
   /** `ScaffoldingLevel` - none | light | standard | strong. */
   scaffolding: string;
   priority: number;
+  /**
+   * SCRUM-272, 21 Oct: the same availability and recommendation as the
+   * lesson read's section (`LessonSegment.availableFormats`), as of this
+   * answer - so the fresher of the two is read. Optional: an answer from
+   * before them carries neither.
+   */
+  availableFormats?: string[];
+  recommendedFormat?: string | null;
+  /**
+   * The child's own choice for this section echoed back (K4): the engine
+   * "respects the explicit format, returns chosenDepth/slower". TYPED, NOT
+   * READ - the choice is read from the lesson and the sitting, and an echo
+   * of it is not a second source.
+   */
+  chosenDepth?: "original" | "simplified" | "expanded" | null;
+  slower?: boolean | null;
 }
 
 export interface BreakSuggestionResponse {
@@ -215,7 +232,47 @@ export interface AdaptResponse {
      */
     segmentId?: string | null;
   } | null;
+  /**
+   * DEPRECATED AND ALWAYS NULL since 21 Oct: "Retired separate pill. Use each
+   * segment's recommendedFormat in its format control" (spec). Read by
+   * nothing - the pill it fed is gone (SCRUM-271/272).
+   */
   modalitySuggestion: ModalitySuggestionResponse | null;
+  /**
+   * The decision the instruction was recorded under. Help still active is
+   * RESENT WITH ITS EXISTING ID (Teslim, 22 Oct, answer 3), so a resend is
+   * the same help, not a new offer. TYPED, NOT READ: a resend carries the
+   * same instruction and the same words, and the player's once-only rules -
+   * `hint_offered` once per hint per section, the reshape and the panel
+   * counted once as applied, a closed hint staying closed - are already
+   * keyed on those, so a second key would decide nothing differently.
+   */
+  decisionId?: string | null;
+  /**
+   * WHAT BECOMES OF THE HELP ON SCREEN (backend 864dff0, Teslim's answer 3):
+   * `apply` shows the new instruction; `retain` keeps what is on screen, even
+   * when `proactiveAdjustment` is null - "null alone no longer means
+   * dismiss"; `clear` removes it. The contract's default is `clear`, so an
+   * answer without it reads as before. See `useRuntimeAdaptation`.
+   */
+  adjustmentDisposition?: "apply" | "retain" | "clear";
+  /**
+   * When the engine's adaptation cooldown ends. INFORMATION ONLY - TYPED, NOT
+   * READ: Teslim asked for no re-read at it, and a cooldown is not a
+   * dismissal (`retain` says so).
+   */
+  cooldownUntil?: string | null;
+  /**
+   * When the question's grace window ends (backend 7d97248) - the same
+   * moment as the attempt's `handoffAvailableAt` for the question in front
+   * of the child: both are `guidance_deadline` over the same run of misses.
+   * TYPED, NOT READ: the player already reads the attempts once at that
+   * moment, which hands the panel off (`rereadAt` in the player); a second
+   * ask, of the engine, could only offer its own panel for the same question
+   * - which the player does not draw while the hand-off's is open - or say
+   * `retain`, which nothing on screen needs at that point.
+   */
+  supportGraceUntil?: string | null;
 }
 
 /**
@@ -314,6 +371,25 @@ export interface SessionDelivery {
   engineConfig: EngineConfig;
   accommodations: AccommodationType[];
   capturedAt: string;
+  /**
+   * The format the child chose for each section of this sitting (K4, 21 Oct),
+   * keyed by the segment's own id - the format ONLY since 741685e: depth and
+   * Slower are the sitting's, in `lessonPreferences`. Absent on a sitting
+   * from before it.
+   */
+  segmentChoices?: Record<string, SegmentFormatChoice>;
+  /**
+   * The sitting's depth and Slower (741685e, 22 Oct): one value for every
+   * section, however many it was picked on. Absent on a server from before
+   * it; empty for a new sitting, which inherits nothing.
+   */
+  lessonPreferences?: LessonChoice;
+  /**
+   * The engine's standing recommendation per section, keyed the same way.
+   * TYPED, NOT READ: each section's own `recommendedFormat` already says it,
+   * on the lesson read and on every engine answer.
+   */
+  recommendations?: Record<string, string>;
 }
 
 /**
@@ -354,6 +430,13 @@ export const intelligenceApi = {
    *
    * `studentId` is nullable in the contract: the backend can take the student
    * from the token, so it is optional here rather than invented by the caller.
+   *
+   * `sessionId` IS THE LESSON SESSION THE CHILD IS SITTING, the id `POST
+   * /api/v1/lessons/{id}/session` issued. An `in_lesson` read is refused 409
+   * `lesson_session_required` unless that sitting is open
+   * (`prepare_adaptation`), and naming it scopes the read, and the decisions
+   * the engine records, to it. Sent only when given: `lesson_load` has no
+   * sitting to name, and a null would be a claim that there is none.
    */
   getAdaptation: (
     lessonId: string,
@@ -363,12 +446,15 @@ export const intelligenceApi = {
       mode?: AdaptationMode;
       /** Omitted on `lesson_load`; the engine's neutral defaults apply. */
       signals?: RuntimeSignals;
+      /** The backend's lesson session id - see above. */
+      sessionId?: string | null;
     } = {},
   ) =>
     api.post<AdaptResponse>("/api/intelligence/adapt", {
       lessonId,
       segments,
       studentId: options.studentId ?? null,
+      ...(options.sessionId ? { sessionId: options.sessionId } : {}),
       mode: options.mode ?? "lesson_load",
       ...(options.signals ? { signals: options.signals } : {}),
     }),

@@ -4,6 +4,7 @@ import {
   HISTORY_DAYS,
   HISTORY_LIMIT,
   recentThreads,
+  safetyStop,
   type ThreadSummary,
 } from "./askNevo";
 import { ApiError } from "./client";
@@ -131,5 +132,46 @@ describe("allowanceSpent", () => {
     expect(allowanceSpent(refusal(500, "ask_nevo_daily_limit"))).toBe(false);
     expect(allowanceSpent(new ApiError(0, "offline"))).toBe(false);
     expect(allowanceSpent(new Error("ask_nevo_daily_limit"))).toBe(false);
+  });
+});
+
+/**
+ * SCRUM-259: the safety stop is a 403 with its own code, carrying the
+ * server's words for the child. Told apart by its code, as the allowance is:
+ * a 403 is also a role or consent refusal, and those stay ordinary failures.
+ */
+describe("safetyStop", () => {
+  const WORDS =
+    "Nevo can’t help with this one. Please talk to a trusted adult or your teacher.";
+  const refusal = (status: number, detail: Record<string, unknown>) =>
+    new ApiError(status, "x", { detail });
+
+  it("is the 403 that names the safety check, carrying the server's words verbatim", () => {
+    expect(
+      safetyStop(refusal(403, { code: "content_safety_blocked", message: WORDS })),
+    ).toEqual({ message: WORDS });
+  });
+
+  it("carries no words of its own when the server sent none", () => {
+    expect(safetyStop(refusal(403, { code: "content_safety_blocked" }))).toEqual({
+      message: null,
+    });
+    expect(
+      safetyStop(refusal(403, { code: "content_safety_blocked", message: "  " })),
+    ).toEqual({ message: null });
+  });
+
+  it("is not any other 403", () => {
+    expect(safetyStop(refusal(403, { code: "ask_role_forbidden", message: "m" }))).toBeNull();
+    expect(safetyStop(refusal(403, { code: "consent_withdrawn", message: "m" }))).toBeNull();
+    expect(safetyStop(new ApiError(403, "x"))).toBeNull();
+  });
+
+  it("is not that code on any other status, nor a failure with no response", () => {
+    expect(
+      safetyStop(refusal(500, { code: "content_safety_blocked", message: WORDS })),
+    ).toBeNull();
+    expect(safetyStop(new ApiError(0, "offline"))).toBeNull();
+    expect(safetyStop(new Error("content_safety_blocked"))).toBeNull();
   });
 });

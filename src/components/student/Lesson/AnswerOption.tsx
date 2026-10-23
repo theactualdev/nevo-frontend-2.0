@@ -11,17 +11,33 @@ import { READING_BODY, READING_INK } from "./readingSupport";
  */
 export type AnswerTone = "idle" | "navy" | "violet" | "muted";
 
-/** One answer card, shared by the Quick Check and the after-lesson assessment. */
+/**
+ * One answer card, shared by the Quick Check and the after-lesson assessment.
+ *
+ * ITS NAME IS ON THE BUTTON ITSELF (21 Oct production run: "The end-of-lesson
+ * answer options have no accessible names"). The label sits in a child span
+ * for the reading type, beside the trailing marker, so a reader that walks
+ * the tree found an unnamed button and, apart from it, plain text - as #837
+ * found for the probe's options and the key-term chips.
+ */
 export function AnswerOption({
   label,
   tone,
   trailing,
   onSelect,
+  selected,
   reading = false,
   className,
 }: {
   label: string;
   tone: AnswerTone;
+  /**
+   * Whether this is the picked answer, in a select-then-confirm flow (the
+   * after-lesson check), said as `aria-pressed`: the radio that shows it is
+   * drawn, and said nothing. Left out where a tap answers at once (the Quick
+   * Check), which has no picked-but-not-sent state to say.
+   */
+  selected?: boolean;
   /** Right-edge marker (check badge, violet dot, radio) — supplied by the parent. */
   trailing?: React.ReactNode;
   /** Tap handler; the card is only tappable while `tone` is "idle". */
@@ -36,6 +52,8 @@ export function AnswerOption({
   return (
     <button
       type="button"
+      aria-label={label}
+      {...(selected === undefined ? {} : { "aria-pressed": selected })}
       disabled={tone !== "idle"}
       onClick={onSelect}
       className={cn(

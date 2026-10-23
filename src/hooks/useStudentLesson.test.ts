@@ -581,6 +581,85 @@ describe("a lesson the child has already finished", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.finished).toBe(false);
   });
+
+  /*
+   * RUN21 FINDING 3, AND TESLIM'S `completedAt` (21 Oct). Opening a completed
+   * lesson set its row back to `in_progress` at the last segment, so every
+   * reopen after the first resumed the child's finished lesson on its last
+   * section, as unfinished work. The row's `completedAt` survived; a finished
+   * lesson opens at the top (D22, D100 "Look again").
+   */
+  describe("with a row demoted to in progress", () => {
+    // Five segments, so a saved place of 3 is not clamped to 0 and a hook
+    // that resumed would be seen to.
+    const FIVE = {
+      ...LIVE_LESSON,
+      segments: [0, 1, 2, 3, 4].map((i) => ({
+        ...LIVE_LESSON.segments[0],
+        id: `seg-${i}`,
+        segmentKey: `s${i}`,
+        sequenceOrder: i + 1,
+      })),
+    };
+    const demoted = (over: Record<string, unknown> = {}) => ({
+      lessonId: FIRST_LESSON_ID,
+      status: "in_progress",
+      segmentPosition: 3,
+      updatedAt: "2026-10-21T16:00:00Z",
+      ...over,
+    });
+    const open = async (
+      assignments: Record<string, unknown>[],
+      recentProgress: Record<string, unknown>[],
+    ) => {
+      signIn();
+      detail.mockResolvedValue(FIVE);
+      dashboard.mockReturnValue({
+        data: { assignments, recentProgress },
+        loading: false,
+        failed: false,
+      });
+      const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      return result.current;
+    };
+
+    it("is finished when the newest row carries completedAt, and opens at the top", async () => {
+      const state = await open(
+        [],
+        [demoted({ completedAt: "2026-10-21T15:00:00Z" })],
+      );
+
+      expect(state.finished).toBe(true);
+      expect(state.resumeAt).toBeNull();
+    });
+
+    it("opens at the top when the assignment says completed", async () => {
+      const state = await open(
+        [
+          {
+            id: "a-1",
+            status: "completed",
+            availableFrom: null,
+            lesson: { id: FIRST_LESSON_ID },
+          },
+        ],
+        [demoted()],
+      );
+
+      expect(state.finished).toBe(true);
+      expect(state.resumeAt).toBeNull();
+    });
+
+    it("still resumes a row with no completedAt - a finish with nothing marked", async () => {
+      // `not_attempted` stays in progress on the server and sets no
+      // completedAt, so it resumes where it was, as Teslim describes.
+      const state = await open([], [demoted({ completedAt: null })]);
+
+      expect(state.finished).toBe(false);
+      expect(state.resumeAt).toBe(3);
+    });
+  });
 });
 
 describe("what the first frame waits for", () => {
