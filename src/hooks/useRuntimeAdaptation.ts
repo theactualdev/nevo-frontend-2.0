@@ -151,6 +151,10 @@ export interface AppliedAdaptations {
  * than the held help was given for keeps nothing - "retain" there is about
  * that section's help, and it has none here. Nothing held, nothing kept:
  * there is no help this could invent.
+ *
+ * A HINT HELD WITH NO INSTRUCTION IS HELP ON SCREEN TOO. Since the gate
+ * (23 Oct) a hint can arrive under an action this client does not draw, so
+ * it is held with no `adjustment` beside it - see `toAdaptationPlan`.
  */
 export function withDisposition(
   held: RuntimeAdaptation,
@@ -161,13 +165,17 @@ export function withDisposition(
   if (res.adjustmentDisposition !== "retain" || res.proactiveAdjustment)
     return answer;
   const help = held.plan;
-  if (!answer.plan || !help?.adjustment || held.forSegmentId !== askedFor)
+  if (
+    !answer.plan ||
+    !(help?.adjustment || help?.hint) ||
+    held.forSegmentId !== askedFor
+  )
     return answer;
   return {
     ...answer,
     plan: {
       ...answer.plan,
-      adjustment: help.adjustment,
+      ...(help.adjustment ? { adjustment: help.adjustment } : {}),
       ...(help.hint ? { hint: help.hint } : {}),
       ...(help.guidedQuestions ? { guidedQuestions: help.guidedQuestions } : {}),
       ...(help.guidedPrompts ? { guidedPrompts: help.guidedPrompts } : {}),

@@ -121,6 +121,19 @@ describe("retain keeps the help on screen", () => {
     expect(result.current.forSegmentId).toBe("seg-1");
   });
 
+  it("keeps a hint that came beside an action this client does not draw", async () => {
+    // The gate (23 Oct): the hint rides `rechunk`, which resolves to no
+    // instruction here, so what is held is the hint alone.
+    const result = await answers(
+      applied({ ...hint(), action: "rechunk", reason: "Try smaller parts" }),
+      [answer({ adjustmentDisposition: "retain" })],
+    );
+
+    expect(result.current.plan?.adjustment ?? null).toBeNull();
+    expect(result.current.plan?.hint).toBe(HINT);
+    expect(result.current.forSegmentId).toBe("seg-1");
+  });
+
   it("keeps a Simplify through a cooldown that says retain", async () => {
     const result = await answers(
       applied({ action: "simplify", reason: "r", segmentId: "seg-1" }),

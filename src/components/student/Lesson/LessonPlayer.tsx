@@ -1674,9 +1674,16 @@ export function LessonPlayer({
    * load-time plan. Without this the same hint sat under every later segment,
    * and a failed read kept it there indefinitely. The authored per-segment
    * seam is already per segment.
+   *
+   * A HINT WITH NO INSTRUCTION BESIDE IT IS TIED THE SAME WAY. Since the gate
+   * (23 Oct) the hint rides actions this client does not draw - `rechunk`,
+   * `offer_modality_shift` - which resolve to no `adjustment`, and keyed on
+   * the instruction alone that hint would have followed the child into every
+   * later section.
    */
   const engineOn = runtime.plan ? runtime.forSegmentId : first.id;
-  const contentHere = !engine?.adjustment || engineOn === segment.id;
+  const contentHere =
+    !(engine?.adjustment || engine?.hint) || engineOn === segment.id;
   const hintText = engine?.hint ?? segPlan?.hint ?? null;
   /*
    * The panel's rows, read the way the questions always were. Where the
@@ -1693,11 +1700,15 @@ export function LessonPlayer({
   /*
    * A hint the child closed stays closed for that segment (D29). Keyed by the
    * hint as well, so a different hint the engine sends later still shows.
+   *
+   * THE ENGINE'S HINT SHOWS UNDER WHATEVER IT ASKED FOR (gate contract,
+   * 23 Oct - see `toAdaptationPlan`). The authored seam's still needs its
+   * `offer_hint`.
    */
   const hintKey = `${segment.id}:${hintText ?? ""}`;
   const hintHere =
     contentHere &&
-    action === ADJUSTMENT_ACTIONS.OFFER_HINT &&
+    (Boolean(engine?.hint) || action === ADJUSTMENT_ACTIONS.OFFER_HINT) &&
     !closedHints.has(hintKey);
   /*
    * `hint_offered` (B20): the hint card went on screen. Once per hint per

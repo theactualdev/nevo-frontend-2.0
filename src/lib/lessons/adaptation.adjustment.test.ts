@@ -132,11 +132,13 @@ describe("what the instruction actually shows", () => {
     ]);
   });
 
-  it("ties the content to the instruction it serves", () => {
+  it("carries the hint under any instruction, and the panel's questions only under its own", () => {
     /*
-     * A hint arriving beside `simplify` is not a hint anybody asked to show.
-     * The action IS the instruction; the text serves it. Dropping it here
-     * beats trusting every future consumer to check which action it belongs to.
+     * The gate contract (Teslim, 23 Oct): the hint "must not be hidden solely
+     * because the action is a pacing or chunking action". It was dropped here
+     * under anything but `offer_hint`, and since the gate the two-miss hint
+     * arrives under `simplify`, `slower` and the rest - so a child who missed
+     * twice never saw it. The panel's questions still belong to the panel.
      */
     const plan = toAdaptationPlan(
       response(ADJUSTMENT_ACTIONS.SIMPLIFY, {
@@ -146,8 +148,31 @@ describe("what the instruction actually shows", () => {
       lesson(),
     );
 
-    expect(plan.hint ?? null).toBeNull();
+    expect(plan.adjustment).toBe(ADJUSTMENT_ACTIONS.SIMPLIFY);
+    expect(plan.hint).toBe("Start with where the light lands.");
     expect(plan.guidedQuestions ?? null).toBeNull();
+  });
+
+  it("carries the hint beside an action this client does not draw", () => {
+    // 23 Oct's sweep: the hint came under `rechunk` and `offer_modality_shift`,
+    // which resolve to no instruction here. The hint is the engine's words
+    // either way.
+    const plan = toAdaptationPlan(
+      response("rechunk", { hint: "Think about what moves, and through what." }),
+      lesson(),
+    );
+
+    expect(plan.adjustment ?? null).toBeNull();
+    expect(plan.hint).toBe("Think about what moves, and through what.");
+  });
+
+  it("carries no hint that is only spaces", () => {
+    const plan = toAdaptationPlan(
+      response(ADJUSTMENT_ACTIONS.SLOWER, { hint: "   " }),
+      lesson(),
+    );
+
+    expect(plan.hint ?? null).toBeNull();
   });
 
   it("renders the nothing-state when an instruction arrives empty", () => {

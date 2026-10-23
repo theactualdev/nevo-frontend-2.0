@@ -696,11 +696,12 @@ export interface AdaptationPlan {
    */
   adjustment?: AdjustmentAction | null;
   /**
-   * The hint `offer_hint` shows, when the engine sent one.
+   * The engine's hint, when it sent one.
    *
-   * Carried ONLY when the action is `offer_hint` - see `toAdaptationPlan`. The
-   * action is the instruction and the text serves it; a hint arriving under a
-   * different instruction is not a hint anybody asked to show.
+   * Carried under ANY action, `adjustment` absent included - see
+   * `toAdaptationPlan`. Since the gate (23 Oct) the engine sends the hint
+   * beside pacing, chunking and format offers, and its contract says it "must
+   * not be hidden solely because the action is a pacing or chunking action".
    */
   hint?: string | null;
   /** Likewise, the questions `show_socratic_panel` opens. */
