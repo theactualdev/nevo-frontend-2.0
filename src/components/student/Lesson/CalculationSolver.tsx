@@ -233,8 +233,17 @@ export function CalculationSolver({
   );
   const manipulative = calculation.manipulative;
   const support = supportAt(level);
+  /*
+   * THE ENGINE'S HINT IS OFTEN THIS STEP'S OWN. Since the gate (23 Oct) it
+   * resends the step's authored hint on each miss from the second, and a
+   * strong level already shows that hint, so the same words were drawn twice,
+   * one pill above the other. Drawn once, as the engine's.
+   */
+  const engineSaysStepHint =
+    Boolean(engineHint) && engineHint?.trim() === step.hint.trim();
   /** A strong level's hint: this step's own, shown without being asked for. */
-  const levelHint = support.hint && !levelHintClosed && step.hint !== "";
+  const levelHint =
+    support.hint && !levelHintClosed && step.hint !== "" && !engineSaysStepHint;
   const pad = step.input === "number" && usesPad(step);
   /** The tap step's pieces are all placed: what "That's the total" waits on. */
   const built =
@@ -584,10 +593,17 @@ export function CalculationSolver({
               <HintPill
                 text={engineHint}
                 reading={reading}
-                onClose={onEngineHintClosed}
+                onClose={
+                  onEngineHintClosed &&
+                  (() => {
+                    // Closed, the same words do not come back as the level's.
+                    if (engineSaysStepHint) setLevelHintClosed(true);
+                    onEngineHintClosed();
+                  })
+                }
               />
             )}
-            {hintOpen && step.hint && (
+            {hintOpen && step.hint && !engineSaysStepHint && (
               <HintPill text={step.hint} reading={reading} />
             )}
             {/*

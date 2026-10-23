@@ -373,3 +373,40 @@ describe("the engine's hint while a check is open (SCRUM-275 #2)", () => {
     expect(screen.queryByText(HINT)).toBeNull();
   });
 });
+
+/*
+ * 23 OCT'S SWEEP: THE HINT CAME, AND THE SHEET NEVER SHOWED IT. Since the
+ * gate, the engine sends the two-miss hint beside whatever it asks for -
+ * `offer_modality_shift`, `simplify`, `rechunk` - and only `offer_hint` drew
+ * it. The gate contract (Teslim, 23 Oct): it "must not be hidden solely
+ * because the action is a pacing or chunking action".
+ */
+describe("the engine's hint beside another instruction (the gate, 23 Oct)", () => {
+  const hintBeside = (adjustment?: string) => {
+    runtime.value = {
+      offeredBreak: null,
+      reason: null,
+      plan: {
+        lessonId: "lesson-1",
+        segments: [],
+        ...(adjustment ? { adjustment } : {}),
+        hint: HINT,
+      } as AdaptationPlan,
+      forSegmentId: SEG_1,
+    };
+  };
+
+  it.each([
+    ["simplify", "simplify"],
+    ["an action this client does not draw", undefined],
+  ])("goes inside the open check under %s", async (_, adjustment) => {
+    const view = render(player());
+    next();
+    await miss();
+    hintBeside(adjustment);
+    view.rerender(player());
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(HINT)).toBeTruthy();
+  });
+});
