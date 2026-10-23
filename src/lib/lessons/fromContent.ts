@@ -498,6 +498,18 @@ function interactiveFor(
 ): InteractiveContent | undefined {
   const variant = segment.interactiveVariant;
   if (!variant || !isActivity(variant)) return undefined;
+  /*
+   * AN ACTIVITY WITH A SAFETY SENTENCE IS NOT OFFERED UNTIL ITS LINE CAN BE
+   * DRAWN (SCRUM-280, a blocker, Lydia 23 Oct): "an activity whose source has
+   * a safety sentence MUST NOT RENDER AT ALL if the card can't display it".
+   * The server sends `safety` since 92af149 and this card has no designed
+   * place for it yet - above the steps, distinct from a step, never collapsed
+   * or dismissible - so production showed Osmosis section 4's activity with
+   * its "let an adult do the cutting" line missing. Not built here means not
+   * in the format group, so no pick, stored choice or engine plan can open
+   * it; the section keeps its other formats. Lifted when the drawn line ships.
+   */
+  if (lineOf(variant.safety)) return undefined;
   const steps = textsOf(
     Array.isArray(variant.steps) ? variant.steps.map((s) => s?.instruction) : [],
   );
