@@ -54,8 +54,8 @@ import { GROWTH_SUMMARY, SUBJECTS } from "./progressData";
  * and still waits on a designed slot.
  *
  * No score reaches the screen (screen 22: no percentile, no score, no
- * comparison, direction of travel only). `understanding` orders the concepts
- * and never appears.
+ * comparison, direction of travel only). `understanding` never appears, and
+ * since d461b60 a student's is always null; the concepts go by practice.
  *
  * THE TOPIC COUNTS ARRIVED ON 5 OCT (backend B53) and draw 33a's squares, one
  * per topic the child has MET. They are never printed as a number: design

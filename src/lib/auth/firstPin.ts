@@ -3,6 +3,7 @@ import {
   studentEntryApi,
   type StudentEntrySession,
 } from "@/lib/api/studentEntry";
+import { markRunFinished } from "./onboarding";
 import { setSession } from "./session";
 
 /**
@@ -66,6 +67,14 @@ export function bindFirstPin(
 /**
  * Sign the child in on the session the PIN route started - the first PIN's
  * and the new PIN's alike, so the two doors cannot store it differently.
+ *
+ * AND THIS TAB MADE IT, so it is this tab's own (19 Oct browser-storage
+ * audit; `markRunFinished`). A cleared child's new PIN on 05 went Home, and
+ * the device's Back came to 05 again, which held his new session as one it
+ * found stored - so 05's Back ended it: his last try went as him, his
+ * session and cookie went, and his queued signals with them. Marked, 05 and
+ * the sequence route him on, signed in, as they do the child this tab
+ * finished its run as.
  */
 export function startEntrySession(res: StudentEntrySession): void {
   setSession({
@@ -74,6 +83,7 @@ export function startEntrySession(res: StudentEntrySession): void {
     userId: res.session.userId,
     role: res.session.role,
   });
+  markRunFinished(res.session.userId);
 }
 
 /**

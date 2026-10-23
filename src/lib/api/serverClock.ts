@@ -37,6 +37,24 @@ export function noteServerClock(response: Response): void {
   skewMs = Date.now() - serverNow;
 }
 
+/**
+ * How long until a moment the SERVER named, by the server's clock: its
+ * timestamp less the device's "now" corrected by the skew above, never less
+ * than nothing. Null for a moment that cannot be read - no moment, not "now".
+ *
+ * The estimate of the server's "now" never runs AHEAD of it: the `Date`
+ * header is whole seconds, rounded down, and is stamped before the response
+ * travels, so both errors make the skew read larger and the server's "now"
+ * earlier. A wait measured from it ends at the server's moment or just after,
+ * never before it. Before any response the skew is 0 and this is the
+ * device's own reading.
+ */
+export function msUntilServerTime(at: string): number | null {
+  const then = Date.parse(at);
+  if (Number.isNaN(then)) return null;
+  return Math.max(0, then - (Date.now() - deviceClockSkewMs()));
+}
+
 /** Test seam. */
 export function resetServerClock(): void {
   skewMs = null;

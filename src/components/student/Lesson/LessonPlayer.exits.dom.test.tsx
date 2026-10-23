@@ -30,11 +30,14 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
 
 const progress = vi.hoisted(() => ({
   report: vi.fn(),
+  sessionId: null as string | null,
   completionSaved: false,
   completionFailed: false,
 }));
+/** The review's own sitting, once the server has opened one. */
+const SESSION = "4f1c2a9e-8b7d-4c3a-9e2f-1a2b3c4d5e6f";
 vi.mock("@/hooks/useLessonProgress", () => ({
-  useLessonProgress: () => ({ sessionId: null, ...progress }),
+  useLessonProgress: () => ({ ...progress }),
 }));
 
 const { push, trackEvent, recordReview, signals } = vi.hoisted(() => ({
@@ -64,6 +67,14 @@ vi.mock("@/hooks/useAssignmentNote", () => ({
 vi.mock("@/lib/api/scheduler", () => ({
   schedulerApi: { recordReview: (...a: unknown[]) => recordReview(...a) },
 }));
+// A live review's answers go up as it is played; nothing here reads them.
+vi.mock("@/lib/api/lessons", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/lessons")>();
+  return {
+    ...actual,
+    lessonsApi: { ...actual.lessonsApi, saveAttempt: vi.fn().mockResolvedValue({}) },
+  };
+});
 vi.mock("@/context/AccessibilityContext", () => ({
   useAccessibility: () => ({ textSize: "regular", reducedMotion: false }),
   TEXT_ZOOM: { regular: 1 },
@@ -101,6 +112,7 @@ const writes = () => progress.report.mock.calls;
 
 beforeEach(() => {
   progress.report.mockReset();
+  progress.sessionId = null;
   progress.completionSaved = false;
   progress.completionFailed = false;
   push.mockReset();
@@ -437,12 +449,17 @@ describe("a review session's outcome", () => {
       userId: "stu-1",
       role: "student",
     });
+    // Live, with a sitting whose completion has landed: the scheduler is
+    // told only then, naming it (Teslim, 19 Oct).
+    progress.sessionId = SESSION;
+    progress.completionSaved = true;
     render(
       <LessonPlayer
         lesson={REVIEW}
         plan={null}
         review
         reviewConceptId="concept-1"
+        live
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /begin|start|ready/i }));
@@ -463,6 +480,7 @@ describe("a review session's outcome", () => {
         studentId: "stu-1",
         conceptId: "concept-1",
         outcome: "second_attempt",
+        sessionId: SESSION,
       }),
     );
   });
@@ -483,12 +501,15 @@ describe("a review session's outcome", () => {
       adjustment: "show_socratic_panel",
       guidedQuestions: ["Which number counts the parts?"],
     } as AdaptationPlan;
+    progress.sessionId = SESSION;
+    progress.completionSaved = true;
     render(
       <LessonPlayer
         lesson={REVIEW}
         plan={guided}
         review
         reviewConceptId="concept-1"
+        live
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /begin|start|ready/i }));

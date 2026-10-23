@@ -122,8 +122,6 @@ export {
   type ScaffoldIntensity,
   type ScaffoldOutcome,
   type ScaffoldState,
-  type ScaffoldAttempt,
-  type ScaffoldDecision,
   type ScaffoldLogEntry,
 } from "./scaffolds";
 export { notificationsApi } from "./notifications";

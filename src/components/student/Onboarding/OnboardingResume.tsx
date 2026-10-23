@@ -13,7 +13,12 @@ import {
   type LearningReadiness,
 } from "@/lib/api/probe";
 import { planProbe, type ProbePlan } from "@/lib/api/probePlan";
-import { claimMoveOn } from "@/lib/auth/onboardingGate";
+import {
+  claimMoveOn,
+  claimReturn,
+  lessonIdOf,
+  wayBack,
+} from "@/lib/auth/onboardingGate";
 import { getSession, getToken } from "@/lib/auth/session";
 import { ONBOARDING_SIGNAL_TYPES } from "@/lib/constants";
 import { flushPendingBaseline } from "@/lib/profiling/pendingBaseline";
@@ -42,9 +47,12 @@ function baselineLeft(readiness: LearningReadiness): boolean {
 }
 
 /**
- * Where the server's answers start a child, Home when nothing is left, or
- * null while they are still being read - and for a Module 4 with nothing to
- * ask, which is not a place to start but a move on (`moveOn`).
+ * Where the server's answers start a child, on (`returnTo`, else Home) when
+ * nothing is left, or null while they are still being read - and for a
+ * Module 4 with no question bank, which is not a place to start but a move
+ * on (`moveOn`). Nothing to ask while readiness still holds Module 4 owed
+ * (`nothingToAsk`) is the nothing-state, as a failed read is: only the
+ * server's `unavailable` moves a child on (Teslim, 21 Oct).
  */
 function firstStep(
   readiness: LearningReadiness,
@@ -59,6 +67,7 @@ function firstStep(
     case "ask":
       return "probe";
     case "failed":
+    case "nothingToAsk":
       return "nothing";
     case "unavailable":
       return null;
@@ -66,10 +75,13 @@ function firstStep(
 }
 
 /**
- * Module 4 has nothing to ask: Home, the first time this tab meets that for
- * this child, and the nothing-state every time after (`claimMoveOn`, the loop
- * guard: until the server applies the no-question-bank exception it still
- * refuses their lessons, and each refusal brings them back here).
+ * The server holds Module 4 as unavailable - no question bank: on, the first
+ * time this tab meets that for this child, and the nothing-state every time
+ * after (`claimMoveOn`, the loop guard: a server refusing their lessons for
+ * Module 4 would bring them back here on every refusal). Since Teslim's 19
+ * Oct contract the server records a probe with no bank as `unavailable` and
+ * `completed`, and no longer refuses for it, so the guard should not be
+ * reached that way; it stays as the guard.
  */
 function moveOn(): "home" | "nothing" {
   return claimMoveOn(getSession()?.userId) ? "home" : "nothing";
@@ -93,34 +105,83 @@ function afterModuleFour(outcome: DomainProbeOutcome): "home" | "nothing" {
  * THE SERVER SAYS WHAT IS LEFT; THIS DEVICE NEVER INFERS IT. Readiness
  * (`GET /api/v1/students/me/onboarding`), and then whether Module 4 has
  * anything to ask (`planProbe`), decide - both before anything is drawn:
- *   - all four in: Home.
- *   - only Module 4 left: straight into it, then Home.
+ *   - all four in: on.
+ *   - only Module 4 left: straight into it, then on.
  *   - any of the first three left: the profiling run, its trials sent for
- *     this child, then Module 4, then Home. Its quest map has a stop for
+ *     this child, then Module 4, then on. Its quest map has a stop for
  *     Module 4 only if Module 4 will run.
  *
- * NOTHING TO ASK MOVES THE CHILD ON (Olayinka, 19 Oct: "an unavailable probe
- * moves the child on, never to a dead end"; Teslim's 19 Oct no-question-bank
- * exception): straight Home, replacing this route, rather than a screen to
- * dismiss. Nothing is recorded or assumed for Module 4 - no placement, no
- * completion - and the server's gate decides what Home can open. If it still
- * refuses, the child is back here, and a second arrival in the same tab stays
- * on the nothing-state rather than bouncing Home again (`claimMoveOn`).
+ * ON IS BACK TO THE PAGE THAT WAS REFUSED, else Home. On the 20 Oct
+ * production run a child who tapped Start on a lesson finished the probe and
+ * landed on Home instead of in the lesson. The refused page rides here as
+ * `returnTo`, checked twice (`returnPathOf`, as it is sent and as it is
+ * read), and every way out that means "onboarding is done" takes it: all
+ * four in on arrival, Module 4 sat, Module 4 already held, and the one-time
+ * move on for a Module 4 with no bank. Not the nothing-state's Home
+ * button: that is the way out of a state that may be refused again, and it
+ * goes Home. And once per tab per page (`claimReturn`, the 21 Oct on-screen
+ * check): a page that still refuses after readiness says done sends the
+ * child Home the second time, as before the way back, not round again.
  *
- * A READ THAT FAILS IS NOT "NOTHING TO ASK": it is the nothing-state, as it
- * was - no words (none is designed, and none is true for every cause) and the
- * one way out, Home, offered rather than taken - so a broken read is never
- * passed off as a probe with nothing in it. Not "you're done" either, which
- * this device cannot know.
+ * THE SERVER'S WAY BACK COMES FIRST (SCRUM-266, Teslim 21 Oct). The server
+ * remembers the lesson a child was refused and names it - Module 4's finish
+ * as `navigatesTo`, readiness as `returnTo` - "The frontend still has to
+ * follow that destination". So "done" opens the first of: the finish's
+ * `navigatesTo`, readiness's `returnTo`, the refused page, Home - each
+ * checked as the refused page is, a bad one skipped (`wayBack`), and the one
+ * taken still once per tab (`claimReturn`).
+ *
+ * AND MODULE 4 IS ASKED ABOUT THAT LESSON (SCRUM-266). A child refused a
+ * lesson - the refused page is the lesson player's - has readiness read for
+ * that lesson (`lessonIdOf`), and the probe asks the lesson's subject, about
+ * its concepts, when the server says it can (`planProbe`). With no lesson -
+ * Home refused, or a plain visit - nothing about a lesson is sent.
+ *
+ * NO QUESTION BANK MOVES THE CHILD ON (Olayinka, 19 Oct: "an unavailable
+ * probe moves the child on, never to a dead end"; Teslim's 19 Oct
+ * no-question-bank exception): straight on, replacing this route, rather than
+ * a screen to dismiss. Nothing is recorded or assumed for Module 4 - no
+ * placement, no completion - and the server's gate decides what can open. If
+ * it still refuses, the child is back here, and a second arrival in the same
+ * tab stays on the nothing-state rather than bouncing on again
+ * (`claimMoveOn`).
+ *
+ * AND ONLY THE SERVER SAYS THERE IS NO BANK (Teslim's answers, 21 Oct). A
+ * subject that answers empty, or finished before asking, is not one; the
+ * plan reads readiness again and follows it (`planProbe`). If readiness still
+ * holds Module 4 owed with nothing to ask, that is reported to backend and
+ * the child gets the nothing-state - not a move on, and not the one-time
+ * claim spent on it: Olayinka's order on those answers.
+ *
+ * A READ THAT FAILS IS NOT "NO BANK": it is the nothing-state, as it was - no
+ * words (none is designed, and none is true for every cause) and the one way
+ * out, Home, offered rather than taken - so a broken read is never passed off
+ * as a probe with nothing in it. Not "you're done" either, which this device
+ * cannot know.
  *
  * NO NOTICE, PIN OR YOU'RE IN. Those make an account, and this child has one.
  */
-export function OnboardingResume() {
+export function OnboardingResume({
+  returnTo,
+}: {
+  /**
+   * The student page the child was refused, already checked by the route
+   * (`returnPathOf`): where "done" goes when the server names nowhere, and
+   * - when it is the lesson player's - the lesson Module 4 is asked about
+   * (`lessonIdOf`). Absent: Home, and no lesson.
+   */
+  returnTo?: string;
+} = {}) {
   const router = useRouter();
   const hydrated = useHydrated();
   const owner = hydrated ? (getSession()?.userId ?? null) : null;
   const signedOut = hydrated && !getToken();
-  const run = useCallback(() => probeApi.readiness(), []);
+  /** The lesson onboarding is being finished for, or none. */
+  const lessonId = lessonIdOf(returnTo) ?? undefined;
+  const run = useCallback(
+    () => (lessonId ? probeApi.readiness(lessonId) : probeApi.readiness()),
+    [lessonId],
+  );
   const readiness = useLiveQuery(run, [run]);
   const data = readiness.data;
   /** Whether Module 4 will run, once readiness says it is not yet done. */
@@ -149,22 +210,41 @@ export function OnboardingResume() {
   useEffect(() => {
     if (!data || data.complete) return;
     let cancelled = false;
-    void planProbe(data).then((p) => {
+    void planProbe(data, lessonId).then((p) => {
       if (cancelled) return;
       setPlan(p);
-      // Only Module 4 left, with nothing to ask: on, not a screen to dismiss.
+      // Only Module 4 left, and no bank: on, not a screen to dismiss.
       if (!baselineLeft(data) && p.kind === "unavailable") setMoved(moveOn());
     });
     return () => {
       cancelled = true;
     };
-  }, [data]);
+  }, [data, lessonId]);
 
+  /** The way back Module 4's finish named, as sent - checked on the way out. */
+  const finishedTo = useRef<string | null>(null);
+  /** The way back readiness names, as sent - checked on the way out. */
+  const serverReturn = data?.returnTo;
+
+  /*
+   * Where "done" goes, settled once per arrival: the claim is spent when it
+   * is read, so an effect that runs again (Strict Mode, a re-render) must not
+   * read it a second time and turn a first return into a Home.
+   */
+  const leaving = useRef<string | null>(null);
   useEffect(() => {
     // A visitor with no session has nothing to finish here, and reads nothing.
     if (signedOut) router.replace(SIGN_IN);
-    else if (step === "home") router.replace(HOME);
-  }, [signedOut, step, router]);
+    else if (step === "home") {
+      // Done: the server's way back, else the page they were refused, once
+      // per tab - a page that still refuses sends them Home, not round again
+      // (`claimReturn`).
+      const back = wayBack([finishedTo.current, serverReturn], returnTo);
+      leaving.current ??=
+        back && claimReturn(getSession()?.userId, back) ? back : HOME;
+      router.replace(leaving.current);
+    }
+  }, [signedOut, step, router, returnTo, serverReturn]);
 
   if (signedOut || step === null || step === "home") {
     // Reading, or on the way out: nothing to show for a moment.
@@ -185,9 +265,11 @@ export function OnboardingResume() {
     return (
       <Letterbox>
         <ProfilingFlow
-          // A stop for Module 4 only if it will run (design, 9 Oct: "A child
-          // who will do three sees three segments"). Four when that could not
-          // be read: Module 4 is tried again once the run is done.
+          // A stop for Module 4 unless the server holds it unavailable
+          // (design, 9 Oct: "A child who will do three sees three
+          // segments"). Four when that could not be read, or when readiness
+          // holds it owed with nothing to ask: Module 4 is tried again once
+          // the run is done.
           segments={
             plan?.kind === "unavailable"
               ? BASELINE_MODULES.length
@@ -215,7 +297,17 @@ export function OnboardingResume() {
                   )
                 : Promise.resolve();
             setAfterBaseline(true);
-            if (plan?.kind === "ask" || plan?.kind === "failed") {
+            /*
+             * Module 4 next, unless the server holds it done or unavailable.
+             * A plan that failed, or found nothing to ask while readiness
+             * holds it owed, is planned again by the step after the run -
+             * the server may have its bank by then - and is never a move on.
+             */
+            if (
+              plan?.kind === "ask" ||
+              plan?.kind === "failed" ||
+              plan?.kind === "nothingToAsk"
+            ) {
               setMoved("probe");
               return;
             }
@@ -243,9 +335,11 @@ export function OnboardingResume() {
           // What the plan found to ask, shown as read. A plan that failed
           // before the baseline run is read again by the step itself.
           openings={plan?.kind === "ask" ? plan.openings : undefined}
+          lessonId={lessonId}
           stretchFirst={afterBaseline}
           track={profiling.trackEvent}
-          onDone={(outcome) => {
+          onDone={(outcome, navigatesTo) => {
+            finishedTo.current = navigatesTo ?? null;
             profiling.flush();
             setMoved(afterModuleFour(outcome));
           }}

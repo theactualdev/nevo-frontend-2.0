@@ -14,6 +14,7 @@ import { holdBaseline } from "@/lib/profiling/pendingBaseline";
 import { markWarmUpDone, warmUpDoneFor } from "@/lib/profiling/warmUpDone";
 import { getSession } from "@/lib/auth/session";
 import { useConsentGate } from "@/hooks/useConsentGate";
+import { consentAnswer } from "@/lib/auth/consentAnswer";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useRosterBand } from "@/hooks/useRosterBand";
 import { formFactor } from "@/hooks/useSignals";
@@ -30,6 +31,7 @@ import {
   baselineRunContext,
   baselineTrials,
   tapPoint,
+  wordsShown,
 } from "@/lib/profiling/capture";
 import {
   CheckButton,
@@ -206,22 +208,40 @@ export function WarmUpRun({
   const [withheld, setWithheld] = useState(false);
   /** The served question's pick, sent to the prompt's own endpoint (B8). */
   const servedPick = useRef<{ itemId: string; value: string } | null>(null);
-  const [capture] = useState(() => new BaselineCapture(`warmup-${randomId()}`));
+  /** Held until consent is read as allowing it: see `consent`, below. */
+  const [capture] = useState(
+    () => new BaselineCapture(`warmup-${randomId()}`, { held: true }),
+  );
   /*
-   * Withdrawal, read once per mount. A child here is always signed in, so the
-   * answer is always available - unlike the onboarding run, where a school-code
-   * child has no session to ask with until their account exists.
+   * Consent, read once per mount for the child signed in here.
    *
-   * False until the read answers and false if it fails: a flaky network is not
-   * a withdrawal. The effect empties whatever accumulated in the window before
-   * the answer arrived, and STOPS the capture, so nothing the child does after
-   * it is recorded or written to the device either.
+   * NOTHING IS CAPTURED UNTIL IT IS KNOWN TO ALLOW IT (19 Oct browser-storage
+   * audit; rule 5). A read that failed used to count as "not withdrawn", and
+   * the task captured the child's taps as though the device had been told
+   * yes. The capture is constructed held, allowed only by an answer, and let
+   * go of if the answer becomes unknowable - a sign-out under the run.
+   *
+   * WHAT THE CHILD SEES, with no new copy: while it is asked, the loading
+   * state the task already waits in (D169, with its Home); with no answer to
+   * be had, the nothing-state (no task, Home). Never a task that cannot be
+   * kept. A withdrawal still STOPS the capture for the rest of the run, and
+   * the run still ends on its done state with nothing sent (`finish`).
+   *
+   * THIS EFFECT COMES BEFORE THE ONES THAT RECORD (`warmup_start`, a task
+   * that cannot be presented): effects run in order, so the capture is
+   * allowed by the time they write to it.
    */
-  const { withdrawn, known: consentKnown } = useConsentGate();
+  const gate = useConsentGate();
+  const { withdrawn, known: consentKnown } = gate;
+  const consent = consentAnswer(gate);
   useEffect(() => {
-    if (withdrawn) void capture.stop();
-  }, [withdrawn, capture]);
+    if (consent === "withdrawn") void capture.stop();
+    else if (consent === "allowed") capture.allow();
+    else if (consent === "unknown") void capture.hold();
+  }, [consent, capture]);
   const started = useRef(false);
+  /** The child this run was started for: the only one its trials are sent as. */
+  const runOwner = useRef<string | null>(null);
   const submitted = useRef(false);
   /** This mount has told the engine its task could not be given. */
   const reported = useRef(false);
@@ -273,12 +293,15 @@ export function WarmUpRun({
    * warm-up done on another tablet is done here too; this device's memory
    * answers only when it did not (`warmUpDoneFor`). Nor before the band has
    * settled, which decides the task's size and goes on the event. Nor for a
-   * heard round the device cannot say, which never starts.
+   * heard round the device cannot say, which never starts. Nor before
+   * consent has allowed it (19 Oct): the start is the capture's first entry.
    */
   useEffect(() => {
     if (!dimension || !bandSettled || unheard || started.current) return;
+    if (consent !== "allowed") return;
     if (warmUpDoneFor(doneToday, getSession()?.userId)) return;
     started.current = true;
+    runOwner.current = getSession()?.userId ?? null;
     capture.record("warmup_start", {
       dimension,
       /*
@@ -291,7 +314,7 @@ export function WarmUpRun({
       formFactor: formFactor(),
       ...(item ? { itemId: item.itemId } : {}),
     });
-  }, [capture, dimension, item, doneToday, band, bandSettled, unheard]);
+  }, [capture, dimension, item, doneToday, band, bandSettled, unheard, consent]);
 
   /*
    * A TASK THIS SCREEN CANNOT GIVE IS STILL REPORTED (B117, 13 Oct): "skipped
@@ -371,19 +394,56 @@ export function WarmUpRun({
   /** The write settled and failed. A withdrawal is not a failure. */
   const unsaved = !withheld && saved === false;
   /** A task is on screen: the only state the frame draws the header in. */
-  const running = !showDone && !!dimension && bandSettled && !unheard;
+  /**
+   * Consent could not be read, so no task: one the device may not keep is
+   * not offered (19 Oct). The nothing-state takes its place.
+   */
+  const unconsented = consent === "unknown";
+  const running =
+    !showDone &&
+    !!dimension &&
+    bandSettled &&
+    !unheard &&
+    consent !== "pending" &&
+    !unconsented;
   /*
    * STILL ASKING, WHICH IS NOT THE SAME AS TOLD NOTHING (D169, 13 Oct). The
-   * prompt has not answered, or it named a task whose size waits on the band.
-   * Both reads settle when they fail (`useWarmUpPrompt`, `useRosterBand`), so
-   * a failure moves on to the nothing-state or the task rather than holding
-   * this. A prompt that named nothing does not wait for the band: there is no
-   * task for it to size.
+   * prompt has not answered, or it named a task whose size waits on the band
+   * - or, since 19 Oct, on consent. Every read settles when it fails
+   * (`useWarmUpPrompt`, `useRosterBand`, `useConsentGate`), so a failure moves
+   * on to the nothing-state or the task rather than holding this. A prompt
+   * that named nothing does not wait for either: there is no task.
    */
   const asking =
-    prompt.state === "waiting" || (prompt.state === "ready" && !bandSettled);
+    prompt.state === "waiting" ||
+    (prompt.state === "ready" && (!bandSettled || consent === "pending"));
 
   const finish = useCallback(() => {
+    /*
+     * THE CHILD WHO SAT IT, STILL SIGNED IN (19 Oct browser-storage audit).
+     *
+     * A session can lapse mid-task, and nothing here noticed until the child
+     * answered: the finish then sent the trials with no Authorization at all,
+     * took the refusal as a failure, and parked them with no owner - written
+     * after the sign-out's clean-up, claimable by nobody, kept for a week.
+     *
+     * So the finish asks first. Not the child the run was started for, or no
+     * token to send as: nothing is sent, nothing is parked, the raw stream
+     * goes, and nothing here claims the warm-up was done. Asking is also what
+     * clears a lapsed session, and the shell's lapse watch then takes the
+     * child to the session-ended door, as it does from any screen.
+     */
+    const current = getSession();
+    const owner = runOwner.current;
+    const theirs =
+      Boolean(owner) && Boolean(current?.token) && current?.userId === owner;
+    if (!withdrawn && !theirs) {
+      if (!submitted.current) {
+        submitted.current = true;
+        void capture.stop();
+      }
+      return;
+    }
     if (!submitted.current) {
       submitted.current = true;
       if (withdrawn) {
@@ -472,7 +532,8 @@ export function WarmUpRun({
        * device having no session for the new account, which stopped being true
        * when the invite path began storing one.
        */
-      const owner = getSession()?.userId ?? null;
+      // The run's own child, still signed in: checked at the top of `finish`.
+      const owner = runOwner.current as string;
       /*
        * THE PICK GOES TO ITS OWN ENDPOINT, UNMARKED (B8, 1 Oct).
        * `POST .../recalibrate-prompt/{id}/response` takes `{itemId, value}`
@@ -588,7 +649,7 @@ export function WarmUpRun({
         </div>
       ) : asking ? (
         <WarmUpLoading onHome={() => router.push(HOME)} />
-      ) : !dimension || unheard ? (
+      ) : !dimension || unheard || unconsented ? (
         <WarmUpNothing onHome={() => router.push(HOME)} />
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center px-5 pb-10 sm:px-7">
@@ -762,7 +823,9 @@ function WarmUpLoading({ onHome }: { onHome: () => void }) {
  * button, labelled "Home" here while D79 is open, because this route is
  * full-screen and a child must never be left on it with nothing to press.
  * And for a P1-3 reading round on a device that cannot speak, which cannot be
- * presented honestly (D81). The wait before an answer is `WarmUpLoading`'s.
+ * presented honestly (D81). And when consent could not be read (19 Oct): a
+ * task whose taps the device may not keep is not offered. The wait before an
+ * answer is `WarmUpLoading`'s.
  */
 function WarmUpNothing({ onHome }: { onHome: () => void }) {
   return (
@@ -972,6 +1035,10 @@ function WarmUpTask({
       const reading = warmUpReading(sized);
       // Each pick carries `mode` as the reading activity records it, so the
       // engine can tell a passage read from a sentence read or one heard.
+      // A READ round also carries the words it put on screen, as the
+      // baseline's does (Teslim 18 Oct #6): the passage or the sentence
+      // rendered below, never the question or the options, and nothing for
+      // a sentence heard. A count only; the server derives the speed.
       if (reading.mode === "audio") {
         return (
           <WarmUpHeard
@@ -991,7 +1058,11 @@ function WarmUpTask({
           <SingleChoice
             onDone={onDone}
             onPick={(choice, detail) =>
-              pick(choice, { ...detail, mode: "passage" })
+              pick(choice, {
+                ...detail,
+                mode: "passage",
+                readingWordCount: wordsShown(reading.passage),
+              })
             }
             stacked
             options={[...reading.options, "Not sure"]}
@@ -1015,7 +1086,11 @@ function WarmUpTask({
           prompt="True or false?"
           onDone={onDone}
           onPick={(choice, detail) =>
-            pick(choice, { ...detail, mode: "sentence" })
+            pick(choice, {
+              ...detail,
+              mode: "sentence",
+              readingWordCount: wordsShown(reading.text),
+            })
           }
           stacked
           options={["True", "False", "Not sure"]}

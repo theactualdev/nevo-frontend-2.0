@@ -121,6 +121,25 @@ describe("reading through the server's chunks", () => {
     ]);
   });
 
+  it("says phone on a phone, the only word the server takes for one (it refuses mobile, and the batch with it)", () => {
+    vi.spyOn(window, "matchMedia").mockImplementation(
+      (q: string) =>
+        ({ matches: q === "(pointer: coarse)", media: q }) as MediaQueryList,
+    );
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(375);
+    try {
+      render(<LessonPlayer lesson={lessonWith(CHUNKS)} plan={PLAN} />);
+
+      see("c1", "in");
+
+      expect(viewed().map(([, payload]) => payload.formFactor)).toEqual([
+        "phone",
+      ]);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
   it("sends exactly the catalogue's keys", () => {
     render(<LessonPlayer lesson={lessonWith(CHUNKS)} plan={PLAN} />);
     see("c2", "in");

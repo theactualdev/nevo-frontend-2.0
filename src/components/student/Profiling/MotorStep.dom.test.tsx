@@ -493,7 +493,7 @@ describe("Primary 1-3", () => {
 
 describe("where it runs", () => {
   it("runs on touch, and not on a cursor device", () => {
-    expect(motorStepRuns("mobile")).toBe(true);
+    expect(motorStepRuns("phone")).toBe(true);
     expect(motorStepRuns("tablet")).toBe(true);
     expect(motorStepRuns("desktop")).toBe(false);
   });

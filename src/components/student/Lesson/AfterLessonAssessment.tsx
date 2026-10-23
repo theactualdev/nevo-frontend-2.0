@@ -280,6 +280,9 @@ export function AfterLessonAssessment({
                 label={option.label}
                 reading={reading}
                 tone={tone(option.id)}
+                // Said only while it can still change; once the answer is
+                // revealed the tone and the dot say which was picked.
+                selected={revealed ? undefined : option.id === selected}
                 className="py-4"
                 trailing={
                   revealed ? (

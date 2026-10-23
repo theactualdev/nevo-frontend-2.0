@@ -65,9 +65,13 @@ export interface ConceptMasteryRow {
   /** Shipped 31 Aug. Before it, this read had ids only. */
   /** Nullable in the contract: a concept the engine has no name for. */
   conceptName: string | null;
-  /** 0-1. The frame's bars are percentages. */
-  masteryProbabilityConcept: number;
-  masteryProbabilityReading: number;
+  /**
+   * 0-1. The frame's bars are percentages. NULLABLE since d461b60 (Teslim, 19
+   * Oct): the server withholds both from a student principal, and staff reads
+   * keep the numbers. A null is no estimate, never a 0.
+   */
+  masteryProbabilityConcept: number | null;
+  masteryProbabilityReading: number | null;
   attentionWeights: Record<string, unknown>;
   practiceCount: number;
   lastResponseCorrect: boolean | null;
@@ -149,8 +153,13 @@ export interface StudentProgress {
     conceptId: string;
     name: string;
     subject: string;
-    understanding: number;
-    reading: number;
+    /**
+     * The engine's estimates. NULLABLE since d461b60 (Teslim, 19 Oct: "Please
+     * do not convert nulls to scores"): always null for a student, numbers
+     * for staff. Never computed with or rendered on the student side.
+     */
+    understanding: number | null;
+    reading: number | null;
     practiceCount: number;
   }[];
   lessons: LessonProgress[];
@@ -184,6 +193,27 @@ export interface StudentProgress {
   currentTopic?: string;
 }
 
+/**
+ * `LearningWorkResponse` - the engine's next work for this child, on the
+ * dashboard as `nextWork` (and the same six fields from `GET
+ * /api/v1/students/me/next-work`). Null until the four onboarding modules are
+ * in, or when nothing is deliverable.
+ *
+ * TYPED, NOT READ. Whether You're In, Home or a lesson's first segment follows
+ * it waits on questions to Teslim, design and Lydia (20 Oct contract check),
+ * so nothing here acts on it yet. Whatever does: `kind` is never a label, and
+ * `segmentPosition` is a place in a lesson, never a count shown to a child.
+ */
+export interface LearningWork {
+  lessonId: string;
+  conceptId: string;
+  conceptName: string;
+  segmentId: string | null;
+  /** Zero-based, like every segment position on the wire. */
+  segmentPosition: number;
+  kind: "review" | "new_work";
+}
+
 /** One row of the student's own recent lesson activity. */
 export interface DashboardProgressRow {
   lessonId: string;
@@ -192,6 +222,14 @@ export interface DashboardProgressRow {
   /** ZERO-based cursor (backend B51) - see `lib/lessons/segmentPlace`. */
   segmentPosition: number;
   updatedAt: string;
+  /**
+   * When the lesson was completed, or null/absent while it never has been
+   * (Teslim, 21 Oct). The lesson's own fact, kept through a reopen: a row
+   * demoted before review mode shipped still says `in_progress` beside it.
+   * A finish with no marked answers (`not_attempted`) never sets it. See
+   * `lib/lessons/finishedRow`.
+   */
+  completedAt?: string | null;
   /**
    * The lesson's own title and subject (backend B52, 5 Oct), so a lesson the
    * child started from the library can sit on Home with no assignment behind
@@ -564,6 +602,13 @@ export const studentsApi = {
       student: StudentIdentity;
       assignments: import("./assignments").Assignment[];
       recentProgress: DashboardProgressRow[];
+      /**
+       * Whether the server holds all four onboarding modules as in. Outside
+       * the schema's `required` list, defaulting to false. Typed, not read.
+       */
+      onboardingComplete?: boolean;
+      /** The engine's next work, null until onboarding is in. See `LearningWork`. */
+      nextWork?: LearningWork | null;
     }>("/api/v1/students/me/dashboard"),
 
   profile: (studentId: string) =>

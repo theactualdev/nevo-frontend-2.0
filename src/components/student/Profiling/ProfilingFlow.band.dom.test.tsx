@@ -14,6 +14,17 @@ import {
 } from "@/lib/auth/onboarding";
 import { clearSession, setSession } from "@/lib/auth/session";
 
+// Consent answered and allowing the run: these tests are about something
+// else. What a run does without an answer is pinned in its `.consent` test.
+vi.mock("@/hooks/useConsentGate", () => ({
+  useConsentGate: () => ({ withdrawn: false, known: true, unreadable: false }),
+}));
+
+// The run sends a child with no consent answer to a hold (19 Oct).
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
 /**
  * THE ROSTER'S BAND, BEFORE ANY QUESTION (D13 and B5, 1 Oct).
  *

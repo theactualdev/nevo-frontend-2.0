@@ -178,7 +178,10 @@ export const ADDING_FRACTIONS: Lesson = {
     },
     {
       id: "calc-add-fifths",
-      modalities: [MODALITY.TEXT, MODALITY.INTERACTIVE],
+      // The solver alone, as a live calculation is (Lydia, 17 Oct; Teslim,
+      // 19 Oct). Its text stays: it is what the segment reads as if the
+      // solver fails on the device.
+      modalities: [MODALITY.INTERACTIVE],
       text: {
         heading: "Add them step by step",
         body: {
@@ -273,13 +276,13 @@ export const ADDING_FRACTIONS_PLAN: AdaptationPlan = {
     // full through the co-construction, then eases back. The step-up offer
     // that sat here went with design's 1 Oct ruling (D28): nothing in the
     // contract can trigger it, so only this demo ever showed it.
-    { segmentId: "intro", startModality: MODALITY.TEXT, density: null, suggestModality: null, breakAfter: BREAK_TYPES.MICRO, scaffold: SCAFFOLD_LEVELS.MINIMAL },
-    { segmentId: "calc-add-fifths", startModality: MODALITY.INTERACTIVE, density: null, suggestModality: null, breakAfter: BREAK_TYPES.MOVEMENT, scaffold: SCAFFOLD_LEVELS.FULL },
+    { segmentId: "intro", startModality: MODALITY.TEXT, density: null, breakAfter: BREAK_TYPES.MICRO, scaffold: SCAFFOLD_LEVELS.MINIMAL },
+    { segmentId: "calc-add-fifths", startModality: MODALITY.INTERACTIVE, density: null, breakAfter: BREAK_TYPES.MOVEMENT, scaffold: SCAFFOLD_LEVELS.FULL },
     // ...and the full rest on the way out of the last segment, so all four
     // break types are reachable in the mock (this one lands before the
     // assessment - a real pause between learning and being asked about it).
     // Light is authored here now: it used to arrive from the player's own
     // "light" fallback, which drew a level the plan never gave (rule 5).
-    { segmentId: "recap", startModality: MODALITY.TEXT, density: null, suggestModality: MODALITY.AUDIO, breakAfter: BREAK_TYPES.FULL, scaffold: SCAFFOLD_LEVELS.LIGHT },
+    { segmentId: "recap", startModality: MODALITY.TEXT, density: null, breakAfter: BREAK_TYPES.FULL, scaffold: SCAFFOLD_LEVELS.LIGHT },
   ],
 };

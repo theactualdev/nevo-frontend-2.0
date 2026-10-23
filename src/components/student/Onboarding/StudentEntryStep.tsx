@@ -3,6 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
+import { useDoor } from "@/hooks/useDoor";
+import { endHeldSession } from "@/lib/auth/doorSession";
+import { useHydrated } from "@/hooks/useHydrated";
 import {
   Button,
   IllustrationWrapper,
@@ -31,7 +34,11 @@ import {
 } from "@/lib/auth/entryHandBack";
 import type { EntryIdentity, EntryPinElsewhere } from "@/lib/auth/firstPin";
 import {
+  arriveAtEntry,
+  CONTINUE_ROUTE,
+  claimOnboardingDraft,
   clearOnboardingDraft,
+  endSessionForEntryMatch,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
 import { SCHOOL_CODE_LENGTH, placeSchoolCode } from "@/lib/auth/schoolCode";
@@ -161,7 +168,50 @@ function isThrottle(err: unknown): boolean {
  * illustration makes way for it.
  */
 export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
+  /*
+   * FIRST, BEFORE ANYTHING HERE READS THE SESSION (19 Oct browser-storage
+   * audit; `arriveAtEntry`). A session stored as 05 opens is ended at once
+   * only if a different child's run is in progress, and that run's draft goes
+   * with it; the child this tab finished its run as - back from their first
+   * lesson - or whose session a PIN made in this tab - a cleared child back
+   * from Home - is routed on, signed in. Any other session is nobody's to
+   * guess at: 05 is a door over it, and the lookup decides. In the state
+   * initializer, so it runs in the first render, ahead of every hook below.
+   */
+  const [arrival] = useState(arriveAtEntry);
+  /*
+   * 05 is a door: nothing on this page goes as the session it found stored
+   * (19 Oct, `doorSession`).
+   *
+   * AND LEAVING IT BY ANY WAY ENDS THAT SESSION (19 Oct browser-storage
+   * audit). The Welcome sends anyone carrying the student cookie on to Home,
+   * so with the last child's session still stored, Back put the next child on
+   * that child's Home, signed in as them. It ends as 05 closes - the device's
+   * own Back, which lands wherever the history says, the chevron and any
+   * other way off - because a listener for the device's Back was gone before
+   * it could run (`useDoor`). A way on after a lookup has ended it already
+   * (`endSessionForEntryMatch`). Only the session held since 05 opened: one
+   * a cleared child's new PIN stored here is theirs, and kept. Not for the
+   * child this tab finished its run as, or made a session for, who is routed
+   * on.
+   */
+  useDoor(true, { endOnLeave: arrival !== "routeOn" });
   const router = useRouter();
+  /*
+   * The route on happens after hydration, and the server's frame is drawn
+   * until then: deciding the frame on the first client render would differ
+   * from the server's, which knows no session.
+   */
+  const hydrated = useHydrated();
+  const routesOn = hydrated && arrival === "routeOn";
+  useEffect(() => {
+    if (routesOn) router.replace(CONTINUE_ROUTE);
+  }, [routesOn, router]);
+  /*
+   * The chevron ends it BEFORE the Welcome is asked for, so the route guard
+   * never sees the last child's cookie on the way there (`endHeldSession`).
+   */
+  const leaving = arrival === "routeOn" ? undefined : endHeldSession;
   /*
    * Empty, or 05's miss with the pair as typed: handed back from the end of a
    * first run whose pair the PIN route no longer found (B68). See
@@ -178,6 +228,9 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
     peekEntryHandBack() ? "error" : "idle",
   );
   useEffect(() => clearEntryHandBack(), []);
+  // The draft is this screen's while it is open: a session ending under it -
+  // the last child's, lapsing - does not take it (19 Oct).
+  useEffect(() => claimOnboardingDraft(), []);
   /**
    * A lookup we could not run, versus a pair that matched nobody. A child must
    * never be told to re-check what they typed because our request failed.
@@ -292,6 +345,16 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
     matchedNumber: string,
   ) => {
     const route = entryRoute(state);
+    /*
+     * A CHILD WHO GOES ON FROM HERE IS NOT SHOWN TO BE THE STORED SESSION'S
+     * (19 Oct browser-storage audit). The lookup carries no account id to
+     * compare, so a session still stored now ends before they go on - into
+     * their first run, a new PIN, or 00c to sign in - and nobody lands in
+     * another child's account. A held child stays here, and ends nothing.
+     */
+    if (route === "first-run" || route === "new-pin" || route === "sign-in") {
+      endSessionForEntryMatch();
+    }
     switch (route) {
       case "waiting":
         // Nothing of theirs is kept: a held child is not onboarding.
@@ -321,6 +384,10 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
           admissionNumber: matchedNumber,
           name: state.firstName,
           ...(state.ageBand ? { ageBand: state.ageBand } : {}),
+          // The lookup's own answer, restated: `entryRoute` sends only a
+          // `given` child here, and the baseline captures on nothing else
+          // before an account exists to ask with (19 Oct).
+          ...(state.consentState === "given" ? { consent: "given" as const } : {}),
         });
         if (route === "first-run") {
           router.push(FIRST_RUN);
@@ -403,9 +470,11 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
     else if (at !== null) backspaceCell(at);
   };
 
+  // On the way to finishing onboarding as the child signed in here.
+  if (routesOn) return null;
   if (held === "withdrawn") return <ConsentWithdrawn />;
   // The Entry frame's own hold, with its Back (05, state 6) - not 00d's.
-  if (held === "age-check") return <AgeCheckHold />;
+  if (held === "age-check") return <AgeCheckHold onBack={leaving} />;
   if (held) return <WaitingOnConsent hold={held} />;
   if (clearedChild) {
     return <NewPinAfterClear entry={clearedChild} onRefused={refusedNewPin} />;
@@ -443,6 +512,7 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
   return (
     <OnboardingShell
       backHref={WELCOME}
+      onBack={leaving}
       lifted={keyboardUp}
       footer={
         keyboardUp && (

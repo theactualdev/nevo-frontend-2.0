@@ -20,6 +20,7 @@ import {
 } from "@/lib/auth/entryHandBack";
 import {
   clearOnboardingDraft,
+  forgetOnboardingDraft,
   getOnboardingDraft,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
@@ -469,6 +470,9 @@ describe("where a match goes", () => {
       // The server's band (9 Oct), not the age or the year group: the
       // device bands nothing itself.
       ageBand: "junior_secondary",
+      // The lookup's consent answer, the only one there is before the
+      // account exists: the baseline captures on it and nothing else (19 Oct).
+      consent: "given",
     });
   });
 
@@ -787,6 +791,8 @@ describe("a child whose PIN a teacher cleared (B67)", () => {
       loginIdentifier: "NV-A1B2C3",
       displayName: "Amara",
     });
+    // In the roster, and only there: no old single-profile copy (19 Oct).
+    expect(window.localStorage.getItem("nevo.auth.profile")).toBeNull();
   });
 
   it("holds them instead of Home when the server holds them once they are in", async () => {
@@ -929,5 +935,32 @@ describe("05 Entry - where the keyboard is typing", () => {
 
     for (const el of [...cells(), idField()])
       expect(el.className).not.toMatch(/(^| )outline-(none|hidden|0)( |$)/);
+  });
+});
+
+/*
+ * A SESSION ENDING TAKES THE ONBOARDING DRAFT (19 Oct browser-storage audit),
+ * but not from a child on 05 right now: the last child's session lapsing
+ * under them, or their own new PIN replacing it, must leave what 05 matched.
+ */
+describe("the onboarding draft while 05 is open", () => {
+  it("is not taken by a session ending under it, and is once 05 has closed", () => {
+    render(<StudentEntryStep framing="school" />);
+    startOnboardingDraft({
+      schoolCode: "K7DQ",
+      admissionNumber: "BGA/2031",
+      name: "Amara",
+      consent: "given",
+    });
+
+    forgetOnboardingDraft();
+    expect(getOnboardingDraft()).toMatchObject({
+      schoolCode: "K7DQ",
+      consent: "given",
+    });
+
+    cleanup();
+    forgetOnboardingDraft();
+    expect(getOnboardingDraft()).toEqual({});
   });
 });

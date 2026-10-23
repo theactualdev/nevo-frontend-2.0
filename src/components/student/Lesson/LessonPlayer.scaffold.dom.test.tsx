@@ -193,9 +193,23 @@ describe("where calculation support starts (B103, 9 Oct)", () => {
     expect(filledDots()).toBe(4);
   });
 
-  it("says nothing on the same segment's text, where no calculation is", () => {
-    render(<LessonPlayer lesson={CALC} plan={opensOn("text")} />);
+  it("says nothing on a segment's text, where no calculation is", () => {
+    // A calculation itself never opens as its text now (Lydia, 17 Oct; Teslim,
+    // 19 Oct), so the text is another segment's, in the same lesson.
+    const lesson = {
+      ...CALC,
+      segments: [
+        {
+          id: "seg-0",
+          modalities: ["text"],
+          text: { heading: "Before", body: { default: "Read this first." } },
+        },
+        ...CALC.segments,
+      ],
+    } as unknown as Lesson;
+    render(<LessonPlayer lesson={lesson} plan={opensOn("text")} />);
 
+    expect(screen.getByText("Read this first.")).toBeInTheDocument();
     expect(indicator()).toBeNull();
   });
 

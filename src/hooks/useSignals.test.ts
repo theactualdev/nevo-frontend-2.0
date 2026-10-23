@@ -21,12 +21,16 @@ interface Event {
   payload?: Record<string, unknown>;
 }
 
-const submitBatch = vi.fn(
-  async (_envelope: Envelope, _events: Event[]) => ({
-    sessionId: "s",
-    acceptedEvents: _events.length,
-  }),
-);
+/** With the options a send carries: `keepalive`, and a last try's token. */
+type SubmitBatch = (
+  envelope: Envelope,
+  events: Event[],
+  options?: Record<string, unknown>,
+) => Promise<{ sessionId: string; acceptedEvents: number }>;
+const submitBatch = vi.fn<SubmitBatch>(async (_envelope, events) => ({
+  sessionId: "s",
+  acceptedEvents: events.length,
+}));
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
@@ -51,6 +55,8 @@ const { useSignals } = await import("./useSignals");
 const { ApiError } = await import("@/lib/api");
 const { clearSession, setSession } = await import("@/lib/auth/session");
 const { holdSignals } = await import("@/lib/signals/outbox");
+const { announceSessionEnd } = await import("@/lib/auth/sessionEnd");
+const { openDoor } = await import("@/lib/auth/doorSession");
 
 /**
  * These tests encode a defect that destroyed real data silently.
@@ -349,24 +355,56 @@ describe("signals that outlive their screen", () => {
     expect(entry?.events.some((e) => e.payload?.last === true)).toBe(true);
   });
 
-  it("keeps what a dying session could not send, for the same child", async () => {
+  /*
+   * A SESSION ENDING IS THE STREAM'S LAST CHANCE (19 Oct browser-storage
+   * audit). What a dying session could not send was kept on the tablet for
+   * the same child's next sign-in. It gets one try now, with the token that
+   * session held, and none of it is written back onto the device.
+   */
+  it("gives what a dying session could not send one last try, and keeps none of it", async () => {
     signIn();
     const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
     act(() => result.current.trackEvent("time_on_segment", { first: true }));
     await act(async () => {
       result.current.flush();
     });
+    submitBatch.mockClear();
 
-    // A 401 elsewhere: the token is cleared and the page is leaving.
+    // A 401 elsewhere: the session ends, and then the page leaves.
     act(() => result.current.trackEvent("time_on_segment", { stranded: true }));
     clearSession();
+    await act(async () => {});
     act(() => {
       window.dispatchEvent(new Event("pagehide"));
     });
 
-    const [entry] = held();
-    expect(entry?.userId).toBe("user-1");
-    expect(entry?.events.some((e) => e.payload?.stranded === true)).toBe(true);
+    expect(submitBatch).toHaveBeenCalledTimes(1);
+    const [, events, options] = submitBatch.mock.calls[0];
+    expect(events.some((e) => e.payload?.stranded === true)).toBe(true);
+    expect(options).toMatchObject({ keepalive: true, token: "tok-test" });
+    expect(held()).toEqual([]);
+  });
+
+  it("makes no try at another child's session ending", async () => {
+    signIn();
+    const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    act(() => result.current.trackEvent("time_on_segment", { first: true }));
+    await act(async () => {
+      result.current.flush();
+    });
+    submitBatch.mockClear();
+    act(() => result.current.trackEvent("time_on_segment", { mine: true }));
+
+    act(() =>
+      announceSessionEnd({ userId: "user-2", role: "student", token: "tok-2" }),
+    );
+
+    expect(submitBatch).not.toHaveBeenCalled();
+    // Still this stream's, for its own child's next send.
+    await act(async () => {
+      result.current.flush();
+    });
+    expect(submitBatch.mock.calls[0][2]).not.toMatchObject({ token: "tok-2" });
   });
 
   it("holds a batch the server refused with 401, rather than dropping it", async () => {
@@ -508,6 +546,17 @@ describe("the session's interpretation context", () => {
       vi.spyOn(window, "innerWidth", "get").mockReturnValue(1024);
     });
     expect(payload?.formFactor).toBe("tablet");
+  });
+
+  it("tags a 375px touch phone as a phone, the contract's word, never mobile", async () => {
+    const payload = await contextOf(() => {
+      vi.spyOn(window, "matchMedia").mockImplementation(
+        (q: string) =>
+          ({ matches: q === "(pointer: coarse)", media: q }) as MediaQueryList,
+      );
+      vi.spyOn(window, "innerWidth", "get").mockReturnValue(375);
+    });
+    expect(payload?.formFactor).toBe("phone");
   });
 
   it("counts the child's own reduced-motion switch, not only the OS's", async () => {
@@ -697,5 +746,65 @@ describe("a withdrawn consent", () => {
     });
 
     expect(submitBatch).toHaveBeenCalledTimes(1);
+  });
+});
+
+/*
+ * A STREAM ON A DOOR (19 Oct browser-storage audit). A refused SSO sign-in's
+ * stream posted as the child whose session was still stored. A door holds
+ * that session (`doorSession`): the stream sends nothing as it, keeps nothing
+ * under it, and goes as the screen's own child once they sign in.
+ */
+describe("a stream on a door, with another child's session stored", () => {
+  const OUTBOX = "nevo.signals.outbox";
+  const heldFor = () =>
+    (
+      JSON.parse(window.localStorage.getItem(OUTBOX) ?? "[]") as {
+        userId: string;
+      }[]
+    ).map((h) => h.userId);
+
+  it("sends nothing as them, and keeps nothing of the screen's under them", async () => {
+    signIn();
+    const close = openDoor();
+    const { result, unmount } = renderHook(() =>
+      useSignals(UUID, undefined, "sso"),
+    );
+    act(() => result.current.trackEvent("time_on_segment", { refused: true }));
+    await act(async () => {
+      result.current.flush();
+    });
+
+    unmount();
+    await act(async () => {});
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+    close();
+
+    expect(submitBatch).not.toHaveBeenCalled();
+    expect(heldFor()).not.toContain("user-1");
+  });
+
+  it("goes as the screen's own child once they sign in at it", async () => {
+    signIn();
+    const close = openDoor();
+    const { result } = renderHook(() => useSignals(UUID, undefined, "sso"));
+    act(() => result.current.trackEvent("time_on_segment", { mine: true }));
+
+    setSession({
+      token: "tok-sso",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId: "sso-child",
+      role: "student",
+    });
+    await act(async () => {
+      result.current.flush();
+    });
+    close();
+
+    expect(submitBatch).toHaveBeenCalledTimes(1);
+    const [, events] = submitBatch.mock.calls[0];
+    expect(events.some((e) => e.payload?.mine === true)).toBe(true);
   });
 });

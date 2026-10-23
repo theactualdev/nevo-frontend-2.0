@@ -23,10 +23,14 @@ const WELCOME = "/student/onboarding";
  * Wherever the age check holds a child who has no session - on 05's lookup,
  * on the new PIN after a teacher's clear, or at the end of a first run whose
  * PIN the server refused - this is the screen.
+ *
+ * `onBack` is 05's, for the session it has been holding (19 Oct
+ * browser-storage audit): held there, the next child's Back to the Welcome
+ * would land on the last child's Home (`endHeldSession`).
  */
-export function AgeCheckHold() {
+export function AgeCheckHold({ onBack }: { onBack?: () => void } = {}) {
   return (
-    <OnboardingShell backHref={WELCOME}>
+    <OnboardingShell backHref={WELCOME} onBack={onBack}>
       <HoldMessage hold="age-check" className="px-3 sm:px-4" />
     </OnboardingShell>
   );

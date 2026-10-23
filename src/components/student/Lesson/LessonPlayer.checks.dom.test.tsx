@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import { LESSON_STATUS } from "@/lib/api/lessons";
@@ -81,9 +83,6 @@ vi.mock("@/hooks/useAssignmentNote", () => ({
 }));
 vi.mock("@/lib/api/scheduler", () => ({
   schedulerApi: { recordReview: (...a: unknown[]) => recordReview(...a) },
-}));
-vi.mock("@/lib/api/scaffolds", () => ({
-  scaffoldsApi: { attempt: vi.fn().mockResolvedValue({}) },
 }));
 vi.mock("@/lib/api/lessons", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/lessons")>();
@@ -499,6 +498,11 @@ describe("the time each answer took, as it was measured", () => {
 });
 
 describe("what the review tells the scheduler (B28)", () => {
+  // The review's own completion has landed - see "which sitting" below.
+  beforeEach(() => {
+    progress.completionSaved = true;
+  });
+
   const finishReview = async (plan: AdaptationPlan | null = null) => {
     signIn();
     render(
@@ -525,6 +529,7 @@ describe("what the review tells the scheduler (B28)", () => {
         studentId: "stu-1",
         conceptId: "concept-1",
         outcome: "first_time",
+        sessionId: SESSION,
       }),
     );
   });
@@ -556,13 +561,111 @@ describe("what the review tells the scheduler (B28)", () => {
   });
 });
 
+describe("which sitting the review names (Teslim, 19 Oct)", () => {
+  /*
+   * `RecordReviewRequest.sessionId`: for a student the server reads the
+   * answers it marked in a COMPLETED session. With no id it took the latest
+   * completed sitting on the concept - an older one - or answered 409 when
+   * this one's completion had not landed yet.
+   */
+  const reviewOn = (props: { live?: boolean; partial?: boolean } = {}) => (
+    <LessonPlayer
+      lesson={REVIEW}
+      plan={null}
+      review
+      reviewConceptId="concept-1"
+      live={props.live ?? true}
+      partial={props.partial}
+    />
+  );
+  const finish = async (props: { live?: boolean; partial?: boolean } = {}) => {
+    signIn();
+    const view = render(reviewOn(props));
+    fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
+    next();
+    fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    next();
+    return view;
+  };
+
+  it("waits for the review's own completion to land, then names its sitting", async () => {
+    const { rerender } = await finish();
+    await act(async () => {});
+
+    // The completion is written as the review ends; until it lands there is
+    // no completed sitting for the server to read.
+    expect(recordReview).not.toHaveBeenCalled();
+    expect(statuses()).toContain(LESSON_STATUS.COMPLETED);
+
+    progress.completionSaved = true;
+    rerender(reviewOn());
+
+    await waitFor(() => expect(recordReview).toHaveBeenCalledTimes(1));
+    expect(recordReview).toHaveBeenCalledWith(
+      expect.objectContaining({ conceptId: "concept-1", sessionId: SESSION }),
+    );
+  });
+
+  it("holds the heading while the completion is on its way", async () => {
+    await finish();
+    await act(async () => {});
+
+    expect(screen.queryByRole("heading")).toBeNull();
+    expect(document.querySelector("h2")?.className).toContain("invisible");
+  });
+
+  it("sends nothing, and holds nothing, when the completion did not land", async () => {
+    const { rerender } = await finish();
+    progress.completionFailed = true;
+    rerender(reviewOn());
+    await act(async () => {});
+
+    expect(recordReview).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("heading", { name: "You've been through this one again." }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/bring it back/i)).toBeNull();
+  });
+
+  it("sends nothing for a review with no session to name", async () => {
+    // An authored mock opens no session, so it is never written completed.
+    progress.sessionId = null;
+    progress.completionSaved = true;
+    await finish({ live: false });
+    await act(async () => {});
+
+    expect(recordReview).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("heading", { name: "You've been through this one again." }),
+    ).toBeTruthy();
+  });
+
+  it("sends nothing for a partial copy, which is never written completed", async () => {
+    progress.completionSaved = true;
+    await finish({ partial: true });
+    await act(async () => {});
+
+    expect(recordReview).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("heading", { name: "You've been through this one again." }),
+    ).toBeTruthy();
+  });
+});
+
 describe("what the review's completion may claim (D40)", () => {
+  // The review's own completion has landed, so the scheduler is asked.
+  beforeEach(() => {
+    progress.completionSaved = true;
+  });
+
+  // As a student reads it since d461b60: the spacing parameters withheld.
   const schedule = {
     studentId: "stu-1",
     conceptId: "concept-1",
-    stability: 3,
-    difficulty: 5,
-    retrievability: 0.9,
+    stability: null,
+    difficulty: null,
+    retrievability: null,
     lastReview: "2026-10-01T10:00:00Z",
     reviewCount: 2,
     nextReviewDue: "2026-10-09T10:00:00Z",
@@ -594,6 +697,19 @@ describe("what the review's completion may claim (D40)", () => {
     expect(
       await screen.findByRole("heading", {
         name: "You've got this one more firmly now.",
+      }),
+    ).toBeTruthy();
+    expect(screen.getByText("We'll bring it back later.")).toBeTruthy();
+  });
+
+  it("says the plain line, and the return, when the verdict is withheld", async () => {
+    // What a student's write answers since d461b60: no verdict, never a "no".
+    recordReview.mockResolvedValue({ recallSuccessful: null, outcome: null, schedule });
+    await finish();
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "You've been through this one again.",
       }),
     ).toBeTruthy();
     expect(screen.getByText("We'll bring it back later.")).toBeTruthy();
@@ -993,5 +1109,94 @@ describe("from the check-in (B26)", () => {
 
     expect(screen.queryByText(/revisit soon/)).toBeNull();
     expect(document.querySelectorAll(".shadow-elevation-1")).toHaveLength(0);
+  });
+});
+
+/**
+ * SCRUM-275, LYDIA 22 OCT: "The check sheet gets its own Keep going. A child
+ * whose only way past is the right answer is trapped, and with no guided
+ * questions there is no support on that screen at all."
+ *
+ * It goes the way Next goes on a segment with no check in the way, and
+ * records nothing: no answer, no correctness, no event.
+ */
+describe("the quick check's own Keep going (SCRUM-275)", () => {
+  const sheet = () => screen.queryByRole("dialog");
+  const keepGoing = () =>
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: "Keep going",
+    });
+
+  it("is pressable the moment the check opens, and moves the child on with nothing recorded", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await screen.findByRole("dialog");
+
+    expect(keepGoing()).toBeEnabled();
+    fireEvent.click(keepGoing());
+
+    expect(sheet()).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Denominators" }),
+    ).toBeInTheDocument();
+    // No answer, held or sent, and no right answer claimed.
+    expect(saveAttempt).not.toHaveBeenCalled();
+    expect(heldAnswers()).toEqual([]);
+    expect(trackEvent.mock.calls.map(([t]) => t)).not.toContain(
+      "comprehension_response",
+    );
+    expect(screen.queryByText("That's it. Here's what's next.")).toBeNull();
+
+    // And on from there, as ever: the after-lesson check.
+    next();
+    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+  });
+
+  it("leaves the check unpassed: a return visit asks it again", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await screen.findByRole("dialog");
+    fireEvent.click(keepGoing());
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    next();
+
+    expect(
+      await screen.findByRole("heading", { name: QUICK_CHECK.question }),
+    ).toBeInTheDocument();
+    expect(keepGoing()).toBeEnabled();
+  });
+
+  it("after a miss, records the miss and nothing more", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    fireEvent.click(
+      await screen.findByRole("button", { name: /The denominator/ }),
+    );
+    fireEvent.click(keepGoing());
+
+    expect(saveAttempt).toHaveBeenCalledOnce();
+    expect(saveAttempt.mock.calls[0][1]).toMatchObject({
+      problemId: QUICK_CHECK.id,
+      answer: "b",
+    });
+    expect(
+      screen.getByRole("heading", { name: "Denominators" }),
+    ).toBeInTheDocument();
+  });
+
+  it("takes Next's way on, so a planned break still comes first", async () => {
+    const plan: AdaptationPlan = {
+      lessonId: "lesson-1",
+      segments: [
+        { segmentId: SEG_1, startModality: "text", breakAfter: "movement" },
+      ],
+    };
+    render(<LessonPlayer lesson={LESSON} plan={plan} live />);
+    next();
+    await screen.findByRole("dialog");
+    fireEvent.click(keepGoing());
+
+    expect(screen.getByRole("button", { name: "I'm done" })).toBeInTheDocument();
   });
 });

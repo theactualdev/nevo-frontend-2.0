@@ -1,4 +1,5 @@
 import { api, ApiError } from "./client";
+import { getSession } from "@/lib/auth/session";
 
 /** How many times a baseline submit is attempted before we accept it failed. */
 const BASELINE_SUBMIT_ATTEMPTS = 3;
@@ -70,6 +71,18 @@ export interface BaselineTrial {
    * contract's false. A "Not sure" is a response, never a skip.
    */
   skipped?: boolean;
+  /**
+   * The words a timed reading put on screen (Teslim 18 Oct #6; the contract
+   * takes a whole number, 1 to 10000): the sentence or the passage, never the
+   * question or the options, counted by `wordsShown`. Sent only on a reading
+   * trial the child read, beside a response time measured for it. Absent on
+   * every other trial, including a sentence heard, as the contract asks
+   * ("Omit when the activity is not timed reading").
+   *
+   * A count of words, not a speed. The server pairs it with `responseTimeMs`
+   * to derive words per minute; the device never does (rule 3).
+   */
+  readingWordCount?: number;
 }
 
 /**
@@ -87,7 +100,11 @@ export interface BaselineRunContext {
     | "upper_primary"
     | "junior_secondary"
     | "senior_secondary";
-  formFactor?: "tablet_touch" | "desktop_cursor" | "mobile_touch";
+  /**
+   * The spec's `BaselineFormFactor`. `mobile_touch` is still accepted and
+   * stored as `phone_touch`, the word this app sends for a phone.
+   */
+  formFactor?: "tablet_touch" | "desktop_cursor" | "phone_touch" | "mobile_touch";
   /** Onboarding only: the warm-up has no motor step to run or skip. */
   motorStepSkipped?: boolean;
   /**
@@ -105,7 +122,20 @@ export interface BaselineRunContext {
  * its body as a literal, which is what `npm run contract` checks.
  */
 async function withRetry(send: () => Promise<unknown>): Promise<boolean> {
+  /*
+   * ONLY EVER AS THE CHILD SIGNED IN WHEN IT STARTED (19 Oct browser-storage
+   * audit). Trials sent with no token are a child's measurements put on the
+   * wire for nobody, and a retry a few seconds on can outlive the session it
+   * began in - a lapse, a 401 elsewhere, the next child signing in. So no
+   * attempt goes without a token, and none goes once the session is not the
+   * one this began with: it reports not sent, and the caller keeps the trials
+   * for their owner as it does for any failed write.
+   */
+  const as = getSession();
+  if (!as?.token) return false;
   for (let attempt = 0; attempt < BASELINE_SUBMIT_ATTEMPTS; attempt++) {
+    const now = getSession();
+    if (!now?.token || now.userId !== as.userId) return false;
     try {
       await send();
       return true;

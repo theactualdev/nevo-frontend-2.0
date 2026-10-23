@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/shared";
 import type { QuickCheck } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { KeepGoingButton } from "./AffectiveLayer";
 import { AnswerCheck, AnswerDot, AnswerOption } from "./AnswerOption";
 import { READING_BODY, READING_HEADING } from "./readingSupport";
 import { SpokenPrompt } from "./SpokenPrompt";
@@ -36,11 +37,32 @@ function msSince(start: number | null): number | null {
  * child step round the check the player gates on - and the player recorded
  * every one of those scrim taps as `tap_blocked` while they were doing the
  * opposite. Outside taps and Esc are refused now, so the record is true. The
- * ways out are the ones the frame draws: Keep going and Try again.
+ * ways out are the sheet's own: Keep going and Try again.
+ *
+ * ITS OWN KEEP GOING, FROM THE MOMENT IT OPENS (Lydia, SCRUM-275, 22 Oct): "A
+ * child whose only way past is the right answer is trapped, and with no
+ * guided questions there is no support on that screen at all." So Keep going
+ * is there before any answer, beside Try again after a miss, and alone after
+ * a right one. Before the check is passed it leaves it (`onLeave`): the sheet
+ * closes and the child moves on, the check unpassed, nothing recorded - no
+ * answer, no correctness, and no event (the catalogue has none for leaving a
+ * check). After a right answer it is the frame's Keep going (`onContinue`).
+ *
+ * ONE PRIMARY (Lydia, same ruling): Try again, navy and full width, is the
+ * action that progresses the check. Keep going is secondary - see
+ * `KeepGoingButton` - so two identical navy buttons never stand together.
  *
  * A SPOKEN CHECK (B16) says its question aloud on opening, with the printed
  * question still in place - see `SpokenPrompt`. The reading accommodation's
  * typographic half reaches the question, the answers and the note (D30).
+ *
+ * THE ENGINE'S HINT, WHILE THE CHECK IS OPEN, IS HERE WITH ITS QUESTION
+ * (Lydia, SCRUM-275, 21 Oct): "a hint that arrives after the moment it was
+ * for is worse than no hint, and away from its question it does not read."
+ * Under the sheet it sat behind the scrim, unseen, until the check closed and
+ * the segment moved on. The player decides whether there is one (`hint`);
+ * this only gives it its place, under the question and over the answers, as
+ * the Lesson Player frame's answer sheet draws its hint.
  */
 export function QuickCheckSheet({
   check,
@@ -48,14 +70,18 @@ export function QuickCheckSheet({
   onOpenChange,
   onAnswered,
   onContinue,
+  onLeave,
   reading = false,
   onAudioBusy,
+  hint,
 }: {
   check: QuickCheck;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The reading accommodation is on - see `readingSupport`. */
   reading?: boolean;
+  /** The engine's hint for this check's segment, as the player draws it. */
+  hint?: ReactNode;
   /** `system_busy` bracket while a spoken question plays. */
   onAudioBusy?: (phase: "start" | "end") => void;
   /**
@@ -68,6 +94,11 @@ export function QuickCheckSheet({
   ) => void;
   /** "Keep going" after a correct answer — close the sheet and advance. */
   onContinue: () => void;
+  /**
+   * "Keep going" before the check is passed - close the sheet and move on,
+   * the check left unpassed. Nothing is recorded for it.
+   */
+  onLeave: () => void;
 }) {
   const [chosenId, setChosenId] = useState<string | null>(null);
   const resolved = chosenId !== null;
@@ -130,6 +161,7 @@ export function QuickCheckSheet({
         >
           {check.question}
         </SheetTitle>
+        {hint}
 
         <div className="mt-[18px] flex flex-col gap-2.5">
           {check.options.map((option) => (
@@ -171,16 +203,17 @@ export function QuickCheckSheet({
           </p>
         )}
 
-        {resolved &&
-          (correct ? (
-            <Button className="mt-5 w-full" onClick={onContinue}>
-              Keep going
-            </Button>
-          ) : (
-            <Button className="mt-5 w-full" onClick={() => setChosenId(null)}>
-              Try again
-            </Button>
-          ))}
+        {resolved && !correct && (
+          <Button className="mt-5 w-full" onClick={() => setChosenId(null)}>
+            Try again
+          </Button>
+        )}
+        {/* One Keep going, whatever has happened: the way on after a right
+            answer, and the way out before one. */}
+        <KeepGoingButton
+          onClick={correct ? onContinue : onLeave}
+          className={resolved && !correct ? "mt-3" : "mt-5"}
+        />
       </SheetContent>
     </Sheet>
   );

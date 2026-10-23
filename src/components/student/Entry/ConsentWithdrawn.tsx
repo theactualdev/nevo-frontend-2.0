@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect } from "react";
+import { purgeStoredCaptures } from "@/lib/profiling/capture";
 import { HoldWayBack } from "./WaitingOnConsent";
 
 /** 00e's words, verbatim. */
@@ -35,6 +39,17 @@ export const WITHDRAWN_COPY = {
  * straight back here. The child on 05 has nobody to sign out.
  */
 export function ConsentWithdrawn() {
+  /*
+   * NOTHING OF THEIRS IS KEPT ON ARRIVAL (19 Oct browser-storage audit). A
+   * child reaches 00e because their consent is gone, and a baseline run that
+   * was under way when it went left its raw taps in IndexedDB - the page that
+   * held the capture was left before it could stop it. Every way here lets
+   * them go: a refused request (`holdIfWithdrawn` starts it), a sign-in, and
+   * 05 Entry's in-place hold.
+   */
+  useEffect(() => {
+    void purgeStoredCaptures();
+  }, []);
   return (
     <div className="flex min-h-dvh w-full flex-col bg-nevo-cream text-nevo-near-black">
       <HoldWayBack />

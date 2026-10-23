@@ -7,6 +7,7 @@ import {
   pickerEntries,
   rememberChild,
   rememberedChildren,
+  retireLegacyProfile,
 } from "./deviceRoster";
 
 /**
@@ -288,6 +289,100 @@ describe("a name we once had", () => {
   });
 });
 
+/*
+ * ONE TILE PER ACCOUNT (19 Oct browser-storage audit). Sign-in takes either
+ * the issued identifier or the admission number, and the roster matched on
+ * the pair alone - so a child the tablet knew as "ada.o" who signed in at
+ * 00c with "BGA/2031" was remembered again, as a nameless tile beside their
+ * own, for the same account.
+ */
+describe("a child who signs in with their admission number", () => {
+  const ADA = {
+    schoolCode: "NEVO-1",
+    loginIdentifier: "ada.o",
+    displayName: "Ada",
+    initials: "AD",
+    userId: "u-ada",
+  };
+  /** What 00c remembers: the identifier typed, stand-in initials, no name. */
+  const BY_ADMISSION_NUMBER = {
+    schoolCode: "NEVO-1",
+    loginIdentifier: "BGA/2031",
+    initials: "B2",
+    userId: "u-ada",
+  };
+
+  it("keeps one tile, still named, carrying the identifier that signed in", () => {
+    rememberChild(ADA);
+    const [before] = rememberedChildren();
+
+    rememberChild(BY_ADMISSION_NUMBER);
+
+    expect(pickerEntries()).toEqual([
+      { id: before.id, name: "Ada", shapeIndex: before.shapeIndex },
+    ]);
+    expect(rememberedChildren()[0]).toMatchObject({
+      id: before.id,
+      loginIdentifier: "BGA/2031",
+      displayName: "Ada",
+      initials: "AD",
+      userId: "u-ada",
+    });
+  });
+
+  it("folds the duplicate an earlier sign-in stored into one tile on read", () => {
+    const latest = daysAgo(1);
+    seed([
+      {
+        ...entry("e-named", "ada.o", daysAgo(3), "Ada"),
+        initials: "AD",
+        shapeIndex: 2,
+        userId: "u-ada",
+      },
+      {
+        ...entry("e-nameless", "BGA/2031", latest),
+        initials: "B2",
+        shapeIndex: 0,
+        userId: "u-ada",
+      },
+      { ...entry("e-ben", "ben.k", daysAgo(2), "Ben"), userId: "u-ben" },
+    ]);
+
+    expect(pickerEntries().map((e) => e.name)).toEqual(["Ada", "Ben"]);
+    expect(childById("e-named")).toMatchObject({
+      loginIdentifier: "BGA/2031",
+      displayName: "Ada",
+      initials: "AD",
+      shapeIndex: 2,
+      lastUsedAt: latest,
+    });
+    expect(childById("e-nameless")).toBeNull();
+    // Written back, so the next read finds one too.
+    const stored = JSON.parse(window.localStorage.getItem(KEY) ?? "[]");
+    expect(stored.map((c: { id: string }) => c.id)).toEqual([
+      "e-named",
+      "e-ben",
+    ]);
+  });
+
+  it("folds only by account id, never two entries that carry none", () => {
+    // Without an account id nothing shows two entries are one child, and two
+    // children are never merged on a guess.
+    seed([
+      { ...entry("e-ada", "ada.o", daysAgo(4), "Ada"), userId: "u-ada" },
+      { ...entry("e-ada-2", "BGA/2031", daysAgo(3)), userId: "u-ada" },
+      entry("e-femi", "femi.a", daysAgo(2), "Femi"),
+      entry("e-old", "FMI/7", daysAgo(1)),
+    ]);
+
+    expect(rememberedChildren().map((c) => c.id)).toEqual([
+      "e-old",
+      "e-femi",
+      "e-ada",
+    ]);
+  });
+});
+
 describe("the length of a child's PIN (D58)", () => {
   /*
    * Four digits, four boxes, for every child: no PIN door reads a remembered
@@ -410,5 +505,59 @@ describe("a child whose account closed", () => {
       "E",
       "F",
     ]);
+  });
+});
+
+/*
+ * THE OLD SINGLE PROFILE GOES AT SIGN-OUT (19 Oct browser-storage audit). It
+ * names one child, with their school code and login identifier, and nothing
+ * reads it for anything the roster does not hold - so a sign-out leaves one
+ * copy of who uses the tablet, not two. Never before the roster has it.
+ */
+describe("the old single remembered profile, at sign-out", () => {
+  const legacy = {
+    schoolCode: "NEVO-1",
+    loginIdentifier: "ada.o",
+    displayName: "Ada",
+    initials: "AO",
+  };
+
+  it("is deleted, and the roster still remembers the child", () => {
+    rememberChild(child("ada.o", "Ada"));
+    window.localStorage.setItem(LEGACY, JSON.stringify(legacy));
+
+    retireLegacyProfile();
+
+    expect(window.localStorage.getItem(LEGACY)).toBeNull();
+    expect(pickerEntries().map((e) => e.name)).toEqual(["Ada"]);
+  });
+
+  it("is folded into the roster first on a device from before the roster", () => {
+    window.localStorage.setItem(LEGACY, JSON.stringify(legacy));
+
+    retireLegacyProfile();
+
+    expect(window.localStorage.getItem(LEGACY)).toBeNull();
+    expect(childById(pickerEntries()[0].id)?.loginIdentifier).toBe("ada.o");
+  });
+
+  it("is kept when the roster cannot take it, rather than forget the child", () => {
+    window.localStorage.setItem(LEGACY, JSON.stringify(legacy));
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("refused");
+    });
+
+    retireLegacyProfile();
+
+    expect(window.localStorage.getItem(LEGACY)).not.toBeNull();
+  });
+
+  it("is kept when the roster cannot be read", () => {
+    window.localStorage.setItem(KEY, "{not json");
+    window.localStorage.setItem(LEGACY, JSON.stringify(legacy));
+
+    retireLegacyProfile();
+
+    expect(window.localStorage.getItem(LEGACY)).not.toBeNull();
   });
 });

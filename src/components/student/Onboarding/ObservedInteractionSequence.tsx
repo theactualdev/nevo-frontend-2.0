@@ -4,10 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useSignals, type TrackEvent } from "@/hooks";
 import {
+  arriveAtSequence,
+  CONTINUE_ROUTE,
+  claimOnboardingDraft,
   clearOnboardingDraft,
   entryIdentityFromDraft,
+  markRunFinished,
+  mergeOnboardingDraft,
   rememberOnboardedStudent,
 } from "@/lib/auth/onboarding";
+import { useHydrated } from "@/hooks/useHydrated";
+import { useDoor } from "@/hooks/useDoor";
+import { getSession } from "@/lib/auth/session";
 import {
   bindFirstPin,
   startEntrySession,
@@ -71,7 +79,57 @@ const ENTRY = "/student/onboarding/school";
  * (`user.method`), never a URL param.
  */
 export function ObservedInteractionSequence() {
+  /*
+   * A SESSION THAT IS NOT THIS RUN'S ENDS BEFORE THE RUN READS IT (19 Oct
+   * browser-storage audit; `arriveAtSequence`): otherwise this child's
+   * onboarding and profiling streams, and the consent read their capture
+   * waits on, go up as the last child. Only a DIFFERENT child's session is
+   * ended - the run in progress is the one the draft names. An SSO child's
+   * own session is kept, and a signed-in child with no run here (back from
+   * their first lesson after You're In) is routed on, signed in. During the
+   * first render, ahead of every hook below.
+   */
+  /*
+   * AND A RUN ALREADY PAST ITS PIN RESUMES (19 Oct). The PIN made the
+   * child's account and signed them in; a reload during Module 4, Complete
+   * or You're In started the sequence again from its transition - or, since
+   * aa7b2db, ended their own new session. The draft keeps the account the
+   * PIN made until You're In, so a reload finds it, keeps the session, and
+   * hands the child to the resume for a signed-in child, which asks the
+   * server what is left.
+   */
+  const [arrival] = useState(arriveAtSequence);
+  /*
+   * DECIDED AFTER HYDRATION (19 Oct). The server knows no session, so it
+   * draws the transition; deciding to draw nothing on the first client
+   * render tore hydration on every resume. The frame matches until the
+   * client is running, and the route on happens then.
+   */
+  const hydrated = useHydrated();
+  const resumes = hydrated && arrival === "routeOn";
+  /*
+   * A SESSION NOBODY HAS SHOWN TO BE THIS CHILD'S GOES TO 05 TO BE ASKED (19
+   * Oct): no run is here, and nothing in this tab says the session is the
+   * child holding the tablet. Routing it on would put whoever is there into
+   * that account.
+   */
+  const toEntry = hydrated && arrival === "toEntry";
+  // On its way elsewhere, the sequence is a door: its transition's events
+  // do not go as the session it found (`doorSession`).
+  useDoor(arrival !== "stay");
   const router = useRouter();
+  useEffect(() => {
+    if (resumes) {
+      // Handed on as this tab's own child: Back from the resume routes on
+      // again rather than asking 05 (`markRunFinished`).
+      markRunFinished(getSession()?.userId);
+      // Its work is done: the resume needs none of it.
+      clearOnboardingDraft();
+      router.replace(CONTINUE_ROUTE);
+    } else if (toEntry) {
+      router.replace(ENTRY);
+    }
+  }, [resumes, toEntry, router]);
   const { user } = useAuth();
   const isSso = user?.method === "sso";
   /*
@@ -120,8 +178,8 @@ export function ObservedInteractionSequence() {
   const [index, setIndex] = useState(0);
   /*
    * The quest map's segments: the modules this child will do (design, 9 Oct).
-   * Four, until Module 4 turns out to have nothing to ask - then the run was
-   * three, and Complete says so rather than filling a stop nobody reached.
+   * Four, until Module 4 ends without being sat - then the run was three,
+   * and Complete says so rather than filling a stop nobody reached.
    * Not knowable earlier for a school-code child: there is no account to ask
    * with until the PIN step. From then it is known before Module 4 draws
    * anything, so its fourth stop never shows for a module that does not run.
@@ -146,6 +204,15 @@ export function ObservedInteractionSequence() {
       alive.current = false;
     };
   }, []);
+  /*
+   * THE DRAFT IS THIS RUN'S WHILE IT IS OPEN (19 Oct browser-storage audit).
+   * A session ending takes the draft with it, but not from a child still
+   * using it: the last child's session lapsing under this run, or this
+   * child's own first PIN replacing it, must not take the pair their PIN is
+   * stored against, their name, or 05's consent answer. The run clears it
+   * itself at its end.
+   */
+  useEffect(() => claimOnboardingDraft(), []);
 
   /*
    * Deliver this run's parked baseline, and only THEN say so.
@@ -164,8 +231,8 @@ export function ObservedInteractionSequence() {
    * vector, which is gone.
    */
   const deliverBaseline = async (owner: string, run: string | null) => {
-    const parked = readPendingBaseline();
-    const ours = run !== null && parked?.sessionId === run;
+    // This run's own parked trials, on their own shelf since 19 Oct.
+    const ours = run !== null && readPendingBaseline({ run })?.sessionId === run;
     const ok = await flushPendingBaseline(owner, run);
     if (ok && ours && alive.current) {
       profiling.trackEvent(ONBOARDING_SIGNAL_TYPES.BASELINE_SUBMITTED);
@@ -212,6 +279,8 @@ export function ObservedInteractionSequence() {
    * route - see `Letterbox`.
    */
   // 05's hold for the age check, with its Back, as 05 would show it.
+  // On the way to the resume: nothing of a run that is already past this.
+  if (resumes || toEntry) return null;
   if (held === "age-check")
     return (
       <Letterbox>
@@ -295,6 +364,8 @@ export function ObservedInteractionSequence() {
           const res = await bindFirstPin(entry, pin);
           identifierRef.current = res.loginIdentifier;
           startEntrySession(res);
+          // This run's own account now: a reload keeps its session (19 Oct).
+          mergeOnboardingDraft({ userId: res.userId });
           /*
            * The baseline this child sat in phase 0 can now reach them.
            *
@@ -329,7 +400,10 @@ export function ObservedInteractionSequence() {
            * help implies something has gone wrong at the exact moment nothing
            * has." It matters at the next sign-in, not this one.
            */
-          if (!isSso) rememberOnboardedStudent(identifierRef.current);
+          // The draft stays until You're In: a reload before then resumes.
+          if (!isSso) {
+            rememberOnboardedStudent(identifierRef.current, { keepDraft: true });
+          }
           advance();
         }}
       />
@@ -340,14 +414,18 @@ export function ObservedInteractionSequence() {
    * MODULE 4, NOW THAT THE ACCOUNT EXISTS (SCRUM-244). The server serves and
    * marks it; this records nothing of its own.
    *
-   * WITH NOTHING TO ASK IT MOVES THE CHILD ON (Olayinka, 19 Oct; Teslim's 19
-   * Oct no-question-bank exception): whether it will run is read before any
-   * of it is drawn, so a child it will not run for goes straight to Complete -
+   * WITH NO BANK IT MOVES THE CHILD ON (Olayinka, 19 Oct; Teslim's 19 Oct
+   * no-question-bank exception): whether it will run is read before any of
+   * it is drawn, so a child it will not run for goes straight to Complete -
    * no stretch first, no fourth stop on the map while it is read - and
    * Complete maps the three they did. No placement and no completion is
    * written or assumed here; the server's gate says what comes next. A read
    * that fails does the same, as it did: Complete with the three done, and
-   * the gate brings the child back to finish (`OnboardingResume`).
+   * the gate brings the child back to finish (`OnboardingResume`). So does
+   * nothing to ask while readiness still holds Module 4 owed (Teslim, 21 Oct:
+   * not a no-bank signal; `nothingToAsk` ends `failed`): this run makes the
+   * account and always goes on, Complete fills only the three that were
+   * done, and the gate, not this run, decides that Module 4 is still owed.
    */
   if (index === 3) {
     return (
@@ -418,6 +496,11 @@ function YoureInStep({
          * read, since a check that cannot complete does not open the door
          * (D69).
          */
+        // The run is over: the draft goes now, and not before (19 Oct) -
+        // and this tab remembers whose run it was, so Back from the first
+        // lesson routes them on, signed in, and nobody else.
+        markRunFinished(getSession()?.userId);
+        clearOnboardingDraft();
         void enterFirstLesson(firstLesson, go);
       }}
       track={track}

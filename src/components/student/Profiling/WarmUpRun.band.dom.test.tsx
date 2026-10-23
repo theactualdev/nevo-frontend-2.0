@@ -28,7 +28,14 @@ import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
  */
 
 const { submit } = vi.hoisted(() => ({ submit: vi.fn() }));
-vi.mock("@/lib/api", () => ({ baselineApi: { submitTrials: submit } }));
+// Signed in, so a served pick and a device day go to their own endpoints too.
+vi.mock("@/lib/api", () => ({
+  baselineApi: {
+    submitTrials: submit,
+    answerPrompt: vi.fn(async () => true),
+    deviceTaskDone: vi.fn(async () => true),
+  },
+}));
 const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
 const engine = vi.hoisted(() => ({
@@ -137,6 +144,9 @@ beforeEach(() => {
   roster.value = { band: null, settled: true };
   window.localStorage.clear();
   clearSession();
+  // A warm-up is only ever sat signed in (the route guard), and its trials go
+  // as that child or not at all (19 Oct).
+  signIn();
 });
 
 afterEach(() => {
@@ -315,6 +325,86 @@ describe("the reading task, by band", () => {
       response: "not_sure",
       correct: null,
     });
+  });
+});
+
+describe("the reading task says how many words it showed (Teslim 18 Oct #6)", () => {
+  /*
+   * "For a timed reading trial, send the number of words actually displayed
+   * as `readingWordCount`." The warm-up's reading round sent none, as the
+   * baseline's did not, so a recalibration could not move a child's reading
+   * speed off the 120 wpm default either. Counted from the text on screen:
+   * the passage or the sentence, never the question or the options.
+   */
+  it("sends the senior band's passage words, and not its question's or options'", async () => {
+    roster.value = { band: "ss", settled: true };
+    render(<WarmUpRun dimension="reading" />);
+    await wait(18_000);
+
+    fireEvent.click(screen.getByText("To track her savings for school fees"));
+    await wait(1000);
+
+    expect(submitted()).toMatchObject({
+      condition: "passage",
+      responseTimeMs: 18_000,
+      readingWordCount: 60,
+    });
+  });
+
+  it("sends the junior secondary band's sentence words", async () => {
+    roster.value = { band: "jss", settled: true };
+    render(<WarmUpRun dimension="reading" />);
+    await wait(3000);
+
+    fireEvent.click(screen.getByText("True"));
+    await wait(1000);
+
+    expect(submitted()).toMatchObject({
+      condition: "sentence",
+      responseTimeMs: 3000,
+      readingWordCount: 16,
+    });
+  });
+
+  it("sends the frame's sentence's words with no band, a 'Not sure' included", async () => {
+    // "Garri is made from cassava.", Primary 4-6's.
+    render(<WarmUpRun dimension="reading" />);
+    await wait(2000);
+
+    fireEvent.click(screen.getByText("Not sure"));
+    await wait(1000);
+
+    expect(submitted()).toMatchObject({
+      response: "not_sure",
+      readingWordCount: 5,
+    });
+  });
+
+  it("sends none for Primary 1-3's sentence, which is heard and not read", async () => {
+    roster.value = { band: "p13", settled: true };
+    giveJsdomAVoice();
+    render(<WarmUpRun dimension="reading" />);
+    await wait(1500);
+    act(() => said[0].onend?.());
+    await wait(700);
+
+    fireEvent.click(screen.getByRole("button", { name: "A bus" }));
+    await wait(1000);
+
+    expect(submitted()).toMatchObject({ condition: "audio", responseTimeMs: 700 });
+    expect(submitted()).not.toHaveProperty("readingWordCount");
+  });
+
+  it("sends none for a task that is not reading", async () => {
+    roster.value = { band: "ss", settled: true };
+    render(<WarmUpRun dimension="ps" />);
+    await wait(1200);
+
+    fireEvent.click(screen.getByText("Different"));
+    await wait(1000);
+
+    expect(submitted()).toMatchObject({ dimension: "ps", responseTimeMs: 1200 });
+    expect(submitted()).not.toHaveProperty("readingWordCount");
   });
 });
 

@@ -1,22 +1,27 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
+import { api } from "@/lib/api/client";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
 
 /**
- * One attempt per problem.
+ * What an after-lesson answer tells the engine.
  *
- * The engine decides how much support a child gets on a concept from these, so
- * an attempt filed twice counts one answer twice, and one filed against the
- * wrong problem or concept teaches it something untrue about a child.
- *
- * **WHAT THIS FILE NO LONGER CLAIMS.** It opened with a test that answered
- * wrong, answered again, and said it proved the `firstAnswers` guard. It did
- * not: a wrong answer reveals and renames the confirm to "Next question",
- * whose onClick is `advance` rather than `confirm`, so `onAnswer` cannot fire
- * twice for one question. Removing the guard passed all seven tests. The guard
- * stays - it costs nothing and the scheduler write beside it shares the same
- * map - but it is defensive rather than load-bearing, and the tests say so.
+ * NO SCAFFOLD ATTEMPT ANY MORE. Each first answer used to post `POST
+ * /api/intelligence/scaffolds/attempt` beside the lesson's own attempt. Since
+ * Teslim's 19 Oct contract (d461b60) that write refuses every student without
+ * persisted server evidence (422 `server_marked_attempt_required`), and
+ * "normal lesson completion/answers already update these mechanisms" - so it
+ * was a call that always failed, carrying a device verdict the server no
+ * longer takes from a student. It is gone, and these tests say it stays gone.
  */
 
 const { trackEvent } = vi.hoisted(() => ({ trackEvent: vi.fn() }));
@@ -39,9 +44,6 @@ vi.mock("@/context/AccessibilityContext", () => ({
 }));
 vi.mock("@/hooks/useScaffoldLevel", () => ({ useScaffoldLevel: () => null }));
 vi.mock("@/hooks/useAssignmentNote", () => ({ useAssignmentNote: () => null }));
-
-const { attempt } = vi.hoisted(() => ({ attempt: vi.fn() }));
-vi.mock("@/lib/api/scaffolds", () => ({ scaffoldsApi: { attempt } }));
 
 const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }));
 vi.mock("@/lib/auth/session", async (importOriginal) => {
@@ -99,36 +101,36 @@ const answer = (label: string) => {
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
 };
 
+/** Every write that left for the server, by path. */
+const posted = () => post.mock.calls.map((c) => c[0]);
+let post: MockInstance<typeof api.post>;
+
 beforeEach(() => {
   trackEvent.mockReset();
-  attempt.mockReset();
-  attempt.mockResolvedValue({});
   getSession.mockReturnValue({ userId: "s-1" });
+  post = vi.spyOn(api, "post").mockResolvedValue({});
 });
 
 afterEach(() => {
   cleanup();
+  post.mockRestore();
 });
 
-describe("answering a question", () => {
-  it("reports the attempt, keyed on the checkpoint and the concept", () => {
-    render(<LessonPlayer lesson={lessonWith(QUESTION)} plan={PLAN} live />);
+describe("the scaffold attempt (d461b60)", () => {
+  it("is not sent for an after-lesson answer, right or wrong", () => {
+    const second = { ...QUESTION, id: "cp-8", correctId: "b" };
+    render(
+      <LessonPlayer lesson={lessonWith(QUESTION, second)} plan={PLAN} live />,
+    );
     reachAssessment();
 
     answer("Chloroplasts");
+    answer("Chloroplasts");
 
-    expect(attempt).toHaveBeenCalledWith({
-      studentId: "s-1",
-      conceptId: "c-1",
-      problemId: "cp-7",
-      responseCorrect: true,
-      // How long the question was in front of the child, measured. The attempt
-      // never carried one, so the engine read every answer as untimed.
-      responseTimeMs: expect.any(Number),
-    });
+    expect(posted()).not.toContain("/api/intelligence/scaffolds/attempt");
   });
 
-  it("carries the child's pick and the lesson it came from (B27)", () => {
+  it("is not sent for a signed-in child on a lesson with a real id either", () => {
     const LESSON_ID = "6f2c1d8e-4b3a-4c5d-9e8f-7a6b5c4d3e2f";
     const lesson = {
       ...lessonWith({
@@ -145,110 +147,7 @@ describe("answering a question", () => {
 
     answer("Roots");
 
-    // The option's own value, not our id for it.
-    expect(attempt).toHaveBeenCalledWith(
-      expect.objectContaining({ answer: "roots", lessonId: LESSON_ID }),
-    );
-  });
-
-  it("reports a wrong answer as wrong", () => {
-    render(<LessonPlayer lesson={lessonWith(QUESTION)} plan={PLAN} live />);
-    reachAssessment();
-
-    answer("Roots");
-
-    expect(attempt).toHaveBeenCalledWith(
-      expect.objectContaining({ responseCorrect: false }),
-    );
-  });
-});
-
-describe("across a whole assessment", () => {
-  it("reports one attempt per question, keyed on each one's own problem", () => {
-    /*
-     * The invariant that matters: the engine moves a support level on these,
-     * so two attempts for one problem would count a single answer twice.
-     *
-     * **AND THE FIRST VERSION OF THIS TEST WAS A LIE.** It answered wrong,
-     * answered again, and claimed to prove the `firstAnswers` guard. A wrong
-     * answer reveals and renames the button to "Next question", whose onClick
-     * is `advance` rather than `confirm` - so `onAnswer` cannot fire twice for
-     * one question, the guard was never exercised, and removing it passed
-     * every test. The guard stays because it costs nothing and the scheduler
-     * write next to it relies on the same map; it is defensive, not
-     * load-bearing, and this test no longer pretends otherwise.
-     */
-    const second = { ...QUESTION, id: "cp-8", correctId: "b" };
-    render(
-      <LessonPlayer
-        lesson={lessonWith(QUESTION, second)}
-        plan={PLAN}
-        live
-      />,
-    );
-    reachAssessment();
-
-    answer("Chloroplasts");
-    answer("Roots");
-
-    expect(attempt).toHaveBeenCalledTimes(2);
-    expect(attempt.mock.calls.map((c) => c[0].problemId)).toEqual([
-      "cp-7",
-      "cp-8",
-    ]);
-  });
-});
-
-describe("when there is nothing to report", () => {
-  it("says nothing for a question with no checkpoint id", () => {
-    // An authored mock. An id from the question's position would key the
-    // engine's history to an array index.
-    const { id, ...noId } = QUESTION;
-    void id;
-    render(<LessonPlayer lesson={lessonWith(noId)} plan={PLAN} live />);
-    reachAssessment();
-
-    answer("Chloroplasts");
-
-    expect(attempt).not.toHaveBeenCalled();
-  });
-
-  it("says nothing for a question that resolves to no concept", () => {
-    const { conceptId, ...noConcept } = QUESTION;
-    void conceptId;
-    render(<LessonPlayer lesson={lessonWith(noConcept)} plan={PLAN} live />);
-    reachAssessment();
-
-    answer("Chloroplasts");
-
-    expect(attempt).not.toHaveBeenCalled();
-  });
-
-  it("says nothing for a signed-out visitor", () => {
-    getSession.mockReturnValue(null);
-    render(<LessonPlayer lesson={lessonWith(QUESTION)} plan={PLAN} />);
-    reachAssessment();
-
-    answer("Chloroplasts");
-
-    expect(attempt).not.toHaveBeenCalled();
-  });
-});
-
-describe("what a failed report costs", () => {
-  it("does not disturb the child", async () => {
-    // Missing one attempt costs a slightly stale intensity. Telling a child
-    // their answer did not count would be worse, and is not true.
-    attempt.mockRejectedValue(new Error("network"));
-
-    render(<LessonPlayer lesson={lessonWith(QUESTION)} plan={PLAN} live />);
-    reachAssessment();
-
-    answer("Chloroplasts");
-
-    expect(document.body.textContent).not.toMatch(
-      /couldn't|error|failed|try again/i,
-    );
+    expect(posted()).not.toContain("/api/intelligence/scaffolds/attempt");
   });
 });
 

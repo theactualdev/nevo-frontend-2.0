@@ -2,7 +2,7 @@
 
 import { useContext, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronLeft, Clock, Mic, MessageCircle, Send } from "lucide-react";
+import { ChevronLeft, Clock, MessageCircle, Send } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
 import { SampleRegion } from "@/components/shared/SampleRegion";
@@ -12,6 +12,8 @@ import { useHasSession } from "@/hooks/useHasSession";
 import { askNevoApi, asUuid } from "@/lib/api";
 import {
   allowanceSpent,
+  safetyStop,
+  type SafetyStop,
   type ThreadSummary,
   type ThreadTranscript,
 } from "@/lib/api/askNevo";
@@ -56,34 +58,6 @@ const LIVE_TIMEOUT_MS = 30000;
 /** The minimum "Nevo is thinking" beat - real answers never land jarringly
  *  fast, and the mock fallback keeps its original calm pacing. */
 const THINKING_MS = 1600;
-/** Mic toast lifetime. */
-const TOAST_MS = 3200;
-
-/**
- * Device-native speech recognition (SCRUM-51): v1 delegates entirely to the
- * OS recogniser via the Web Speech API - no Nevo voice model, no API key, no
- * audio ever stored. A Nevo-owned model is v2.
- */
-interface SpeechRecognitionLike {
-  continuous: boolean;
-  interimResults: boolean;
-  onresult: ((e: SpeechResultEventLike) => void) | null;
-  onerror: ((e: { error?: string }) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-}
-interface SpeechResultEventLike {
-  resultIndex: number;
-  results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
-}
-function speechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
-  const w = window as unknown as {
-    SpeechRecognition?: new () => SpeechRecognitionLike;
-    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-  };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
-}
 
 const PROMPTS = ["Explain this differently", "Give me a hint", "I'm stuck"];
 
@@ -170,8 +144,8 @@ function replyFor(text: string): Message {
  * Always reachable from the app tabs, never interruptive: a docked button on
  * mobile, a corner pill on desktop, opening a full-width bottom sheet (mobile)
  * or right side drawer (tablet/desktop). Suggested prompts, conversation,
- * "Nevo is thinking" dots, the cannot-help hand-to-teacher state, Nevo
- * Keyboard entry (A.12) and the microphone flow with a calm denied toast.
+ * "Nevo is thinking" dots, the cannot-help hand-to-teacher state, the safety
+ * stop (SCRUM-259, `StopScreen`) and Nevo Keyboard entry (A.12). Typed only: no microphone (SCRUM-256, at the composer).
  */
 export function AskNevo() {
   const router = useRouter();
@@ -212,8 +186,6 @@ export function AskNevo() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [thinking, setThinking] = useState(false);
   const [input, setInput] = useState("");
-  const [recording, setRecording] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
   /*
    * FRAME 26: *"A quiet clock icon in the drawer's top bar opens a flat,
    * most-recent-first list of past conversations inside the same sheet.
@@ -224,14 +196,19 @@ export function AskNevo() {
    * the composer below never leaves.
    */
   const [view, setView] = useState<"chat" | "history">("chat");
+  /*
+   * THE SAFETY STOP (SCRUM-259), held apart from `messages` on purpose. It is
+   * not a turn in the conversation: the ticket says it is "not written into
+   * the child's visible conversation history as a failed turn that invites
+   * another attempt", so it takes the drawer's body until the child asks
+   * something new. See `StopScreen`.
+   */
+  const [stop, setStop] = useState<SafetyStop | null>(null);
   const signedIn = useHasSession();
   const history = useAskNevoHistory(open && signedIn);
   const kb = useNevoKeyboardDock();
   const threadRef = useRef<HTMLDivElement | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const recognition = useRef<SpeechRecognitionLike | null>(null);
-  // Text committed before/between utterances; interim results render after it.
-  const transcriptBase = useRef("");
 
   const alive = useRef(true);
 
@@ -241,7 +218,6 @@ export function AskNevo() {
     return () => {
       alive.current = false;
       t.forEach(clearTimeout);
-      recognition.current?.stop();
     };
   }, []);
 
@@ -253,8 +229,6 @@ export function AskNevo() {
     const text = (raw ?? input).trim();
     if (!text || thinking) return; // pressable, not disabled - an empty send just rests
     setInput("");
-    recognition.current?.stop();
-    setRecording(false);
     /*
      * BACK TO THE LIVE THREAD. A question asked from Past conversations was
      * appended to the conversation underneath, which was hidden - so it, and
@@ -263,7 +237,12 @@ export function AskNevo() {
      */
     setView("chat");
     history.closeThread();
-    setMessages((m) => [...m, { who: "user", text }]);
+    // Something new clears a stop: the composer is how a child moves on.
+    setStop(null);
+    // Kept by reference so a stop can take exactly this question back off
+    // the screen, whatever else the thread holds.
+    const asked: Message = { who: "user", text };
+    setMessages((m) => [...m, asked]);
     setThinking(true);
 
     // Live assistant first. When the backend can't answer, a signed-in child
@@ -279,6 +258,8 @@ export function AskNevo() {
     later(() => controller.abort(), LIVE_TIMEOUT_MS);
     /** The day's allowance is spent: not a failure, and never shown as one. */
     let spent = false;
+    /** The safety check stopped it: not a failure either, and never retried. */
+    let stopped: SafetyStop | null = null;
     const answer = askNevoApi
       .ask(
         {
@@ -295,6 +276,7 @@ export function AskNevo() {
       )
       .catch((cause) => {
         spent = allowanceSpent(cause);
+        stopped = safetyStop(cause);
         return null;
       });
     /*
@@ -324,6 +306,19 @@ export function AskNevo() {
       // ever set from an answer: one without an id must not drop a thread we
       // already hold.
       if (res?.threadId) threadId.current = res.threadId;
+      /*
+       * A SAFETY STOP IS NOT A FAILED TURN (SCRUM-259). It was shown as one -
+       * "that's on us, not you. Try asking again in a moment" - so a child who
+       * had just disclosed something was told the product broke and invited
+       * to say it again. Now the question comes back off the screen, nothing
+       * is added to the thread, and nothing ever sends it again.
+       */
+      if (stopped) {
+        setMessages((m) => m.filter((message) => message !== asked));
+        setStop(stopped);
+        setThinking(false);
+        return;
+      }
       // The server's own verdict, reported here rather than inside the state
       // update below, which React may run twice.
       if (res?.canHelp === false)
@@ -361,52 +356,6 @@ export function AskNevo() {
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
   }, [messages, thinking]);
-
-  const showToast = (message: string) => {
-    setToast(message);
-    later(() => setToast(null), TOAST_MS);
-  };
-
-  const toggleMic = () => {
-    if (recording) {
-      // Stop = transcription complete; the text waits for review before send
-      // (never auto-sent - SCRUM-51).
-      recognition.current?.stop();
-      setRecording(false);
-      return;
-    }
-    const Ctor = speechRecognitionCtor();
-    if (!Ctor) {
-      showToast("Voice input isn't available on this device.");
-      return;
-    }
-    const rec = new Ctor();
-    rec.continuous = true;
-    rec.interimResults = true;
-    transcriptBase.current = input.trim() ? `${input.trim()} ` : "";
-    rec.onresult = (e) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (r.isFinal) transcriptBase.current += `${r[0].transcript.trim()} `;
-        else interim += r[0].transcript;
-      }
-      setInput((transcriptBase.current + interim).trimStart());
-    };
-    rec.onerror = (e) => {
-      if (e.error === "not-allowed" || e.error === "service-not-allowed")
-        showToast("Microphone access needed. Check your device settings.");
-      setRecording(false);
-    };
-    rec.onend = () => setRecording(false);
-    recognition.current = rec;
-    try {
-      rec.start();
-      setRecording(true);
-    } catch {
-      showToast("Voice input isn't available on this device.");
-    }
-  };
 
   return (
     <>
@@ -520,6 +469,8 @@ export function AskNevo() {
                 />
               )}
             </div>
+          ) : stop ? (
+            <StopScreen message={stop.message} />
           ) : (
           <>
           {/* Thread */}
@@ -641,15 +592,23 @@ export function AskNevo() {
             new", so history is somewhere to look rather than somewhere to be
             stuck. Typing from a transcript returns to the live thread.
           */}
-          <div className="relative shrink-0 border-t border-nevo-near-black/8 px-4 py-3">
+          <div className="shrink-0 border-t border-nevo-near-black/8 px-4 py-3">
             <div
               className={cn(
                 "flex h-11 items-center gap-1 rounded-full border-[1.5px] bg-nevo-cream pl-3.5 transition-colors",
-                kb.open || recording
-                  ? "border-nevo-navy"
-                  : "border-nevo-near-black/16",
+                kb.open ? "border-nevo-navy" : "border-nevo-near-black/16",
               )}
             >
+              {/*
+                NO MICROPHONE, ON PURPOSE: SCRUM-256, for v1.5 (Lydia, 19 Oct).
+                Board 26 draws one, and it was built on the browser's own
+                speech service, which in Chrome sends a child's voice to
+                Google: a provider nobody chose and none of our documents
+                name. Dictation comes back in v1.5 with a provider we chose,
+                assessed and named. Until then a child types, and nothing
+                here may call the browser's speech service (a guard test,
+                noBrowserDictation.test.ts, fails if anything does).
+              */}
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -661,29 +620,10 @@ export function AskNevo() {
                 // A.12: the Nevo Keyboard drives entry on touch; hardware
                 // keyboards still type on desktop.
                 inputMode="none"
-                placeholder={recording ? "Listening…" : "Ask a question"}
+                placeholder="Ask a question"
                 aria-label="Ask a question"
-                className={cn(
-                  "min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-nevo-near-black/40",
-                  recording && "placeholder:text-nevo-near-black/50",
-                )}
+                className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-nevo-near-black/40"
               />
-              <button
-                type="button"
-                aria-label={
-                  recording ? "Stop listening" : "Speak your question"
-                }
-                aria-pressed={recording}
-                onClick={toggleMic}
-                className={cn(
-                  "flex size-11 shrink-0 cursor-pointer items-center justify-center",
-                  recording
-                    ? "text-nevo-violet motion-safe:animate-nevo-mic-pulse"
-                    : "text-nevo-near-black",
-                )}
-              >
-                <Mic className="size-5" strokeWidth={2} />
-              </button>
               <button
                 type="button"
                 aria-label="Send"
@@ -695,13 +635,6 @@ export function AskNevo() {
                 </span>
               </button>
             </div>
-
-            {/* Mic denied/unavailable - a calm toast, never an error state. */}
-            {toast && (
-              <div className="absolute inset-x-4 bottom-[70px] z-10 rounded-[10px] bg-nevo-navy px-3.5 py-3 text-[13px] leading-[1.45] text-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-200">
-                {toast}
-              </div>
-            )}
           </div>
 
           {kb.open && (
@@ -719,6 +652,43 @@ export function AskNevo() {
         </SheetContent>
       </Sheet>
     </>
+  );
+}
+
+/**
+ * THE SAFETY STOP'S OWN SCREEN (SCRUM-259): the server's words and nothing
+ * else, in the drawer's body where the thread was.
+ *
+ * NO FRAME DRAWS THIS STATE. Frame 26's states are entry, conversation,
+ * thinking, cannot-help and the three history views. The ticket allowed it to
+ * be built without one because the retry was a line of copy, not a button, so
+ * this borrows the drawer's own centred line (frame 26, state 4) at reading
+ * strength rather than inventing a layout. Never red, never an icon (34 State
+ * Patterns).
+ *
+ * - The server's `message`, verbatim. None in the bundle - the ticket wants it
+ *   "taken from the server rather than substituted locally".
+ * - No retry, no "try again", and not the suggested prompts either: this is
+ *   not the thread, and a row of things to tap next reads as carry on.
+ * - The composer below stays, for something NEW. Frame 26 keeps the input
+ *   there "to start something new"; the blocked question was cleared from it
+ *   when it was sent and is never put back.
+ * - No message from the server is the nothing-state: the stop, empty. Never
+ *   the ordinary failure, which is exactly the screen this replaces.
+ *
+ * `role="status"` because the thread has no live region of its own, and a
+ * child using a screen reader must hear the stop as surely as anyone sees it.
+ */
+function StopScreen({ message }: { message: string | null }) {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-5 text-center">
+      <p
+        role="status"
+        className="max-w-[300px] text-[16px] leading-[1.6] text-pretty text-nevo-near-black"
+      >
+        {message}
+      </p>
+    </div>
   );
 }
 

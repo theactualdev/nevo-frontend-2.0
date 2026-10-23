@@ -503,6 +503,7 @@ describe("WarmUpRun — the tile task, as tile memory does it", () => {
    */
   const WRONG = 15;
   const renderTheTileTask = () => {
+    signIn();
     const random = vi.spyOn(Math, "random").mockReturnValue(0);
     render(<WarmUpRun dimension="wmc" />);
     random.mockRestore();
