@@ -16,6 +16,7 @@ import {
   type ToggleSegment,
 } from "@/components/shared";
 import {
+  BREAK_TYPES,
   BUSY_PHASE,
   BUSY_REASON,
   DENSITY,
@@ -1025,7 +1026,7 @@ export function LessonPlayer({
   // Where the active break came from: "advance" resumes the interrupted move,
   // "offer" returns to the same segment. A module boundary offers none (D91).
   // Trigger travels into `break_start`.
-  const breakOrigin = useRef<"advance" | "offer">("advance");
+  const breakOrigin = useRef<"advance" | "offer" | "check">("advance");
   const breakTrigger = useRef<string>("adaptation_plan");
   // Break OFFERS (B.7/§4): spent per segment, whoever made them. Declining
   // spends; the same segment never re-asks.
@@ -1605,22 +1606,12 @@ export function LessonPlayer({
     return () => trackBusy(BUSY_REASON.BLOCKED_BY_MODAL, BUSY_PHASE.END);
   }, [checkOpen, trackBusy]);
 
-  // Scrim taps (the shared sheet overlay broadcasts them): recorded as blocked,
-  // never as latency or an aborted gesture — a design signal, not a student one.
-  // ONLY WHILE THE QUICK CHECK IS UP, the one sheet whose scrim really blocks.
-  // Every sheet broadcasts, so this recorded `tap_blocked` for scrim taps that
-  // dismissed something, which is the opposite of blocked. The reason is the
-  // busy window the tap fell in, opened just above.
-  useEffect(() => {
-    if (!checkOpen) return;
-    const onScrimTap = () =>
-      trackEvent(SIGNAL_EVENT_TYPES.TAP_BLOCKED, {
-        target: "scrim",
-        reason: BUSY_REASON.BLOCKED_BY_MODAL,
-      });
-    window.addEventListener("nevo-scrim-tap", onScrimTap);
-    return () => window.removeEventListener("nevo-scrim-tap", onScrimTap);
-  }, [checkOpen, trackEvent]);
+  /*
+   * NO `tap_blocked` FOR THE SCRIM ANY MORE (Olayinka, 23 Oct). The Quick
+   * Check's was the one scrim that blocked, and a tap on it closes the check
+   * now - a tap that did something is not a blocked one. What tapping out
+   * does say goes up as Back's does - see `tapOutOfCheck`.
+   */
 
   // ── The engine's instruction (§4) ───────────────────────────────────────
   const segPlan = livePlanFor(segment.id);
@@ -2114,7 +2105,7 @@ export function LessonPlayer({
    *
    * ONLY WHILE THE QUESTION IS STILL OPEN: its check is up on that section,
    * unpassed and not handed off. Answering it right, a hand-off arriving,
-   * the sheet closing (Keep going), leaving the section or the lesson
+   * the sheet closing (a tap-out), leaving the section or the lesson
    * unmounting each ends that, and the read with it - see `unresolvedCheck`.
    * A read already on its way when that happens is not followed.
    */
@@ -2195,18 +2186,93 @@ export function LessonPlayer({
   const handoffHere = handoff?.segmentId === segment.id ? handoff : null;
 
   /*
-   * Previous chevron. B105 (9 Oct): BACK TO AN EARLIER SEGMENT IS THE ONE
-   * NON-LINEAR MOVE THIS PLAYER HAS - Next goes on by one, and the check has
-   * no way back - so each is one `navigation_fragmentation`. Whether the
-   * moves add up to fragmentation is the engine's reading, not this one's.
+   * Previous chevron. B105 (9 Oct): THE PLAYER'S NON-LINEAR MOVES ARE BACK TO
+   * AN EARLIER SEGMENT AND, SINCE 23 OCT, OUT OF A QUICK CHECK (Olayinka) -
+   * Next goes on by one, and the check that once had no way back has the tap
+   * out now (`tapOutOfCheck`). Each is one `navigation_fragmentation`; the
+   * move forward again - Next, or Next reopening the check - is not. Whether
+   * the moves add up to fragmentation is the engine's reading, not this one's
+   * (rule 3): nothing here names it struggle.
    */
-  const handlePrev = () => {
-    if (index === 0) return;
+  const fragmented = () =>
     trackEvent(SIGNAL_EVENT_TYPES.ENGAGEMENT_SIGNAL, {
       indicator: "navigation_fragmentation",
       value: 1,
     });
+  const handlePrev = () => {
+    if (index === 0) return;
+    fragmented();
     go(index - 1);
+  };
+
+  /*
+   * THE CHILD TAPPED OUT OF THE CHECK (Olayinka, 23 Oct): the dimmed player,
+   * Esc, or the phone sheet pulled down. They stay on this section with its
+   * place, the check unpassed, and Next asks it again. The move back out of
+   * it is one `navigation_fragmentation`, as Back's is (B105) - the signal
+   * there is, and no new one.
+   */
+  const tapOutOfCheck = () => {
+    if (!checkOpen) return;
+    fragmented();
+    setCheckOpen(false);
+  };
+
+  /*
+   * "TAKE A BREAK" FROM INSIDE THE CHECK (Lydia, 23 Oct: a hold at a check is
+   * not live until the break is reachable at all times, including from inside
+   * the check sheet). The child's own break: the server's micro break, started
+   * on the sitting (`controlBreak`), which records it - its `break_start` and
+   * `break_end` with the trigger `student_request` - so this sends neither.
+   * Where there is no sitting to start it on - offline, a review, the
+   * walkthrough - the break is still the child's, and is shown all the same.
+   * When it ends the child is back at the check they left, asked afresh.
+   */
+  /**
+   * The break asked of the server: the sitting, and whether its start landed.
+   * Set, the server records the break - decided once, as it starts, so its
+   * start and end are never half the server's and half ours. A start that
+   * fails is recorded by neither, and is not stopped on the screen.
+   */
+  const breakOnSitting = useRef<{
+    sitting: string;
+    started: Promise<boolean>;
+  } | null>(null);
+  const takeBreakFromCheck = () => {
+    setCheckOpen(false);
+    breakOrigin.current = "check";
+    breakTrigger.current = "student_request";
+    const sitting = progress.sessionId;
+    breakOnSitting.current =
+      choicesHeld && sitting && getToken()
+        ? {
+            sitting,
+            started: lessonsApi
+              .controlBreak(lesson.id, sitting, "start")
+              .then(
+                () => true,
+                () => false,
+              ),
+          }
+        : null;
+    setBreakActive(BREAK_TYPES.MICRO);
+  };
+  /**
+   * Back from it: the return goes once the start has landed, never before
+   * it and never for a start that failed - a return that overtook its start
+   * would leave the sitting paused.
+   */
+  const returnFromBreak = () => {
+    const asked = breakOnSitting.current;
+    breakOnSitting.current = null;
+    if (!asked) return;
+    void asked.started.then((ok) =>
+      ok
+        ? lessonsApi
+            .controlBreak(lesson.id, asked.sitting, "return")
+            .catch(() => {})
+        : undefined,
+    );
   };
 
   /** Keeps a pick with the segment it was made on, for this visit. */
@@ -3006,24 +3072,30 @@ export function LessonPlayer({
   // resumes the advance the break interrupted (which may itself land on a
   // module boundary next).
   if (breakActive) {
+    // A break the child took from the check, started on the sitting: the
+    // server writes its start and end (see `takeBreakFromCheck`).
+    const serverRecords = () =>
+      breakOrigin.current === "check" && breakOnSitting.current !== null;
     return (
       <BreakScreen
         type={breakActive}
         // The catalogue's keys and no others: the break's type (B89, 8 Oct),
         // `trigger`, and how long it lasted. The segment is not among them.
-        onStart={() =>
+        onStart={() => {
+          if (serverRecords()) return;
           trackEvent(SIGNAL_EVENT_TYPES.BREAK_START, {
             breakType: breakActive,
             trigger: breakTrigger.current,
-          })
-        }
-        onEnd={(durationMs) =>
+          });
+        }}
+        onEnd={(durationMs) => {
+          if (serverRecords()) return;
           trackEvent(SIGNAL_EVENT_TYPES.BREAK_END, {
             breakType: breakActive,
             trigger: breakTrigger.current,
             durationMs,
-          })
-        }
+          });
+        }}
         onFeelings={(feelings) =>
           // `response` is the catalogue's key for what the child picked.
           trackEvent(SIGNAL_EVENT_TYPES.FEELING_CHECKIN, { response: feelings })
@@ -3032,8 +3104,13 @@ export function LessonPlayer({
           setBreakActive(null);
           setObserved((o) => ({ ...o, breaksTaken: o.breaksTaken + 1 }));
           // An offered break returns to the segment it interrupted; a
-          // plan-delivered one resumes the advance it intercepted.
+          // plan-delivered one resumes the advance it intercepted; the
+          // child's own, from the check, returns to the check.
           if (breakOrigin.current === "advance") continueAdvance();
+          if (breakOrigin.current === "check") {
+            returnFromBreak();
+            setCheckOpen(true);
+          }
         }}
       />
     );
@@ -3602,7 +3679,8 @@ export function LessonPlayer({
           key={`check-${segment.id}`}
           check={segment.quickCheck}
           open={checkOpen}
-          onOpenChange={setCheckOpen}
+          onTapOut={tapOutOfCheck}
+          onTakeBreak={takeBreakFromCheck}
           // The engine's hint for this segment, with its question - see
           // `hintInSheet`.
           hint={hintInSheet ? hintCard : null}
@@ -3656,24 +3734,13 @@ export function LessonPlayer({
             advancePastSegment();
           }}
           /*
-           * THE SHEET'S OWN KEEP GOING, BEFORE THE CHECK IS PASSED (Lydia,
-           * SCRUM-275, 22 Oct: "A child whose only way past is the right
-           * answer is trapped"). It does what Next does on a segment with no
-           * check in the way: on, through `advancePastSegment` - so a planned
-           * break, the module boundary and the after-lesson check all still
-           * come, exactly as they would. Closing alone would leave Next to
-           * open the same check again.
-           *
-           * The check stays unpassed and nothing is recorded: no answer, no
-           * correctness, no line about it. The catalogue has no event for
-           * leaving a check, and none is made up; the segment's own
-           * `time_on_segment` still goes as it is left. A return visit asks
-           * it again, with this same way out.
+           * NO WAY ON PAST IT BEFORE A RIGHT ANSWER (Olayinka, 23 Oct, under
+           * Lydia's gate ruling the same day). The sheet's own Keep going
+           * before the check was passed (Lydia, SCRUM-275, 22 Oct) took the
+           * child on through `advancePastSegment`; it is gone. Tapping out
+           * (`tapOutOfCheck`) returns them to this section, and Next asks the
+           * check again.
            */
-          onLeave={() => {
-            setCheckOpen(false);
-            advancePastSegment();
-          }}
         />
       )}
 

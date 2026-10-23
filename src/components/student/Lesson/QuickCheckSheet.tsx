@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/shared";
 import type { QuickCheck } from "@/lib/types";
@@ -15,6 +21,23 @@ function msSince(start: number | null): number | null {
   return start === null
     ? null
     : Math.max(0, Math.round(performance.now() - start));
+}
+
+/**
+ * How far the phone sheet is pulled down before letting go closes it, and how
+ * far a finger moves before it counts as pulling rather than tapping. A
+ * gesture's distances, about the sheet and nothing about the child.
+ */
+const SWIPE_CLOSES_AT_PX = 80;
+const SWIPE_STARTS_AT_PX = 8;
+
+/** The sheet is the centred card from `sm:` up, and only the phone's swipes. */
+function centredCard(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(min-width: 640px)").matches
+  );
 }
 
 /**
@@ -33,23 +56,28 @@ function msSince(start: number | null): number | null {
  *
  * Mount keyed on the segment id so the chosen answer resets per segment.
  *
- * NO MANUAL DISMISS (IA 31). A tap on the scrim or Esc closed it, which let a
- * child step round the check the player gates on - and the player recorded
- * every one of those scrim taps as `tap_blocked` while they were doing the
- * opposite. Outside taps and Esc are refused now, so the record is true. The
- * ways out are the sheet's own: Keep going and Try again.
+ * A CHILD CAN TAP OUT OF IT (Olayinka, 23 Oct - reversing IA 31's "no manual
+ * dismiss"). A tap on the dimmed player, Esc, or the phone sheet pulled down
+ * closes it, and the child is back on the same section with its place kept,
+ * free to read it again, try another format or pace, or take a break. Tapping
+ * out passes nothing: the check is asked afresh - its last pick cleared - when
+ * Next opens it again. No close button: no frame draws one.
  *
- * ITS OWN KEEP GOING, FROM THE MOMENT IT OPENS (Lydia, SCRUM-275, 22 Oct): "A
- * child whose only way past is the right answer is trapped, and with no
- * guided questions there is no support on that screen at all." So Keep going
- * is there before any answer, beside Try again after a miss, and alone after
- * a right one. Before the check is passed it leaves it (`onLeave`): the sheet
- * closes and the child moves on, the check unpassed, nothing recorded - no
- * answer, no correctness, and no event (the catalogue has none for leaving a
- * check). After a right answer it is the frame's Keep going (`onContinue`).
+ * NO MOVING ON PAST IT BEFORE A RIGHT ANSWER (Olayinka, 23 Oct, under Lydia's
+ * gate ruling of the same day). The Keep going it carried before any answer
+ * (Lydia, SCRUM-275, 22 Oct: "A child whose only way past is the right answer
+ * is trapped") is gone, because tapping out is the way out now and it goes
+ * back to the section, not on past it. Try again stays after a miss, and Keep
+ * going after a right answer (`onContinue`) is the frame's way on.
  *
- * ONE PRIMARY (Lydia, same ruling): Try again, navy and full width, is the
- * action that progresses the check. Keep going is secondary - see
+ * THE BREAK IS INSIDE IT (Lydia, 23 Oct: a hold at a check is not live until
+ * the break is reachable at all times, including from inside the check
+ * sheet). "Take a break" sits across from QUICK CHECK, as the Lesson Check
+ * frame draws it on a section's checks (design 4e03b7f), and starts the
+ * child's own break - see `onTakeBreak`.
+ *
+ * ONE PRIMARY (Lydia, SCRUM-275, 22 Oct): Try again, navy and full width, is
+ * the action that progresses the check. Keep going is secondary - see
  * `KeepGoingButton` - so two identical navy buttons never stand together.
  *
  * A SPOKEN CHECK (B16) says its question aloud on opening, with the printed
@@ -67,17 +95,22 @@ function msSince(start: number | null): number | null {
 export function QuickCheckSheet({
   check,
   open,
-  onOpenChange,
+  onTapOut,
   onAnswered,
   onContinue,
-  onLeave,
+  onTakeBreak,
   reading = false,
   onAudioBusy,
   hint,
 }: {
   check: QuickCheck;
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  /**
+   * The child tapped out - the dimmed player, Esc, or the phone sheet pulled
+   * down. The sheet's own buttons close it through their own callbacks, never
+   * this. It only ever closes: Next opens it, by `open`.
+   */
+  onTapOut: () => void;
   /** The reading accommodation is on - see `readingSupport`. */
   reading?: boolean;
   /** The engine's hint for this check's segment, as the player draws it. */
@@ -94,11 +127,8 @@ export function QuickCheckSheet({
   ) => void;
   /** "Keep going" after a correct answer — close the sheet and advance. */
   onContinue: () => void;
-  /**
-   * "Keep going" before the check is passed - close the sheet and move on,
-   * the check left unpassed. Nothing is recorded for it.
-   */
-  onLeave: () => void;
+  /** "Take a break" - the child's own break, from inside the check. */
+  onTakeBreak: () => void;
 }) {
   const [chosenId, setChosenId] = useState<string | null>(null);
   const resolved = chosenId !== null;
@@ -121,6 +151,48 @@ export function QuickCheckSheet({
     });
   };
 
+  /** Tapped out: the check is asked afresh next time, unless it was passed. */
+  const tapOut = () => {
+    if (!correct) setChosenId(null);
+    onTapOut();
+  };
+
+  /*
+   * THE PHONE SHEET PULLED DOWN. It follows the finger once it has moved far
+   * enough to be a pull, and closes if let go far enough down; short of that
+   * it settles back. A pull that ends on an answer does not pick it.
+   */
+  const pull = useRef<{ id: number; from: number; pulling: boolean } | null>(
+    null,
+  );
+  const [pulledBy, setPulledBy] = useState(0);
+  const pulled = useRef(false);
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    pulled.current = false;
+    if (!e.isPrimary || centredCard()) return;
+    pull.current = { id: e.pointerId, from: e.clientY, pulling: false };
+  };
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const p = pull.current;
+    if (!p || p.id !== e.pointerId) return;
+    const by = e.clientY - p.from;
+    if (!p.pulling) {
+      if (by < -SWIPE_STARTS_AT_PX) pull.current = null;
+      if (by < SWIPE_STARTS_AT_PX) return;
+      p.pulling = true;
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    }
+    setPulledBy(Math.max(0, by));
+  };
+  const endPull = (e: ReactPointerEvent<HTMLDivElement>, cancelled: boolean) => {
+    const p = pull.current;
+    pull.current = null;
+    if (!p?.pulling || p.id !== e.pointerId) return;
+    pulled.current = true;
+    setPulledBy(0);
+    if (!cancelled && e.clientY - p.from >= SWIPE_CLOSES_AT_PX) tapOut();
+  };
+
   const tone = (id: string) => {
     if (!resolved) return "idle";
     if (id !== chosenId) return "muted";
@@ -128,26 +200,55 @@ export function QuickCheckSheet({
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) tapOut();
+      }}
+    >
       <SheetContent
         data-nevo-console="student"
         side="bottom"
         showCloseButton={false}
         aria-describedby={undefined}
-        onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={(e) => endPull(e, false)}
+        onPointerCancel={(e) => endPull(e, true)}
+        onClickCapture={(e) => {
+          if (!pulled.current) return;
+          pulled.current = false;
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        style={
+          pulledBy > 0
+            ? { transform: `translateY(${pulledBy}px)`, transition: "none" }
+            : undefined
+        }
         // The `!` marks out-shout the stock data-[side=bottom] variants (class +
         // attribute selectors), which otherwise beat these breakpoint overrides
         // and leave the panel pinned to the bottom-left while the centering
-        // translate still applies.
-        className="gap-0 rounded-t-[16px] border-0! bg-nevo-cream px-6 pt-3 pb-7 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-1/2 sm:bottom-auto! sm:left-1/2! sm:w-[560px] sm:max-w-[calc(100%-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[16px] sm:px-8 sm:py-7 sm:shadow-[0_8px_32px_rgba(0,0,0,0.16)] lg:w-[600px] lg:px-10"
+        // translate still applies. On the phone the sheet takes vertical
+        // drags for its pull (`touch-pan-x`) and keeps pinch zoom.
+        className="gap-0 rounded-t-[16px] border-0! bg-nevo-cream px-6 pt-3 pb-7 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] max-sm:touch-pan-x max-sm:touch-pinch-zoom sm:inset-x-auto! sm:top-1/2 sm:bottom-auto! sm:left-1/2! sm:w-[560px] sm:max-w-[calc(100%-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[16px] sm:px-8 sm:py-7 sm:shadow-[0_8px_32px_rgba(0,0,0,0.16)] lg:w-[600px] lg:px-10"
       >
         {/* Drag handle — sheet form only */}
         <div className="mx-auto mb-[18px] h-1 w-8 rounded-full bg-nevo-near-black/30 sm:hidden" />
 
-        <p className="font-mono text-[11px] tracking-[0.08em] text-nevo-navy uppercase">
-          Quick check
-        </p>
+        {/* QUICK CHECK, and the break across from it (design 4e03b7f). */}
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-mono text-[11px] tracking-[0.08em] text-nevo-navy uppercase">
+            Quick check
+          </p>
+          <button
+            type="button"
+            onClick={onTakeBreak}
+            className="shrink-0 cursor-pointer rounded-md px-2 py-[11px] text-[13px] font-medium text-nevo-navy outline-none focus-visible:ring-2 focus-visible:ring-nevo-navy motion-safe:transition-transform motion-safe:duration-[120ms] motion-safe:active:scale-[0.98]"
+          >
+            Take a break
+          </button>
+        </div>
         {check.promptAudio && (
           <div className="mt-3">
             <SpokenPrompt src={check.promptAudio} onBusy={onAudioBusy} />
@@ -208,12 +309,8 @@ export function QuickCheckSheet({
             Try again
           </Button>
         )}
-        {/* One Keep going, whatever has happened: the way on after a right
-            answer, and the way out before one. */}
-        <KeepGoingButton
-          onClick={correct ? onContinue : onLeave}
-          className={resolved && !correct ? "mt-3" : "mt-5"}
-        />
+        {/* The way on, and only after a right answer. */}
+        {correct && <KeepGoingButton onClick={onContinue} className="mt-5" />}
       </SheetContent>
     </Sheet>
   );
