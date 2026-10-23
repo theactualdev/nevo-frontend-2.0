@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { withBack } from "../back";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
@@ -180,21 +181,20 @@ export function StudentsView() {
   }, [load, classId, includeInactive]);
 
   /*
-   * THE AGE-CHECK NOTE (Lydia, 7 Oct; backend, 8 Oct). A date of birth the
-   * parent gave that disagrees with the school's is a note against that child
-   * here, and nothing more: no hold, nothing to the child, and no verdict on
-   * which date is right. Its own read and its own absence - a list we could
-   * not read leaves the roster without notes, never with invented ones.
+   * THE DATE OF BIRTH HOLD (SCRUM-243 as rewritten 20 Oct; design 96cd4b4).
+   * The 7 Oct ruling - a note and nothing more - is superseded: a parent's
+   * date that differs from the school's now HOLDS the account. Each held child
+   * carries a quiet note, and the header routes to the checks (D30).
+   *
+   * Held is the server's `blocksAccess`, read on its own: a list we could not
+   * read leaves the roster without notes, never with invented ones. The
+   * parent's date is never on it.
    */
   const [dobNotes, setDobNotes] = useState<Set<string>>(() => new Set());
   useEffect(() => {
     ageChecksApi
-      .mismatches()
-      .then((rows) =>
-        setDobNotes(
-          new Set((Array.isArray(rows) ? rows : []).filter((r) => r.state === "mismatch").map((r) => r.studentId)),
-        ),
-      )
+      .held()
+      .then((rows) => setDobNotes(new Set(rows.map((r) => r.studentId))))
       .catch(() => setDobNotes(new Set()));
   }, []);
 
@@ -302,6 +302,18 @@ export function StudentsView() {
                       {withoutRecordedConsent(enrolled)}
                       {" without recorded consent"}
                     </span>
+                  </>
+                ) : null}
+                {/* D07 (96cd4b4): the held children, one quiet link to D30. */}
+                {dobNotes.size > 0 ? (
+                  <>
+                    {" · "}
+                    <Link
+                      href={withBack("/admin/students/date-of-birth", { href: "/admin/students", label: "All students" })}
+                      className="font-semibold text-nevo-navy hover:underline"
+                    >
+                      {dobNotes.size} on hold · date of birth check
+                    </Link>
                   </>
                 ) : null}
               </p>
@@ -596,8 +608,12 @@ export function StudentsView() {
                               </span>
                             ) : null}
                             {dobNotes.has(s.id) ? (
+                              // The row is a button, so D07's inline "Check
+                              // your record" can't sit in it: the row opens the
+                              // student, whose page links to the checks, and
+                              // the header links there directly.
                               <span className="mt-0.5 block text-[12.5px] leading-[1.45] text-nevo-navy">
-                                The parent gave a different date of birth. Check your record.
+                                Parent gave a different date of birth.
                               </span>
                             ) : null}
                           </span>

@@ -32,10 +32,11 @@ vi.mock("@/context/PermissionContext", async (importOriginal) => {
 });
 
 /**
- * THE AGE-CHECK NOTE. Lydia, 7 Oct: "There is no queue, and no child is ever
- * blocked." A date of birth the parent gave that disagrees with the school's
- * appears as a note against that child on the roster, and Nevo never chooses
- * between the two dates. Backend stopped blocking on 8 Oct.
+ * THE DATE OF BIRTH HOLD (SCRUM-243 as rewritten 20 Oct; design 96cd4b4). The
+ * 7 Oct "no child is ever blocked" is superseded: a parent's date that differs
+ * from the school's now holds the account. The roster carries a note against
+ * each held child, and the header routes to the checks (D30). Nevo still never
+ * shows the parent's date, or any date, here.
  *
  * (The mocks below are shared with the bulk send's test, whose note follows.)
  *
@@ -93,7 +94,7 @@ vi.mock("@/lib/api/consents", async (importOriginal) => {
 vi.mock("@/lib/api/classes", () => ({ classesApi: { list: async () => [] } }));
 
 const mismatches = vi.fn();
-vi.mock("@/lib/api/ageChecks", () => ({ ageChecksApi: { mismatches: () => mismatches() } }));
+vi.mock("@/lib/api/ageChecks", () => ({ ageChecksApi: { held: () => mismatches() } }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
@@ -116,7 +117,7 @@ const student = (over: Partial<AdminStudentRow> = {}): AdminStudentRow => ({
 });
 
 
-const NOTE = "The parent gave a different date of birth. Check your record.";
+const NOTE = "Parent gave a different date of birth.";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -124,10 +125,10 @@ beforeEach(() => {
     student({ id: "s1", name: "Chisom Eze" }),
     student({ id: "s2", name: "Tunde Bello" }),
   ]);
-  mismatches.mockResolvedValue([{ id: "ac1", studentId: "s2", state: "mismatch" }]);
+  mismatches.mockResolvedValue([{ id: "ac1", studentId: "s2", state: "mismatch", blocksAccess: true }]);
 });
 
-describe("a date of birth that disagrees", () => {
+describe("a child held for a date of birth check", () => {
   it("is a note against that child, and only that child", async () => {
     render(<StudentsView />);
     await screen.findByText("Tunde Bello");
@@ -136,10 +137,18 @@ describe("a date of birth that disagrees", () => {
     expect(row).toHaveTextContent("Tunde Bello");
   });
 
-  it("names no date and blocks nothing - Nevo never decides a child's birthday", async () => {
+  it("names no date - the parent's is never shown, and nor is the school's here", async () => {
     const { container } = render(<StudentsView />);
     await waitFor(() => expect(screen.getByText(NOTE)).toBeInTheDocument());
-    expect(visibleText(container)).not.toMatch(/\b\d{4}-\d{2}-\d{2}\b|blocked|on hold|can.t sign in/i);
+    expect(visibleText(container)).not.toMatch(
+      /\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2} (January|February|March|April|May|June|July|August|September|October|November|December) \d{4}\b/,
+    );
+  });
+
+  it("routes from the header to the checks, saying how many are held", async () => {
+    render(<StudentsView />);
+    const link = await screen.findByRole("link", { name: "1 on hold · date of birth check" });
+    expect(link.getAttribute("href")).toMatch(/^\/admin\/students\/date-of-birth\?back=%2Fadmin%2Fstudents/);
   });
 
   it("leaves the roster without notes when the list cannot be read", async () => {
@@ -148,13 +157,6 @@ describe("a date of birth that disagrees", () => {
     await screen.findByText("Tunde Bello");
     await waitFor(() => expect(mismatches).toHaveBeenCalled());
     expect(screen.queryByText(NOTE)).toBeNull();
-  });
-
-  it("ignores any row that is not an open mismatch", async () => {
-    mismatches.mockResolvedValue([{ id: "ac1", studentId: "s2", state: "resolved" }]);
-    render(<StudentsView />);
-    await screen.findByText("Tunde Bello");
-    await waitFor(() => expect(mismatches).toHaveBeenCalled());
-    expect(screen.queryByText(NOTE)).toBeNull();
+    expect(screen.queryByRole("link", { name: /on hold/ })).toBeNull();
   });
 });
