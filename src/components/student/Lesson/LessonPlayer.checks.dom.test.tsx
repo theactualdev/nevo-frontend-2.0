@@ -1113,79 +1113,73 @@ describe("from the check-in (B26)", () => {
 });
 
 /**
- * SCRUM-275, LYDIA 22 OCT: "The check sheet gets its own Keep going. A child
- * whose only way past is the right answer is trapped, and with no guided
- * questions there is no support on that screen at all."
- *
- * It goes the way Next goes on a segment with no check in the way, and
- * records nothing: no answer, no correctness, no event.
+ * NO WAY ON PAST A CHECK THAT HAS NOT BEEN PASSED (Olayinka, 23 Oct, under
+ * Lydia's gate ruling the same day). The sheet's Keep going before a right
+ * answer (SCRUM-275, 22 Oct) took the child on to the next section; it is
+ * gone. Tapping out returns them to this section, and Next asks the check
+ * again - so what comes after it, a planned break included, waits for the
+ * right answer and its Keep going.
  */
-describe("the quick check's own Keep going (SCRUM-275)", () => {
+describe("no way on past an unpassed check (Olayinka, 23 Oct)", () => {
   const sheet = () => screen.queryByRole("dialog");
-  const keepGoing = () =>
-    within(screen.getByRole("dialog")).getByRole("button", {
-      name: "Keep going",
+  const tapOut = () =>
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: "Escape",
     });
 
-  it("is pressable the moment the check opens, and moves the child on with nothing recorded", async () => {
+  it("has no Keep going until the check is answered right", async () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
-    await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByRole("button", { name: "Keep going" })).toBeNull();
 
-    expect(keepGoing()).toBeEnabled();
-    fireEvent.click(keepGoing());
-
-    expect(sheet()).toBeNull();
-    expect(
-      screen.getByRole("heading", { name: "Denominators" }),
-    ).toBeInTheDocument();
-    // No answer, held or sent, and no right answer claimed.
-    expect(saveAttempt).not.toHaveBeenCalled();
-    expect(heldAnswers()).toEqual([]);
-    expect(trackEvent.mock.calls.map(([t]) => t)).not.toContain(
-      "comprehension_response",
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: /The denominator/ }),
     );
-    expect(screen.queryByText("That's it. Here's what's next.")).toBeNull();
 
-    // And on from there, as ever: the after-lesson check.
-    next();
-    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Try again" })).toBeEnabled();
+    expect(within(dialog).queryByRole("button", { name: "Keep going" })).toBeNull();
   });
 
-  it("leaves the check unpassed: a return visit asks it again", async () => {
-    render(<LessonPlayer lesson={LESSON} plan={null} live />);
-    next();
-    await screen.findByRole("dialog");
-    fireEvent.click(keepGoing());
-
-    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
-    next();
-
-    expect(
-      await screen.findByRole("heading", { name: QUICK_CHECK.question }),
-    ).toBeInTheDocument();
-    expect(keepGoing()).toBeEnabled();
-  });
-
-  it("after a miss, records the miss and nothing more", async () => {
+  it("after a miss and a tap out, records the miss and keeps the child on the section", async () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     fireEvent.click(
       await screen.findByRole("button", { name: /The denominator/ }),
     );
-    fireEvent.click(keepGoing());
+    tapOut();
 
+    expect(sheet()).toBeNull();
     expect(saveAttempt).toHaveBeenCalledOnce();
     expect(saveAttempt.mock.calls[0][1]).toMatchObject({
       problemId: QUICK_CHECK.id,
       answer: "b",
     });
-    expect(
-      screen.getByRole("heading", { name: "Denominators" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Numerators" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Denominators" })).toBeNull();
   });
 
-  it("takes Next's way on, so a planned break still comes first", async () => {
+  it("asks it again on Next, every time, until it is passed", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    for (let visit = 0; visit < 2; visit++) {
+      next();
+      expect(
+        await screen.findByRole("heading", { name: QUICK_CHECK.question }),
+      ).toBeInTheDocument();
+      tapOut();
+      expect(screen.getByRole("heading", { name: "Numerators" })).toBeInTheDocument();
+    }
+
+    next();
+    fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Keep going" }),
+    );
+
+    expect(screen.getByRole("heading", { name: "Denominators" })).toBeInTheDocument();
+  });
+
+  it("holds a planned break until the check is passed, then gives it", async () => {
     const plan: AdaptationPlan = {
       lessonId: "lesson-1",
       segments: [
@@ -1195,7 +1189,14 @@ describe("the quick check's own Keep going (SCRUM-275)", () => {
     render(<LessonPlayer lesson={LESSON} plan={plan} live />);
     next();
     await screen.findByRole("dialog");
-    fireEvent.click(keepGoing());
+    tapOut();
+    expect(screen.queryByRole("button", { name: "I'm done" })).toBeNull();
+
+    next();
+    fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Keep going" }),
+    );
 
     expect(screen.getByRole("button", { name: "I'm done" })).toBeInTheDocument();
   });

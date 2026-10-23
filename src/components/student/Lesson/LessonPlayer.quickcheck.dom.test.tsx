@@ -5,11 +5,12 @@ import { SIGNAL_EVENT_TYPES } from "@/lib/constants";
 import type { Lesson } from "@/lib/types";
 
 /**
- * THE QUICK CHECK, AS IA 31 HAS IT: "No manual dismiss".
- *
- * A scrim tap or Esc closed it, so a child could step round the check the
- * player gates on - and every scrim tap anywhere was recorded as
- * `tap_blocked`, including the ones that dismissed something.
+ * THE QUICK CHECK, AS OLAYINKA CALLED IT ON 23 OCT - reversing IA 31's "No
+ * manual dismiss". A child can tap out of it - the dimmed player, Esc, or the
+ * phone sheet pulled down - back to the same section, the check unpassed;
+ * Next asks it again. The move out is one `navigation_fragmentation`, as
+ * Back's is (B105), and a scrim tap is no longer `tap_blocked`, because it
+ * blocks nothing now.
  *
  * And a miss offers Try again alone (D93, confirmed 6 Oct): "See it
  * explained" went back to the segment and explained nothing.
@@ -75,6 +76,14 @@ const scrim = () =>
   document.querySelector<HTMLElement>('[data-slot="sheet-overlay"]')!;
 const blocked = () =>
   trackEvent.mock.calls.filter((c) => c[0] === SIGNAL_EVENT_TYPES.TAP_BLOCKED);
+const fragmentation = () =>
+  trackEvent.mock.calls.filter(
+    (c) =>
+      c[0] === SIGNAL_EVENT_TYPES.ENGAGEMENT_SIGNAL &&
+      (c[1] as { indicator?: string }).indicator === "navigation_fragmentation",
+  );
+const escape = () =>
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
 
 beforeEach(() => {
   trackEvent.mockReset();
@@ -84,45 +93,82 @@ afterEach(() => {
   cleanup();
 });
 
-describe("no manual dismiss", () => {
+describe("tapping out of the check (Olayinka, 23 Oct)", () => {
   // The scrim half is pinned in `QuickCheckSheet.dom.test.tsx`: Radix never
-  // sees an outside tap in jsdom, so a scrim test here passes either way.
-  it("stays open through Esc", async () => {
+  // sees an outside tap in jsdom. Esc reaches the same close.
+  it("closes on Esc, with the child still on the same section", async () => {
     await openCheck();
 
-    fireEvent.keyDown(document.activeElement ?? document.body, {
-      key: "Escape",
+    escape();
+
+    expect(check()).toBeNull();
+    expect(screen.getByText("Inside a leaf")).toBeInTheDocument();
+    expect(screen.getByText("Segment 1 of 2")).toBeInTheDocument();
+  });
+
+  it("sends one navigation_fragmentation for the move out, as Back does", async () => {
+    await openCheck();
+    expect(fragmentation()).toHaveLength(0);
+
+    escape();
+
+    expect(fragmentation()).toHaveLength(1);
+    expect(fragmentation()[0][1]).toEqual({
+      indicator: "navigation_fragmentation",
+      value: 1,
     });
+  });
+
+  it("asks the same check again on Next, and the move back in counts nothing", async () => {
+    await openCheck();
+    escape();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(check()).toBeInTheDocument();
+    expect(screen.getByText("What do plants take in?")).toBeInTheDocument();
+    expect(screen.getByText("Segment 1 of 2")).toBeInTheDocument();
+    expect(fragmentation()).toHaveLength(1);
   });
-});
 
-describe("what a scrim tap records", () => {
-  it("records tap_blocked while the check is up, because it was", async () => {
+  it("asks a missed check afresh, its last pick gone", async () => {
+    await openCheck();
+    fireEvent.click(screen.getByRole("button", { name: /Oxygen/ }));
+    escape();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.queryByText("Not quite. Let's look again.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("records no tap_blocked for a scrim tap, because the scrim blocks nothing now", async () => {
     await openCheck();
 
     fireEvent.pointerDown(scrim());
 
-    expect(blocked()).toHaveLength(1);
-    // The catalogue's two keys: what was tapped, and why it was refused - the
-    // modal's busy window, which it was sent without until 6 Oct.
-    expect(blocked()[0][1]).toEqual({
-      target: "scrim",
-      reason: "blocked_by_modal",
-    });
+    expect(blocked()).toHaveLength(0);
+  });
+});
+
+describe("no way on past a check that has not been passed (Olayinka, 23 Oct)", () => {
+  it("has no Keep going before an answer, nor after a miss", async () => {
+    await openCheck();
+    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Oxygen/ }));
+
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
   });
 
-  it("records nothing for a scrim tap while the check is not up", () => {
-    // Every sheet broadcasts its scrim taps; the player listened to all of
-    // them, including the ones that dismissed something.
-    render(<LessonPlayer lesson={LESSON} plan={null} />);
+  it("keeps the child on the section however they leave the sheet", async () => {
+    await openCheck();
+    fireEvent.click(screen.getByRole("button", { name: /Oxygen/ }));
+    escape();
 
-    act(() => {
-      window.dispatchEvent(new CustomEvent("nevo-scrim-tap"));
-    });
-
-    expect(blocked()).toHaveLength(0);
+    expect(screen.getByText("Inside a leaf")).toBeInTheDocument();
+    expect(screen.queryByText("Next")).toBeNull();
   });
 });
 

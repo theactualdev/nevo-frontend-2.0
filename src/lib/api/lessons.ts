@@ -1037,4 +1037,41 @@ export const lessonsApi = {
       `/api/v1/lessons/${lessonId}/sessions/${sessionId}/segments/${segmentId}/preferences`,
       body,
     ),
+
+  /**
+   * A break the child starts themselves, and their coming back from it
+   * (Teslim's gate contract, 23 Oct).
+   * POST /api/v1/lessons/{id}/sessions/{session}/break with `{action}`:
+   * "start" pauses the sitting - a micro break, the contract's default - and
+   * "return" resumes it.
+   *
+   * THE SERVER RECORDS THIS BREAK ITSELF: its `break_start` on start and its
+   * `break_end` on return, both with the trigger `student_request`, and the
+   * sitting's break count. So the client sends neither signal for it. Without
+   * the return the sitting would stay paused, and an engine that reads it as
+   * a break in progress holds back its own offers.
+   */
+  controlBreak: (
+    lessonId: string,
+    sessionId: string,
+    action: "start" | "return",
+  ) =>
+    api.post<BreakControlResponse>(
+      `/api/v1/lessons/${lessonId}/sessions/${sessionId}/break`,
+      { action },
+    ),
 };
+
+/**
+ * `BreakControlResponse`. TYPED, NOT READ: the child came back to the check
+ * they left, which the player already knows; `resumeSegmentId` and
+ * `canAdvance` are the gate's, and the gate is the server's (off since
+ * 23 Oct).
+ */
+export interface BreakControlResponse {
+  sessionId: string;
+  status: "paused" | "learning" | "stopped";
+  resumeSegmentId?: string | null;
+  conceptCarriedForward?: boolean;
+  canAdvance?: boolean;
+}
