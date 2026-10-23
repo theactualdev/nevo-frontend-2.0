@@ -281,14 +281,14 @@ export const PHOTOSYNTHESIS_PLAN: AdaptationPlan = {
   // Scaffold arc (37a): support quietly withdraws as the lesson lands.
   // Affective states (37b) are spread so no segment ever stacks two asks.
   segments: [
-    { segmentId: "intro", startModality: MODALITY.TEXT, density: null, suggestModality: MODALITY.VISUAL, scaffold: SCAFFOLD_LEVELS.MODERATE },
+    { segmentId: "intro", startModality: MODALITY.TEXT, density: null, scaffold: SCAFFOLD_LEVELS.MODERATE },
     // `show_socratic_panel`, with the intelligence boards' exact guided
     // questions for this idea.
     {
       segmentId: "inside-leaf",
       startModality: MODALITY.TEXT,
       density: null,
-      suggestModality: null,
+     
       scaffold: SCAFFOLD_LEVELS.LIGHT,
       adjustment: ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL,
       socraticPrompts: [
@@ -306,7 +306,7 @@ export const PHOTOSYNTHESIS_PLAN: AdaptationPlan = {
       segmentId: "experiment",
       startModality: MODALITY.INTERACTIVE,
       density: null,
-      suggestModality: null,
+     
       scaffold: SCAFFOLD_LEVELS.FULL,
       adjustment: ADJUSTMENT_ACTIONS.OFFER_HINT,
       hint:
@@ -315,7 +315,7 @@ export const PHOTOSYNTHESIS_PLAN: AdaptationPlan = {
     },
     // Slower, standing - the plan's own density. It carried `modulate_density`
     // and its chrome dim until design removed that state on 1 Oct (SCRUM-180).
-    { segmentId: "recap", startModality: MODALITY.TEXT, density: DENSITY.SLOWER, suggestModality: null, scaffold: SCAFFOLD_LEVELS.MODERATE },
+    { segmentId: "recap", startModality: MODALITY.TEXT, density: DENSITY.SLOWER, scaffold: SCAFFOLD_LEVELS.MODERATE },
   ],
 };
 

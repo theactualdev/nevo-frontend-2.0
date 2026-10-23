@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import { ADJUSTMENT_ACTIONS } from "@/lib/constants";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
@@ -94,9 +94,9 @@ describe("the hint the engine sends", () => {
     expect(body()).not.toMatch(/light lands/);
   });
 
-  it("is not shown under a different instruction", () => {
-    // The translator drops it, so this can only fail if something downstream
-    // started reading the field on its own.
+  it("is shown under a pacing or chunking instruction too", () => {
+    // The gate contract (Teslim, 23 Oct): the hint "must not be hidden solely
+    // because the action is a pacing or chunking action".
     render(
       <LessonPlayer
         lesson={LESSON}
@@ -107,6 +107,38 @@ describe("the hint the engine sends", () => {
       />,
     );
 
+    expect(screen.getByText(HINT)).toBeInTheDocument();
+  });
+
+  it("is shown beside an action this client does not draw", () => {
+    // `rechunk` and `offer_modality_shift` resolve to no instruction, and the
+    // hint they carry still reaches the child (23 Oct's sweep).
+    render(<LessonPlayer lesson={LESSON} plan={plan({ hint: HINT })} />);
+
+    expect(screen.getByText(HINT)).toBeInTheDocument();
+  });
+
+  it("with no instruction beside it, stays on the section it was given for", () => {
+    // Keyed on the instruction alone, a hint carried with none would have
+    // followed the child into every later section.
+    const twoSections = {
+      ...LESSON,
+      segments: [
+        ...LESSON.segments,
+        {
+          id: "seg-2",
+          modalities: ["text"],
+          text: { heading: "The next part", body: { default: "Another idea." } },
+        },
+      ],
+    } as unknown as Lesson;
+    // The load-time plan's words are for the section the lesson opens on.
+    render(<LessonPlayer lesson={twoSections} plan={plan({ hint: HINT })} />);
+    expect(screen.getByText(HINT)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("The next part")).toBeInTheDocument();
     expect(body()).not.toMatch(/light lands/);
   });
 });

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -32,6 +33,17 @@ import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
 const dashboard = vi.hoisted(() => ({ useStudentDashboard: vi.fn() }));
 vi.mock("@/hooks/useStudentDashboard", () => dashboard);
 
+// The child's full assignment list, finished ones included - which the
+// dashboard leaves out. Unread (failed) unless a test says otherwise.
+const assignments = vi.hoisted(() => ({ list: vi.fn() }));
+vi.mock("@/lib/api/assignments", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/assignments")>();
+  return {
+    ...actual,
+    assignmentsApi: { ...actual.assignmentsApi, list: assignments.list },
+  };
+});
+
 // Today's cards open the lesson preview, whose Start navigates.
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -51,6 +63,8 @@ beforeEach(() => {
   // the mark. Failing fast keeps them in their catch instead of pending.
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("no network")));
   dashboard.useStudentDashboard.mockReset();
+  assignments.list.mockReset();
+  assignments.list.mockRejectedValue(new Error("no network"));
   router.push.mockReset();
   clearSession();
   // The warm-up's done-flag lives in localStorage and outlives a test by
@@ -484,6 +498,84 @@ describe("Home's two lists", () => {
     ).toBeInTheDocument();
   });
 
+  /*
+   * TESLIM, 21 OCT: THE ROW CARRIES `completedAt`. Reopening a finished lesson
+   * set its row back to `in_progress` at the last segment, so it came back
+   * here as unfinished work to pick up (RUN21 finding 3). It leaves the list,
+   * and nothing more: where finished work goes is SCRUM-146's.
+   */
+  it("leaves a finished lesson off Pick up where you left off, though its row says in progress", async () => {
+    signIn();
+    live(
+      [
+        assignment("done", "Finished Fractions"),
+        assignment("mid", "Halfway Fractions"),
+      ],
+      [
+        row("done", "in_progress", 2, 3, { completedAt: at(60) }),
+        row("mid", "in_progress", 5),
+      ],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    const pickup = section(/Pick up where you left off/);
+    expect(within(pickup).getByText("Halfway Fractions")).toBeInTheDocument();
+    expect(screen.queryByText("Finished Fractions")).toBeNull();
+  });
+
+  it("leaves a finished library lesson off the same way", async () => {
+    signIn();
+    live(
+      [],
+      [
+        row("lib", "in_progress", 2, 4, {
+          title: "Volcanoes",
+          completedAt: at(60),
+        }),
+      ],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.queryByText("Volcanoes")).toBeNull();
+  });
+
+  it("still lists a part-way lesson with no completedAt, a finish with nothing marked included", async () => {
+    // `not_attempted` stays in progress on the server, with no completedAt.
+    signIn();
+    live(
+      [assignment("mid", "Halfway Fractions")],
+      [row("mid", "in_progress", 5, 3, { completedAt: null })],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(
+      within(section(/Pick up where you left off/)).getByText(
+        "Halfway Fractions",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("does not tell a child whose only lesson is finished that a first one is coming", async () => {
+    // It left Pick up, so it must still count as set work finished - as a
+    // `completed` row already did - or Home would say nothing was ever set.
+    signIn();
+    live(
+      [assignment("done", "Finished Fractions")],
+      [row("done", "in_progress", 2, 3, { completedAt: at(60) })],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.queryByText(/your first lesson/)).toBeNull();
+  });
+
   it("shows at most five, the most recently touched first", async () => {
     signIn();
     const ids = ["a", "b", "c", "d", "e", "f"];
@@ -739,13 +831,13 @@ describe("Home's two lists", () => {
     expect(screen.queryByText("Volcanoes")).toBeNull();
   });
 
-  it("shows the caught-up state below a part-way lesson when nothing new is open", async () => {
+  it("shows a part-way lesson with no Today heading and no caught-up line when nothing new is open", async () => {
     /*
      * Design D99, 6 Oct: "The part-way lesson appears in
-     * continue-where-you-left-off, and the slot below shows the caught-up
-     * state. A child with one unfinished lesson is not empty-handed." No
-     * Today heading over an empty grid (D20), and no empty state telling the
-     * child their lessons are still to come.
+     * continue-where-you-left-off". No Today heading over an empty grid
+     * (D20), and no empty state telling the child their lessons are still to
+     * come. The caught-up state D99 put below it waits on a status the
+     * backend sends (Lydia, 21 Oct, SCRUM-146).
      */
     signIn();
     live([assignment("mid", "Halfway Fractions")], [row("mid", "in_progress")]);
@@ -758,13 +850,7 @@ describe("Home's two lists", () => {
     expect(screen.queryByText(/your first lesson/)).toBeNull();
     const pickUp = section(/Pick up where you left off/);
     expect(within(pickUp).getByText("Halfway Fractions")).toBeInTheDocument();
-    const note = screen.getByText(
-      "You're all caught up. Nice and steady - come back any time.",
-    );
-    // In the slot below the list, as the frame places its note.
-    expect(
-      pickUp.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(screen.queryByText(/caught up/)).toBeNull();
   });
 
   it("keeps Today's lessons when something new is open, with no empty state and no note", async () => {
@@ -802,7 +888,7 @@ describe("Home's two lists", () => {
 
     expect(screen.queryByText("Later Decimals")).toBeNull();
     expect(screen.queryByText(/Today's lessons/)).toBeNull();
-    expect(screen.getByText(/You're all caught up/)).toBeInTheDocument();
+    expect(screen.queryByText(/caught up/)).toBeNull();
   });
 
   it("is absent entirely when nothing is part-way", async () => {
@@ -932,9 +1018,91 @@ describe("what Home says when there is nothing, or nothing left", () => {
     await settled(container);
 
     expect(screen.queryByText(/your first lesson/)).toBeNull();
-    expect(
-      screen.getByText(/You're all caught up\. Nice and steady/),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/caught up/)).toBeNull();
+  });
+
+  /*
+   * 22 OCT PRODUCTION RUN: AMINA FINISHED OSMOSIS, HER ONLY LESSON, and Home
+   * told her "Your teacher is setting up your first lesson". The dashboard
+   * leaves completed assignments out, so it had none to show. Her row said
+   * `completed` with a `completedAt`, and `GET /api/v1/assignments` listed
+   * the assignment completed. Home draws no lesson area for her and says
+   * nothing about it: where finished work goes is SCRUM-146's.
+   */
+  describe("when the dashboard leaves the finished lesson out", () => {
+    const osmosis = { ...done, id: "as-osmosis", lesson: { id: "l-osmosis", title: "Osmosis", segmentCount: 9 } };
+    const finishedRow = {
+      lessonId: "l-osmosis",
+      status: "completed",
+      segmentPosition: 8,
+      updatedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      title: "Osmosis",
+    };
+    const noLessonArea = () => {
+      expect(screen.queryByText(/your first lesson/)).toBeNull();
+      expect(screen.queryByText(/Today's lessons/)).toBeNull();
+      expect(screen.queryByText("Pick up where you left off")).toBeNull();
+      expect(screen.queryByText("Osmosis")).toBeNull();
+    };
+
+    it("does not say a first lesson is coming, from the full list and her row", async () => {
+      signIn();
+      live([], [finishedRow]);
+      assignments.list.mockResolvedValue([osmosis]);
+
+      const { container } = render(<HomeDashboard />);
+      await settled(container);
+      await waitFor(() =>
+        expect(screen.queryByText(/your first lesson/)).toBeNull(),
+      );
+
+      noLessonArea();
+      expect(assignments.list).toHaveBeenCalled();
+    });
+
+    it("nor from the full list alone, once her row has aged out of the feed", async () => {
+      signIn();
+      live([], []);
+      assignments.list.mockResolvedValue([osmosis]);
+
+      const { container } = render(<HomeDashboard />);
+      await settled(container);
+
+      await waitFor(() =>
+        expect(screen.queryByText(/your first lesson/)).toBeNull(),
+      );
+      noLessonArea();
+    });
+
+    it("nor from her row alone, when the full list cannot be read", async () => {
+      signIn();
+      live([], [finishedRow]);
+
+      const { container } = render(<HomeDashboard />);
+      await settled(container);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      noLessonArea();
+    });
+
+    it("still says it for a child whose only assignment was cancelled", async () => {
+      signIn();
+      live([], []);
+      assignments.list.mockResolvedValue([{ ...osmosis, status: "cancelled" }]);
+
+      const { container } = render(<HomeDashboard />);
+      await settled(container);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(
+        screen.getByText("Your teacher is setting up your first lesson"),
+      ).toBeInTheDocument();
+    });
   });
 
   it("says nothing about being caught up beside a ready lesson, with nothing part-way", async () => {
@@ -972,7 +1140,9 @@ describe("what Home says when there is nothing, or nothing left", () => {
     expect(screen.queryByText(/caught up/)).toBeNull();
   });
 
-  it("shows the caught-up line once everything set is finished", async () => {
+  it("says nothing about being caught up once everything set is finished, until the backend says so", async () => {
+    // "All caught up" is a status the backend sends, not one Home works out
+    // from its lists (Lydia, 21 Oct, SCRUM-146).
     signIn();
     live([done], [
       {
@@ -988,7 +1158,7 @@ describe("what Home says when there is nothing, or nothing left", () => {
 
     expect(screen.queryByText(/Today's lessons/)).toBeNull();
     expect(screen.queryByText("Pick up where you left off")).toBeNull();
-    expect(screen.getByText(/You're all caught up/)).toBeInTheDocument();
+    expect(screen.queryByText(/caught up/)).toBeNull();
   });
 
   it("says nothing about the child's week while work is outstanding", async () => {
@@ -996,8 +1166,7 @@ describe("what Home says when there is nothing, or nothing left", () => {
      * The frame's line for this state ("You've been showing up this week")
      * was a claim nothing verifies, and the one that replaced it was in no
      * frame at all. Design ruled for absence (D98, 6 Oct). Outstanding is the
-     * frame's state: something new today AND something part-way - with
-     * nothing new, the caught-up note shows (D99).
+     * frame's state: something new today AND something part-way.
      */
     signIn();
     live(

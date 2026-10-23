@@ -13,6 +13,7 @@ import {
 import type { AdaptSegment } from "@/lib/api/intelligence";
 import type { DashboardProgressRow } from "@/lib/api/students";
 import { adaptSegmentsFor, indicatorLevel } from "@/lib/lessons/adaptation";
+import { isFinishedRow } from "@/lib/lessons/finishedRow";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
 import { getMockAdaptation, getMockLesson } from "@/lib/mocks";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
@@ -161,9 +162,11 @@ export interface StudentLessonState {
   partial: boolean;
   /**
    * The child has already finished this lesson: their newest progress row
-   * says `completed`, or the assignment does (the feed is recent activity, so
-   * an old completion may have no row left). The same two facts the Lessons
-   * tab reads to file it under Completed.
+   * says `completed` or carries a `completedAt` (`isFinishedRow`), or the
+   * assignment says `completed` (the feed is recent activity, so an old
+   * completion may have no row left). The same facts the Lessons tab reads
+   * to file it under Completed. A finished lesson never resumes: it opens at
+   * the top (`resumeAt` is null).
    *
    * Reopening it played it as new work, and the first frame wrote
    * `in_progress, 0` over the completion - so a child who looked back at a
@@ -396,18 +399,6 @@ export function useStudentLesson(
   const saved = dashboard?.recentProgress
     .filter((r) => r.lessonId === lessonId)
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
-  // `exited` resumes too. The status records HOW a child left, not whether
-  // they are done, and #217 already made Home show exited lessons on Pick
-  // Back Up - so leaving this on `in_progress` alone produced a card reading
-  // "About halfway in" that then opened the lesson at segment one. The same
-  // half-fix twice: the display was corrected and the resume was not.
-  const resumable =
-    saved?.status === "in_progress" || saved?.status === "exited";
-  const resumeAt =
-    live && saved && resumable
-      ? Math.max(0, Math.min(saved.segmentPosition, live.segments.length - 1))
-      : null;
-
   /*
    * THE ASSIGNMENT FOR THIS LESSON, WHICH WAS IN MEMORY AND NEVER READ.
    *
@@ -429,7 +420,26 @@ export function useStudentLesson(
   const unavailable = assignment ? unavailableReason(assignment) : null;
   const finished =
     Boolean(live) &&
-    (saved?.status === "completed" || assignment?.status === "completed");
+    (isFinishedRow(saved) || assignment?.status === "completed");
+
+  // `exited` resumes too. The status records HOW a child left, not whether
+  // they are done, and #217 already made Home show exited lessons on Pick
+  // Back Up - so leaving this on `in_progress` alone produced a card reading
+  // "About halfway in" that then opened the lesson at segment one. The same
+  // half-fix twice: the display was corrected and the resume was not.
+  /*
+   * NEVER A FINISHED ONE (D22, D100 "Look again"; RUN21 finding 3). A row
+   * demoted to `in_progress` at the last segment by an earlier reopen still
+   * carries its `completedAt`, and resuming it opened the child's finished
+   * lesson on its last section, as unfinished work. It opens at the top.
+   */
+  const resumable =
+    !finished &&
+    (saved?.status === "in_progress" || saved?.status === "exited");
+  const resumeAt =
+    live && saved && resumable
+      ? Math.max(0, Math.min(saved.segmentPosition, live.segments.length - 1))
+      : null;
 
   return {
     finished,

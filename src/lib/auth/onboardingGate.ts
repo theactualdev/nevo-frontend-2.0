@@ -96,6 +96,74 @@ export function returnPathOf(value: unknown): string | null {
   return value;
 }
 
+/** The lesson player's own address: `/student/lessons/<uuid>`, query or not. */
+const LESSON_PAGE =
+  /^\/student\/lessons\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(\?|$)/i;
+
+/**
+ * The lesson a way back leads to, or null: what Module 4 is asked about when
+ * onboarding is being finished because of it (SCRUM-266).
+ *
+ * Teslim, 21 Oct: readiness, the probe's `next` and its `answer` each take a
+ * `lessonId`, and with it "the backend validates the lesson/subject and
+ * limits items to the lesson's concepts". So the child who tapped Start on a
+ * lesson about osmosis is asked about osmosis, not the first subject listed.
+ *
+ * ONLY THE LESSON PLAYER'S ROUTE YIELDS ONE, and only a UUID - every one of
+ * the three takes `lessonId` as a UUID and answers anything else 422. A
+ * lesson's review or summary is not the lesson; Home, or a fixture's id, is
+ * no lesson at all, and nothing is sent: the probe runs as it does with no
+ * lesson. Read only from a path `returnPathOf` has already taken.
+ */
+export function lessonIdOf(path: string | null | undefined): string | null {
+  const back = returnPathOf(path);
+  return back ? (LESSON_PAGE.exec(back)?.[1] ?? null) : null;
+}
+
+/** A page, without its query. */
+const pageOf = (path: string) => path.split("?")[0];
+
+/**
+ * Where "onboarding is done" goes: the first way back the server names that
+ * this device honours, else the one the refusal brought, else null (Home).
+ *
+ * THE SERVER'S WAY BACK FIRST (Teslim, 21 Oct, SCRUM-266). It remembers the
+ * lesson a child was refused - "Opening an assigned lesson while onboarding
+ * is incomplete also remembers that lesson" - and names it: the probe's
+ * finish as `navigatesTo`, readiness as `returnTo`, both a bare
+ * `/student/lessons/<id>` (`probe._finish`, `learning_readiness.readiness`).
+ * "The backend cannot navigate a browser", so this follows it, in that order,
+ * ahead of the continue route's `?next=` - which is only what this device saw
+ * refused, Home included.
+ *
+ * EACH CHECKED AS `?next=` IS (`returnPathOf`): a same-site student page as a
+ * bare path, or skipped for the next in line. A full URL is skipped too: the
+ * server sends a path, and an address with a host is not one this device
+ * follows, whatever host it names.
+ *
+ * THE SAME PAGE KEEPS THE REFUSAL'S QUERY. The server names the lesson bare;
+ * the link the child tapped carried `?assignment=`, which every progress
+ * write files their work under (`lessonHref`). So when the server's lesson is
+ * the page that was refused, the refused address is the one taken - the same
+ * lesson, opened as the child opened it.
+ *
+ * Decides nothing about onboarding: only which page "done" opens. The
+ * caller still takes it once per tab (`claimReturn`), so a lesson that still
+ * refuses sends the child Home, not round again.
+ */
+export function wayBack(
+  server: readonly unknown[],
+  refused: string | null | undefined,
+): string | null {
+  const ours = returnPathOf(refused);
+  for (const named of server) {
+    const path = returnPathOf(named);
+    if (!path) continue;
+    return ours && pageOf(ours) === pageOf(path) ? ours : path;
+  }
+  return ours;
+}
+
 /**
  * Where a refused request sends a child onboarding is not finished for, or
  * null to leave the refusal with whoever made it.

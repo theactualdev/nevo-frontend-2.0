@@ -28,17 +28,27 @@ import { clearSession } from "@/lib/auth/session";
  * account to ask with, so the profiling run maps four.
  */
 
-const { push, bindFirstPin, myDashboard, myConsentGate, readiness, next, answer, stretched } =
-  vi.hoisted(() => ({
-    push: vi.fn(),
-    bindFirstPin: vi.fn(),
-    myDashboard: vi.fn(),
-    myConsentGate: vi.fn(),
-    readiness: vi.fn(),
-    next: vi.fn(),
-    answer: vi.fn(),
-    stretched: vi.fn(),
-  }));
+const {
+  push,
+  bindFirstPin,
+  myDashboard,
+  myConsentGate,
+  readiness,
+  next,
+  answer,
+  stretched,
+  report,
+} = vi.hoisted(() => ({
+  push: vi.fn(),
+  bindFirstPin: vi.fn(),
+  myDashboard: vi.fn(),
+  myConsentGate: vi.fn(),
+  readiness: vi.fn(),
+  next: vi.fn(),
+  answer: vi.fn(),
+  stretched: vi.fn(),
+  report: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
@@ -57,6 +67,10 @@ vi.mock("@/lib/api/consents", () => ({ consentsApi: { myConsentGate } }));
 vi.mock("@/lib/api/probe", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/probe")>()),
   probeApi: { readiness, next, answer },
+}));
+vi.mock("@/lib/api/clientErrors", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/clientErrors")>()),
+  reportProbeNothingToAsk: report,
 }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({
   flushPendingBaseline: vi.fn(async () => {}),
@@ -215,6 +229,12 @@ function walkToPin() {
 }
 
 describe("an unavailable probe moves the child on (Olayinka, 19 Oct)", () => {
+  /*
+   * Readiness, read again, still holds the probe owed here - not a no-bank
+   * signal since Teslim's 21 Oct answers, so it is reported. This run makes
+   * the account and goes on regardless; the server's gate brings the child
+   * back for Module 4.
+   */
   it("goes from the PIN to Complete with three stops when the subject answers with no items", async () => {
     const first = deferred<typeof EMPTY>();
     next.mockReturnValue(first.promise);
@@ -236,6 +256,7 @@ describe("an unavailable probe moves the child on (Olayinka, 19 Oct)", () => {
     // No stretch for a module that was never going to run.
     expect(stretched).not.toHaveBeenCalled();
     expect(answer).not.toHaveBeenCalled();
+    expect(report).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Let's finish setting up" }));
     expect(screen.getByRole("button", { name: "you are in" })).toBeInTheDocument();

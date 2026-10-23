@@ -115,15 +115,30 @@ export interface AudioContent {
   transcript: string;
 }
 
-/** Interactive modality — tickable steps that reveal an outcome once all done. */
+/** Interactive modality — tickable steps, and a line to watch for. */
 export interface InteractiveContent {
   heading: string;
-  /** One-line orientation under the heading ("…there's no rush."). */
+  /**
+   * One-line orientation under the heading ("…there's no rush."). NOT DRAWN
+   * since frame d6b9fbc, which removed the intro paragraph so the in-progress
+   * line fits on a phone. Kept, as the server keeps `introduction`.
+   */
   intro?: string;
   /** "YOU'LL NEED" items. */
   needs?: string[];
   steps: string[];
-  outcome: { pending: string; done: string };
+  /**
+   * The two "what you should see" lines (SCRUM-273, frame d6b9fbc), each
+   * authored per activity and each optional: `pending` while the child works
+   * (the wire's `inProgress`), `done` once every step is ticked (the wire's
+   * `outcome`). Whichever the moment calls for is drawn in its box, with no
+   * label, no tick and one tone; where that line is absent there is no box
+   * at all, and nothing written to stand in for it. So the four supply
+   * states - both, in-progress only, completion only, neither - are just
+   * what is here. Absent altogether when the activity has neither. The
+   * authored walkthrough carries both of its lines.
+   */
+  outcome?: { pending?: string; done?: string };
 }
 
 // ── Comprehension check (inline Quick Check) ────────────────────────────────
@@ -416,6 +431,20 @@ export interface CalculationSegment {
 
 // ── Segment + lesson ────────────────────────────────────────────────────────
 
+/**
+ * What the child chose for ONE segment in this sitting (K4, Lydia 21 Oct):
+ * its format, and its pace for the text. Held on the server per section and
+ * per sitting, and read back so a reload opens the section in it - never on
+ * the child, and never a description of them (rule 1).
+ *
+ * `density` null is the standard text, chosen; absent is no choice about
+ * pace. See `lib/lessons/segmentChoice`.
+ */
+export interface ChosenVersion {
+  modality?: Modality;
+  density?: Density | null;
+}
+
 export interface LessonSegment {
   id: string;
   /**
@@ -423,6 +452,25 @@ export interface LessonSegment {
    * which is the solver alone (Lydia, 17 Oct; Teslim, 19 Oct).
    */
   modalities: Modality[];
+  /**
+   * The format group's pills (SCRUM-272): the server's `availableFormats` for
+   * this section, in its order, narrowed to what this app can draw. ABSENT
+   * on a payload from before the field and on the authored walkthrough,
+   * where the group offers `modalities` instead and marks nothing.
+   */
+  formats?: Modality[];
+  /**
+   * The server's `recommendedFormat`, where `formats` came with it - one of
+   * them, or null for none. Read for the group's quiet marker and never
+   * worked out here.
+   */
+  recommendedFormat?: Modality | null;
+  /**
+   * What the child chose for this segment in the sitting the lesson was read
+   * from (its `deliveryPreference`), so the section opens in it before its
+   * first frame. Absent is no choice - and on the authored walkthrough.
+   */
+  chosen?: ChosenVersion;
   text?: TextContent;
   visual?: VisualContent;
   audio?: AudioContent;
@@ -574,8 +622,18 @@ export interface SegmentAdaptation {
   startModality: Modality;
   /** Active reading density, if any. */
   density?: Density | null;
-  /** One system-suggested modality to surface via the calm pill (never chained). */
-  suggestModality?: Modality | null;
+  /*
+   * NO `suggestModality` ANY MORE. The engine's separate suggestion pill is
+   * gone (SCRUM-271 amended, 21 Oct): its recommendation is the quiet marker
+   * inside the format group, read from `recommendedFormat` below.
+   */
+  /**
+   * The engine's answer's `availableFormats` and `recommendedFormat` for this
+   * section (SCRUM-272), carried only where the answer had them, so the
+   * fresher read wins over the lesson's own. Absent, the lesson's stand.
+   */
+  formats?: Modality[];
+  recommendedFormat?: Modality | null;
   /**
    * Break module (frame 18) inserted after the student leaves this segment
    * forward. Break decisions are confirmed server-side (FE Architecture §5);
@@ -638,17 +696,12 @@ export interface AdaptationPlan {
    */
   adjustment?: AdjustmentAction | null;
   /**
-   * The engine's one modality suggestion for this answer, lesson-level like
-   * the wire's `modalitySuggestion`. The per-segment `suggestModality` is the
-   * authored seam; this is offered once, where it can render.
-   */
-  suggestModality?: Modality | null;
-  /**
-   * The hint `offer_hint` shows, when the engine sent one.
+   * The engine's hint, when it sent one.
    *
-   * Carried ONLY when the action is `offer_hint` - see `toAdaptationPlan`. The
-   * action is the instruction and the text serves it; a hint arriving under a
-   * different instruction is not a hint anybody asked to show.
+   * Carried under ANY action, `adjustment` absent included - see
+   * `toAdaptationPlan`. Since the gate (23 Oct) the engine sends the hint
+   * beside pacing, chunking and format offers, and its contract says it "must
+   * not be hidden solely because the action is a pacing or chunking action".
    */
   hint?: string | null;
   /** Likewise, the questions `show_socratic_panel` opens. */

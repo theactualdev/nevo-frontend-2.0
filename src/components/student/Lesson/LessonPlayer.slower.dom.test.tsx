@@ -283,12 +283,18 @@ describe("the chip row's height is the lesson's, not the segment's", () => {
         },
       ],
     }) as unknown as Lesson;
-  /** The header's own rows: what sets where the column starts. */
+  /**
+   * The header's own rows, and the rows of its control column (the format
+   * group's and the chips', since 21 Oct): what sets where the column starts.
+   */
   const headerRows = () =>
-    [...document.querySelector("header")!.children].map((row) =>
-      row.className.replace(/\binvisible\b/, "").trim(),
+    [...document.querySelectorAll("header > *, header > .flex-col > *")].map(
+      (row) => row.className.replace(/\binvisible\b/, "").trim(),
     );
-  const chipRow = () => document.querySelector("header > .justify-end");
+  /** The chips' own row, drawn or held. */
+  const chipRow = () =>
+    document.querySelector("header [aria-label='Lesson pacing']")
+      ?.parentElement ?? null;
 
   it("keeps the header's rows, so the column top, from a segment with chips to one without", () => {
     render(<LessonPlayer lesson={twoSegments()} plan={PLAN} />);
