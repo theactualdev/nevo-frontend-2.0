@@ -166,6 +166,13 @@ export interface InteractiveActivityVariant {
    */
   inProgress?: string | null;
   outcome?: string | null;
+  /**
+   * THE SOURCE'S SAFETY SENTENCE (backend 92af149; spec 23 Oct: "Authored
+   * safety instructions; show before activity steps"). Nullable. While the
+   * player has no designed way to draw it, an activity carrying one is not
+   * offered at all - SCRUM-280's hard rule; see `interactiveFor`.
+   */
+  safety?: string | null;
 }
 
 /**

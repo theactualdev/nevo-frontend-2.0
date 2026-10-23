@@ -225,3 +225,46 @@ describe("what is not an activity the child can do", () => {
     expect(seg.interactive?.steps).toEqual(["Put one slice in each glass."]);
   });
 });
+
+describe("an activity with a safety sentence is not offered (SCRUM-280)", () => {
+  /*
+   * Lydia, 23 Oct: "an activity whose source has a safety sentence MUST NOT
+   * RENDER AT ALL if the card can't display it". The card has no designed
+   * safety line yet, so the activity is held back whole.
+   */
+  const safe = (safety: unknown) =>
+    built({
+      availableModalities: ["text", "visual", "interactive"],
+      availableFormats: ["text", "interactive"],
+      interactiveVariant: activity({
+        safety,
+      }),
+    } as never);
+
+  it("is not built, so there is no card to open", () => {
+    const seg = safe("Let an adult do the cutting. Do not taste the salt water.");
+
+    expect(seg.interactive).toBeUndefined();
+  });
+
+  it("is not in the format group, even where the server lists it", () => {
+    const seg = safe("Let an adult do the cutting.");
+
+    expect(seg.formats).not.toContain("interactive");
+    expect(seg.formats).toContain("text");
+  });
+
+  it("is not a modality the section can open in", () => {
+    const seg = safe("Wash your hands afterwards.");
+
+    expect(seg.modalities).not.toContain("interactive");
+  });
+
+  it("is offered as before when the safety sentence is empty or absent", () => {
+    for (const safety of [null, undefined, "", "   "]) {
+      const seg = safe(safety);
+      expect(seg.interactive?.steps).toHaveLength(3);
+      expect(seg.formats).toContain("interactive");
+    }
+  });
+});
