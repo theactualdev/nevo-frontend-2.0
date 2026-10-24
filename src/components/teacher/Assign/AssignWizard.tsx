@@ -796,7 +796,7 @@ export function AssignWizard({
       {/* Body */}
       {step === 4 ? (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-7 py-5 xl:px-8">
-          <div className="flex max-w-[420px] flex-col items-center text-center xl:max-w-[440px]">
+          <div className="flex w-full max-w-[440px] flex-col items-center text-center xl:max-w-[480px]">
             <div className="flex size-[54px] items-center justify-center rounded-full bg-nevo-navy text-nevo-cream motion-safe:animate-nevo-pop xl:size-14">
               <svg
                 width="28"
@@ -815,28 +815,31 @@ export function AssignWizard({
             <h1 className="mt-[18px] text-[23px] font-semibold tracking-[-0.015em] xl:mt-5 xl:text-[26px]">
               All set
             </h1>
-            <p className="mt-3.5 text-base leading-[1.6] text-nevo-near-black/78 xl:mt-4 xl:text-[17px]">
-              <strong className="font-semibold text-nevo-near-black">
-                {lessonsText}
-              </strong>{" "}
-              will open for{" "}
-              <strong className="font-semibold text-nevo-near-black">
-                {whoText}
-              </strong>{" "}
-              {when === "right" ? (
-                <>
-                  on{" "}
-                  <strong className="font-semibold text-nevo-near-black">
-                    {whenText.replace(/^on /, "")}
-                  </strong>
-                </>
-              ) : (
-                <strong className="font-semibold text-nevo-near-black">
-                  now
-                </strong>
-              )}
-              .
+            {/*
+              C07i's confirm (design 82c213b): the batch counted in the line,
+              and every lesson picked named in the list under it, so a teacher
+              sending four lessons sees all four before Confirm.
+            */}
+            <p className="mt-[13px] text-[15px] leading-[1.6] text-nevo-near-black/78 xl:mt-3.5 xl:text-base">
+              {`${picked.length} ${picked.length === 1 ? "lesson" : "lessons"} will open for ${whoText} ${when === "right" ? whenText : "now"}.`}
             </p>
+            <ul className="m-0 mt-[18px] w-full list-none overflow-hidden rounded-[12px] bg-nevo-cream-elevated p-0 text-left shadow-elevation-1">
+              {lessons
+                .filter((l) => chosen.has(l.id))
+                .map((l) => (
+                  <li
+                    key={l.id}
+                    className="flex items-center gap-[11px] border-b border-nevo-near-black/7 px-4 py-[13px] last:border-b-0"
+                  >
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    </span>
+                    <span className="text-sm font-medium text-nevo-near-black xl:text-[14.5px]">{l.title}</span>
+                  </li>
+                ))}
+            </ul>
           </div>
         </div>
       ) : (
@@ -845,6 +848,13 @@ export function AssignWizard({
             <h1 className="mt-0 text-[23px] font-semibold tracking-[-0.015em] xl:mt-3.5 xl:text-[26px]">
               {heading}
             </h1>
+            {/* C07i (design 82c213b): one lesson or several, set once for the
+                batch in the steps after. */}
+            {step === 1 && (
+              <p className="mt-[7px] text-[13.5px] text-nevo-near-black/62 xl:mt-2 xl:text-[14.5px]">
+                Pick one or several. They&rsquo;ll go to the same class and time in the next steps.
+              </p>
+            )}
 
             {step === 1 && (
               <div className="mt-[18px] flex flex-col gap-2.5 xl:mt-5 xl:gap-[11px]">
@@ -1175,9 +1185,24 @@ export function AssignWizard({
             Back
           </button>
         )}
+        {step === 1 && (
+          <span
+            aria-live="polite"
+            className={cn(
+              "flex-1 px-3 text-center text-[13.5px]",
+              picked.length > 0 ? "text-nevo-near-black/60" : "font-medium text-nevo-violet-text",
+            )}
+          >
+            {picked.length > 0
+              ? `${picked.length} ${picked.length === 1 ? "lesson" : "lessons"} selected`
+              : "Pick at least one lesson to continue."}
+          </span>
+        )}
         <button
           type="button"
-          disabled={!canContinue}
+          /* C07i: on step 1 Continue stays pressable with nothing picked - the
+             line beside it says what it needs - and simply does not move on. */
+          disabled={!canContinue && step !== 1}
           onClick={() => {
             if (!canContinue || submitting) return;
             if (step === 3 && !stillAhead()) return;
@@ -1186,7 +1211,7 @@ export function AssignWizard({
           }}
           className={cn(
             "flex h-[46px] items-center rounded-[10px] px-[26px] text-[15px] font-semibold xl:h-12 xl:px-[30px] xl:text-[15.5px]",
-            canContinue
+            canContinue || step === 1
               ? "cursor-pointer bg-nevo-navy text-nevo-cream transition-[filter] hover:brightness-93"
               : "cursor-not-allowed bg-nevo-navy/18 text-nevo-near-black/40",
           )}
