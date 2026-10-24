@@ -5,9 +5,11 @@ import { useMemo, useState } from "react";
 import type { KeyPoint, LessonReview } from "@/lib/api/lessons";
 import type { LessonReviewFlowState } from "@/hooks/useLessonReviewFlow";
 import { cn } from "@/lib/utils";
+import { StepMedia } from "./StepMedia";
 import {
   approvalLines,
   keyPointRows,
+  mediaView,
   plural,
   rewriteRows,
   rowResolved,
@@ -60,6 +62,10 @@ const PRIMARY =
   "inline-flex h-[42px] shrink-0 cursor-pointer items-center justify-center gap-2 rounded-[10px] bg-nevo-navy px-[18px] text-[13.5px] font-semibold whitespace-nowrap text-nevo-cream transition-[filter] hover:brightness-104 disabled:cursor-default disabled:opacity-55 xl:h-[46px] xl:px-[22px] xl:text-[14.5px]";
 const GHOST =
   "inline-flex h-[42px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-[15px] text-[13px] font-medium whitespace-nowrap text-nevo-navy transition-colors hover:bg-nevo-navy/6 xl:h-[46px] xl:px-[18px] xl:text-[14px]";
+const SPINNER_BTN =
+  "inline-flex h-[42px] shrink-0 cursor-default items-center justify-center gap-[9px] rounded-[10px] bg-nevo-navy/55 px-[18px] text-[13.5px] font-semibold whitespace-nowrap text-nevo-cream xl:h-[46px] xl:px-[22px] xl:text-[14.5px]";
+const SPINNER =
+  "size-4 shrink-0 animate-spin rounded-full border-2 border-solid border-nevo-cream/40 border-t-nevo-cream motion-reduce:animate-none";
 const TEXTAREA =
   "min-h-[62px] w-full resize-y rounded-[10px] border-[1.5px] border-nevo-navy bg-nevo-cream px-3 py-2.5 text-[14px] leading-[1.5] text-nevo-near-black outline-none xl:text-[15px]";
 
@@ -109,7 +115,18 @@ export function LessonReviewFlow({
     [lesson.segments],
   );
   const complete = review.reviewComplete === true;
-  const [step, setStep] = useState<Step>(initialStep ?? (complete ? 4 : 1));
+  const media = mediaView(review, segments);
+  /*
+   * WHAT THE KEY-POINT PRESS ALSO SIGNS. Since Teslim's 10c6bf8 it approves
+   * every picture and recording waiting in its snapshot. So while one is still
+   * waiting, the review opens on step 1, where they are shown, and step 2's
+   * press is held until they are approved there.
+   */
+  const mediaWaiting = media.awaiting.length > 0;
+  const [step, setStep] = useState<Step>(
+    initialStep ?? (complete && !mediaWaiting ? 4 : 1),
+  );
+  const [flaggedMedia, setFlaggedMedia] = useState<Set<string>>(() => new Set());
   const [confirmed, setConfirmed] = useState<Set<string>>(() => new Set());
   const [edited, setEdited] = useState<Set<string>>(() => new Set());
 
@@ -144,6 +161,16 @@ export function LessonReviewFlow({
     primary: React.ReactNode;
   } | null = null;
   if (step === 1) {
+    const refusal = refusedHere("media");
+    const approving = flow.working === "media";
+    const remake = media.awaiting.filter((m) => flaggedMedia.has(m.id)).map((m) => m.id);
+    const approve = media.awaiting.filter((m) => !flaggedMedia.has(m.id)).map((m) => m.id);
+    const kinds = new Set(media.awaiting.map((m) => m.kind));
+    const shown = media.pictures.length + media.recordings.length;
+    const next =
+      needLook > 0
+        ? `${needLook} ${needLook === 1 ? "key point wants" : "key points want"} a look next.`
+        : null;
     footer = {
       back: (
         <Link href={`/teacher/lessons/${lesson.id}`} className={GHOST}>
@@ -151,12 +178,48 @@ export function LessonReviewFlow({
         </Link>
       ),
       note:
-        needLook > 0
-          ? "You can continue now; the flagged items are waiting in the next step."
-          : "Nothing here needs you.",
-      primary: (
+        refusal ??
+        (approving
+          ? "Saving your approval."
+          : mediaWaiting
+            ? remake.length > 0
+              ? `${remake.length} flagged - Nevo will remake ${remake.length === 1 ? "it" : "those"}; the rest go as they are.`
+              : "One press approves everything here."
+            : !media.exists
+              ? next
+                ? `Text only. ${next}`
+                : "Text only - nothing to approve here."
+              : shown === 0
+                ? "Nevo is still making the pictures and narration."
+                : next
+                  ? `Media approved. ${next}`
+                  : "Media approved. Nothing else needs you."),
+      alert: Boolean(refusal),
+      primary: approving ? (
+        <span className={SPINNER_BTN} aria-live="polite">
+          <span aria-hidden className={SPINNER} />
+          Approving
+        </span>
+      ) : mediaWaiting ? (
+        <button
+          type="button"
+          disabled={flow.working !== null}
+          onClick={() => {
+            void flow.approveMedia(approve, remake).then((ok) => {
+              if (ok) setFlaggedMedia(new Set());
+            });
+          }}
+          className={PRIMARY}
+        >
+          {kinds.size > 1
+            ? "Approve pictures and narration"
+            : kinds.has("image")
+              ? "Approve the pictures"
+              : "Approve the narration"}
+        </button>
+      ) : (
         <button type="button" onClick={() => setStep(2)} className={PRIMARY}>
-          {needLook > 0 ? `Review the ${needLook} flagged` : "Looks right - continue"}
+          Continue to key points
         </button>
       ),
     };
@@ -173,7 +236,9 @@ export function LessonReviewFlow({
         refusal ??
         (pointsSigned
           ? signoffLine(review.keyPointApproval!)
-          : missingLeft > 0
+          : mediaWaiting
+            ? "Approve the pictures and narration in step 1 first. Accepting the key points approves them too."
+            : missingLeft > 0
             ? `Decide the ${plural(missingLeft, "section", "sections")} with no key point first: add one or leave it out.`
             : flagsLeft > 0
               ? `${flagsLeft} flagged above - handle or accept, your call.`
@@ -186,7 +251,7 @@ export function LessonReviewFlow({
       ) : (
         <button
           type="button"
-          disabled={missingLeft > 0 || flow.working !== null}
+          disabled={mediaWaiting || missingLeft > 0 || flow.working !== null}
           onClick={() => {
             void flow.approveKeyPoints().then((ok) => ok && setStep(3));
           }}
@@ -306,6 +371,33 @@ export function LessonReviewFlow({
               title={lesson.title}
               subject={lesson.subject ?? null}
               needLook={needLook}
+              mediaLine={
+                mediaWaiting
+                  ? `Nevo made ${[
+                      media.pictures.length > 0 ? plural(media.pictures.length, "picture", "pictures") : "",
+                      media.recordings.length > 0 ? plural(media.recordings.length, "recording", "recordings") : "",
+                    ].filter(Boolean).join(" and ")} for this lesson. Have a look, then approve.`
+                  : null
+              }
+              media={
+                <StepMedia
+                  media={media}
+                  flagged={flaggedMedia}
+                  onFlag={(id) =>
+                    setFlaggedMedia((f) => {
+                      const next = new Set(f);
+                      if (next.has(id)) next.delete(id);
+                      else next.add(id);
+                      return next;
+                    })
+                  }
+                  approved={!mediaWaiting}
+                  working={flow.working === "media"}
+                  onRetry={(id) => void flow.retryMedia(id)}
+                  retrying={flow.working?.startsWith("retry:") ? flow.working.slice(6) : null}
+                  retryRefusal={(id) => refusedHere(`retry:${id}`)}
+                />
+              }
               modules={modules}
               segments={segments}
             />
@@ -329,7 +421,9 @@ export function LessonReviewFlow({
             />
           )}
 
-          {step === 3 && <StepRewrites flow={flow} rows={rewrites} refusedHere={refusedHere} />}
+          {step === 3 && (
+            <StepRewrites lessonId={lesson.id} flow={flow} rows={rewrites} refusedHere={refusedHere} />
+          )}
 
           {step === 4 && (
             <StepLive
@@ -368,12 +462,17 @@ function StepMade({
   title,
   subject,
   needLook,
+  mediaLine,
+  media,
   modules,
   segments,
 }: {
   title: string;
   subject: string | null;
   needLook: number;
+  /** Step 1's own line while media waits; otherwise the step names what is next. */
+  mediaLine: string | null;
+  media: React.ReactNode;
   modules: LessonReviewFlowState["modules"];
   segments: { id: string; title?: string | null }[];
 }) {
@@ -397,9 +496,10 @@ function StepMade({
       <span className={EYEBROW}>Step 1 of 4 · what Nevo made of it</span>
       {/* THE header: one plain status line, and the only one on the step. */}
       <h2 className="mt-3 text-[22px] leading-[1.2] font-semibold tracking-[-0.014em] text-pretty text-nevo-near-black xl:text-[26px]">
-        {needLook > 0
-          ? `${needLook} ${needLook === 1 ? "thing needs" : "things need"} a quick look before this is ready.`
-          : "This looks ready. Nothing needs you."}
+        {mediaLine ??
+          (needLook > 0
+            ? `${needLook} ${needLook === 1 ? "thing needs" : "things need"} a look in the next steps.`
+            : "This looks ready. Nothing needs you.")}
       </h2>
       <p className={cn(SUB, "mt-2.5 text-nevo-near-black/60")}>
         {subject ? `${title} · ${subject}` : title}
@@ -440,6 +540,7 @@ function StepMade({
           </ul>
         )}
       </div>
+      {media}
     </div>
   );
 }
@@ -742,10 +843,12 @@ const VERSION_NAME: Record<RewriteKind, string> = {
  * so the row offers the action the contract does have: change the wording.
  */
 function StepRewrites({
+  lessonId,
   flow,
   rows,
   refusedHere,
 }: {
+  lessonId: string;
   flow: LessonReviewFlowState;
   rows: RewriteRow[];
   refusedHere: (work: string) => string | null;
@@ -813,6 +916,14 @@ function StepRewrites({
                         refusal={refusedHere(`rewrite:${r.segmentId}:${v.kind}`)}
                       />
                     ))}
+                    {/* C16d: every format of this section, read-only, with the
+                        orientation line above its tabs. */}
+                    <Link
+                      href={`/teacher/lessons/${lessonId}/variants?section=${r.section}`}
+                      className="self-start text-[13px] font-semibold text-nevo-navy underline underline-offset-[3px]"
+                    >
+                      See every format of this section
+                    </Link>
                   </div>
                 )}
               </div>

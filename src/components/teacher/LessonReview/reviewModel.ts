@@ -5,6 +5,7 @@ import type {
   LessonSegment,
   ReviewSignoff,
 } from "@/lib/api/lessons";
+import type { LessonMediaItem } from "@/lib/api/media";
 
 /**
  * What each step of C07k draws, read off the review and the lesson.
@@ -135,6 +136,8 @@ export type RewriteKind = "simplified" | "expanded";
 
 export interface RewriteRow {
   segmentId: string;
+  /** Its place in the lesson, counted from 1, as the variants screen counts. */
+  section: number;
   label: string;
   versions: { kind: RewriteKind; body: string; edited: boolean }[];
 }
@@ -154,7 +157,7 @@ export function rewriteRows(segments: LessonSegment[]): RewriteRow[] {
       return v?.body ? [{ kind, body: v.body, edited: Boolean(v.editedAt) }] : [];
     });
     return versions.length > 0
-      ? [{ segmentId: segment.id, label: segmentLabel(segment, index), versions }]
+      ? [{ segmentId: segment.id, section: index + 1, label: segmentLabel(segment, index), versions }]
       : [];
   });
 }
@@ -199,3 +202,63 @@ export function approvalLines(review: LessonReview): string[] {
 
 export const plural = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`;
+
+/* ------------------------------------------------------------------ media */
+
+export interface MediaRow {
+  item: LessonMediaItem;
+  label: string;
+}
+
+/**
+ * Step 1's pictures and narration (SCRUM-286; design 82c213b).
+ *
+ * WHAT IS SHOWN IS WHAT THE ONE PRESS SIGNS. Pictures and recordings waiting
+ * for a teacher, and those already approved, in the lesson's own order. Ones
+ * still being made, and ones that could not be made, are counted apart: they
+ * are not part of this approval, and a later one waits for its own.
+ * Withdrawn items belong to C06c, not here. Safety-blocked items never reach
+ * this list at all.
+ */
+export interface MediaView {
+  /** Anything made, being made, or failed: the lesson is not text only. */
+  exists: boolean;
+  pictures: MediaRow[];
+  recordings: MediaRow[];
+  /** Shown and not yet approved: what the step's press approves. */
+  awaiting: LessonMediaItem[];
+  making: { images: number; audio: number };
+  failed: MediaRow[];
+  /** Sections no picture (or recording) was made for, for "1 section has none". */
+  sectionsWithoutPictures: number;
+  sectionsWithoutNarration: number;
+}
+
+export function mediaView(review: LessonReview, segments: LessonSegment[]): MediaView {
+  const place = new Map(segments.map((s, i) => [s.id, i]));
+  const items = (review.media?.items ?? [])
+    .filter((m) => m.status !== "withdrawn")
+    .sort((a, b) => (place.get(a.segmentId) ?? 0) - (place.get(b.segmentId) ?? 0));
+  const row = (item: LessonMediaItem): MediaRow => {
+    const i = place.get(item.segmentId) ?? 0;
+    return { item, label: segmentLabel(segments[i], i) };
+  };
+  const shown = (m: LessonMediaItem) =>
+    (m.status === "awaiting_review" || m.status === "approved") &&
+    Boolean(m.kind === "image" ? m.asset?.image?.imageUrl : m.asset?.audio?.audioUrl);
+  const covered = (kind: "image" | "audio") =>
+    new Set(items.filter((m) => m.kind === kind && m.status !== "failed").map((m) => m.segmentId)).size;
+  return {
+    exists: items.length > 0,
+    pictures: items.filter((m) => m.kind === "image" && shown(m)).map(row),
+    recordings: items.filter((m) => m.kind === "audio" && shown(m)).map(row),
+    awaiting: items.filter((m) => m.status === "awaiting_review" && shown(m)),
+    making: {
+      images: items.filter((m) => m.kind === "image" && (m.status === "queued" || m.status === "processing")).length,
+      audio: items.filter((m) => m.kind === "audio" && (m.status === "queued" || m.status === "processing")).length,
+    },
+    failed: items.filter((m) => m.status === "failed" || m.status === "stale").map(row),
+    sectionsWithoutPictures: Math.max(0, segments.length - covered("image")),
+    sectionsWithoutNarration: Math.max(0, segments.length - covered("audio")),
+  };
+}

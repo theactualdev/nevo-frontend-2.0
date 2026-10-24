@@ -68,16 +68,15 @@ describe("the retired approve step", () => {
     expect(screen.queryByRole("button", { name: /Approve/ })).not.toBeInTheDocument();
   });
 
-  it("sends a teacher to the four-step review instead", () => {
+  it("names itself as the review's rewrites step, and goes back to it (C16d)", () => {
     show();
 
-    expect(
-      screen.getByRole("heading", { name: "Reviewing happens in four calm steps now" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Open the review flow/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Lesson review · Rewrites/ })).toHaveAttribute(
       "href",
-      "/teacher/lessons/l-1/review",
+      "/teacher/lessons/l-1/review?step=3",
     );
+    // C07b is deleted (design 0d46d4f), and its card with it.
+    expect(screen.queryByText("Reviewing happens in four calm steps now")).not.toBeInTheDocument();
   });
 
   it("calls neither the deprecated approval nor the review", () => {

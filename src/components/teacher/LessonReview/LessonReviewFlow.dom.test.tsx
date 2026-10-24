@@ -163,7 +163,7 @@ describe("four screens, not one page", () => {
     await open();
 
     expect(
-      screen.getByRole("heading", { name: "2 things need a quick look before this is ready." }),
+      screen.getByRole("heading", { name: "2 things need a look in the next steps." }),
     ).toBeInTheDocument();
   });
 
@@ -176,12 +176,12 @@ describe("four screens, not one page", () => {
     expect(
       screen.getByRole("heading", { name: "This looks ready. Nothing needs you." }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Looks right - continue" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue to key points" })).toBeInTheDocument();
   });
 
   it("takes the teacher to the flagged ones in one press", async () => {
     await open();
-    fireEvent.click(screen.getByRole("button", { name: "Review the 2 flagged" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue to key points" }));
 
     expect(screen.getByText(/Step 2 of 4/)).toBeInTheDocument();
   });
