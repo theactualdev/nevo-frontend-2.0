@@ -42,6 +42,12 @@ export interface AdminNavItem {
   scope: PermissionScope | null;
   /** True where D03's catalogue does not settle it - see the docblock. */
   inferred?: boolean;
+  /**
+   * Shown only to someone who holds Learning Support (the holders read's
+   * `viewerHoldsIt`), whatever scopes they hold. For everyone else the item
+   * is ABSENT - not a locked row, not a greyed one (design, D29).
+   */
+  learningSupportOnly?: boolean;
 }
 
 export const ADMIN_NAV: AdminNavItem[] = [
@@ -52,6 +58,8 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // Invitations create teachers and students, which is what `roster` grants.
   { label: "Invitations", href: "/admin/invitations", group: "School", scope: "roster", inferred: true },
   { label: "Learning Support", href: "/admin/senco", group: "Support", scope: "senco" },
+  // SCRUM-260, D29: Learning Support holders only, school-wide.
+  { label: "Safeguarding", href: "/admin/safeguarding", group: "Support", scope: null, learningSupportOnly: true },
   // Reports are the school-wide picture, which is `oversight`'s own wording.
   { label: "Reports", href: "/admin/reports", group: "Support", scope: "oversight", inferred: true },
   // Administering other admins is school-wide administration; no scope names it.
@@ -78,9 +86,20 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { label: "Settings", href: "/admin/settings", group: "Administration", scope: null, inferred: true },
 ];
 
-/** The nav an admin holding these scopes actually sees. */
-export function navForScopes(scopes: PermissionScope[]): AdminNavItem[] {
-  return ADMIN_NAV.filter((i) => i.scope === null || scopes.includes(i.scope));
+/**
+ * The nav an admin holding these scopes actually sees. `holdsLearningSupport`
+ * is the holders read's own answer; unknown is false, so a Learning-Support-
+ * only item stays out until the server says this admin holds it.
+ */
+export function navForScopes(
+  scopes: PermissionScope[],
+  holdsLearningSupport = false,
+): AdminNavItem[] {
+  return ADMIN_NAV.filter(
+    (i) =>
+      (i.scope === null || scopes.includes(i.scope)) &&
+      (!i.learningSupportOnly || holdsLearningSupport),
+  );
 }
 
 /**
@@ -100,14 +119,18 @@ const DRILL_DOWN_SCOPE: Record<string, PermissionScope> = {
  * without SENCo, the founding admin among them. Routes that are not rail
  * screens (setup, activation) are not this function's to gate.
  */
-export function canOpen(href: string, scopes: PermissionScope[]): boolean {
+export function canOpen(
+  href: string,
+  scopes: PermissionScope[],
+  holdsLearningSupport = false,
+): boolean {
   const under = (p: string) => href === p || href.startsWith(`${p}/`);
   const drill = Object.entries(DRILL_DOWN_SCOPE).find(([p]) => under(p));
   if (drill) return scopes.includes(drill[1]);
   const item = ADMIN_NAV.filter((i) => under(i.href)).sort(
     (a, b) => b.href.length - a.href.length,
   )[0];
-  return !item || navForScopes(scopes).includes(item);
+  return !item || navForScopes(scopes, holdsLearningSupport).includes(item);
 }
 
 /**
