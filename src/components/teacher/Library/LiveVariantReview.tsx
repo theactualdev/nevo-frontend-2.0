@@ -311,6 +311,7 @@ function VariantBody({
     }
     const materials = Array.isArray(v.materials) ? v.materials.filter(Boolean) : [];
     const steps = Array.isArray(v.steps) ? v.steps.filter((s) => s?.instruction) : [];
+    const safety = typeof v.safety === "string" ? v.safety.trim() : "";
     return (
       <div className="flex flex-col gap-2.5">
         {v.title && (
@@ -331,6 +332,22 @@ function VariantBody({
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+        {/*
+          THE SAFETY LINE A CHILD GETS (SCRUM-288; Teslim b52edeb). A teacher
+          approved an activity without ever seeing it: this tab drew the title,
+          what is needed, the steps and the outcome, and nothing else. Now it
+          sits where the child's card puts it - above the steps, never after
+          them - under the player frame's own "First" label (design 1a3016b),
+          word for word. No line from the server, nothing drawn.
+        */}
+        {safety && (
+          <div className="flex items-start gap-2.5 rounded-[12px] bg-nevo-violet/8 px-4 py-[11px]">
+            <span className="mt-0.5 shrink-0 font-mono text-[10px] tracking-[0.06em] text-nevo-navy uppercase">
+              First
+            </span>
+            <p className="text-[13.5px] leading-[1.5] text-nevo-near-black/82">{safety}</p>
           </div>
         )}
         {steps.length > 0 && (

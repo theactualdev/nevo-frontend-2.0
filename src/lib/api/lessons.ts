@@ -178,7 +178,12 @@ export type SegmentReviewReason =
   | "calculation_step_missing_options"
   | "calculation_variant_missing_manipulative"
   | "calculation_segment_has_no_interactive_delivery"
-  | "model_flagged_for_review";
+  | "model_flagged_for_review"
+  // In the deployed enum by 24 Oct and read as "a reason this console
+  // doesn't recognise yet" until then (Osmosis section 4, the hub).
+  | "unmarkable_question"
+  | "depth_variant_review_required"
+  | "optional_media_pending_review";
 
 /**
  * "A stable, ordered reading boundary generated from approved lesson text."

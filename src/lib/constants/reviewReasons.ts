@@ -65,6 +65,21 @@ export const REVIEW_REASON_COPY: Record<SegmentReviewReason, string> = {
     "This section works through a calculation, but nothing came through for the student to do themselves.",
   model_flagged_for_review:
     "Nevo was not confident about this section and asked for a person to look at it.",
+
+  // The three below were in the deployed enum while this map held seventeen,
+  // so Osmosis section 4 showed "a reason this console doesn't recognise yet"
+  // (the hub, 24 Oct). Ours, for design to confirm or replace.
+  //
+  // A check question whose answer key matches none of its options, or whose
+  // answer type Nevo does not know (backend: UnclassifiableQuestionError).
+  unmarkable_question:
+    "One of this section's check questions came through without an answer Nevo can mark it against.",
+  // Not something that went wrong: work waiting for a teacher. Said as what
+  // is true for a child until then, not as an instruction.
+  depth_variant_review_required:
+    "Nevo wrote a simpler and a longer version of this section. Children don't get them until they're approved.",
+  optional_media_pending_review:
+    "Nevo made a picture or narration for this section. Children don't get it until it's approved.",
 };
 
 /**
