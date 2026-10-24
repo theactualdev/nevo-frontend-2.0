@@ -226,12 +226,15 @@ describe("what is not an activity the child can do", () => {
   });
 });
 
-describe("an activity with a safety sentence is not offered (SCRUM-280)", () => {
+describe("an activity with a safety sentence carries it (SCRUM-280, SCRUM-288)", () => {
   /*
    * Lydia, 23 Oct: "an activity whose source has a safety sentence MUST NOT
-   * RENDER AT ALL if the card can't display it". The card has no designed
-   * safety line yet, so the activity is held back whole.
+   * RENDER AT ALL if the card can't display it". #853 held such an activity
+   * back whole while the card had no designed place for the line. Frame
+   * 1a3016b draws it - a FIRST row above the steps - so the activity is
+   * offered again, and its line goes with it, word for word.
    */
+  const LINE = "Let an adult do the cutting. Do not taste the salt water.";
   const safe = (safety: unknown) =>
     built({
       availableModalities: ["text", "visual", "interactive"],
@@ -241,30 +244,34 @@ describe("an activity with a safety sentence is not offered (SCRUM-280)", () => 
       }),
     } as never);
 
-  it("is not built, so there is no card to open", () => {
-    const seg = safe("Let an adult do the cutting. Do not taste the salt water.");
+  it("is built, with the server's line word for word", () => {
+    const seg = safe(LINE);
 
-    expect(seg.interactive).toBeUndefined();
+    expect(seg.interactive?.steps).toHaveLength(3);
+    expect(seg.interactive?.safety).toBe(LINE);
   });
 
-  it("is not in the format group, even where the server lists it", () => {
-    const seg = safe("Let an adult do the cutting.");
+  it("is in the format group again, and opens only when picked, like any activity", () => {
+    const seg = safe(LINE);
 
-    expect(seg.formats).not.toContain("interactive");
+    expect(seg.formats).toContain("interactive");
     expect(seg.formats).toContain("text");
+    // Never what a section opens in with nothing picked (Lydia, 21 Oct).
+    expect(seg.modalities).toEqual(["text"]);
   });
 
-  it("is not a modality the section can open in", () => {
-    const seg = safe("Wash your hands afterwards.");
+  it("keeps the line as written, only its outer spaces trimmed", () => {
+    const seg = safe(`  ${LINE}\n`);
 
-    expect(seg.modalities).not.toContain("interactive");
+    expect(seg.interactive?.safety).toBe(LINE);
   });
 
-  it("is offered as before when the safety sentence is empty or absent", () => {
+  it("carries no line - nothing to stand in for one - when the sentence is empty or absent", () => {
     for (const safety of [null, undefined, "", "   "]) {
       const seg = safe(safety);
       expect(seg.interactive?.steps).toHaveLength(3);
       expect(seg.formats).toContain("interactive");
+      expect(seg.interactive && "safety" in seg.interactive).toBe(false);
     }
   });
 });

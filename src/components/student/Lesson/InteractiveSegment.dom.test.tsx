@@ -320,3 +320,145 @@ describe("the card's measurements, as the frame draws them", () => {
     expect(classes(heading)).not.toContain("leading-[1.3]");
   });
 });
+
+/*
+ * THE SAFETY LINE (SCRUM-280's hard rule; SCRUM-288, frame 1a3016b). The
+ * server's `safety`, word for word, as a row between YOU'LL NEED and the
+ * steps: the same lavender box as YOU'LL NEED, with the mono label FIRST
+ * before the line. Not dismissible and not tied to progress, so it stays for
+ * the whole activity. No line means no row and no space kept for one.
+ */
+describe("the safety line (SCRUM-288)", () => {
+  const SAFETY = "Let an adult do the cutting. Do not taste the salt water.";
+  const classes = (el: Element) => el.className.split(" ");
+  const row = () => screen.getByText(SAFETY).parentElement!;
+
+  it("is drawn word for word, under FIRST, between YOU'LL NEED and the steps", () => {
+    const { container } = render(
+      <InteractiveSegment content={{ ...activity(), safety: SAFETY }} />,
+    );
+
+    expect(card(container)).toEqual([
+      "heading",
+      "needs",
+      `div: First${SAFETY}`,
+      "steps",
+    ]);
+    // The label first, then the line.
+    expect(row().firstElementChild?.textContent).toBe("First");
+    expect(row().lastElementChild?.textContent).toBe(SAFETY);
+  });
+
+  it("is the YOU'LL NEED box, with its label and its type", () => {
+    render(<InteractiveSegment content={{ ...activity(), safety: SAFETY }} />);
+    const needs = screen.getByText(/need/i).parentElement!;
+
+    for (const c of [
+      "flex",
+      "items-start",
+      "gap-2.5",
+      "rounded-[12px]",
+      "bg-nevo-violet/8",
+      "px-4",
+      "py-[11px]",
+    ]) {
+      expect(classes(row()), c).toContain(c);
+      expect(classes(needs), c).toContain(c);
+    }
+    expect(classes(row())).toContain("mt-3");
+    expect(classes(row().firstElementChild!)).toEqual(
+      expect.arrayContaining([
+        "font-mono",
+        "text-[10px]",
+        "tracking-[0.06em]",
+        "text-nevo-navy",
+        "uppercase",
+      ]),
+    );
+    expect(classes(row().lastElementChild!)).toEqual(
+      expect.arrayContaining(["text-sm", "leading-[1.5]", "text-nevo-near-black/82"]),
+    );
+  });
+
+  it("is never a step: no checkbox, nothing to press, nothing to close", () => {
+    render(<InteractiveSegment content={{ ...activity(), safety: SAFETY }} />);
+
+    expect(row().closest("ol")).toBeNull();
+    expect(row().querySelector("button")).toBeNull();
+    expect(screen.getAllByRole("button")).toHaveLength(STEPS.length);
+  });
+
+  it("stays for the whole activity, every step ticked and back", () => {
+    render(
+      <InteractiveSegment
+        content={{ ...activity({ pending: WHILE, done: AFTER }), safety: SAFETY }}
+      />,
+    );
+
+    tickAll();
+    expect(screen.getByText(SAFETY)).toBeInTheDocument();
+    expect(screen.getByText(AFTER)).toBeInTheDocument();
+    tick(0);
+    expect(screen.getByText(SAFETY)).toBeInTheDocument();
+  });
+
+  it("sits 16 under the heading where there is no YOU'LL NEED", () => {
+    const { container } = render(
+      <InteractiveSegment
+        content={{ heading: "Grow a bean", steps: STEPS, safety: SAFETY }}
+      />,
+    );
+
+    expect(card(container)).toEqual(["heading", `div: First${SAFETY}`, "steps"]);
+    expect(classes(row())).toContain("mt-4");
+  });
+
+  it("is not there, and keeps no space, when the activity has no line", () => {
+    const { container } = render(<InteractiveSegment content={activity()} />);
+
+    expect(screen.queryByText("First")).toBeNull();
+    expect(card(container)).toEqual(["heading", "needs", "steps"]);
+  });
+
+  it("is drawn from the wire's `safety`, through the adapter", () => {
+    const content = lessonFromContent({
+      id: "osmosis",
+      title: "Osmosis",
+      confirmationSummary: null,
+      segments: [
+        {
+          id: "seg-4",
+          segmentKey: "s4",
+          contentType: "explanatory_text",
+          sequenceOrder: 4,
+          title: "Osmosis in a yam",
+          body: "Water moves across a membrane.",
+          availableModalities: ["text", "interactive"],
+          comprehensionCheckpoints: [],
+          textVariant: null,
+          visualVariant: null,
+          audioVariant: null,
+          interactiveVariant: {
+            type: "activity",
+            title: "Watch a yam strip change",
+            materials: ["Two yam strips"],
+            steps: [{ id: "a0", instruction: "Cut two strips of yam." }],
+            safety: SAFETY,
+          },
+          calculationVariant: null,
+          needsReview: false,
+          reviewReasons: [],
+        },
+      ],
+    } as unknown as LessonDetailResponse)!.segments[0].interactive!;
+
+    const { container } = render(<InteractiveSegment content={content} />);
+
+    expect(card(container)).toEqual([
+      "heading",
+      "needs",
+      `div: First${SAFETY}`,
+      "steps",
+    ]);
+  });
+});

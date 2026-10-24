@@ -126,6 +126,13 @@ export interface InteractiveContent {
   intro?: string;
   /** "YOU'LL NEED" items. */
   needs?: string[];
+  /**
+   * The activity's safety line, word for word as the server sends it
+   * (`interactiveVariant.safety`, SCRUM-280/288) - drawn under the FIRST
+   * label between "YOU'LL NEED" and the steps, for the whole activity.
+   * Authored per activity, so absent means none: nothing drawn, no space kept.
+   */
+  safety?: string;
   steps: string[];
   /**
    * The two "what you should see" lines (SCRUM-273, frame d6b9fbc), each
