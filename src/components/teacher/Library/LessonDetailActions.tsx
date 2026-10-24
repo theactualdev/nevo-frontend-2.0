@@ -45,6 +45,7 @@ export function stillToCheck(keyPoints: number, sections: number): string {
 export function LessonDetailActions({
   lessonId,
   variantsHref,
+  mediaHref,
   compact = false,
   ready = true,
   checking = false,
@@ -53,6 +54,12 @@ export function LessonDetailActions({
 }: {
   lessonId: string;
   variantsHref?: string;
+  /**
+   * C06b's way to C06c Lesson Media (design 82c213b): "Pictures and
+   * narration", after the lesson's other actions, as a quiet text link. Only
+   * where the lesson has live media to look at.
+   */
+  mediaHref?: string;
   compact?: boolean;
   /**
    * The SERVER's verdict on whether this lesson can go to a class.
@@ -102,6 +109,14 @@ export function LessonDetailActions({
             className={`inline-flex cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] font-semibold text-nevo-cream transition-[filter,transform] hover:brightness-93 active:scale-[0.99] xl:px-5 ${h}`}
           >
             Assign to a class
+          </Link>
+        )}
+        {mediaHref && (
+          <Link
+            href={mediaHref}
+            className={`inline-flex cursor-pointer items-center rounded-[10px] px-3.5 font-medium text-nevo-navy transition-[background-color,transform] hover:bg-nevo-navy/6 active:scale-[0.99] ${h}`}
+          >
+            Pictures and narration
           </Link>
         )}
       </div>
