@@ -56,6 +56,14 @@ export interface LessonReviewState {
   remove: (keyPointId: string) => void;
   /** Re-read, after something outside this hook changed the review. */
   refresh: () => void;
+  /**
+   * C07k's own answers, for the lesson page's way into it: the server's
+   * `reviewComplete`, and how many sections have no key point. Null and 0
+   * while unknown, and null on a deployment without the redesign, where the
+   * page has nothing to route into.
+   */
+  signedOff: boolean | null;
+  missingKeyPoints: number;
 }
 
 export function useLessonReview(
@@ -187,5 +195,8 @@ export function useLessonReview(
     amend,
     remove,
     refresh,
+    signedOff:
+      typeof review?.reviewComplete === "boolean" ? review.reviewComplete : null,
+    missingKeyPoints: review?.missingKeyPointSegmentIds?.length ?? 0,
   };
 }

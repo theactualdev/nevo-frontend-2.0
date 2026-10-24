@@ -5,6 +5,7 @@ import type {
 } from "./checkpoints";
 import type { SessionDelivery } from "./intelligence";
 import type { SegmentVariants } from "./variants";
+import type { LessonMedia } from "./media";
 
 /**
  * Parsed lesson content - the library and one lesson's segments.
@@ -448,7 +449,58 @@ export interface LessonReview {
    */
   readyToAssign: boolean;
   keyPoints: KeyPoint[];
+  /*
+   * C07K, THE LESSON-WIDE REVIEW (Lydia and Teslim, 19 Oct). Everything below
+   * is on Teslim's `codex/lesson-review-redesign` branch and not yet in
+   * production, so each is optional: a read without them is the old contract,
+   * and nothing below may be inferred from its absence.
+   */
+  /** What the one press signs. Sent back unchanged; the server refuses a stale one. */
+  keyPointsContentHash?: string;
+  rewritesContentHash?: string;
+  /** The latest sign-off of each kind, `current: false` once the material changed. */
+  keyPointApproval?: ReviewSignoff | null;
+  rewriteApproval?: ReviewSignoff | null;
+  /** Sections the parser drew no key point from and nobody has decided about. */
+  missingKeyPointSegmentIds?: string[];
+  rewriteCount?: number;
+  pendingRewriteCount?: number;
+  /**
+   * Both current sign-offs are in (a lesson with no rewrites needs only the
+   * first). NOT the assignment gate - `readyToAssign` keeps its old meaning.
+   */
+  reviewComplete?: boolean;
+  /**
+   * The lesson's generated pictures and narration, section by section (Teslim
+   * 10c6bf8). WHAT `approveAllKeyPoints` ALSO SIGNS: every item here at
+   * `awaiting_review` is in the key-point snapshot and is approved with it. So
+   * the review never offers that press while one is still unseen - step 1
+   * approves them first, where they are shown.
+   */
+  media?: LessonMedia | null;
 }
+
+/**
+ * One professional's sign-off over a whole step of the review.
+ *
+ * The name is the one the school recorded for them, stored with the approval
+ * rather than looked up later, so it says who decided even after they leave.
+ */
+export interface ReviewSignoff {
+  id: string;
+  kind: "key_points" | "rewrites";
+  approvedBy: string | null;
+  approvedByName: string;
+  approvedAt: string;
+  contentHash: string;
+  /** False once anything it signed has changed since. */
+  current: boolean;
+}
+
+/** A section with no key point: the teacher writes one, or says it has none. */
+export type MissingKeyPointWrite =
+  | { action: "add"; text: string }
+  | { action: "omit" };
 export interface LessonDetailResponse extends LessonSummary {
   /**
    * EVERY CLASS THIS LESSON WENT TO, and the reason the screen stopped showing
@@ -994,6 +1046,55 @@ export const lessonsApi = {
   removeKeyPoint: (lessonId: string, keyPointId: string) =>
     api.del<LessonReview>(
       `/api/v1/lessons/${lessonId}/key-points/${keyPointId}`,
+    ),
+
+  /*
+   * C07K'S FOUR WRITES (Teslim's `codex/lesson-review-redesign`, f1ba340).
+   *
+   * Each returns the whole review, like the three above. The two approvals
+   * send back the hash the last read carried: the server signs exactly the
+   * material the teacher was shown, and answers 409 `review_content_changed`
+   * if it moved underneath them. `acceptKeyPoint` and `approveSegment` are
+   * deprecated by these - nothing in the redesigned review calls them.
+   */
+  approveAllKeyPoints: (lessonId: string, expectedContentHash: string) =>
+    api.post<LessonReview>(
+      `/api/v1/lessons/${lessonId}/key-points/approve-all`,
+      { expectedContentHash },
+    ),
+
+  approveAllRewrites: (lessonId: string, expectedContentHash: string) =>
+    api.post<LessonReview>(
+      `/api/v1/lessons/${lessonId}/rewrites/approve-all`,
+      { expectedContentHash },
+    ),
+
+  /** Only where the parser found none; an extracted point is amended instead. */
+  resolveMissingKeyPoint: (
+    lessonId: string,
+    segmentId: string,
+    write: MissingKeyPointWrite,
+  ) =>
+    api.put<LessonReview>(
+      `/api/v1/lessons/${lessonId}/segments/${segmentId}/key-point`,
+      write,
+    ),
+
+  /**
+   * New wording for the simpler or the longer version. It stays pending, and
+   * out of every child's lesson, until the rewrites are approved again; the
+   * original is kept as `originalBody`. The response is the review, so the
+   * new body is read back from the lesson detail.
+   */
+  editRewrite: (
+    lessonId: string,
+    segmentId: string,
+    variant: "simplified" | "expanded",
+    body: string,
+  ) =>
+    api.patch<LessonReview>(
+      `/api/v1/lessons/${lessonId}/segments/${segmentId}/rewrites/${variant}`,
+      { body },
     ),
   /**
    * Open (or re-open) a play session. POST /api/v1/lessons/{id}/session

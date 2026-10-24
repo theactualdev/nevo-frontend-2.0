@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import { equationsOf, keyTermsOf } from "@/lib/lessons/fromContent";
-import { lessonsApi } from "@/lib/api/lessons";
 import { AudioVariantPlayer } from "./AudioVariantPlayer";
 import { IllustrationWrapper } from "@/components/shared/IllustrationWrapper";
 import type { LessonSegment } from "@/lib/api/lessons";
@@ -433,79 +432,12 @@ export function LiveVariantReview({
   segmentCount?: number;
 }) {
   const [tab, setTab] = useState<VariantTab>("Text");
-  /*
-   * APPROVAL, which this screen has never had (17 Sep).
-   *
-   * C07b's stated purpose is that "the teacher reviews each segment's variants
-   * and approves them for the class. Approval is manual and deliberate." There
-   * was no transport for it, so what shipped was review WITHOUT approval and
-   * the frame's purpose went unmet. Backend built it once design settled the
-   * question.
-   *
-   * It is not cosmetic any more: ASSIGNMENT IS GATED on every segment being
-   * approved, so without this control a teacher cannot assign a lesson they
-   * have just uploaded and has no way to unblock themselves.
-   *
-   * Local state, seeded from the server's `approved`, because the lesson read
-   * that produced `segment` is not refetched when a single segment is approved
-   * - and the approval response carries the lesson counts precisely so it does
-   * not have to be.
-   */
-  const [approved, setApproved] = useState(segment.approved);
-  const [counts, setCounts] = useState<{ done: number; total: number } | null>(
-    null,
-  );
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  /**
-   * WHETHER THE LESSON CAN NOW GO TO A CLASS - the server's `readyToAssign`,
-   * read once the last section is approved. Null until it has been read.
-   *
-   * "Every section approved. This lesson can be assigned." was said on the
-   * section count alone. Sections are half of it: a key point Nevo could not
-   * ground holds a lesson back too, and that half is only in the review read.
-   * A teacher told "can be assigned" went back to a greyed-out Assign.
-   */
-  const [assignable, setAssignable] = useState<{
-    ready: boolean;
-    keyPoints: number;
-  } | null>(null);
-
-  async function approve() {
-    if (approved || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await lessonsApi.approveSegment(lessonId, segment.id);
-      setApproved(true);
-      setCounts({ done: res.approvedSegmentCount, total: res.segmentCount });
-      if (res.approvedSegmentCount === res.segmentCount) {
-        // Best-effort: unknown says less, never more. A failed read leaves
-        // "Every section approved." standing alone, which is still true.
-        void lessonsApi
-          .review(lessonId)
-          .then((r) =>
-            setAssignable({ ready: r.readyToAssign, keyPoints: r.outstandingCount }),
-          )
-          .catch(() => {});
-      }
-    } catch {
-      // Nothing is approved until the server says so. Claiming otherwise is
-      // the shape of bug this console has shipped before.
-      setError(
-        `We couldn${"’"}t record that just now. Nothing has changed, so you can try again.`,
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       {/* No cap of its own at tablet - it conforms to its host (C16d, 8 Oct). */}
       <div className="mx-auto xl:max-w-[820px]">
         <Link
-          href={`/teacher/lessons/${lessonId}`}
+          href={`/teacher/lessons/${lessonId}/review?step=3`}
           className="inline-flex cursor-pointer items-center gap-[7px] text-[13px] text-nevo-near-black/55 transition-transform active:scale-[0.99] xl:text-[13.5px]"
         >
           <svg
@@ -521,7 +453,7 @@ export function LiveVariantReview({
           >
             <path d="M15 6l-6 6 6 6" />
           </svg>
-          Lesson Library · Variant review
+          Lesson review · Rewrites
         </Link>
 
         <h1 className="mt-0.5 text-[22px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[26px]">
@@ -533,6 +465,13 @@ export function LiveVariantReview({
           </p>
         )}
 
+        {/*
+          C16d (design 82c213b, 23 Oct): this screen is read from the review
+          flow's rewrites step now, and says so - "Lesson review · Rewrites",
+          back to that step. C07b, which it belonged to, is deleted (0d46d4f),
+          and the card that pointed from here into the flow went with it.
+          Approval lives in the flow; nothing here approves.
+        */}
         <p className="mt-4 text-[13px] leading-[1.6] text-nevo-near-black/60 italic xl:mt-[18px]">
           {VARIANT_ORIENTATION}
         </p>
@@ -584,7 +523,7 @@ export function LiveVariantReview({
             {`${tab} variant`}
           </h3>
           <div className="mt-3">
-            <VariantBody tab={tab} segment={segment} approved={approved} />
+            <VariantBody tab={tab} segment={segment} approved={segment.approved} />
           </div>
         </div>
 
@@ -600,57 +539,7 @@ export function LiveVariantReview({
               ? `Reviewing section ${sectionIndex} of ${segmentCount}`
               : `Reviewing section ${sectionIndex}`}
           </p>
-
-          {approved ? (
-            <span className="inline-flex h-11 items-center gap-2 rounded-[10px] border-[1.5px] border-nevo-navy/25 px-4 text-sm font-medium text-nevo-near-black/70">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M5 12.5l4.5 4.5L19 7.5" />
-              </svg>
-              Approved
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={approve}
-              disabled={busy}
-              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-60 xl:h-[46px] xl:px-[22px] xl:text-[14.5px]"
-            >
-              {busy ? "Approving…" : "Approve this section"}
-            </button>
-          )}
         </div>
-
-        {counts && (
-          <p className="mt-2.5 text-right text-[13px] text-nevo-near-black/60">
-            {counts.done === counts.total
-              ? assignable?.ready
-                ? "Every section approved. This lesson can be assigned."
-                : assignable && assignable.keyPoints > 0
-                  ? /* The lesson page's own count, in its own words. */
-                    `Every section approved. ${assignable.keyPoints} ${assignable.keyPoints === 1 ? "key point" : "key points"} waiting for you.`
-                  : "Every section approved."
-              : `${counts.done} of ${counts.total} sections approved.`}
-          </p>
-        )}
-        {/* C07b's end state carries its next step: "Lesson approved", then
-            "Assign to classes". Only when the server says it can go - the
-            line above is the reason; this is the way there. */}
-        {counts && counts.done === counts.total && assignable?.ready && (
-          <div className="mt-3 flex justify-end">
-            <Link
-              href={`/teacher/lessons/assign?lesson=${lessonId}`}
-              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 xl:h-[46px] xl:px-[22px] xl:text-[14.5px]"
-            >
-              Assign to classes
-            </Link>
-          </div>
-        )}
-
-        {error && (
-          <p className="mt-2.5 text-right text-[13px] leading-[1.5] text-nevo-near-black/72">
-            {error}
-          </p>
-        )}
 
         {/*
           C07b'S SECTION PILLS (T54). Each section was its own URL with no way
