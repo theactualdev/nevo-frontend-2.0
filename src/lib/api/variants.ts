@@ -168,9 +168,9 @@ export interface InteractiveActivityVariant {
   outcome?: string | null;
   /**
    * THE SOURCE'S SAFETY SENTENCE (backend 92af149; spec 23 Oct: "Authored
-   * safety instructions; show before activity steps"). Nullable. While the
-   * player has no designed way to draw it, an activity carrying one is not
-   * offered at all - SCRUM-280's hard rule; see `interactiveFor`.
+   * safety instructions; show before activity steps"). Nullable. Drawn word
+   * for word as the card's FIRST row, above the steps (SCRUM-288, frame
+   * 1a3016b) - see `interactiveFor` and `InteractiveSegment`.
    */
   safety?: string | null;
 }

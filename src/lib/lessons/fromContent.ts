@@ -499,17 +499,15 @@ function interactiveFor(
   const variant = segment.interactiveVariant;
   if (!variant || !isActivity(variant)) return undefined;
   /*
-   * AN ACTIVITY WITH A SAFETY SENTENCE IS NOT OFFERED UNTIL ITS LINE CAN BE
-   * DRAWN (SCRUM-280, a blocker, Lydia 23 Oct): "an activity whose source has
-   * a safety sentence MUST NOT RENDER AT ALL if the card can't display it".
-   * The server sends `safety` since 92af149 and this card has no designed
-   * place for it yet - above the steps, distinct from a step, never collapsed
-   * or dismissible - so production showed Osmosis section 4's activity with
-   * its "let an adult do the cutting" line missing. Not built here means not
-   * in the format group, so no pick, stored choice or engine plan can open
-   * it; the section keeps its other formats. Lifted when the drawn line ships.
+   * AN ACTIVITY'S SAFETY LINE GOES WITH IT, WORD FOR WORD (SCRUM-280's hard
+   * rule; SCRUM-288, frame 1a3016b). "An activity whose source has a safety
+   * sentence MUST NOT RENDER AT ALL if the card can't display it" - and since
+   * 1a3016b the card can: a FIRST row above the steps (`InteractiveSegment`).
+   * #853 kept such an activity out of the format group until then; that
+   * guard is lifted here, because the line now travels with the card that
+   * draws it. No line sent is none drawn - nothing is written in its place.
    */
-  if (lineOf(variant.safety)) return undefined;
+  const safety = lineOf(variant.safety);
   const steps = textsOf(
     Array.isArray(variant.steps) ? variant.steps.map((s) => s?.instruction) : [],
   );
@@ -526,6 +524,7 @@ function interactiveFor(
     heading: title || (segment.title ?? lessonTitle),
     ...(intro ? { intro } : {}),
     ...(needs ? { needs } : {}),
+    ...(safety ? { safety } : {}),
     steps,
     ...(pending || done
       ? {

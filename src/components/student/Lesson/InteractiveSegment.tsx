@@ -7,8 +7,10 @@ import type { InteractiveContent } from "@/lib/types";
 
 /**
  * Interactive modality (Lesson Player frame 17) — work through it: a "YOU'LL
- * NEED" strip, tickable STEP cards with square checkboxes, and the activity's
- * own line of what to watch for. No score, no right/wrong — just doing.
+ * NEED" strip, the activity's safety line under FIRST where it has one
+ * (SCRUM-288, frame 1a3016b), tickable STEP cards with square checkboxes, and
+ * the activity's own line of what to watch for. No score, no right/wrong —
+ * just doing.
  *
  * NO INTRO PARAGRAPH (frame d6b9fbc): the frame removed it, and trimmed the
  * spacing round the strip and the steps, so the in-progress line fits on a
@@ -61,6 +63,31 @@ export function InteractiveSegment({
           </span>
           <span className="text-sm leading-[1.5] text-nevo-near-black/82">
             {content.needs.join(" · ")}
+          </span>
+        </div>
+      )}
+
+      {/*
+        THE SAFETY LINE (SCRUM-280/288, frame 1a3016b): the server's
+        `safety`, word for word, under a FIRST label, in the same lavender box
+        as YOU'LL NEED and above the steps, so it is read before starting and
+        never reads as a step. Not dismissible and not tied to progress: it
+        stays for the whole activity. No line, no box and no space for one.
+      */}
+      {content.safety && (
+        <div
+          className={cn(
+            "flex items-start gap-2.5 rounded-[12px] bg-nevo-violet/8 px-4 py-[11px]",
+            // 12 under YOU'LL NEED, as the frame spaces it; 16 under the
+            // heading where there is no YOU'LL NEED above it.
+            content.needs && content.needs.length > 0 ? "mt-3" : "mt-4",
+          )}
+        >
+          <span className="mt-0.5 shrink-0 font-mono text-[10px] tracking-[0.06em] text-nevo-navy uppercase">
+            First
+          </span>
+          <span className="text-sm leading-[1.5] text-nevo-near-black/82">
+            {content.safety}
           </span>
         </div>
       )}
