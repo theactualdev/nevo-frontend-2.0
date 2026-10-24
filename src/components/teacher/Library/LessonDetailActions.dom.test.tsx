@@ -136,3 +136,24 @@ describe("Edit", () => {
     expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * C06b's way to C06c Lesson Media (design 82c213b): "Pictures and narration",
+ * only where the lesson has live media to look at.
+ */
+describe("the way to the lesson's pictures and narration", () => {
+  it("is offered when the lesson has live media", () => {
+    render(<LessonDetailActions lessonId="l-1" ready mediaHref="/teacher/lessons/l-1/media" />);
+
+    expect(screen.getByRole("link", { name: "Pictures and narration" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1/media",
+    );
+  });
+
+  it("is not offered when there is none", () => {
+    render(<LessonDetailActions lessonId="l-1" ready />);
+
+    expect(screen.queryByRole("link", { name: "Pictures and narration" })).not.toBeInTheDocument();
+  });
+});

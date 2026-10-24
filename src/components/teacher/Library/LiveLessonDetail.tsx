@@ -525,6 +525,12 @@ export function LiveLessonDetail({
           {assignable && (
           <LessonDetailActions
             lessonId={lesson.id}
+            /* C06c: a live picture or recording on any section. */
+            mediaHref={
+              segments.some((s) => s.visualVariant?.imageUrl || s.audioVariant?.audioUrl)
+                ? `/teacher/lessons/${lesson.id}/media`
+                : undefined
+            }
             /* THE GATE IS `readyToAssign`, and the count is only what the
                line says. Backend asked for the split by name: a client that
                decides "ready" for itself is how this ticket started. */
