@@ -9,6 +9,7 @@ import {
   type LessonReview,
   type MissingKeyPointWrite,
 } from "@/lib/api/lessons";
+import { mediaApi } from "@/lib/api/media";
 import { getToken } from "@/lib/auth/session";
 
 /**
@@ -33,7 +34,9 @@ export type ReviewWork =
   | "rewrites"
   | `point:${string}`
   | `missing:${string}`
-  | `rewrite:${string}:${string}`;
+  | `rewrite:${string}:${string}`
+  | "media"
+  | `retry:${string}`;
 
 export interface LessonReviewFlowState {
   lesson: LessonDetailResponse | null;
@@ -57,6 +60,14 @@ export interface LessonReviewFlowState {
     variant: "simplified" | "expanded",
     body: string,
   ) => Promise<boolean>;
+  /**
+   * Step 1's one press: the flagged items are sent back to be made again,
+   * then everything else shown is approved. Remakes go first and a refused one
+   * stops the press, so a teacher's flag is never overridden by the approval.
+   */
+  approveMedia: (approve: string[], remake: string[]) => Promise<boolean>;
+  /** Try a failed picture or recording again. */
+  retryMedia: (mediaId: string) => Promise<boolean>;
 }
 
 export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
@@ -170,6 +181,59 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
     [act, lessonId, readLesson],
   );
 
+  /*
+   * Approving media writes the picture or recording onto its section, and a
+   * remake or an approval changes what the key-point snapshot holds, so both
+   * reads come back after either.
+   */
+  const rereadAll = useCallback(
+    () => Promise.all([lessonsApi.review(lessonId).then(setReview), readLesson()]),
+    [lessonId, readLesson],
+  );
+
+  const approveMedia = useCallback(
+    async (approve: string[], remake: string[]) => {
+      if (working) return false;
+      setWorking("media");
+      setRefused(null);
+      try {
+        for (const id of remake) await mediaApi.retry(lessonId, id);
+        if (approve.length > 0) await mediaApi.approve(lessonId, approve);
+        await rereadAll().catch(() => {});
+        return true;
+      } catch (err: unknown) {
+        const detail = err instanceof ApiError ? err.detail : undefined;
+        setRefused({ work: "media", message: apiErrorMessage(detail) });
+        // Something may have landed before the refusal; show what is true now.
+        await rereadAll().catch(() => {});
+        return false;
+      } finally {
+        setWorking(null);
+      }
+    },
+    [working, lessonId, rereadAll],
+  );
+
+  const retryMedia = useCallback(
+    async (mediaId: string) => {
+      if (working) return false;
+      setWorking(`retry:${mediaId}`);
+      setRefused(null);
+      try {
+        await mediaApi.retry(lessonId, mediaId);
+        await rereadAll().catch(() => {});
+        return true;
+      } catch (err: unknown) {
+        const detail = err instanceof ApiError ? err.detail : undefined;
+        setRefused({ work: `retry:${mediaId}`, message: apiErrorMessage(detail) });
+        return false;
+      } finally {
+        setWorking(null);
+      }
+    },
+    [working, lessonId, rereadAll],
+  );
+
   return {
     lesson,
     modules: [...(lesson?.modules ?? [])].sort((a, b) => a.sequenceOrder - b.sequenceOrder),
@@ -185,5 +249,7 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
     amendPoint,
     resolveMissing,
     editRewrite,
+    approveMedia,
+    retryMedia,
   };
 }

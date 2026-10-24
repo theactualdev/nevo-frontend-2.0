@@ -437,7 +437,7 @@ export function LiveVariantReview({
       {/* No cap of its own at tablet - it conforms to its host (C16d, 8 Oct). */}
       <div className="mx-auto xl:max-w-[820px]">
         <Link
-          href={`/teacher/lessons/${lessonId}`}
+          href={`/teacher/lessons/${lessonId}/review?step=3`}
           className="inline-flex cursor-pointer items-center gap-[7px] text-[13px] text-nevo-near-black/55 transition-transform active:scale-[0.99] xl:text-[13.5px]"
         >
           <svg
@@ -453,7 +453,7 @@ export function LiveVariantReview({
           >
             <path d="M15 6l-6 6 6 6" />
           </svg>
-          Lesson Library · Variant review
+          Lesson review · Rewrites
         </Link>
 
         <h1 className="mt-0.5 text-[22px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[26px]">
@@ -466,31 +466,12 @@ export function LiveVariantReview({
         )}
 
         {/*
-          C07b-1, PORTED TO C07k (design 534ba31; Lydia, 19 Oct): "C07b's
-          per-segment approve step is retired; it keeps its assignment steps."
-          The approve control that stood under these tabs is gone, and with it
-          the route it called, which backend has deprecated in favour of the
-          lesson-wide sign-off. The variants stay readable here.
+          C16d (design 82c213b, 23 Oct): this screen is read from the review
+          flow's rewrites step now, and says so - "Lesson review · Rewrites",
+          back to that step. C07b, which it belonged to, is deleted (0d46d4f),
+          and the card that pointed from here into the flow went with it.
+          Approval lives in the flow; nothing here approves.
         */}
-        <div className="mt-[22px] rounded-[12px] bg-nevo-cream-elevated px-7 py-[26px] shadow-elevation-1">
-          <h2 className="text-[18px] font-semibold text-nevo-near-black">
-            Reviewing happens in four calm steps now
-          </h2>
-          <p className="mt-[9px] text-[14.5px] leading-[1.55] text-pretty text-nevo-near-black/68">
-            The rewrites are checked in step 3 of the flow. One press accepts
-            them all. You approve the lesson once, then assign it anywhere.
-          </p>
-          <Link
-            href={`/teacher/lessons/${lessonId}/review`}
-            className="mt-5 inline-flex h-[46px] cursor-pointer items-center gap-2 rounded-[10px] bg-nevo-navy px-[22px] text-[14.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
-          >
-            Open the review flow
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M9 6l6 6-6 6" />
-            </svg>
-          </Link>
-        </div>
-
         <p className="mt-4 text-[13px] leading-[1.6] text-nevo-near-black/60 italic xl:mt-[18px]">
           {VARIANT_ORIENTATION}
         </p>

@@ -450,6 +450,10 @@ const CLASSIFIER_ALLOWED = new Map([
     "src/components/teacher/Upload/UploadWizard.tsx:faintPagesLine",
     "`j - i >= 2` decides whether page numbers the SERVER sent, in a row, are written as a range (\"Pages 1 to 27\") or listed one by one - typesetting a document's page numbers, and `pages.length > 1` is \"Page\"/\"Pages\" grammar. About an uploaded file, not a child. Permanent: there is no cutoff to own.",
   ],
+  [
+    "src/components/teacher/LessonReview/StepMedia.tsx:coverNote",
+    "`flagged > 0` and `without > 0` ask whether the teacher has flagged any of a lesson's generated PICTURES or RECORDINGS, or whether any SECTION has none - the teacher's own flags and the server's own media list counted, nothing measured about anyone - and `without === 1` is \"section has\"/\"sections have\" grammar. About a lesson's media, not a child. Permanent: there is no cutoff to own.",
+  ],
 ]);
 const allowlistHits = new Set();
 

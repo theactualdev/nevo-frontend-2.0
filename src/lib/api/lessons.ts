@@ -5,6 +5,7 @@ import type {
 } from "./checkpoints";
 import type { SessionDelivery } from "./intelligence";
 import type { SegmentVariants } from "./variants";
+import type { LessonMedia } from "./media";
 
 /**
  * Parsed lesson content - the library and one lesson's segments.
@@ -469,6 +470,14 @@ export interface LessonReview {
    * first). NOT the assignment gate - `readyToAssign` keeps its old meaning.
    */
   reviewComplete?: boolean;
+  /**
+   * The lesson's generated pictures and narration, section by section (Teslim
+   * 10c6bf8). WHAT `approveAllKeyPoints` ALSO SIGNS: every item here at
+   * `awaiting_review` is in the key-point snapshot and is approved with it. So
+   * the review never offers that press while one is still unseen - step 1
+   * approves them first, where they are shown.
+   */
+  media?: LessonMedia | null;
 }
 
 /**
