@@ -14,17 +14,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# THE BACKEND MOVED AGAIN (25 Oct 2026). api.nevolearning.com stopped answering
-# when the API moved to the `-zxoz` Render service, and every default in this
-# repo still names the domain: the e2e specs (`E2E_API_BASE`), the contract,
-# audit and probe scripts (`NEVO_API_URL`) and the app itself (`upstream.ts`).
-# Until Teslim points the domain at the new service, CI names the address
-# here. Remove this block, and the e2e step's NEXT_PUBLIC_API_URL, once
-# api.nevolearning.com answers again.
-env:
-  E2E_API_BASE: https://nevo-backend-2-0-zxoz.onrender.com
-  NEVO_API_URL: https://nevo-backend-2-0-zxoz.onrender.com
-
 jobs:
   static:
     name: types and lint
@@ -89,9 +78,6 @@ jobs:
       # school code is read from the admin's own record, never named here.
       - run: npm run e2e
         env:
-          # The app this job builds and serves proxies to `API_ORIGIN`, which
-          # falls back to api.nevolearning.com - see the note at the top.
-          NEXT_PUBLIC_API_URL: https://nevo-backend-2-0-zxoz.onrender.com
           E2E_TEACHER_EMAIL: ${{ secrets.E2E_TEACHER_EMAIL }}
           E2E_TEACHER_PASSWORD: ${{ secrets.E2E_TEACHER_PASSWORD }}
           E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
