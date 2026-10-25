@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { InteractiveContent } from "@/lib/types";
+import { asSentence } from "@/lib/lessons/asSentence";
 
 /**
  * Interactive modality (Lesson Player frame 17) — work through it: a "YOU'LL
@@ -73,6 +74,8 @@ export function InteractiveSegment({
         as YOU'LL NEED and above the steps, so it is read before starting and
         never reads as a step. Not dismissible and not tied to progress: it
         stays for the whole activity. No line, no box and no space for one.
+        Its first letter is a capital ON SCREEN ONLY (Lydia, 25 Oct) - see
+        `asSentence`.
       */}
       {content.safety && (
         <div
@@ -87,7 +90,7 @@ export function InteractiveSegment({
             First
           </span>
           <span className="text-sm leading-[1.5] text-nevo-near-black/82">
-            {content.safety}
+            {asSentence(content.safety)}
           </span>
         </div>
       )}
