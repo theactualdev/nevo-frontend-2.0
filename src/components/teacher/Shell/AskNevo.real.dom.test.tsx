@@ -204,16 +204,54 @@ describe("the signed-out walkthrough", () => {
   });
 });
 
+/**
+ * A STRUCTURED ANSWER KEEPS ITS SHAPE (Teslim 09a29d8, 25 Oct). The drawer
+ * picked `plainText` and printed it in one `<p>`, which flattened headings,
+ * lists, spacing and emphasis. It draws the Markdown answer by block now -
+ * and only as text, never as HTML.
+ */
 describe("a structured answer", () => {
-  it("reads its plain text, not its markup", async () => {
+  it("draws its heading, list, bold and code as such", async () => {
     ask.mockResolvedValue(
-      answer({ answer: "## Heading\n- one\n- two", plainText: "One, then two.", answerFormat: "structured" }),
+      answer({
+        answer: "**This week**\n\n- Check **JSS 2A**\n- Open `Fractions 3`\n\nThen plan Monday.",
+        plainText: "This week\n• Check JSS 2A\n• Open Fractions 3\nThen plan Monday.",
+        answerFormat: "structured",
+      }),
     );
     openOn("/teacher/dashboard");
     askQuestion("Give me a list");
 
+    const items = await screen.findAllByRole("listitem", {}, { timeout: 3000 });
+    expect(items.map((li) => li.textContent)).toEqual(["Check JSS 2A", "Open Fractions 3"]);
+    expect(items[0].querySelector("strong")?.textContent).toBe("JSS 2A");
+    expect(items[1].querySelector("code")?.textContent).toBe("Fractions 3");
+    expect(screen.getByText("This week")).toHaveClass("font-semibold");
+    expect(screen.getByText("Then plan Monday.")).toBeInTheDocument();
+    // No markup reaches the page as characters, either.
+    expect(screen.queryByText(/\*\*|`/)).not.toBeInTheDocument();
+  });
+
+  it("shows markup in an answer as text, never as HTML", async () => {
+    ask.mockResolvedValue(
+      answer({ answer: "Try <img src=x onerror=alert(1)> and <script>alert(1)</script>." }),
+    );
+    openOn("/teacher/dashboard");
+    askQuestion("Tell me");
+
+    expect(
+      await screen.findByText(/<script>alert\(1\)<\/script>/, {}, { timeout: 3000 }),
+    ).toBeInTheDocument();
+    expect(document.querySelector("img[src='x']")).toBeNull();
+    expect(document.querySelector("script")).toBeNull();
+  });
+
+  it("falls back to the plain text when the answer itself is empty", async () => {
+    ask.mockResolvedValue(answer({ answer: "", plainText: "One, then two." }));
+    openOn("/teacher/dashboard");
+    askQuestion("Tell me");
+
     expect(await screen.findByText("One, then two.", {}, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.queryByText(/## Heading/)).not.toBeInTheDocument();
   });
 
   it("reads the answer itself when it is plain", async () => {

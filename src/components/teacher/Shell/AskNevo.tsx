@@ -12,6 +12,8 @@ import {
   type ThreadTranscript,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth/session";
+import type { ServerAnswerBlock } from "@/lib/answerBlocks";
+import { NevoAnswer } from "@/components/shared/NevoAnswer";
 import {
   ASK_NEVO_CONTEXTS,
   CANNOT_HELP_LINE,
@@ -80,7 +82,11 @@ type Turn =
   | { kind: "question"; text: string }
   | {
       kind: "answer";
+      /** The answer's Markdown, or a canned answer's sentence. */
       text: string;
+      /** The server's blocks and plain text, drawn only when `text` is empty. */
+      blocks?: ServerAnswerBlock[];
+      plainText?: string;
       action?: { label: string; href: string };
       /** Present only on a REAL answer - what the vote is cast against. */
       interactionId?: string;
@@ -287,13 +293,16 @@ export function AskNevo() {
         res
           ? {
               kind: "answer",
-              // A structured answer's `answer` carries its markup; the
-              // contract gives `plainText` for a client that renders one
-              // paragraph, which this bubble is.
-              text:
-                res.answerFormat === "structured" && res.plainText
-                  ? res.plainText
-                  : res.answer,
+              /*
+               * THE ANSWER'S OWN SHAPE (Teslim 09a29d8, 25 Oct). This picked
+               * `plainText` for a structured answer and printed it in one
+               * `<p>`, which flattened its headings, lists and paragraphs
+               * into one run. The Markdown is drawn now, by `NevoAnswer`; the
+               * blocks and plain text ride along as its fallbacks.
+               */
+              text: res.answer,
+              blocks: res.blocks,
+              plainText: res.plainText,
               // Kept so the vote below has something to post against; a
               // canned answer has no interaction and gets no vote.
               interactionId: res.interactionId,
@@ -511,9 +520,12 @@ export function AskNevo() {
                     ) : t.kind === "answer" ? (
                       <div key={i} className="mt-3.5 flex justify-start">
                         <div className="max-w-[88%] rounded-[14px_14px_14px_4px] border border-nevo-violet/35 bg-nevo-violet/15 px-4 py-3.5">
-                          <p className="text-[14.5px] leading-[1.6] text-nevo-near-black">
-                            {t.text}
-                          </p>
+                          <NevoAnswer
+                            answer={t.text}
+                            blocks={t.blocks}
+                            plainText={t.plainText}
+                            className="text-[14.5px] leading-[1.6] text-nevo-near-black"
+                          />
                           {t.interactionId && (
                             <div className="mt-[11px] flex items-center justify-end gap-1 border-t border-nevo-near-black/9 pt-[9px]">
                               {([1, -1] as const).map((v) => {
@@ -808,9 +820,12 @@ function HistoryItem({
             className={i > 0 ? "mt-3.5 flex justify-start" : "flex justify-start"}
           >
             <div className="max-w-[88%] rounded-[14px_14px_14px_4px] border border-nevo-violet/35 bg-nevo-violet/15 px-4 py-3.5">
-              <p className="text-[14.5px] leading-[1.6] text-nevo-near-black">
-                {m.text}
-              </p>
+              {/* A reopened answer looks as it did when it was given. */}
+              <NevoAnswer
+                answer={m.text}
+                blocks={m.blocks}
+                className="text-[14.5px] leading-[1.6] text-nevo-near-black"
+              />
             </div>
           </div>
         ),
