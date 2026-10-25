@@ -477,12 +477,13 @@ function dropProgress(owner: string, slot: string, heldAt: number): void {
 /**
  * One visit: a session for it if it never had one, then its answers, then
  * its position - the completion only once its answers are in (see above).
+ * True when its position reached the server.
  */
 async function deliverSlot(
   owner: string,
   lessonId: string,
   slot: string,
-): Promise<void> {
+): Promise<boolean> {
   let held: PendingWrite | undefined = read(owner)[slot];
   if (held && Date.now() - held.heldAt > MAX_AGE_MS) {
     dropProgress(owner, slot, held.heldAt);
@@ -492,12 +493,12 @@ async function deliverSlot(
   const waiting = answersIn(owner, slot).filter(
     (a) => a.refusedAt === undefined,
   );
-  if (!held && waiting.length === 0) return;
+  if (!held && waiting.length === 0) return false;
   try {
     let sessionId =
       held?.sessionId ?? waiting.find((a) => a.sessionId)?.sessionId ?? null;
     if (!sessionId) {
-      if (mine || !stillSignedInAs(owner)) return;
+      if (mine || !stillSignedInAs(owner)) return false;
       sessionId = (await lessonsApi.startSession(lessonId)).sessionId;
       // Kept under the session from here on, so its answers and its position
       // land in one visit even if they go on different reconnects.
@@ -512,13 +513,13 @@ async function deliverSlot(
       slot = to;
     }
     const answers = await sendAnswers(owner, lessonId, slot, sessionId);
-    if (!held || mine) return;
+    if (!held || mine) return false;
     let status = held.status;
     if (status === LESSON_STATUS.COMPLETED && answers !== "sent") {
-      if (answers === "held") return;
+      if (answers === "held") return false;
       status = LESSON_STATUS.EXITED;
     }
-    if (!stillSignedInAs(owner)) return;
+    if (!stillSignedInAs(owner)) return false;
     await lessonsApi.saveProgress(lessonId, {
       sessionId,
       status,
@@ -529,6 +530,7 @@ async function deliverSlot(
     });
     dropProgress(owner, slot, held.heldAt);
     if (status !== held.status) settle(owner, slot);
+    return true;
   } catch (cause) {
     // A 4xx DROPS the entry - the server has answered about this write, and
     // a stale session id it will never accept would otherwise be retried for
@@ -538,7 +540,28 @@ async function deliverSlot(
     if (held && status >= 400 && status < 500) {
       dropProgress(owner, slot, held.heldAt);
     }
+    return false;
   }
+}
+
+/**
+ * Fired on `window` once a flush has put at least one held position on the
+ * server.
+ *
+ * THE SHELL FLUSHES AS HOME READS THE DASHBOARD - both on mount, side by
+ * side. So a completion held on this device can land a beat after Home has
+ * already read the row it replaces, and Home would go on listing that
+ * finished lesson under "Pick up where you left off" until it was next
+ * mounted. The 24 Oct production run saw exactly that shape (Chidi on
+ * Photosynthesis: listed, then opened as finished, then gone). A screen that
+ * draws from those rows reads them again on this; see `onHeldProgressLanded`.
+ */
+const LANDED = "nevo:held-progress-landed";
+
+/** Call `listener` whenever held progress lands. Returns the unsubscribe. */
+export function onHeldProgressLanded(listener: () => void): () => void {
+  window.addEventListener(LANDED, listener);
+  return () => window.removeEventListener(LANDED, listener);
 }
 
 async function flushOnce(): Promise<void> {
@@ -567,12 +590,16 @@ async function flushOnce(): Promise<void> {
 
   // Oldest first within a lesson, so a held completion is never overtaken by
   // a later visit's position on the way up. Lessons go in parallel.
+  let landed = false;
   await Promise.all(
     [...byLesson].map(async ([lessonId, slots]) => {
       const ordered = [...slots].sort((a, b) => a[1] - b[1]);
-      for (const [slot] of ordered) await deliverSlot(owner, lessonId, slot);
+      for (const [slot] of ordered) {
+        if (await deliverSlot(owner, lessonId, slot)) landed = true;
+      }
     }),
   );
+  if (landed) window.dispatchEvent(new Event(LANDED));
 }
 
 let queue: Promise<void> = Promise.resolve();
