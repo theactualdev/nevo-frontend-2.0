@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { isOpenToStudent, unavailableReason } from "@/lib/lessons/availability";
 import { isFinishedRow } from "@/lib/lessons/finishedRow";
+import { onHeldProgressLanded } from "@/lib/lessons/pendingProgress";
 import { lessonHref } from "@/lib/lessons/lessonHref";
 import { segmentPlace, type SegmentPlace } from "@/lib/lessons/segmentPlace";
 import { BookOpen, ChevronRight, Clock, Play, Shapes } from "lucide-react";
@@ -173,7 +174,15 @@ export function HomeDashboard() {
   const { name: displayName } = useDisplayName();
   const signedIn = useHasSession();
   const hydrated = useHydrated();
-  const { data: live, failed, loading } = useStudentDashboard();
+  const { data: live, failed, loading, refresh } = useStudentDashboard();
+  /*
+   * READ AGAIN WHEN HELD PROGRESS LANDS. The shell sends what this device
+   * held at the same moment this screen first reads, so a completion landing
+   * a beat later left its finished lesson under "Pick up where you left off"
+   * until Home was next opened (24 Oct production run). See
+   * `onHeldProgressLanded`.
+   */
+  useEffect(() => onHeldProgressLanded(refresh), [refresh]);
   // Every assignment, finished ones included - the dashboard leaves those
   // out. Read once here, for `everSet` alone. See `useStudentAssignments`.
   const { data: everyAssignment } = useStudentAssignments();

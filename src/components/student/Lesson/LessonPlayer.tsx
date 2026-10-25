@@ -707,6 +707,46 @@ export function LessonPlayer({
   const [passedChecks, setPassedChecks] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  /*
+   * AND THE ONES PASSED BEFORE THIS PAGE LOADED (24 Oct production run, item
+   * 4: The Periodic Table's section 4 was asked again after a reload, though
+   * the server had marked it right). Passed is the SERVER'S MARK - a stored
+   * quick-check answer to this section's own question with `correct: true` -
+   * read back once the sitting opens, and nothing counted or decided here
+   * (rule 3). The whole lesson's answers, not one sitting's, because that is
+   * how the server's own comprehension gate counts a pass
+   * (`gate_for_position`); its `GET .../comprehension` names no passes while
+   * the gate is off, which it is in production, so it cannot be the source.
+   * Unread, every check is asked as it was before (rule 5).
+   *
+   * Only for a live lesson the child is working through, as `choicesHeld`:
+   * a finished lesson opened again is a sitting on work that ended.
+   */
+  // Once a lesson: the read is the server's word as the sitting opened, and a
+  // pass made after it is added where the answer lands.
+  const passesAsked = useRef<string | null>(null);
+  const sittingOpen = Boolean(progress.opened);
+  useEffect(() => {
+    if (!choicesHeld || !sittingOpen || passesAsked.current === lesson.id) {
+      return;
+    }
+    passesAsked.current = lesson.id;
+    lessonsApi
+      .attempts(lesson.id)
+      .then((rows) => {
+        const right = new Set(
+          rows.flatMap((r) =>
+            r.source === "checkpoint" && r.correct === true ? [r.questionId] : [],
+          ),
+        );
+        const passed = lesson.segments.flatMap((s) =>
+          s.quickCheck?.id && right.has(s.quickCheck.id) ? [s.id] : [],
+        );
+        if (passed.length === 0) return;
+        setPassedChecks((prev) => new Set([...prev, ...passed]));
+      })
+      .catch(() => {});
+  }, [choicesHeld, sittingOpen, lesson]);
   const [checkOpen, setCheckOpen] = useState(false);
   /*
    * B94 / SCRUM-241: THE SERVER HANDING A CHILD OFF FROM A QUICK CHECK to the
