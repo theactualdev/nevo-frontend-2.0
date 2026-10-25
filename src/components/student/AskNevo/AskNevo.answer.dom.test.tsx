@@ -167,6 +167,28 @@ describe("an answer with structure", () => {
     expect(screen.getByText("light").tagName).toBe("STRONG");
     expect(document.body.textContent).not.toContain("**");
   });
+
+  it("keeps its bold and code, which the server's own blocks strip (Teslim, 25 Oct)", async () => {
+    ask.mockResolvedValue(
+      answer({
+        answer: "Plants need **light**.\n\n- Write it as `CO2`",
+        // The server's blocks: the same answer with the marks taken out.
+        blocks: [
+          { type: "paragraph", text: "Plants need light.", items: [], level: 0 },
+          { type: "bullets", text: "", items: ["Write it as CO2"], level: 0 },
+        ],
+        plainText: "Plants need light.\n• Write it as CO2",
+      }),
+    );
+    open();
+    await send("What do plants need?");
+
+    expect(screen.getByText("light").tagName).toBe("STRONG");
+    expect(screen.getByText("CO2").tagName).toBe("CODE");
+    expect(screen.getByRole("listitem").textContent).toBe("Write it as CO2");
+    expect(document.body.textContent).not.toContain("**");
+    expect(document.body.textContent).not.toContain("`");
+  });
 });
 
 describe("an answer the server says it cannot help with", () => {

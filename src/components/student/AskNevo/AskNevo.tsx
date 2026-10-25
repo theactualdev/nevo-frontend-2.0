@@ -19,6 +19,7 @@ import {
   type ThreadTranscript,
 } from "@/lib/api/askNevo";
 import { AnswerBlocks } from "@/components/shared/AnswerBlocks";
+import { answerBlocksFor } from "@/lib/answerMarkdown";
 import { LessonContext } from "@/context/LessonContext";
 import { useAuth, useSignals } from "@/hooks";
 import { SIGNAL_EVENT_TYPES } from "@/lib/constants";
@@ -338,8 +339,10 @@ export function AskNevo() {
               who: "nevo",
               text: res.answer,
               // Drawn by its pieces, never the Markdown string as it is: a
-              // child saw its asterisks (Teslim, 25 Oct). See `AnswerBlocks`.
-              blocks: res.blocks,
+              // child saw its asterisks (Teslim, 25 Oct). Read from the
+              // Markdown so bold and code are kept, which the server's own
+              // blocks strip; those are the fallback. See `answerBlocksFor`.
+              blocks: answerBlocksFor(res),
               interactionId: res.interactionId,
               // Frame 26's "Can't help · hands to teacher": the server's own
               // answer, with the way to the teacher beside it. Strictly
@@ -810,9 +813,13 @@ function ReadOnlyThread({
           </div>
         ) : (
           <div key={m.messageId} className="flex justify-start">
-            {/* Drawn as the live answer was - by its pieces (Teslim, 25 Oct). */}
+            {/* Drawn as the live answer was - by its pieces, bold and code
+                kept (Teslim, 25 Oct). */}
             <div className="max-w-[88%] rounded-2xl rounded-bl-[5px] bg-nevo-violet/22 px-3.5 py-3 text-[15px] leading-[1.5]">
-              <AnswerBlocks blocks={m.blocks} text={m.text} />
+              <AnswerBlocks
+                blocks={answerBlocksFor({ answer: m.text, blocks: m.blocks })}
+                text={m.text}
+              />
             </div>
           </div>
         ),
