@@ -157,3 +157,51 @@ describe("the way to the lesson's pictures and narration", () => {
     expect(screen.queryByRole("link", { name: "Pictures and narration" })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * ASSIGN WAITS FOR THE LESSON-WIDE SIGN-OFF (Lydia, 25 Oct): "Assign waits for
+ * the lesson-wide sign-off. Assigning a lesson whose media and checks have not
+ * been approved puts unreviewed content in front of children."
+ *
+ * `readyToAssign` alone let such a lesson go, so the server's `reviewComplete`
+ * is the second half of the verdict, taken here beside `ready` where these
+ * tests can see it.
+ */
+describe("the lesson-wide sign-off", () => {
+  it("holds Assign when the server says the lesson is not signed off", () => {
+    render(<LessonDetailActions lessonId="l-1" ready signedOff={false} />);
+
+    expect(screen.queryByRole("link", { name: "Assign to a class" })).not.toBeInTheDocument();
+    expect(screen.getByText("Assign to a class")).toHaveAttribute("aria-disabled", "true");
+    // The teacher's review is what waits, not Nevo.
+    expect(screen.getByText("Review this lesson to assign it.")).toBeInTheDocument();
+    expect(screen.queryByText("Still being checked.")).not.toBeInTheDocument();
+  });
+
+  it("lets Assign go once it is signed off", () => {
+    render(<LessonDetailActions lessonId="l-1" ready signedOff />);
+
+    expect(screen.getByRole("link", { name: "Assign to a class" })).toBeInTheDocument();
+  });
+
+  it("holds nothing over a review that could not be read", () => {
+    // Null is our outage, not the lesson's state. The server refuses with a
+    // reason if it must.
+    render(<LessonDetailActions lessonId="l-1" ready signedOff={null} />);
+
+    expect(screen.getByRole("link", { name: "Assign to a class" })).toBeInTheDocument();
+  });
+
+  it("names what is left when there is something to count", () => {
+    render(
+      <LessonDetailActions
+        lessonId="l-1"
+        ready={false}
+        signedOff={false}
+        outstandingKeyPoints={2}
+      />,
+    );
+
+    expect(screen.getByText("2 key points still to check")).toBeInTheDocument();
+  });
+});

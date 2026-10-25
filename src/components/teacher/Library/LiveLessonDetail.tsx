@@ -453,11 +453,14 @@ export function LiveLessonDetail({
               {/* C06b's "Ready · not yet assigned": a quiet pill beside the
                   title, in the frame's own neutral. Only once the review has
                   answered and found nothing, on a lesson with something to
-                  send that nobody has yet. */}
+                  send that nobody has yet. Never beside "Needs review": a
+                  lesson waiting on its sign-off is not ready, however little
+                  is left to look at. */}
               {assignable &&
                 settled &&
                 waiting === 0 &&
                 review.ready &&
+                !toReview &&
                 assignments.length === 0 &&
                 !assignmentsFailed && (
                   <span className="inline-flex shrink-0 items-center rounded-full bg-nevo-navy/10 px-2.5 py-[3px] text-[11.5px] font-semibold whitespace-nowrap text-nevo-near-black/60">
@@ -528,6 +531,9 @@ export function LiveLessonDetail({
              * to click.
              */
             ready={review.ready}
+            /* And the lesson-wide sign-off (Lydia, 25 Oct): Assign waits
+               for it, inside the component beside `ready`. */
+            signedOff={review.signedOff}
             checking={!settled}
             outstandingKeyPoints={outstandingPoints}
             outstandingSections={outstandingSections}

@@ -1,18 +1,28 @@
 import Link from "next/link";
+import { REVIEW_TO_ASSIGN } from "@/lib/lessons/signOff";
 
 /**
  * The line under an Assign that cannot go yet: what is left, from the
  * server's counts, or the one true thing when it cannot be itemised. Shared
  * with the upload finish screen so the two places Assign waits cannot drift.
+ *
+ * `awaitingReview` is the server's sign-off saying no. With nothing counted
+ * left, that is the one thing holding the lesson, and "Still being checked."
+ * would be a sentence about Nevo when it is the teacher's review that waits.
  */
-export function stillToCheck(keyPoints: number, sections: number): string {
+export function stillToCheck(
+  keyPoints: number,
+  sections: number,
+  awaitingReview = false,
+): string {
   const plural = (n: number, one: string, many: string) =>
     `${n} ${n === 1 ? one : many}`;
   const left = [
     ...(keyPoints > 0 ? [plural(keyPoints, "key point", "key points")] : []),
     ...(sections > 0 ? [plural(sections, "section", "sections")] : []),
   ].join(" and ");
-  return left ? `${left} still to check` : "Still being checked.";
+  if (left) return `${left} still to check`;
+  return awaitingReview ? REVIEW_TO_ASSIGN : "Still being checked.";
 }
 
 /**
@@ -34,6 +44,13 @@ export function stillToCheck(keyPoints: number, sections: number): string {
  * ready is how this started"* - so this takes the verdict and the numbers
  * separately, and a caller cannot accidentally make the numbers the gate.
  *
+ * AND THE LESSON-WIDE SIGN-OFF (Lydia, 25 Oct): "Assign waits for the
+ * lesson-wide sign-off." `readyToAssign` alone let a lesson go whose
+ * pictures, narration and guiding questions nobody had approved, so the
+ * server's `reviewComplete` is the second half of the verdict. It is taken
+ * HERE, beside `ready`, for the reason above: a gate ANDed together by the
+ * caller is one this component's tests cannot see.
+ *
  * EDIT IS GONE, and this is the part to put back first. LR-06 wants it to
  * open the lesson itself - title, key points, how Nevo should treat it - and
  * there is no endpoint that edits any of those. What it did instead was
@@ -48,6 +65,7 @@ export function LessonDetailActions({
   mediaHref,
   compact = false,
   ready = true,
+  signedOff = null,
   checking = false,
   outstandingKeyPoints = 0,
   outstandingSections = 0,
@@ -70,6 +88,12 @@ export function LessonDetailActions({
    */
   ready?: boolean;
   /**
+   * The server's `reviewComplete`. Only FALSE holds Assign: null is a
+   * review that could not be read, and refusing a teacher over our own
+   * outage is worse than letting the server refuse with a reason.
+   */
+  signedOff?: boolean | null;
+  /**
    * The verdict has not arrived. Assign waits, and says nothing - there is no
    * refusal to explain yet, and "Still being checked." is a sentence about
    * the lesson, not about our read of it.
@@ -82,7 +106,8 @@ export function LessonDetailActions({
 }) {
   // C06b's tablet draws 42px / 14px buttons; desktop 44px / 14.5px.
   const h = compact ? "h-[42px] text-sm" : "h-[42px] text-sm xl:h-11 xl:text-[14.5px]";
-  const blocked = !ready || checking;
+  const awaitingReview = signedOff === false;
+  const blocked = !ready || awaitingReview || checking;
 
   return (
     // Under the title on tablet, so it reads from the left; beside it on desktop.
@@ -127,7 +152,7 @@ export function LessonDetailActions({
           {/* C06b: "2 key points still to check". The "below" this used to
               carry was true on the lesson page and false everywhere else
               this component is drawn. */}
-          {stillToCheck(outstandingKeyPoints, outstandingSections)}
+          {stillToCheck(outstandingKeyPoints, outstandingSections, awaitingReview)}
         </span>
       )}
     </div>

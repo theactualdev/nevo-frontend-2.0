@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
-const { create, useLessonLibrary } = vi.hoisted(() => ({
+const { create, review, useLessonLibrary } = vi.hoisted(() => ({
   create: vi.fn(),
+  review: vi.fn(),
   useLessonLibrary: vi.fn(),
 }));
 
 vi.mock("@/lib/api/assignments", () => ({ assignmentsApi: { create } }));
+vi.mock("@/lib/api/lessons", () => ({ lessonsApi: { review } }));
 vi.mock("@/hooks/useLessonLibrary", () => ({ useLessonLibrary }));
 
 import { ApiError } from "@/lib/api/client";
@@ -57,20 +59,25 @@ beforeEach(() => {
   useLessonLibrary.mockReset();
   useLessonLibrary.mockReturnValue({ cards: LESSONS, live: true, sample: false, loading: false });
   create.mockResolvedValue(CREATED);
+  // Signed off, unless a test says otherwise (see the last describe).
+  review.mockReset();
+  review.mockResolvedValue({ reviewComplete: true });
 });
 
 describe("sending", () => {
-  it("assigns the chosen lesson to this one student", () => {
+  it("assigns the chosen lesson to this one student", async () => {
     show();
     pick("Fractions 3");
     sendIt();
 
     // One lesson, one student. `AssignmentCreate.studentIds` takes up to 500,
     // which is why "recommend to one child" needed no new endpoint.
-    expect(create).toHaveBeenCalledWith({
-      lessonIds: ["l-1"],
-      studentIds: ["s-1"],
-    });
+    await vi.waitFor(() =>
+      expect(create).toHaveBeenCalledWith({
+        lessonIds: ["l-1"],
+        studentIds: ["s-1"],
+      }),
+    );
   });
 
   it("confirms only after the write resolves", async () => {
@@ -130,20 +137,22 @@ describe("the note", () => {
   const write = (text: string) =>
     fireEvent.change(screen.getByRole("textbox"), { target: { value: text } });
 
-  it("sends what the teacher wrote, to this child", () => {
+  it("sends what the teacher wrote, to this child", async () => {
     show();
     pick("Fractions 3");
     write("I picked this because you liked the last one.");
     sendIt();
 
-    expect(create).toHaveBeenCalledWith({
-      lessonIds: ["l-1"],
-      studentIds: ["s-1"],
-      note: "I picked this because you liked the last one.",
-    });
+    await vi.waitFor(() =>
+      expect(create).toHaveBeenCalledWith({
+        lessonIds: ["l-1"],
+        studentIds: ["s-1"],
+        note: "I picked this because you liked the last one.",
+      }),
+    );
   });
 
-  it("sends NO note key when the box was never touched", () => {
+  it("sends NO note key when the box was never touched", async () => {
     // Optional means absent, not "". An empty note would render as an empty
     // bubble on her dashboard, saying her teacher wrote to her when they
     // did not.
@@ -151,31 +160,37 @@ describe("the note", () => {
     pick("Fractions 3");
     sendIt();
 
-    expect(create).toHaveBeenCalledWith({
-      lessonIds: ["l-1"],
-      studentIds: ["s-1"],
-    });
+    await vi.waitFor(() =>
+      expect(create).toHaveBeenCalledWith({
+        lessonIds: ["l-1"],
+        studentIds: ["s-1"],
+      }),
+    );
   });
 
-  it("treats whitespace as no note", () => {
+  it("treats whitespace as no note", async () => {
     show();
     pick("Fractions 3");
     write("   \n  ");
     sendIt();
 
-    expect(create).toHaveBeenCalledWith(
-      expect.not.objectContaining({ note: expect.anything() }),
+    await vi.waitFor(() =>
+      expect(create).toHaveBeenCalledWith(
+        expect.not.objectContaining({ note: expect.anything() }),
+      ),
     );
   });
 
-  it("trims it", () => {
+  it("trims it", async () => {
     show();
     pick("Fractions 3");
     write("  Have a go at this one.  ");
     sendIt();
 
-    expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ note: "Have a go at this one." }),
+    await vi.waitFor(() =>
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({ note: "Have a go at this one." }),
+      ),
     );
   });
 
@@ -573,5 +588,39 @@ describe("the lesson Nevo suggests", () => {
 
     await vi.waitFor(() => expect(create).toHaveBeenCalled());
     expect(create.mock.calls[0][0]).toEqual(expect.objectContaining({ lessonIds: ["l-2"] }));
+  });
+});
+
+/**
+ * ASSIGN WAITS FOR THE LESSON-WIDE SIGN-OFF (Lydia, 25 Oct), and a
+ * recommendation is an assignment to one child. The library list carries no
+ * sign-off, so the lesson being sent is asked about at the moment of sending.
+ */
+describe("a lesson nobody has signed off", () => {
+  it("is not sent, and the teacher is told why with the way to its review", async () => {
+    review.mockResolvedValue({ reviewComplete: false });
+    show();
+    pick("Fractions 3");
+    sendIt();
+
+    const said = await screen.findByRole("alert");
+    expect(said).toHaveTextContent("Fractions 3 isn’t reviewed yet, so it can’t go to Amara.");
+    expect(screen.getByRole("link", { name: "Review it" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1/review",
+    );
+    expect(create).not.toHaveBeenCalled();
+    expect(review).toHaveBeenCalledWith("l-1");
+  });
+
+  it("is not held over a review that could not be read", async () => {
+    // Refusing a teacher over our own outage is worse than the server
+    // refusing with a reason - the lesson page's rule.
+    review.mockRejectedValue(new Error("offline"));
+    show();
+    pick("Fractions 3");
+    sendIt();
+
+    await vi.waitFor(() => expect(create).toHaveBeenCalled());
   });
 });
