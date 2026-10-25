@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { QuickCheckSheet } from "./QuickCheckSheet";
+import {
+  GIVES_WAY_AFTER_MS,
+  QuickCheckSheet,
+  RECOVERY_LINE,
+} from "./QuickCheckSheet";
 import type { QuickCheck } from "@/lib/types";
 
 /**
@@ -506,4 +510,108 @@ describe("one navy primary per sheet (SCRUM-275)", () => {
       expect(keepGoing().firstChild?.nodeType).toBe(Node.TEXT_NODE);
     },
   );
+});
+
+/*
+ * SCRUM-282: A MISS UNDER THE GATE IS THE FRAME'S `qc-recovery` (17d S1) -
+ * and only while the server says the gate is on. Off, which it is in
+ * production, a miss is drawn exactly as above.
+ */
+describe("a miss while the gate is on (17d S1)", () => {
+  const gatedSheet = (over: Partial<Parameters<typeof QuickCheckSheet>[0]> = {}) =>
+    render(
+      <QuickCheckSheet
+        check={CHECK}
+        open
+        onTapOut={() => {}}
+        onAnswered={() => {}}
+        onContinue={() => {}}
+        onTakeBreak={() => {}}
+        gated
+        {...over}
+      />,
+    );
+  afterEach(() => vi.useRealTimers());
+
+  it("holds the answer picked, says the frame's line, and offers no Try again", () => {
+    gatedSheet();
+
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+
+    expect(screen.getByRole("status").textContent).toBe(RECOVERY_LINE);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    const held = screen.getByRole("button", { name: "Oxygen" });
+    // Navy, like a pick held - not the violet of a miss - and no dot on it.
+    expect(classes(held)).toContain("border-nevo-navy");
+    expect(classes(held)).not.toContain("border-nevo-violet");
+    expect(held.querySelector("svg, [data-answer-dot], span.rounded-full")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/not quite|wrong|incorrect/i);
+  });
+
+  it("gives way by itself once the line has been read - the system's move, not a tap-out", () => {
+    vi.useFakeTimers();
+    const onGiveWay = vi.fn();
+    const onTapOut = vi.fn();
+    gatedSheet({ onGiveWay, onTapOut });
+
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+    act(() => vi.advanceTimersByTime(GIVES_WAY_AFTER_MS - 1));
+    expect(onGiveWay).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
+
+    expect(onGiveWay).toHaveBeenCalledOnce();
+    expect(onTapOut).not.toHaveBeenCalled();
+    // Asked afresh when it opens again.
+    expect(screen.getByRole("button", { name: "Oxygen" })).toBeEnabled();
+  });
+
+  it("does not give way if the child has already tapped out", () => {
+    vi.useFakeTimers();
+    const onGiveWay = vi.fn();
+    const { rerender } = gatedSheet({ onGiveWay });
+
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+    rerender(
+      <QuickCheckSheet
+        check={CHECK}
+        open={false}
+        onTapOut={() => {}}
+        onAnswered={() => {}}
+        onContinue={() => {}}
+        onTakeBreak={() => {}}
+        gated
+        onGiveWay={onGiveWay}
+      />,
+    );
+    act(() => vi.advanceTimersByTime(GIVES_WAY_AFTER_MS * 2));
+
+    expect(onGiveWay).not.toHaveBeenCalled();
+  });
+
+  it("affirms a right answer as it always has, and never gives way after one", () => {
+    vi.useFakeTimers();
+    const onGiveWay = vi.fn();
+    gatedSheet({ onGiveWay });
+
+    fireEvent.click(screen.getByRole("button", { name: "Carbon dioxide" }));
+    act(() => vi.advanceTimersByTime(GIVES_WAY_AFTER_MS * 2));
+
+    expect(screen.getByRole("status").textContent).toBe(CHECK.correctNote);
+    expect(keepGoing()).toBeInTheDocument();
+    expect(onGiveWay).not.toHaveBeenCalled();
+  });
+
+  it("is drawn as before while the gate is off", () => {
+    vi.useFakeTimers();
+    const onGiveWay = vi.fn();
+    gatedSheet({ gated: false, onGiveWay });
+
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+    act(() => vi.advanceTimersByTime(GIVES_WAY_AFTER_MS * 2));
+
+    expect(screen.getByRole("status").textContent).toBe(CHECK.recoveryNote);
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    expect(onGiveWay).not.toHaveBeenCalled();
+  });
 });

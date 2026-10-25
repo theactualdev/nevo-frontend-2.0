@@ -921,6 +921,13 @@ export interface LessonQuestionAttempt {
    * Null or absent: no deadline, and nothing is scheduled (rule 5).
    */
   handoffAvailableAt?: string | null;
+  /**
+   * THE COMPREHENSION GATE AS THIS ANSWER LEAVES IT (SCRUM-281/282). Absent
+   * from a server before 23 Oct, and `required: false` while the gate is off -
+   * which it is in production. Nothing gate-only draws without `required`
+   * (rule 5).
+   */
+  comprehensionGate?: ComprehensionGate | null;
 }
 
 /** `SocraticHandoffPrompt` - one guided question a hand-off opens with. */
@@ -1166,7 +1173,82 @@ export const lessonsApi = {
       `/api/v1/lessons/${lessonId}/sessions/${sessionId}/break`,
       { action },
     ),
+
+  /**
+   * Where the comprehension gate stands for this sitting, for an opening or a
+   * reload (Teslim's gate contract, 23 Oct; SCRUM-281/282).
+   * GET /api/v1/lessons/{id}/sessions/{session}/comprehension
+   *
+   * `required: false` while the gate is off - which it is in production - and
+   * then it names nothing else.
+   */
+  comprehension: (lessonId: string, sessionId: string) =>
+    api.get<ComprehensionGate>(
+      `/api/v1/lessons/${lessonId}/sessions/${sessionId}/comprehension`,
+    ),
 };
+
+/**
+ * `TeachingRoute` - one way in the server says a section has, after a miss
+ * under the gate, with the server's own words for it (`label`). The player
+ * names the ways in in design's words instead (17d) - see `lib/lessons/waysIn`.
+ */
+export interface TeachingRoute {
+  action:
+    | "format"
+    | "simplify"
+    | "simpler_presentation"
+    | "slower"
+    | "rechunk"
+    | "panel"
+    | "calculation_scaffold";
+  label: string;
+  /** For `format` only: which one. */
+  format?: "text" | "audio" | "visual" | "interactive" | null;
+  requiresChoice?: boolean;
+}
+
+/** `TeachingPresentation` - how the re-teaching asks to be drawn. Not read yet. */
+export interface TeachingPresentation {
+  density?: "low";
+  itemsPerScreen?: number;
+  pacing?: "slow";
+  recheckRequired?: boolean;
+  body?: string | null;
+  scaffoldLevel?: string | null;
+}
+
+/**
+ * `ReteachingResponse` - the server's re-teaching for one unresolved check:
+ * the ways in this section has and the one it suggests.
+ */
+export interface ReteachingResponse {
+  questionId: string;
+  segmentId: string;
+  availableRoutes: TeachingRoute[];
+  recommendedRoute: TeachingRoute;
+  presentation?: TeachingPresentation;
+  screens?: string[];
+  hint?: string | null;
+  teacherNotified?: boolean;
+  breakAvailable?: boolean;
+}
+
+/**
+ * `ComprehensionGate` (SCRUM-281). `required` says whether the gate is on at
+ * all; the rest is only ever said while it is.
+ */
+export interface ComprehensionGate {
+  required?: boolean;
+  canAdvance: boolean;
+  segmentId?: string | null;
+  questionIds?: string[];
+  unresolvedQuestionIds?: string[];
+  /** Present after a marked miss on the check still to pass. */
+  reteaching?: ReteachingResponse | null;
+  assessmentGates?: boolean;
+  teacherOverrideAllowed?: boolean;
+}
 
 /**
  * `BreakControlResponse`. TYPED, NOT READ: the child came back to the check

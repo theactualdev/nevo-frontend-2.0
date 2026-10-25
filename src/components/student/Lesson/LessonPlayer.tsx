@@ -77,8 +77,10 @@ import {
   lessonsApi,
   type LessonQuestionAttempt,
   type LessonQuestionAttemptWrite,
+  type ReteachingResponse,
   type SegmentChoiceWrite,
 } from "@/lib/api/lessons";
+import { WAY_IN_PRESSES, waysInFor, type WayIn } from "@/lib/lessons/waysIn";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { msUntilServerTime } from "@/lib/api/serverClock";
 import {
@@ -128,6 +130,7 @@ import { ONE_MORE_BIT, PressedLine } from "./PressedLine";
 import { ScaffoldIndicator } from "./ScaffoldIndicator";
 import { QuickCheckSheet } from "./QuickCheckSheet";
 import { ReviewEntryScreen } from "./ReviewEntryScreen";
+import { WaysInCard } from "./WaysInCard";
 import {
   type ReviewAnswer,
   saveCheckOutcome,
@@ -2593,6 +2596,82 @@ export function LessonPlayer({
   };
 
   /*
+   * SCRUM-282: THE GATE'S WAYS IN, ONLY WHILE THE SERVER SAYS THE GATE IS ON.
+   *
+   * Lydia, 23 Oct: a missed in-lesson check no longer moves the child on; the
+   * section is offered another way, in place, position kept, and the child
+   * moves on once they have got it. The server owns all of it - whether the
+   * gate is on (`comprehensionGate.required`), which ways in the section has
+   * and which it suggests (`reteaching`). The gate is OFF in production, so
+   * none of this draws today: no `required`, no card, and a miss looks as it
+   * always has (rule 5).
+   *
+   * Where it is said: the sitting's own read as it opens
+   * (`GET .../comprehension`, so a reload comes back to the ways in it left),
+   * and every answer's reply after that. Only for a live lesson the child is
+   * working through - a finished lesson opened again gates nothing.
+   */
+  const [gateOn, setGateOn] = useState(false);
+  const [reteach, setReteach] = useState<ReteachingResponse | null>(null);
+  const gateSitting =
+    choicesHeld && progress.opened ? (progress.sessionId ?? null) : null;
+  const gateAsked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!gateSitting || gateAsked.current === gateSitting) return;
+    gateAsked.current = gateSitting;
+    lessonsApi
+      .comprehension(lesson.id, gateSitting)
+      .then((gate) => {
+        if (gateAsked.current !== gateSitting) return;
+        setGateOn(gate.required === true);
+        if (gate.required === true && gate.reteaching) {
+          setReteach(gate.reteaching);
+        }
+      })
+      // Unread is the gate as it was: off, with nothing to offer.
+      .catch(() => {});
+  }, [gateSitting, lesson.id]);
+  /** What an answer's reply says of the gate, for the section it answered. */
+  const noteGate = (segmentId: string, stored: LessonQuestionAttempt) => {
+    const gate = stored.comprehensionGate;
+    if (!gate) return;
+    setGateOn(gate.required === true);
+    if (
+      gate.required === true &&
+      stored.correct === false &&
+      gate.reteaching?.segmentId === segmentId
+    ) {
+      setReteach(gate.reteaching);
+    }
+  };
+  // The ways in for this section, while its check is still to pass. Not on a
+  // calculation, whose ways are the solver's (Lydia, 23 Oct).
+  const reteachHere =
+    gateOn &&
+    !isCalculation(segment) &&
+    reteach?.segmentId === segment.id &&
+    !passedChecks.has(segment.id)
+      ? reteach
+      : null;
+  const waysHere = waysInFor(reteachHere, {
+    formats: formatsHere,
+    densities: densitySegments.map((d) => d.id as Density),
+  });
+  /*
+   * TAKING ONE PRESSES THE SECTION'S OWN CONTROL - the format group or the
+   * pace chip - so it is exactly the child's pick there, held and signalled
+   * as that is. A pace already on is left on: the chip toggles, a way does not.
+   */
+  const takeWay = (way: WayIn) => {
+    const presses = WAY_IN_PRESSES[way];
+    if ("format" in presses) {
+      pickFormat(presses.format);
+      return;
+    }
+    if (manualDensity !== presses.density) pickDensity(presses.density);
+  };
+
+  /*
    * AN ASSESSMENT WITH NO QUESTIONS IS NOT AN ASSESSMENT.
    *
    * These gates asked `lesson.assessment` - truthiness - and `{ questions: [] }`
@@ -3402,6 +3481,13 @@ export function LessonPlayer({
               />
             )}
             {feedback && <FeedbackStrip message={feedback} />}
+            {/* SCRUM-282: the other ways in, in place, under the gate only. */}
+            <WaysInCard
+              ways={waysHere.ways}
+              suggested={waysHere.suggested}
+              onTake={takeWay}
+              reading={readingOn}
+            />
             {(handoffHere ||
               (contentHere &&
                 action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
@@ -3685,6 +3771,9 @@ export function LessonPlayer({
           // `hintInSheet`.
           hint={hintInSheet ? hintCard : null}
           reading={readingOn}
+          // Under the gate a miss is held, then gives way to the ways in.
+          gated={gateOn}
+          onGiveWay={() => setCheckOpen(false)}
           onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
           onAnswered={(correct, answered) => {
             const checkpointId = segment.quickCheck?.id;
@@ -3710,8 +3799,12 @@ export function LessonPlayer({
                 responseTimeMs: answered.responseTimeMs,
                 hinted: hintedSegments.current.has(segment.id),
               }),
-              // B94: the server's answer may hand this child off.
-              (stored) => handOffFrom(segment.id, stored),
+              // B94: the server's answer may hand this child off; and it says
+              // where the gate stands (SCRUM-282).
+              (stored) => {
+                handOffFrom(segment.id, stored);
+                noteGate(segment.id, stored);
+              },
             );
             if (correct) answeredRight.current.add(segment.id);
             noteAnswer(correct);
