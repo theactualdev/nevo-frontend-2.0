@@ -152,14 +152,16 @@ describe("tapping out of the check (Olayinka, 23 Oct)", () => {
 });
 
 describe("no way on past a check that has not been passed (Olayinka, 23 Oct)", () => {
-  it("has no Keep going before an answer, nor after a miss", async () => {
+  it("has no way on before an answer, nor after a miss", async () => {
+    const wayOn = () =>
+      screen.queryByRole("button", { name: /^(Continue|Keep going)$/ });
     await openCheck();
-    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    expect(wayOn()).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Oxygen/ }));
 
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    expect(wayOn()).toBeNull();
   });
 
   it("keeps the child on the section however they leave the sheet", async () => {
@@ -193,7 +195,7 @@ describe("after a passed check (D185)", () => {
   it("says Lydia's line, about the work and not the child", async () => {
     await openCheck();
     fireEvent.click(screen.getByRole("button", { name: /Carbon dioxide/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(screen.getByText("That's it. Here's what's next.")).toBeInTheDocument();
     expect(screen.queryByText(/Nice/)).toBeNull();

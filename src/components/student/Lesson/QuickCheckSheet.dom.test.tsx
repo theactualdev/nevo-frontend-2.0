@@ -396,8 +396,9 @@ describe("the sheet's look (design, 13 Oct)", () => {
 /**
  * SCRUM-275, LYDIA 22 OCT: "Two identical navy buttons is a defect, not a
  * choice. One primary per sheet and it is the action that progresses the
- * check, so Try again or Send. Keep going is secondary, not navy, not
- * full-width."
+ * check." Since her 25 Oct ruling the way on after a right answer is the
+ * Lesson Check frame's navy Continue (`qc-correct`), so each answer has its
+ * one primary: Try again after a miss, Continue after a right answer.
  */
 const classes = (el: Element) => (el.getAttribute("class") ?? "").split(/\s+/);
 /** A navy, full-width button: what only the primary may be. */
@@ -407,7 +408,10 @@ const navyFullWidth = () =>
     .filter(
       (b) => classes(b).includes("bg-nevo-navy") && classes(b).includes("w-full"),
     );
-const keepGoing = () => screen.getByRole("button", { name: "Keep going" });
+const continueButton = () => screen.getByRole("button", { name: "Continue" });
+/** Any way on past the check: today's Continue, or the old Keep going. */
+const wayOn = () =>
+  screen.queryByRole("button", { name: /^(Continue|Keep going)$/ });
 
 type Handlers = {
   open?: boolean;
@@ -430,15 +434,16 @@ const mountWith = (handlers: Handlers) => render(sheet(handlers));
 
 /*
  * NO MOVING ON PAST THE CHECK BEFORE A RIGHT ANSWER (Olayinka, 23 Oct, under
- * Lydia's gate ruling the same day). The Keep going it had before an answer
- * (SCRUM-275, 22 Oct) is gone: the way out is tapping out, back to the
- * section. Try again stays, and Keep going after a right answer.
+ * Lydia's gate ruling the same day; and 25 Oct: "the child shouldn't be able
+ * to move with a wrong answer"). The way out is tapping out, back to the
+ * section. Try again stays after a miss, and Continue is the way on after a
+ * right answer (Lydia, 25 Oct; the Lesson Check frame's `qc-correct`).
  */
-describe("Keep going (Olayinka, 23 Oct)", () => {
+describe("the way on (Olayinka, 23 and 25 Oct; Lydia, 25 Oct)", () => {
   it("is not there before any answer", () => {
     mountWith({});
 
-    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    expect(wayOn()).toBeNull();
   });
 
   it("is not there after a miss: Try again is", () => {
@@ -448,17 +453,18 @@ describe("Keep going (Olayinka, 23 Oct)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
 
     expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
-    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    expect(wayOn()).toBeNull();
     expect(onContinue).not.toHaveBeenCalled();
   });
 
-  it("is the frame's way on after a right answer, and is drawn once", () => {
+  it("is the frame's Continue after a right answer, drawn once, and no Keep going", () => {
     const onContinue = vi.fn();
     mountWith({ onContinue });
 
     fireEvent.click(screen.getByRole("button", { name: "Carbon dioxide" }));
-    expect(screen.getAllByRole("button", { name: "Keep going" })).toHaveLength(1);
-    fireEvent.click(keepGoing());
+    expect(screen.getAllByRole("button", { name: "Continue" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    fireEvent.click(continueButton());
 
     expect(onContinue).toHaveBeenCalledOnce();
   });
@@ -494,22 +500,14 @@ describe("one navy primary per sheet (SCRUM-275)", () => {
     ]);
   });
 
-  it(
-    "draws Keep going secondary after a right answer: not navy, not full width, 44px, a pointer",
-    () => {
-      mount();
-      fireEvent.click(screen.getByRole("button", { name: "Carbon dioxide" }));
+  it("makes Continue the one primary after a right answer, navy and full width (Lydia, 25 Oct)", () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Carbon dioxide" }));
 
-      const own = classes(keepGoing());
-      expect(own).not.toContain("bg-nevo-navy");
-      expect(own).not.toContain("w-full");
-      expect(own).toContain("w-fit");
-      expect(own).toContain("h-11");
-      expect(own).toContain("cursor-pointer");
-      // Named on the button itself, not only in a child span.
-      expect(keepGoing().firstChild?.nodeType).toBe(Node.TEXT_NODE);
-    },
-  );
+    expect(navyFullWidth()).toEqual([continueButton()]);
+    // Named on the button itself, not only in a child span.
+    expect(continueButton().textContent).toBe("Continue");
+  });
 });
 
 /*
@@ -540,7 +538,7 @@ describe("a miss while the gate is on (17d S1)", () => {
 
     expect(screen.getByRole("status").textContent).toBe(RECOVERY_LINE);
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    expect(wayOn()).toBeNull();
     const held = screen.getByRole("button", { name: "Oxygen" });
     // Navy, like a pick held - not the violet of a miss - and no dot on it.
     expect(classes(held)).toContain("border-nevo-navy");
@@ -598,7 +596,7 @@ describe("a miss while the gate is on (17d S1)", () => {
     act(() => vi.advanceTimersByTime(GIVES_WAY_AFTER_MS * 2));
 
     expect(screen.getByRole("status").textContent).toBe(CHECK.correctNote);
-    expect(keepGoing()).toBeInTheDocument();
+    expect(continueButton()).toBeInTheDocument();
     expect(onGiveWay).not.toHaveBeenCalled();
   });
 

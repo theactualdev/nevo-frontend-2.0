@@ -153,7 +153,7 @@ const leave = () =>
 const toAssessment = async () => {
   next();
   fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   next();
   fireEvent.click(screen.getByRole("button", { name: "Start" }));
 };
@@ -260,7 +260,7 @@ describe("leaving the after-lesson check (D36)", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     next();
     progress.report.mockClear();
 
@@ -517,7 +517,7 @@ describe("what the review tells the scheduler (B28)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     next();
   };
 
@@ -584,7 +584,7 @@ describe("which sitting the review names (Teslim, 19 Oct)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     next();
     return view;
   };
@@ -686,7 +686,7 @@ describe("what the review's completion may claim (D40)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     next();
   };
 
@@ -779,7 +779,7 @@ describe("an ordinary lesson's completion (D40)", () => {
     render(<LessonPlayer lesson={REVIEW} plan={null} />);
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     next();
 
     expect(
@@ -824,7 +824,7 @@ describe("the reading accommodation reaches the checks (D30)", () => {
 const intoCheck = async () => {
   next();
   fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   next();
 };
 
@@ -1127,18 +1127,20 @@ describe("no way on past an unpassed check (Olayinka, 23 Oct)", () => {
       key: "Escape",
     });
 
-  it("has no Keep going until the check is answered right", async () => {
+  it("has no way on until the check is answered right", async () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).queryByRole("button", { name: "Keep going" })).toBeNull();
+    const wayOn = () =>
+      within(dialog).queryByRole("button", { name: /^(Continue|Keep going)$/ });
+    expect(wayOn()).toBeNull();
 
     fireEvent.click(
       within(dialog).getByRole("button", { name: /The denominator/ }),
     );
 
     expect(within(dialog).getByRole("button", { name: "Try again" })).toBeEnabled();
-    expect(within(dialog).queryByRole("button", { name: "Keep going" })).toBeNull();
+    expect(wayOn()).toBeNull();
   });
 
   it("after a miss and a tap out, records the miss and keeps the child on the section", async () => {
@@ -1173,7 +1175,7 @@ describe("no way on past an unpassed check (Olayinka, 23 Oct)", () => {
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
     fireEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Keep going" }),
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Continue" }),
     );
 
     expect(screen.getByRole("heading", { name: "Denominators" })).toBeInTheDocument();
@@ -1195,7 +1197,7 @@ describe("no way on past an unpassed check (Olayinka, 23 Oct)", () => {
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
     fireEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Keep going" }),
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Continue" }),
     );
 
     expect(screen.getByRole("button", { name: "I'm done" })).toBeInTheDocument();
