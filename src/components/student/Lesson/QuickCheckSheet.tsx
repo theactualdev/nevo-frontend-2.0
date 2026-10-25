@@ -31,6 +31,16 @@ function msSince(start: number | null): number | null {
 const SWIPE_CLOSES_AT_PX = 80;
 const SWIPE_STARTS_AT_PX = 8;
 
+/** The Lesson Check frame's `qc-recovery` line, under the gate (17d S1). */
+export const RECOVERY_LINE = "Let's look at this another way.";
+
+/**
+ * How long the held miss stays up before the sheet gives way under the gate:
+ * time to read one short line. A PROVISIONAL CALL - no frame says when, and it
+ * is asked of design (SCRUM-282). About the sheet, nothing about the child.
+ */
+export const GIVES_WAY_AFTER_MS = 1800;
+
 /** The sheet is the centred card from `sm:` up, and only the phone's swipes. */
 function centredCard(): boolean {
   return (
@@ -84,6 +94,16 @@ function centredCard(): boolean {
  * question still in place - see `SpokenPrompt`. The reading accommodation's
  * typographic half reaches the question, the answers and the note (D30).
  *
+ * UNDER THE GATE A MISS IS THE FRAME'S `qc-recovery` (17d S1; Lesson Check
+ * frame, design 52e3ae3), and only while the server says the gate is on
+ * (`gated`). The answer picked is simply held - navy, no dot, no cross - the
+ * line reads "Let's look at this another way.", and there is no Try again:
+ * "the sheet gives way to the re-presentation in the player behind it - the
+ * alternative arriving is the response." It gives way by itself once the
+ * line has been read (`GIVES_WAY_AFTER_MS`, a provisional call - no frame says
+ * when), asked afresh when Next opens it again. With the gate off, which it
+ * is in production, a miss is drawn exactly as before.
+ *
  * THE ENGINE'S HINT, WHILE THE CHECK IS OPEN, IS HERE WITH ITS QUESTION
  * (Lydia, SCRUM-275, 21 Oct): "a hint that arrives after the moment it was
  * for is worse than no hint, and away from its question it does not read."
@@ -102,9 +122,21 @@ export function QuickCheckSheet({
   reading = false,
   onAudioBusy,
   hint,
+  gated = false,
+  onGiveWay,
 }: {
   check: QuickCheck;
   open: boolean;
+  /**
+   * The server says the comprehension gate is on (`comprehensionGate
+   * .required`). Off, a miss is drawn as it always was.
+   */
+  gated?: boolean;
+  /**
+   * Under the gate, a miss has been read and the sheet gives way to the ways
+   * in behind it. The system's move, not the child's: never `onTapOut`.
+   */
+  onGiveWay?: () => void;
   /**
    * The child tapped out - the dimmed player, Esc, or the phone sheet pulled
    * down. The sheet's own buttons close it through their own callbacks, never
@@ -157,6 +189,21 @@ export function QuickCheckSheet({
     onTapOut();
   };
 
+  // Under the gate, a miss is held - not marked - and then gives way.
+  const recovering = gated && resolved && !correct;
+  const giveWay = useRef(onGiveWay);
+  useEffect(() => {
+    giveWay.current = onGiveWay;
+  });
+  useEffect(() => {
+    if (!recovering || !open) return;
+    const timer = setTimeout(() => {
+      setChosenId(null);
+      giveWay.current?.();
+    }, GIVES_WAY_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [recovering, open]);
+
   /*
    * THE PHONE SHEET PULLED DOWN. It follows the finger once it has moved far
    * enough to be a pull, and closes if let go far enough down; short of that
@@ -196,7 +243,8 @@ export function QuickCheckSheet({
   const tone = (id: string) => {
     if (!resolved) return "idle";
     if (id !== chosenId) return "muted";
-    return correct ? "navy" : "violet";
+    // The frame's `qc-recovery` holds the pick in navy: no verdict on it.
+    return correct || recovering ? "navy" : "violet";
   };
 
   return (
@@ -275,7 +323,7 @@ export function QuickCheckSheet({
                 resolved && option.id === chosenId ? (
                   correct ? (
                     <AnswerCheck />
-                  ) : (
+                  ) : recovering ? undefined : (
                     <AnswerDot />
                   )
                 ) : undefined
@@ -300,11 +348,15 @@ export function QuickCheckSheet({
               reading && READING_BODY,
             )}
           >
-            {correct ? check.correctNote : check.recoveryNote}
+            {correct
+              ? check.correctNote
+              : recovering
+                ? RECOVERY_LINE
+                : check.recoveryNote}
           </p>
         )}
 
-        {resolved && !correct && (
+        {resolved && !correct && !recovering && (
           <Button className="mt-5 w-full" onClick={() => setChosenId(null)}>
             Try again
           </Button>
