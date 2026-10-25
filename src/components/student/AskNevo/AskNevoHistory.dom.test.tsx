@@ -145,6 +145,41 @@ describe("looking back at a past conversation", () => {
     ).toBeInTheDocument();
   });
 
+  it("draws a past answer by its blocks, as it was drawn live (Teslim, 25 Oct)", async () => {
+    threadCall.mockResolvedValue({
+      threadId: "t-1",
+      title: "Why do plants need light?",
+      role: "student",
+      createdAt: new Date(now).toISOString(),
+      messages: [
+        {
+          messageId: "m-2",
+          author: "nevo",
+          sequence: 2,
+          text: "**Two steps**\n\n1. Light lands\n2. Sugar is made",
+          blocks: [
+            { type: "heading", text: "Two steps", items: [] },
+            { type: "steps", text: "", items: ["Light lands", "Sugar is made"] },
+          ],
+          createdAt: new Date(now).toISOString(),
+        },
+      ],
+    });
+    await openHistory();
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Why do plants need light/ }),
+    );
+
+    expect(await screen.findByText("Two steps")).toBeInTheDocument();
+    const steps = screen.getAllByRole("listitem");
+    expect(steps.map((li) => li.textContent)).toEqual([
+      "Light lands",
+      "Sugar is made",
+    ]);
+    expect(steps[0].closest("ol")).not.toBeNull();
+    expect(document.body.textContent).not.toContain("**");
+  });
+
   it("leaves the composer there to start something new", async () => {
     /*
      * Frame 26: "with the input still there to start something new". History
