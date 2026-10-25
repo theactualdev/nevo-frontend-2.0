@@ -131,6 +131,44 @@ describe("the conversation's thread", () => {
   });
 });
 
+/*
+ * TESLIM, 25 OCT: the answer string is Markdown now, and printed as it was a
+ * child saw "**" in the drawer. The drawer draws the server's blocks.
+ */
+describe("an answer with structure", () => {
+  it("is drawn by its blocks - a list as a list - with no asterisks", async () => {
+    ask.mockResolvedValue(
+      answer({
+        answer: "**What a plant needs**\n\n- Light\n- Water",
+        blocks: [
+          { type: "heading", text: "What a plant needs", items: [], level: 2 },
+          { type: "bullets", text: "", items: ["Light", "Water"], level: 0 },
+        ],
+        plainText: "What a plant needs\n• Light\n• Water",
+        answerFormat: "structured",
+      }),
+    );
+    open();
+    await send("What does a plant need?");
+
+    expect(screen.getByText("What a plant needs")).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("listitem").map((li) => li.textContent),
+    ).toEqual(["Light", "Water"]);
+    expect(document.body.textContent).not.toContain("**");
+    expect(document.body.textContent).not.toContain("- Light");
+  });
+
+  it("is its text, without asterisks, when it comes with no blocks", async () => {
+    ask.mockResolvedValue(answer({ answer: "It is **light** that matters." }));
+    open();
+    await send("What matters?");
+
+    expect(screen.getByText("light").tagName).toBe("STRONG");
+    expect(document.body.textContent).not.toContain("**");
+  });
+});
+
 describe("an answer the server says it cannot help with", () => {
   it("is shown, with the way to the teacher beside it", async () => {
     ask.mockResolvedValue(
