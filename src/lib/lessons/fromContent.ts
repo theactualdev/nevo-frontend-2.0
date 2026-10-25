@@ -15,17 +15,19 @@ import { toQuickCheck } from "@/lib/api/checkpoints";
  * is checked against the wrong one - which is how `variant.answer` came back
  * as "does not exist" on a type that plainly has it.
  */
-import type {
-  CalculationScaffold as WireCalculationScaffold,
-  CalculationVariant as WireCalculationVariant,
-  CalculationStep as WireCalculationStep,
-  EquationCallout,
-  KeyTerm,
-  Manipulative,
+import {
+  isActivity,
+  type CalculationScaffold as WireCalculationScaffold,
+  type CalculationVariant as WireCalculationVariant,
+  type CalculationStep as WireCalculationStep,
+  type EquationCallout,
+  type KeyTerm,
+  type Manipulative,
 } from "@/lib/api/variants";
 import type { CheckpointScalar } from "@/lib/api/checkpoints";
 import { isStoredAnswer } from "./storedAnswer";
 import { chunksForBody } from "./chunk";
+import { chosenFrom } from "./segmentChoice";
 import { MODALITY, type Modality } from "@/lib/constants";
 import type {
   Assessment,
@@ -40,6 +42,7 @@ import type {
   LessonModule,
   LessonSegment,
   AudioContent,
+  InteractiveContent,
   QuickCheck,
   TextContent,
   VisualContent,
@@ -77,11 +80,25 @@ import type {
  * one, which for a child who finds reading effortful is the channel that
  * matters most.
  *
- * STILL OFF, OR ONLY PART-WAY ON, and why:
- *   - INTERACTIVE does not map at all. The wire's `InteractiveVariant` is a
- *     QUESTION (`prompt`, `options`, `answerKey`); the player's
- *     `InteractiveContent` is tickable STEPS with an outcome. Two different
- *     things sharing a name - a design question, not a wiring one.
+ * ON as of 21 Oct: THE ACTIVITY (SCRUM-268). The wire's `interactiveVariant`
+ * comes in two forms (Teslim, 14 Oct), and the ACTIVITY - a title, what is
+ * needed, ordered steps and its two lines - is the player's tickable steps, so
+ * it maps; see `interactiveFor`. Until this it never reached a child: no
+ * `segment.interactive` was built, so Osmosis's section 4 activity arrived
+ * and was dropped on the device. The QUESTION form still does not map - a
+ * prompt and an answer key are not steps - and the server does not offer it
+ * as a format either.
+ *
+ * AN ACTIVITY IS OFFERED, NEVER OPENED ON ITS OWN. It is one of the
+ * section's `formats` - the group offers it, and a section the child picked
+ * it on opens in it - but it is not in `modalities`, which is what a section
+ * opens in when nothing was picked: the plan's format is held to that list,
+ * and its first entry is the fallback. Adding the activity there would have
+ * let a section open in it with no pick, and the opening format is Lydia's
+ * to decide (21 Oct, twice: "Do not change format selection logic yet";
+ * "with no stored pick, a section opens exactly as on main today").
+ *
+ * ONLY PART-WAY ON, and why:
  *   - CALCULATION is on where `calculationFor` can build every step from the
  *     payload SCRUM-177 delivered: each step's `input`, its stored answers,
  *     `assembles` and `equationState`, and the `scaffold` drawing where a
@@ -99,7 +116,10 @@ import type {
  * component, which is the only place that knows how long a lesson has been open.
  */
 
-/** The channels this adapter can actually populate from parsed content. */
+/**
+ * The channels a section can open in with nothing picked. The activity is
+ * drawn too, and offered beside them - see the top.
+ */
 const RENDERABLE: readonly Modality[] = [
   MODALITY.TEXT,
   MODALITY.VISUAL,
@@ -178,7 +198,41 @@ export function asSourceText(
   delete fallback.calculation;
   delete fallback.calculationVariant;
   delete fallback.visual;
+  // The server listed the calculation's own formats - interactive, which this
+  // segment no longer has - so the group offers the fallback's instead.
+  delete fallback.formats;
+  delete fallback.recommendedFormat;
   return fallback;
+}
+
+/**
+ * The format group's pills and its marker, as the server sent them
+ * (SCRUM-272): `availableFormats` in its own order - "authored opening order
+ * is preserved among available formats" - narrowed to what this app can
+ * draw (`drawable`), so a picture that failed its own review stays out
+ * whatever the list says. `recommendedFormat` only where it names one of
+ * them; nothing here works one out.
+ *
+ * NOTHING AT ALL for a payload with no `availableFormats`: the player then
+ * offers `modalities`, as it did before the field, and marks nothing.
+ */
+function formatsFor(
+  segment: ContentSegment,
+  drawable: readonly Modality[],
+): Pick<LessonSegment, "formats" | "recommendedFormat"> {
+  if (!Array.isArray(segment.availableFormats)) return {};
+  const formats = [
+    ...new Set(
+      segment.availableFormats.filter((f): f is Modality =>
+        (drawable as readonly string[]).includes(f),
+      ),
+    ),
+  ];
+  const recommended = segment.recommendedFormat;
+  return {
+    formats,
+    recommendedFormat: formats.find((f) => f === recommended) ?? null,
+  };
 }
 
 /**
@@ -412,6 +466,81 @@ function audioFor(
       ? { durationSec: Math.round(variant.durationMs / 1000) }
       : {}),
   };
+}
+
+/**
+ * The segment's activity, as the player's tickable steps - or nothing.
+ *
+ * SCRUM-268, 21 Oct: the activity card was not reaching the child, and it
+ * was ours - it arrived on the wire and this adapter dropped it. Read field
+ * for field, nothing added: `title` is the heading, `introduction` the line
+ * under it (kept, though frame d6b9fbc no longer draws it), `materials` what
+ * is needed, and each step's `instruction` a step.
+ *
+ * ONLY THE ACTIVITY FORM. The question form (`isActivity` false) is a prompt
+ * with an answer key, not steps, and is left unmapped as it always was.
+ *
+ * NO STEP, NO ACTIVITY. A step with no words is not drawn - a card to tick
+ * with nothing on it - and an activity with none left is not offered at all,
+ * by the rule at the top: a channel offered and found blank is worse than one
+ * never offered. The server offers `interactive` only where there are steps.
+ *
+ * THE TWO LINES, EACH ONLY WHEN SENT (SCRUM-273): `inProgress` is the line
+ * while the steps are under way, `outcome` the line once they are done - see
+ * `InteractiveContent.outcome`. Either may be absent, and one with no words
+ * is no line. Nothing is written for a line the server did not send: no
+ * guide line, no generic "you have completed" - the server dropped its own
+ * default (acc5b27), and this adapter never had one.
+ */
+function interactiveFor(
+  segment: ContentSegment,
+  lessonTitle: string,
+): InteractiveContent | undefined {
+  const variant = segment.interactiveVariant;
+  if (!variant || !isActivity(variant)) return undefined;
+  /*
+   * AN ACTIVITY'S SAFETY LINE GOES WITH IT, WORD FOR WORD (SCRUM-280's hard
+   * rule; SCRUM-288, frame 1a3016b). "An activity whose source has a safety
+   * sentence MUST NOT RENDER AT ALL if the card can't display it" - and since
+   * 1a3016b the card can: a FIRST row above the steps (`InteractiveSegment`).
+   * #853 kept such an activity out of the format group until then; that
+   * guard is lifted here, because the line now travels with the card that
+   * draws it. No line sent is none drawn - nothing is written in its place.
+   */
+  const safety = lineOf(variant.safety);
+  const steps = textsOf(
+    Array.isArray(variant.steps) ? variant.steps.map((s) => s?.instruction) : [],
+  );
+  if (!steps) return undefined;
+  const title = typeof variant.title === "string" ? variant.title.trim() : "";
+  const intro =
+    typeof variant.introduction === "string"
+      ? variant.introduction.trim()
+      : "";
+  const needs = textsOf(variant.materials);
+  const pending = lineOf(variant.inProgress);
+  const done = lineOf(variant.outcome);
+  return {
+    heading: title || (segment.title ?? lessonTitle),
+    ...(intro ? { intro } : {}),
+    ...(needs ? { needs } : {}),
+    ...(safety ? { safety } : {}),
+    steps,
+    ...(pending || done
+      ? {
+          outcome: {
+            ...(pending ? { pending } : {}),
+            ...(done ? { done } : {}),
+          },
+        }
+      : {}),
+  };
+}
+
+/** A line with words in it, or nothing. */
+function lineOf(value: unknown): string | undefined {
+  const line = typeof value === "string" ? value.trim() : "";
+  return line || undefined;
 }
 
 /**
@@ -1112,15 +1241,35 @@ function segmentFor(
   const quickCheck = quickCheckFor(segment);
   const visual = visualFor(segment, lessonTitle);
   const audio = audioFor(segment, lessonTitle);
+  const interactive = interactiveFor(segment, lessonTitle);
   const verdict = calculationFor(segment);
   const calculation = verdict?.calculation;
+  const modalities = modalitiesFor(segment, calculation);
+  /*
+   * WHAT THE CHILD CHOSE FOR THIS SECTION, from the sitting the read came
+   * from (K4): read before the first frame, so a reload opens in it with no
+   * visible change (rules 6 and 7). `deliveryPreference`, never
+   * `primaryModality`, which reads as the first format where nothing was
+   * chosen - see `LessonSegment.primaryModality`.
+   */
+  const chosen = chosenFrom(segment.deliveryPreference);
   const built: LessonSegment = {
     id: segment.id,
-    modalities: modalitiesFor(segment, calculation),
+    modalities,
+    // The activity is drawable, and offered, beside them - never opened in
+    // with no pick (see the top). A calculation is the solver alone.
+    ...formatsFor(
+      segment,
+      interactive && !calculation
+        ? [...modalities, MODALITY.INTERACTIVE]
+        : modalities,
+    ),
+    ...(chosen ? { chosen } : {}),
     text: textFor(segment, lessonTitle),
     // Omitted rather than null: the player's `hasContent` tests presence.
     ...(visual ? { visual } : {}),
     ...(audio ? { audio } : {}),
+    ...(interactive ? { interactive } : {}),
     // Omitted rather than set undefined: the player tests `segment.quickCheck`
     // for presence, and an absent check must not gate progress.
     ...(quickCheck ? { quickCheck } : {}),

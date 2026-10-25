@@ -70,7 +70,7 @@ vi.mock("@/lib/api/consents", async (importOriginal) => {
 vi.mock("@/lib/api/classes", () => ({ classesApi: { list: async () => [] } }));
 
 const mismatches = vi.fn();
-vi.mock("@/lib/api/ageChecks", () => ({ ageChecksApi: { mismatches: () => mismatches() } }));
+vi.mock("@/lib/api/ageChecks", () => ({ ageChecksApi: { held: () => mismatches() } }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),

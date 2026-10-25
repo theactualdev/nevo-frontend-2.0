@@ -39,47 +39,87 @@ describe("segment lengths on the adapt request", () => {
 });
 
 /**
- * ONE ENGINE SUGGESTION IS ONE OFFER. `modalitySuggestion` has no segment id;
- * copied onto every row, the player's one-per-segment, never-two-in-a-row
- * rule turned it into an offer on every other segment of the lesson.
+ * SCRUM-272, 21 Oct: THE RECOMMENDATION IS EACH ROW'S, IN THE FORMAT GROUP.
+ * The separate pill is gone, and `modalitySuggestion` with it - deprecated and
+ * always null on the wire. A row's `availableFormats` and `recommendedFormat`
+ * are carried so the group reads the fresher of these and the lesson's own.
  */
-describe("the engine's modality suggestion", () => {
+describe("the engine's formats and recommendation", () => {
   const lesson = {
     id: "l-1",
     title: "Fractions",
     segments: [
       { id: "seg-1", modalities: ["text", "audio"] },
       { id: "seg-2", modalities: ["text", "audio"] },
-      { id: "seg-3", modalities: ["text", "audio"] },
     ],
   } as unknown as Lesson;
-  const res = {
-    lessonId: "l-1",
-    source: "rule_based",
-    segments: lesson.segments.map((s) => ({
-      segmentId: s.id,
-      modality: "text",
-      density: "medium",
-      scaffolding: "light",
-      priority: 1,
-    })),
-    breakSuggestion: null,
-    proactiveAdjustment: null,
-    modalitySuggestion: { suggested: "audio" },
-  } as unknown as AdaptResponse;
-
-  it("is carried once, for the lesson, and on no segment", () => {
-    const plan = toAdaptationPlan(res, lesson);
-
-    expect(plan.suggestModality).toBe("audio");
-    expect(plan.segments.every((s) => !s.suggestModality)).toBe(true);
+  const row = (segmentId: string, extra: Record<string, unknown> = {}) => ({
+    segmentId,
+    modality: "text",
+    density: "medium",
+    scaffolding: "light",
+    priority: 1,
+    ...extra,
   });
+  const res = (
+    rows: ReturnType<typeof row>[],
+    modalitySuggestion: unknown = null,
+  ) =>
+    ({
+      lessonId: "l-1",
+      source: "rule_based",
+      segments: rows,
+      breakSuggestion: null,
+      proactiveAdjustment: null,
+      modalitySuggestion,
+    }) as unknown as AdaptResponse;
 
-  it("is absent when the engine made none", () => {
+  it("are carried per row, in the engine's order", () => {
     const plan = toAdaptationPlan(
-      { ...res, modalitySuggestion: null },
+      res([
+        row("seg-1", {
+          availableFormats: ["audio", "text"],
+          recommendedFormat: "audio",
+        }),
+        row("seg-2", { availableFormats: ["text"], recommendedFormat: null }),
+      ]),
       lesson,
     );
-    expect(plan).not.toHaveProperty("suggestModality");
+
+    expect(plan.segments[0]).toMatchObject({
+      formats: ["audio", "text"],
+      recommendedFormat: "audio",
+    });
+    expect(plan.segments[1]).toMatchObject({
+      formats: ["text"],
+      recommendedFormat: null,
+    });
+  });
+
+  it("carry no recommendation that is not one of the row's formats", () => {
+    const plan = toAdaptationPlan(
+      res([
+        row("seg-1", { availableFormats: ["text"], recommendedFormat: "audio" }),
+      ]),
+      lesson,
+    );
+
+    expect(plan.segments[0].recommendedFormat).toBeNull();
+  });
+
+  it("leave the lesson's own standing where the answer had none", () => {
+    const plan = toAdaptationPlan(res([row("seg-1")]), lesson);
+
+    expect(plan.segments[0]).not.toHaveProperty("formats");
+    expect(plan.segments[0]).not.toHaveProperty("recommendedFormat");
+  });
+
+  it("never read the retired `modalitySuggestion`", () => {
+    const plan = toAdaptationPlan(
+      res([row("seg-1")], { suggested: "audio" }),
+      lesson,
+    );
+
+    expect(JSON.stringify(plan)).not.toContain("audio");
   });
 });

@@ -268,13 +268,26 @@ test("no signed-in admin surface renders an invented figure", async ({
     "/admin/settings",
   ];
 
+  /*
+   * EIGHT LIVE PAGES, SO EIGHT PAGES' WORTH OF TIME (22 Oct). This sweep sat
+   * inside the suite's 30s per-test limit, which held while each page drew in
+   * a few seconds. After the 21 Oct evening backend deploy the whole suite went
+   * from 3.8 to 8.8 minutes, and this one test - eight pages in a row - ran out
+   * of time on every branch and on main, while no single page broke. Each page
+   * still has LIVE's 25s to draw its heading; the test as a whole gets room for
+   * all eight. A step per page names the one that failed.
+   */
+  test.setTimeout(routes.length * LIVE.timeout + 30_000);
+
   for (const route of routes) {
-    await page.goto(route);
-    await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible(LIVE);
-    const kinds = await page
-      .locator(`[${SAMPLE_ATTR}]`)
-      .evaluateAll((els) => els.map((e) => e.getAttribute("data-nevo-sample")));
-    expect(kinds, `${route} rendered a fixture region`).toEqual([]);
+    await test.step(route, async () => {
+      await page.goto(route);
+      await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible(LIVE);
+      const kinds = await page
+        .locator(`[${SAMPLE_ATTR}]`)
+        .evaluateAll((els) => els.map((e) => e.getAttribute("data-nevo-sample")));
+      expect(kinds, `${route} rendered a fixture region`).toEqual([]);
+    });
   }
 });
 

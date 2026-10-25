@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement, type ComponentProps } from "react";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
 import type { LessonDetailResponse } from "@/lib/api/lessons";
@@ -154,12 +154,6 @@ const opensOn = (startModality: "text" | "interactive"): AdaptationPlan => ({
   segments: [{ segmentId: "calc-1", startModality }],
 });
 
-/** The offer pill opens a beat after it mounts. */
-const beat = () =>
-  act(() => {
-    vi.advanceTimersByTime(1600);
-  });
-
 beforeEach(() => {
   report.mockReset();
   solver.throws = false;
@@ -188,24 +182,29 @@ describe("a calculation opens in the solver alone", () => {
     expect(screen.queryByText(BODY)).toBeNull();
   });
 
-  it("is never offered as its text, whoever suggests it", () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    // The engine's live answer for this very segment, naming Text.
+  it("is never offered as its text, whatever a formats list names", () => {
+    // The engine's live answer for this very segment, listing Text and
+    // recommending it: a calculation is the solver alone, so there is no
+    // second format and no group to put a marker in.
     runtime.value = {
       ...runtime.value,
       forSegmentId: "calc-1",
-      plan: { lessonId: "l-1", segments: [], suggestModality: "text" },
+      plan: {
+        lessonId: "l-1",
+        segments: [
+          {
+            segmentId: "calc-1",
+            startModality: "interactive",
+            formats: ["interactive", "text"],
+            recommendedFormat: "text",
+          },
+        ],
+      },
     };
-    render(
-      <LessonPlayer
-        lesson={built()}
-        plan={{ ...opensOn("interactive"), suggestModality: "text" }}
-      />,
-    );
-    beat();
+    render(<LessonPlayer lesson={built()} plan={opensOn("interactive")} />);
 
-    expect(screen.queryByText("Want to read this one instead?")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Yes, try it" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Lesson format" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Text" })).toBeNull();
     expect(screen.getByText(PROMPT)).toBeInTheDocument();
   });
 

@@ -1033,7 +1033,11 @@ describe("a lesson handed in on the address", () => {
   it("counts only when its card is on offer", () => {
     render(<AssignWizard preselect="l-not-offered" />);
 
-    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    // C07i: Continue stays pressable with nothing picked, says what it
+    // needs, and does not move on.
+    expect(screen.getByText("Pick at least one lesson to continue.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByRole("heading", { name: "Choose lessons" })).toBeInTheDocument();
   });
 
   it("is never sent alongside one the teacher did choose", async () => {
@@ -1065,7 +1069,11 @@ describe("a lesson handed in on the address", () => {
     });
     render(<AssignWizard preselect="l-1" />);
 
-    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    // C07i: Continue stays pressable with nothing picked, says what it
+    // needs, and does not move on.
+    expect(screen.getByText("Pick at least one lesson to continue.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByRole("heading", { name: "Choose lessons" })).toBeInTheDocument();
   });
 });
 
@@ -1134,5 +1142,31 @@ describe("a class list that could not be read", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(screen.queryByText(/You don.t have any classes yet/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * C07i (design 82c213b): one lesson or several in step 1, a count beside
+ * Continue, and a confirm that names every lesson picked.
+ */
+describe("choosing several lessons", () => {
+  it("says to pick one or several, and counts what is picked", () => {
+    render(<AssignWizard />);
+
+    expect(screen.getByText(/Pick one or several. They.ll go to the same class and time/)).toBeInTheDocument();
+    expect(screen.getByText("Pick at least one lesson to continue.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Fractions 3/ }));
+    expect(screen.getByText("1 lesson selected")).toBeInTheDocument();
+  });
+
+  it("names every lesson picked on the confirm", () => {
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    onlyClasses(/JSS 2A/);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(screen.getByText("1 lesson will open for JSS 2A now.")).toBeInTheDocument();
+    expect(screen.getByRole("listitem")).toHaveTextContent("Fractions 3");
   });
 });

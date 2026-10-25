@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
+import { ageChecksApi } from "@/lib/api/ageChecks";
 import {
   studentsApi,
   type AdminStudentDetail,
@@ -102,6 +103,27 @@ export function StudentDetailView({
   const [addingGuardian, setAddingGuardian] = useState(false);
   /** What the request just sent to a new guardian said about delivery. */
   const [guardianAdded, setGuardianAdded] = useState<string | null>(null);
+
+  /*
+   * HELD FOR A DATE OF BIRTH CHECK (SCRUM-243; D07b fixed in 96cd4b4). The
+   * frame used to draw a held child as "Active, learning normally", which
+   * contradicted the hold in production. On the server's `blocksAccess`, the
+   * status reads "On hold" and points at the checks rather than describing
+   * the hold in its own words. Unread is not held.
+   */
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    ageChecksApi
+      .held()
+      .then((rows) => {
+        if (alive) setHeld(rows.some((r) => r.studentId === studentId));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [studentId]);
 
   const load = useCallback(() => {
     Promise.all([studentsApi.get(studentId), classesApi.list(true)])
@@ -265,15 +287,43 @@ export function StudentDetailView({
                   aria-hidden="true"
                   className={cn(
                     "size-2 flex-none rounded-full",
-                    deactivated ? "bg-nevo-near-black/35" : "bg-nevo-navy",
+                    held && !deactivated
+                      ? "bg-nevo-violet"
+                      : deactivated
+                        ? "bg-nevo-near-black/35"
+                        : "bg-nevo-navy",
                   )}
                 />
-                {statusLabel(student.status)}
+                {held && !deactivated ? "On hold" : statusLabel(student.status)}
               </span>
             }
           />
           <Field label="Age band" value={student.ageBand ?? "Not set"} />
         </dl>
+
+        {held && !deactivated ? (
+          <div className="mt-[22px] flex items-start gap-2.5 rounded-[10px] bg-nevo-violet/14 px-4 py-3">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="mt-0.5 flex-none text-nevo-navy">
+              <rect x="3" y="4.5" width="18" height="17" rx="2.5" />
+              <path d="M3 9h18M8 2.5v4M16 2.5v4" />
+            </svg>
+            <span className="text-[13.5px] leading-[1.6] text-nevo-near-black/66">
+              {firstName}&rsquo;s date of birth differs from the one the parent gave, so this
+              account is on hold and hasn&rsquo;t started yet. The parent&rsquo;s date is never
+              shown. Check and resolve it in{" "}
+              <Link
+                href={withBack("/admin/students/date-of-birth", {
+                  href: `/admin/students/${studentId}`,
+                  label: firstName,
+                })}
+                className="font-semibold text-nevo-navy hover:underline"
+              >
+                Date of birth checks
+              </Link>
+              .
+            </span>
+          </div>
+        ) : null}
 
         <div className="mt-[22px] border-t border-nevo-near-black/8 pt-4">
           <p className="m-0 flex items-start gap-2 text-[13px] leading-[1.55] text-nevo-near-black/60">

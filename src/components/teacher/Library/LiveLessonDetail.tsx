@@ -14,9 +14,7 @@ import type {
 } from "@/lib/api/lessons";
 import { cn } from "@/lib/utils";
 import { LessonDetailActions } from "./LessonDetailActions";
-import { KeyPointCard } from "./KeyPointCard";
 import { SplitSourceNotice } from "./SplitSourceNotice";
-import { ReviewSection } from "./ReviewSection";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useLessonReview } from "@/hooks/useLessonReview";
 import { useSegmentReview } from "@/hooks/useSegmentReview";
@@ -291,14 +289,8 @@ export function LiveLessonDetail({
    * or a teacher who accepts one watches it vanish and wonders what they
    * just did.
    */
-  const reviewable = segments.filter((s) => s.needsReview);
   const sections = useSegmentReview(lesson.id, segments);
-  /*
-   * The rows below mark only what is STILL waiting, from the hook's own list.
-   * `reviewable` above is deliberately different - it keeps an approved section
-   * in the review list, shown as checked - and the two must not be merged: one
-   * is "what did Nevo flag", the other is "what is left to do".
-   */
+  /* The rows below mark only what is STILL waiting, from the hook's own list. */
   const waitingIds = new Set(sections.outstanding.map((s) => s.id));
   const say = useSystemMessages();
   /*
@@ -315,17 +307,22 @@ export function LiveLessonDetail({
   const review = useLessonReview(lesson.id, () =>
     say.show({ kind: "confirm", message: `${lesson.title} is ready to assign.` }),
   );
-  /*
-   * A segment approval moves `readyToAssign`, and the only thing that knows
-   * is the review read. Without this, a teacher settles the last section and
-   * Assign stays grey until they reload.
-   */
-  const onSectionApproved = review.refresh;
   const outstandingSections = sections.remaining;
   const outstandingPoints = review.outstanding;
   /** Anything at all still waiting, from either half. */
   const waiting = outstandingPoints + outstandingSections;
-  const hadReview = review.hadReview || reviewable.length > 0;
+  /*
+   * C07K IS WHERE A LESSON IS REVIEWED NOW (Lydia, 19 Oct). The per-item key
+   * point list and the per-section approvals that stood on this page are
+   * retired - "C06b's per-item key point list is retired and routes into
+   * C07k" - and in their place is one card and one way in. It appears when
+   * the server says the lesson's sign-off is not complete, and only then: a
+   * deployment without the redesign answers neither way, and this page has
+   * nothing to route that lesson into.
+   */
+  const toReview = review.signedOff === false;
+  /** C06b's "Two things need a quick look": what the flow will stop on. */
+  const needLook = outstandingPoints + review.missingKeyPoints;
   /*
    * WHETHER THERE IS A LESSON HERE TO SEND AT ALL.
    *
@@ -359,41 +356,19 @@ export function LiveLessonDetail({
    * the why to the callout below it.
    */
   /**
-   * "Total: 12 min (Segment 1: 4 min, Segment 2: 3 min)" - design's own shape.
-   * The total is the lesson's pre-summed figure rather than a sum computed
-   * here, so the two cannot drift; the breakdown lists only segments that
-   * carry an estimate.
+   * "Total: 12 min", the lesson's pre-summed figure.
+   *
+   * It carried a per-segment breakdown - "(Segment 1: 4 min, Segment 2: 3
+   * min)", design's 1 Sep shape - which on a 40-section upload was a line of
+   * forty figures. Lydia, 19 Oct: "No per-segment minutes anywhere in the
+   * flow." The total stays; it is one number a teacher plans a lesson by.
    */
-  const durationLine = (() => {
-    const total = lesson.estimatedMinutes ?? 0;
-    if (!total) return "";
-    const parts = segments
-      .map((seg, i) => ({ n: i + 1, mins: seg.estimatedMinutes ?? 0 }))
-      .filter((x) => x.mins > 0)
-      .map((x) => `Segment ${x.n}: ${x.mins} min`);
-    return parts.length > 0
-      ? `Total: ${total} min (${parts.join(", ")})`
-      : `Total: ${total} min`;
-  })();
+  const durationLine = lesson.estimatedMinutes
+    ? `Total: ${lesson.estimatedMinutes} min`
+    : "";
 
   const plural = (n: number, one: string, many: string) =>
     `${n} ${n === 1 ? one : many}`;
-
-  /**
-   * LR-04's live count, naming whichever half is actually outstanding.
-   *
-   * Two numbers rather than one total, because they are settled in different
-   * places on this page and a teacher looking for "3 things" would not know
-   * which three.
-   */
-  const waitingLine = [
-    ...(outstandingPoints > 0
-      ? [plural(outstandingPoints, "key point", "key points")]
-      : []),
-    ...(outstandingSections > 0
-      ? [plural(outstandingSections, "section", "sections")]
-      : []),
-  ].join(" and ");
 
   /**
    * C06b's sub-line, verbatim.
@@ -466,7 +441,7 @@ export function LiveLessonDetail({
               <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">
                 {lesson.title}
               </h1>
-              {waiting > 0 && (
+              {(waiting > 0 || toReview) && (
                 <span className="inline-flex shrink-0 items-center gap-[5px] rounded-full bg-nevo-violet/34 py-[3px] pr-[11px] pl-2 text-[11.5px] font-semibold whitespace-nowrap text-nevo-navy">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                     <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
@@ -493,7 +468,8 @@ export function LiveLessonDetail({
             {/* C06b's violet reason line sits ABOVE the grey meta, so the
                 reason is read before the statistics. The section number comes
                 from the flagged segment itself - never a parser token. */}
-            {waiting > 0 && reviewLine && (
+            {/* Not under C07k's card, which says it in its own title. */}
+            {waiting > 0 && !toReview && reviewLine && (
               <p className="mt-[7px] text-[14px] font-medium text-nevo-navy xl:mt-2 xl:text-[14.5px]">
                 {reviewLine}
               </p>
@@ -525,6 +501,12 @@ export function LiveLessonDetail({
           {assignable && (
           <LessonDetailActions
             lessonId={lesson.id}
+            /* C06c: a live picture or recording on any section. */
+            mediaHref={
+              segments.some((s) => s.visualVariant?.imageUrl || s.audioVariant?.audioUrl)
+                ? `/teacher/lessons/${lesson.id}/media`
+                : undefined
+            }
             /* THE GATE IS `readyToAssign`, and the count is only what the
                line says. Backend asked for the split by name: a client that
                decides "ready" for itself is how this ticket started. */
@@ -553,65 +535,67 @@ export function LiveLessonDetail({
           )}
         </div>
 
-        {/*
-          THE REVIEW ITSELF, not a sign pointing at one (SCRUM-153).
-
-          This banner used to say sections wanted a look and leave it there,
-          and the only control that could settle one lived on another screen,
-          behind a link inside a row. A teacher who uploaded a lesson was told
-          it needed checking, told to do the checking on a page called "My
-          Lessons" that has never existed, and could not assign their own
-          lesson. It stopped a demonstration on 19 September.
-
-          LR-03's copy, and LR-04's live count: how many are left, and what
-          that means for the one action a teacher came here to take.
-        */}
         {/* BEFORE the review, because it changes what the review IS. A
             teacher checking key points drawn from their own pasted text is
             doing something different from checking Nevo's reading of it. */}
         <SplitSourceNotice segments={segments} />
 
-        {waiting > 0 ? (
-          <div className="mt-[18px] flex max-w-none items-start gap-3 rounded-[12px] bg-nevo-violet/14 px-[17px] py-[15px] xl:mt-6 xl:max-w-[600px] xl:px-[18px] xl:py-4">
-            <span className="mt-px shrink-0 text-nevo-navy">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 8h.01M11 12h1v4h1" />
-              </svg>
-            </span>
-            <p className="text-sm leading-[1.55] text-nevo-near-black/78 xl:text-[14.5px]">
-              <strong className="font-semibold text-nevo-near-black">
-                {`${waitingLine} waiting for you:`}
-              </strong>{" "}
-              {/* LR-03's copy, verbatim from the ruling. "Nevo wasn't
-                  confident it's read this correctly. They are marked below."
-                  was the sentence this replaces, and it does not parse. */}
-              Nevo is unsure it read these parts correctly. Open each one to
-              check it, then accept or change it. Nothing you did is lost.
+        {toReview && assignable && settled ? (
+          /*
+           * C06b's needs-review state, as ported to C07k (design 534ba31): one
+           * card, the count of what the flow will stop on, and the way in.
+           * The per-item key point list and the per-section approvals that
+           * stood here are retired; reviewing happens once, in four steps.
+           */
+          <div className="mt-[26px] max-w-[600px] rounded-[12px] bg-nevo-cream-elevated px-7 py-[26px] shadow-elevation-1">
+            <h3 className="text-[18px] font-semibold text-nevo-near-black">
+              {needLook > 0 ? (
+                <>
+                  {`${needLook} ${needLook === 1 ? "thing needs" : "things need"} a quick look`}
+                  <span className="hidden xl:inline"> before this is ready</span>
+                </>
+              ) : (
+                "Nothing needs a look, just your approval"
+              )}
+            </h3>
+            <p className="mt-[9px] text-[14.5px] leading-[1.55] text-pretty text-nevo-near-black/68">
+              <span className="hidden xl:inline">
+                Nevo will walk you through it in four calm steps: what it made,
+                the key points, the rewrites, then live. It only stops you on
+                the few things it is genuinely unsure about, and each carries
+                the action that resolves it.
+              </span>
+              <span className="xl:hidden">
+                Nevo walks you through it in four calm steps: what it made, the
+                key points, the rewrites, then live. It only stops you on the
+                few things it is unsure about.
+              </span>
             </p>
+            <Link
+              href={`/teacher/lessons/${lesson.id}/review`}
+              className="mt-5 inline-flex h-[46px] cursor-pointer items-center gap-2 rounded-[10px] bg-nevo-navy px-[22px] text-[14.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+            >
+              Review in four steps
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </Link>
           </div>
         ) : (
+          !toReview &&
+          waiting === 0 &&
           assignable &&
           settled &&
           assignments.length === 0 &&
           // Not "never assigned" - we could not find out. Said below.
           !assignmentsFailed && (
             /*
-             * LR-05, and C06b draws it as a STATE rather than a sentence.
-             *
-             * What stood here was a line of my own - "you have checked
-             * everything Nevo was unsure about" - written before the frame
-             * was pulled. The frame has no such acknowledgement: a lesson
-             * with nothing outstanding simply IS the ready state, whether it
-             * was reviewed or arrived clean, and it says what a teacher can
-             * do next rather than what they just did.
-             *
-             * SCRUM-152's system message is the other half of this beat. It
-             * is built: `useLessonReview` raises it, above, at the moment the
-             * last thing holding the lesson is settled.
+             * LR-05, and C06b draws it as a STATE rather than a sentence: a
+             * lesson with nothing outstanding simply IS the ready state, and
+             * it says what a teacher can do next rather than what they just
+             * did. SCRUM-152's system message is the other half of this beat;
+             * `useLessonReview` raises it.
              */
-            /* C06b's treatment: a raised cream card with a navy check, as the
-               sample page already draws it - not a flat tint. */
             <div className="mt-5 flex items-start gap-[13px] rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px] shadow-elevation-1 xl:mt-[26px] xl:gap-3.5 xl:px-6 xl:py-[22px]">
               <span className="mt-px shrink-0 text-nevo-navy">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-5">
@@ -630,60 +614,14 @@ export function LiveLessonDetail({
           )
         )}
 
-        {/* The cards themselves, directly under what they are about.
-
-            KEY POINTS FIRST, because they are the ticket's unit and the
-            ordinary case; a flagged section is the rarer second reason a
-            lesson is held. */}
-        {review.keyPoints.length > 0 && (
-          <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-8")}>Key points Nevo found</h3>
-        )}
-        {review.keyPoints.length > 0 && (
-          <div className="mt-3.5 flex max-w-[820px] flex-col gap-[9px] xl:mt-4 xl:gap-2.5">
-            {review.keyPoints.map((kp) => (
-              <KeyPointCard
-                key={kp.id}
-                keyPoint={kp}
-                working={
-                  review.working?.id === kp.id ? review.working.action : null
-                }
-                failed={review.actionFailed === kp.id}
-                onAccept={() => review.accept(kp.id)}
-                onAmend={(text) => review.amend(kp.id, text)}
-                onRemove={() => review.remove(kp.id)}
-              />
-            ))}
-          </div>
-        )}
-
         {review.failed && (
           /* Not "nothing to review" - we could not find out. Assign stays
              open, because refusing a teacher over our own outage is worse
              than letting the server refuse with a reason. */
           <p className="mt-4 max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
-            We couldn&rsquo;t load the key points just now. Nothing is wrong
-            with the lesson - try again in a moment.
+            We couldn&rsquo;t load the review just now. Nothing is wrong with
+            the lesson - try again in a moment.
           </p>
-        )}
-
-        {reviewable.length > 0 && (
-          <div className="mt-4 flex max-w-[820px] flex-col gap-2.5">
-            {reviewable.map((s) => (
-              <ReviewSection
-                key={s.id}
-                segment={s}
-                // Its place in the lesson, counted from 1 as the section rows
-                // below count (T51). `sequenceOrder` is the server's sort key,
-                // and nothing says it starts at 1 - a 0 read "Section 0" here
-                // beside "Section 1" for the same section in the list.
-                index={segments.indexOf(s) + 1}
-                approved={sections.isApproved(s)}
-                approving={sections.approving === s.id}
-                failed={sections.failed === s.id}
-                onAccept={() => sections.approve(s.id, onSectionApproved)}
-              />
-            ))}
-          </div>
         )}
 
         {lesson.confirmationSummary && (

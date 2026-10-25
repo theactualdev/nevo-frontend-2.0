@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import { LESSON_STATUS } from "@/lib/api/lessons";
@@ -1108,5 +1109,95 @@ describe("from the check-in (B26)", () => {
 
     expect(screen.queryByText(/revisit soon/)).toBeNull();
     expect(document.querySelectorAll(".shadow-elevation-1")).toHaveLength(0);
+  });
+});
+
+/**
+ * NO WAY ON PAST A CHECK THAT HAS NOT BEEN PASSED (Olayinka, 23 Oct, under
+ * Lydia's gate ruling the same day). The sheet's Keep going before a right
+ * answer (SCRUM-275, 22 Oct) took the child on to the next section; it is
+ * gone. Tapping out returns them to this section, and Next asks the check
+ * again - so what comes after it, a planned break included, waits for the
+ * right answer and its Keep going.
+ */
+describe("no way on past an unpassed check (Olayinka, 23 Oct)", () => {
+  const sheet = () => screen.queryByRole("dialog");
+  const tapOut = () =>
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: "Escape",
+    });
+
+  it("has no Keep going until the check is answered right", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByRole("button", { name: "Keep going" })).toBeNull();
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: /The denominator/ }),
+    );
+
+    expect(within(dialog).getByRole("button", { name: "Try again" })).toBeEnabled();
+    expect(within(dialog).queryByRole("button", { name: "Keep going" })).toBeNull();
+  });
+
+  it("after a miss and a tap out, records the miss and keeps the child on the section", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    fireEvent.click(
+      await screen.findByRole("button", { name: /The denominator/ }),
+    );
+    tapOut();
+
+    expect(sheet()).toBeNull();
+    expect(saveAttempt).toHaveBeenCalledOnce();
+    expect(saveAttempt.mock.calls[0][1]).toMatchObject({
+      problemId: QUICK_CHECK.id,
+      answer: "b",
+    });
+    expect(screen.getByRole("heading", { name: "Numerators" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Denominators" })).toBeNull();
+  });
+
+  it("asks it again on Next, every time, until it is passed", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    for (let visit = 0; visit < 2; visit++) {
+      next();
+      expect(
+        await screen.findByRole("heading", { name: QUICK_CHECK.question }),
+      ).toBeInTheDocument();
+      tapOut();
+      expect(screen.getByRole("heading", { name: "Numerators" })).toBeInTheDocument();
+    }
+
+    next();
+    fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Keep going" }),
+    );
+
+    expect(screen.getByRole("heading", { name: "Denominators" })).toBeInTheDocument();
+  });
+
+  it("holds a planned break until the check is passed, then gives it", async () => {
+    const plan: AdaptationPlan = {
+      lessonId: "lesson-1",
+      segments: [
+        { segmentId: SEG_1, startModality: "text", breakAfter: "movement" },
+      ],
+    };
+    render(<LessonPlayer lesson={LESSON} plan={plan} live />);
+    next();
+    await screen.findByRole("dialog");
+    tapOut();
+    expect(screen.queryByRole("button", { name: "I'm done" })).toBeNull();
+
+    next();
+    fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Keep going" }),
+    );
+
+    expect(screen.getByRole("button", { name: "I'm done" })).toBeInTheDocument();
   });
 });

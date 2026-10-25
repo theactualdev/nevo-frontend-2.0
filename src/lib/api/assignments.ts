@@ -177,7 +177,12 @@ export const assignmentsApi = {
     note?: string | null;
   }) => api.post<CreateAssignmentsResult>("/api/v1/assignments", payload),
 
-  /** Every assignment the teacher can see, optionally narrowed. */
+  /**
+   * Every assignment the teacher can see, optionally narrowed. For a STUDENT
+   * the server scopes it to their own and ignores the filters: all of them,
+   * completed and cancelled included, except one not open yet - see
+   * `useStudentAssignments`.
+   */
   list: (filter?: { studentId?: string; classId?: string }) =>
     api.get<Assignment[]>("/api/v1/assignments", {
       params: filter?.studentId

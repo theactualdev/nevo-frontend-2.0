@@ -1,10 +1,11 @@
-import { api } from "./client";
+import { api, ApiError, apiErrorCode } from "./client";
 import type {
   CheckpointScalar,
   ComprehensionCheckpoint,
 } from "./checkpoints";
 import type { SessionDelivery } from "./intelligence";
 import type { SegmentVariants } from "./variants";
+import type { LessonMedia } from "./media";
 
 /**
  * Parsed lesson content - the library and one lesson's segments.
@@ -178,7 +179,12 @@ export type SegmentReviewReason =
   | "calculation_step_missing_options"
   | "calculation_variant_missing_manipulative"
   | "calculation_segment_has_no_interactive_delivery"
-  | "model_flagged_for_review";
+  | "model_flagged_for_review"
+  // In the deployed enum by 24 Oct and read as "a reason this console
+  // doesn't recognise yet" until then (Osmosis section 4, the hub).
+  | "unmarkable_question"
+  | "depth_variant_review_required"
+  | "optional_media_pending_review";
 
 /**
  * "A stable, ordered reading boundary generated from approved lesson text."
@@ -230,6 +236,35 @@ export interface LessonSegment extends SegmentVariants {
   readingGroups?: ReadingGroup[];
   availableModalities: ContentModality[];
   /**
+   * SCRUM-272 (Teslim's handoff §5, 21 Oct): the formats this section can
+   * actually be sent in - "derived from actual payloads, not just the
+   * declared modality list": a picture with a current safety stamp and a URL,
+   * audio with a recording - in the authored opening order. What the format
+   * group offers. Absent on a payload from before it (and on a mock), which
+   * falls back to `availableModalities` with no recommendation.
+   */
+  availableFormats?: ContentModality[];
+  /**
+   * The format the engine recommends for this section in the child's latest
+   * sitting, or null for none. The format group's quiet marker reads this and
+   * nothing else; the player never derives one.
+   */
+  recommendedFormat?: ContentModality | null;
+  /**
+   * What this section is delivered in, in the child's in-progress sitting on
+   * this lesson (K4, Lydia 21 Oct) - its own format, and the sitting's depth
+   * and Slower as they take effect here (741685e) - or null for no choice.
+   * What a reload opens in, before its first frame. See `SegmentChoice`.
+   */
+  deliveryPreference?: SegmentChoice | null;
+  /**
+   * The chosen format where there is one - and NOT READ, because where there
+   * is none the server fills it with the section's first available format
+   * (`LessonSegmentResponse`'s validator), so it cannot tell a child's choice
+   * from the default. `deliveryPreference.modality` can.
+   */
+  primaryModality?: ContentModality | null;
+  /**
    * Typed as of 3 Sep. `answerKey` is NULLABLE for lessons parsed before the
    * contract existed - see `api/checkpoints.ts`, which is the only thing that
    * should mark one.
@@ -253,6 +288,80 @@ export interface LessonSegment extends SegmentVariants {
    */
   approved: boolean;
   approvedAt: string | null;
+}
+
+/**
+ * A depth the child chose for a section (K4): its standard text, or one of
+ * its two rewrites. `simplified` and `expanded` are the `depthVariants` keys.
+ */
+export type ChoiceDepth = "original" | "simplified" | "expanded";
+
+/**
+ * `SegmentChoice` - what ONE section of ONE sitting is delivered in, as the
+ * child chose it (SCRUM-272 / K4, Teslim's handoff §5, 21 Oct; 741685e,
+ * 22 Oct). "No preference is written as a permanent learner-profile label" -
+ * it is never a modality on a child (rule 1). Null on a field is no choice
+ * there.
+ *
+ * TWO SCOPES SINCE 741685e (Lydia, 22 Oct: "depth holds for the lesson,
+ * format is per section"). `modality` is this section's own. `depth` and
+ * `slower` are the SITTING's (`LessonChoice`), shown here as they take
+ * effect on this section: `depth` reads `original` on a section with no
+ * approved rewrite at the sitting's depth, while the sitting keeps it.
+ */
+export interface SegmentChoice {
+  modality?: ContentModality | null;
+  depth?: ChoiceDepth | null;
+  slower?: boolean | null;
+  /** The server's, never ours. */
+  updatedAt?: string | null;
+}
+
+/**
+ * `LessonChoice` - the sitting's depth and Slower (741685e, 22 Oct): one
+ * value each for the whole sitting, whichever section it was picked on.
+ * `deliveryState.lessonPreferences` on `POST /session`, and on every
+ * preference write's answer. Null or absent is no choice; `original` and
+ * `false` are the standard text chosen.
+ */
+export interface LessonChoice {
+  depth?: ChoiceDepth | null;
+  slower?: boolean | null;
+  /** The server's, never ours. */
+  updatedAt?: string | null;
+}
+
+/**
+ * `SegmentFormatChoice` - one section's own entry in the sitting's
+ * `segmentChoices` (741685e): its format and nothing else. Depth and Slower
+ * are the sitting's - `LessonChoice`.
+ */
+export interface SegmentFormatChoice {
+  modality?: ContentModality | null;
+  updatedAt?: string | null;
+}
+
+/**
+ * `SegmentChoiceWrite` - the body of `PUT .../segments/{id}/preferences`.
+ * PARTIAL: "omitted fields are preserved and null clears that particular
+ * override". So a write carries only what changed. `modality` is held for
+ * the addressed section; `depth` and `slower` for the whole sitting.
+ */
+export interface SegmentChoiceWrite {
+  modality?: ContentModality | null;
+  depth?: ChoiceDepth | null;
+  slower?: boolean | null;
+}
+
+/**
+ * What a stored choice comes back as: the section's effective choice, the
+ * sitting's depth and Slower, and the section's formats now. TYPED, NOT
+ * READ: what was written is the child's own pick, already on screen.
+ */
+export interface SegmentChoiceResponse extends SegmentChoice {
+  lessonPreferences?: LessonChoice;
+  availableFormats: string[];
+  recommendedFormat?: string | null;
 }
 
 /**
@@ -345,7 +454,58 @@ export interface LessonReview {
    */
   readyToAssign: boolean;
   keyPoints: KeyPoint[];
+  /*
+   * C07K, THE LESSON-WIDE REVIEW (Lydia and Teslim, 19 Oct). Everything below
+   * is on Teslim's `codex/lesson-review-redesign` branch and not yet in
+   * production, so each is optional: a read without them is the old contract,
+   * and nothing below may be inferred from its absence.
+   */
+  /** What the one press signs. Sent back unchanged; the server refuses a stale one. */
+  keyPointsContentHash?: string;
+  rewritesContentHash?: string;
+  /** The latest sign-off of each kind, `current: false` once the material changed. */
+  keyPointApproval?: ReviewSignoff | null;
+  rewriteApproval?: ReviewSignoff | null;
+  /** Sections the parser drew no key point from and nobody has decided about. */
+  missingKeyPointSegmentIds?: string[];
+  rewriteCount?: number;
+  pendingRewriteCount?: number;
+  /**
+   * Both current sign-offs are in (a lesson with no rewrites needs only the
+   * first). NOT the assignment gate - `readyToAssign` keeps its old meaning.
+   */
+  reviewComplete?: boolean;
+  /**
+   * The lesson's generated pictures and narration, section by section (Teslim
+   * 10c6bf8). WHAT `approveAllKeyPoints` ALSO SIGNS: every item here at
+   * `awaiting_review` is in the key-point snapshot and is approved with it. So
+   * the review never offers that press while one is still unseen - step 1
+   * approves them first, where they are shown.
+   */
+  media?: LessonMedia | null;
 }
+
+/**
+ * One professional's sign-off over a whole step of the review.
+ *
+ * The name is the one the school recorded for them, stored with the approval
+ * rather than looked up later, so it says who decided even after they leave.
+ */
+export interface ReviewSignoff {
+  id: string;
+  kind: "key_points" | "rewrites";
+  approvedBy: string | null;
+  approvedByName: string;
+  approvedAt: string;
+  contentHash: string;
+  /** False once anything it signed has changed since. */
+  current: boolean;
+}
+
+/** A section with no key point: the teacher writes one, or says it has none. */
+export type MissingKeyPointWrite =
+  | { action: "add"; text: string }
+  | { action: "omit" };
 export interface LessonDetailResponse extends LessonSummary {
   /**
    * EVERY CLASS THIS LESSON WENT TO, and the reason the screen stopped showing
@@ -486,19 +646,60 @@ export interface LessonSessionResponse {
   /**
    * What the server froze for this session's delivery (`SessionDeliveryResponse`,
    * 18 Oct): the engine config with the active accommodations applied, as it
-   * was at `capturedAt`. TYPED, NOT READ. It answers after the first frame,
-   * so applying it would reshape a screen the child already sees (rules 6
-   * and 7); whether the session opens first and this becomes the source is a
-   * question to Teslim (20 Oct contract check).
+   * was at `capturedAt`. The config is TYPED, NOT READ. It answers after the
+   * first frame, so applying it would reshape a screen the child already sees
+   * (rules 6 and 7); whether the session opens first and this becomes the
+   * source is a question to Teslim (20 Oct contract check).
+   *
+   * Its `segmentChoices` and `lessonPreferences` ARE READ (K4, 21 Oct;
+   * 741685e, 22 Oct): the sitting's own word on what the child chose - the
+   * format section by section, the depth and Slower for the sitting - which
+   * wins over the lesson read's everywhere but the section already on
+   * screen - see the player.
    */
   deliveryState?: SessionDelivery | null;
   /**
    * Where the server starts this session, zero-based (defaults to 0). For a
    * fresh lesson it can be past the first segment, chosen by next-work. TYPED,
    * NOT READ: whether a lesson opens part-way is a question to Teslim and
-   * design (20 Oct contract check).
+   * design (20 Oct contract check). Always 0 on a review sitting, where the
+   * player already opens at the top - see `reviewMode`.
    */
   segmentPosition?: number;
+  /**
+   * TESLIM'S REVIEW MODE (21 Oct, SCRUM-275 #3): this lesson was completed,
+   * and the sitting handed back is the COMPLETED one, reopened "for review,
+   * not as a new adaptive sitting". The lesson stays completed whatever is
+   * written against it. The player takes it as a finished lesson reopened
+   * (D22): no in-lesson adapt asks against it, nothing written that would
+   * demote it, no choices held. Defaults to false.
+   */
+  reviewMode?: boolean;
+  /**
+   * The completed sitting whose saved attempts a review would show. TYPED,
+   * NOT READ: the player replays the lesson for review (D22, D100 "Look
+   * again"), and no frame draws a review of the saved answers.
+   */
+  reviewOfSessionId?: string | null;
+  /** When the lesson was completed, on a review sitting. TYPED, NOT READ. */
+  completedAt?: string | null;
+}
+
+/**
+ * `POST /session`'s 409 for a lesson completed whose completed sitting cannot
+ * be found. The server will not make the lesson unfinished to answer it ("a
+ * missing review sitting never resets a completed lesson"), so there is
+ * nothing to open, and asking again finds the same.
+ */
+export const COMPLETED_SESSION_UNAVAILABLE = "completed_session_unavailable";
+
+/** Whether a refused session open was that 409 - read by shape. */
+export function isCompletedSessionUnavailable(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    err.status === 409 &&
+    apiErrorCode(err.detail) === COMPLETED_SESSION_UNAVAILABLE
+  );
 }
 
 /**
@@ -708,6 +909,18 @@ export interface LessonQuestionAttempt {
    * means there is none (B128), so the player opens no panel without it.
    */
   advanceAfterHandoff?: boolean;
+  /**
+   * THE GRACE WINDOW (backend 7d97248, Teslim's answer 6, 22 Oct): the
+   * moment the server will hand this question off, once a run of three
+   * misses exists and it is not yet time - so the third miss can come back
+   * with no `handoffTo` and this instead. Counted from the FIRST miss of the
+   * run, by age band (`question_support.guidance_deadline`). The spec: "re-read
+   * attempts then if the question is still unresolved" - the server pushes
+   * nothing when its clock passes it. A SERVER timestamp: waited for on the
+   * server's clock (`msUntilServerTime`), never compared with this device's.
+   * Null or absent: no deadline, and nothing is scheduled (rule 5).
+   */
+  handoffAvailableAt?: string | null;
 }
 
 /** `SocraticHandoffPrompt` - one guided question a hand-off opens with. */
@@ -839,6 +1052,55 @@ export const lessonsApi = {
     api.del<LessonReview>(
       `/api/v1/lessons/${lessonId}/key-points/${keyPointId}`,
     ),
+
+  /*
+   * C07K'S FOUR WRITES (Teslim's `codex/lesson-review-redesign`, f1ba340).
+   *
+   * Each returns the whole review, like the three above. The two approvals
+   * send back the hash the last read carried: the server signs exactly the
+   * material the teacher was shown, and answers 409 `review_content_changed`
+   * if it moved underneath them. `acceptKeyPoint` and `approveSegment` are
+   * deprecated by these - nothing in the redesigned review calls them.
+   */
+  approveAllKeyPoints: (lessonId: string, expectedContentHash: string) =>
+    api.post<LessonReview>(
+      `/api/v1/lessons/${lessonId}/key-points/approve-all`,
+      { expectedContentHash },
+    ),
+
+  approveAllRewrites: (lessonId: string, expectedContentHash: string) =>
+    api.post<LessonReview>(
+      `/api/v1/lessons/${lessonId}/rewrites/approve-all`,
+      { expectedContentHash },
+    ),
+
+  /** Only where the parser found none; an extracted point is amended instead. */
+  resolveMissingKeyPoint: (
+    lessonId: string,
+    segmentId: string,
+    write: MissingKeyPointWrite,
+  ) =>
+    api.put<LessonReview>(
+      `/api/v1/lessons/${lessonId}/segments/${segmentId}/key-point`,
+      write,
+    ),
+
+  /**
+   * New wording for the simpler or the longer version. It stays pending, and
+   * out of every child's lesson, until the rewrites are approved again; the
+   * original is kept as `originalBody`. The response is the review, so the
+   * new body is read back from the lesson detail.
+   */
+  editRewrite: (
+    lessonId: string,
+    segmentId: string,
+    variant: "simplified" | "expanded",
+    body: string,
+  ) =>
+    api.patch<LessonReview>(
+      `/api/v1/lessons/${lessonId}/segments/${segmentId}/rewrites/${variant}`,
+      { body },
+    ),
   /**
    * Open (or re-open) a play session. POST /api/v1/lessons/{id}/session
    * Takes no body.
@@ -858,4 +1120,64 @@ export const lessonsApi = {
       `/api/v1/lessons/${lessonId}/progress`,
       body,
     ),
+
+  /**
+   * Hold the child's choice for one section of this sitting on the server
+   * (K4, Lydia 21 Oct: "held server-side rather than in browser storage").
+   * PUT /api/v1/lessons/{id}/sessions/{session}/segments/{segment}/preferences
+   *
+   * `sessionId` is the BACKEND's sitting (`POST /session`), and `segmentId`
+   * the segment's own id. Partial - send what changed. 409 `format_unavailable`
+   * or `depth_unavailable` refuses a choice the section does not have, and
+   * `lesson_session_ended` a sitting that has closed. A stored format choice
+   * puts `modality_manual_switch` on the signal stream server-side, so the
+   * client sends none of its own.
+   */
+  saveSegmentChoice: (
+    lessonId: string,
+    sessionId: string,
+    segmentId: string,
+    body: SegmentChoiceWrite,
+  ) =>
+    api.put<SegmentChoiceResponse>(
+      `/api/v1/lessons/${lessonId}/sessions/${sessionId}/segments/${segmentId}/preferences`,
+      body,
+    ),
+
+  /**
+   * A break the child starts themselves, and their coming back from it
+   * (Teslim's gate contract, 23 Oct).
+   * POST /api/v1/lessons/{id}/sessions/{session}/break with `{action}`:
+   * "start" pauses the sitting - a micro break, the contract's default - and
+   * "return" resumes it.
+   *
+   * THE SERVER RECORDS THIS BREAK ITSELF: its `break_start` on start and its
+   * `break_end` on return, both with the trigger `student_request`, and the
+   * sitting's break count. So the client sends neither signal for it. Without
+   * the return the sitting would stay paused, and an engine that reads it as
+   * a break in progress holds back its own offers.
+   */
+  controlBreak: (
+    lessonId: string,
+    sessionId: string,
+    action: "start" | "return",
+  ) =>
+    api.post<BreakControlResponse>(
+      `/api/v1/lessons/${lessonId}/sessions/${sessionId}/break`,
+      { action },
+    ),
 };
+
+/**
+ * `BreakControlResponse`. TYPED, NOT READ: the child came back to the check
+ * they left, which the player already knows; `resumeSegmentId` and
+ * `canAdvance` are the gate's, and the gate is the server's (off since
+ * 23 Oct).
+ */
+export interface BreakControlResponse {
+  sessionId: string;
+  status: "paused" | "learning" | "stopped";
+  resumeSegmentId?: string | null;
+  conceptCarriedForward?: boolean;
+  canAdvance?: boolean;
+}

@@ -2069,6 +2069,49 @@ describe("drawn to the support level (B116)", () => {
     expect(screen.queryByText(HINT)).toBeNull();
     expect(screen.getByRole("button", { name: "Need a hint?" })).toBeInTheDocument();
   });
+
+  /*
+   * THE ENGINE RESENDS THE STEP'S OWN HINT (the gate, 23 Oct). At strong, the
+   * same words were drawn twice, one pill above the other. Drawn once, as the
+   * engine's, and closed once.
+   */
+  it("draws the step's hint once when the engine sends the same words", () => {
+    const { props } = render13(build(), {
+      level: "full",
+      engineHint: HINT,
+      onEngineHintClosed: vi.fn(),
+    });
+
+    expect(screen.getAllByText(HINT)).toHaveLength(1);
+    expect(props.onHintShown).toHaveBeenCalledTimes(1);
+    expect(props.onHintShown).toHaveBeenCalledWith("engine", "s1");
+  });
+
+  it("does not bring the same words back as the level's once the child closes them", () => {
+    const onEngineHintClosed = vi.fn();
+    const { view } = render13(build(), {
+      level: "full",
+      engineHint: HINT,
+      onEngineHintClosed,
+    });
+
+    tap("Close hint");
+    expect(onEngineHintClosed).toHaveBeenCalledTimes(1);
+    // The host takes the engine's away as it is closed.
+    view.rerender(
+      <CalculationSolver calculation={build()} onSolved={vi.fn()} level="full" />,
+    );
+
+    expect(screen.queryByText(HINT)).toBeNull();
+    expect(screen.getByRole("button", { name: "Need a hint?" })).toBeInTheDocument();
+  });
+
+  it("still draws both when the engine's words are not the step's", () => {
+    render13(build(), { level: "full", engineHint: "Count the pieces in each bar." });
+
+    expect(screen.getByText(HINT)).toBeInTheDocument();
+    expect(screen.getByText("Count the pieces in each bar.")).toBeInTheDocument();
+  });
 });
 
 describe("when a hint is offered and used (B130, B131)", () => {

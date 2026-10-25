@@ -5,13 +5,14 @@ import { QuickCheckSheet } from "./QuickCheckSheet";
 import type { QuickCheck } from "@/lib/types";
 
 /**
- * NO MANUAL DISMISS, AT THE SHEET (IA 31).
+ * THE SHEET, MOCKED TO ITS SEAMS.
  *
  * Radix never registers an outside tap in jsdom - a pointerdown on the scrim,
- * or on the body, reaches no dismiss handler - so a test that taps the scrim
- * and checks the sheet is still open passes whether or not the guard exists.
- * This reads the guard itself: what the sheet does with an outside
- * interaction and with Esc.
+ * or on the body, reaches no dismiss handler. So this reads the seams
+ * themselves: whether the content refuses an outside interaction or Esc, and
+ * what the sheet does when Radix reports one (its root's `onOpenChange`).
+ * The content's own handlers - the phone sheet's pull - are spread onto the
+ * dialog, so pointer events reach them.
  */
 
 type Guarded = { preventDefault: () => void };
@@ -19,12 +20,37 @@ type Guards = {
   onInteractOutside?: (e: Guarded) => void;
   onEscapeKeyDown?: (e: Guarded) => void;
 };
-const content = vi.hoisted(() => ({ props: null as Guards | null }));
+const content = vi.hoisted(() => ({
+  props: null as Guards | null,
+  root: null as { onOpenChange?: (open: boolean) => void } | null,
+}));
 vi.mock("@/components/ui/sheet", () => ({
-  Sheet: ({ children }: { children: ReactNode }) => <>{children}</>,
-  SheetContent: (props: Guards & { children: ReactNode }) => {
-    content.props = props;
-    return <div role="dialog">{props.children}</div>;
+  Sheet: ({
+    children,
+    onOpenChange,
+  }: {
+    children: ReactNode;
+    onOpenChange?: (open: boolean) => void;
+  }) => {
+    content.root = { onOpenChange };
+    return <>{children}</>;
+  },
+  SheetContent: ({
+    children,
+    onInteractOutside,
+    onEscapeKeyDown,
+    ...rest
+  }: Guards & { children: ReactNode } & Record<string, unknown>) => {
+    content.props = { onInteractOutside, onEscapeKeyDown, ...rest } as Guards;
+    // What is not a DOM attribute stays off the dialog.
+    const dom: Record<string, unknown> = { ...rest };
+    delete dom.side;
+    delete dom.showCloseButton;
+    return (
+      <div role="dialog" {...dom}>
+        {children}
+      </div>
+    );
   },
   SheetTitle: ({
     children,
@@ -51,34 +77,202 @@ const mount = () =>
     <QuickCheckSheet
       check={CHECK}
       open
-      onOpenChange={() => {}}
+      onTapOut={() => {}}
       onAnswered={() => {}}
       onContinue={() => {}}
+      onTakeBreak={() => {}}
     />,
   );
 
 afterEach(() => {
   cleanup();
   content.props = null;
+  content.root = null;
 });
 
-describe("the quick check refuses a manual dismiss", () => {
-  it("refuses a tap outside it, which is a tap on the scrim", () => {
+/*
+ * A CHILD CAN TAP OUT OF THE CHECK (Olayinka, 23 Oct - reversing IA 31's no
+ * manual dismiss): the dimmed player, Esc, or the phone sheet pulled down.
+ */
+describe("tapping out of the check", () => {
+  it("lets a tap outside it, on the dimmed player, through", () => {
     mount();
     const e = { preventDefault: vi.fn() };
 
     content.props?.onInteractOutside?.(e);
 
-    expect(e.preventDefault).toHaveBeenCalled();
+    expect(e.preventDefault).not.toHaveBeenCalled();
   });
 
-  it("refuses Esc", () => {
+  it("lets Esc through", () => {
     mount();
     const e = { preventDefault: vi.fn() };
 
     content.props?.onEscapeKeyDown?.(e);
 
-    expect(e.preventDefault).toHaveBeenCalled();
+    expect(e.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("tells the player the child tapped out, when Radix closes it", () => {
+    const onTapOut = vi.fn();
+    render(
+      <QuickCheckSheet
+        check={CHECK}
+        open
+        onTapOut={onTapOut}
+        onAnswered={() => {}}
+        onContinue={() => {}}
+        onTakeBreak={() => {}}
+      />,
+    );
+
+    content.root?.onOpenChange?.(false);
+
+    expect(onTapOut).toHaveBeenCalledOnce();
+  });
+
+  it("asks the check afresh after tapping out of a miss", () => {
+    const view = mountWith({});
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+
+    content.root?.onOpenChange?.(false);
+    view.rerender(sheet({ open: true }));
+
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Oxygen" })).toBeTruthy();
+  });
+
+  it("puts no close button of its own on the sheet", () => {
+    mount();
+
+    expect(screen.queryByRole("button", { name: /close/i })).toBeNull();
+  });
+});
+
+describe("pulling the phone sheet down", () => {
+  const dialog = () => screen.getByRole("dialog");
+  const at = (y: number) => ({
+    pointerId: 1,
+    isPrimary: true,
+    button: 0,
+    clientX: 100,
+    clientY: y,
+  });
+  const pullDown = (el: Element, from: number, to: number) => {
+    fireEvent.pointerDown(el, at(from));
+    fireEvent.pointerMove(el, at((from + to) / 2));
+    fireEvent.pointerMove(el, at(to));
+    fireEvent.pointerUp(el, at(to));
+  };
+
+  it("closes it, let go far enough down", () => {
+    const onTapOut = vi.fn();
+    mountWith({ onTapOut });
+
+    pullDown(dialog(), 100, 220);
+
+    expect(onTapOut).toHaveBeenCalledOnce();
+  });
+
+  it("follows the finger, and settles back when let go short of that", () => {
+    const onTapOut = vi.fn();
+    mountWith({ onTapOut });
+
+    fireEvent.pointerDown(dialog(), at(100));
+    fireEvent.pointerMove(dialog(), at(140));
+    expect((dialog() as HTMLElement).style.transform).toBe("translateY(40px)");
+    fireEvent.pointerUp(dialog(), at(140));
+
+    expect(onTapOut).not.toHaveBeenCalled();
+    expect((dialog() as HTMLElement).style.transform).toBe("");
+  });
+
+  it("picks no answer with a pull that ends on one", () => {
+    const onAnswered = vi.fn();
+    const onTapOut = vi.fn();
+    mountWith({ onAnswered, onTapOut });
+    const answer = screen.getByRole("button", { name: "Oxygen" });
+
+    pullDown(answer, 100, 130);
+    fireEvent.click(answer);
+
+    expect(onAnswered).not.toHaveBeenCalled();
+    // The next tap is a tap again.
+    fireEvent.pointerDown(answer, at(100));
+    fireEvent.click(answer);
+    expect(onAnswered).toHaveBeenCalledOnce();
+  });
+
+  it("is the phone's alone: the centred card does not move", () => {
+    const matchMedia = vi
+      .spyOn(window, "matchMedia")
+      .mockImplementation(
+        (query: string) => ({ matches: true, media: query }) as MediaQueryList,
+      );
+    const onTapOut = vi.fn();
+    mountWith({ onTapOut });
+
+    pullDown(dialog(), 100, 300);
+
+    expect(onTapOut).not.toHaveBeenCalled();
+    matchMedia.mockRestore();
+  });
+});
+
+/*
+ * THE BREAK INSIDE THE CHECK (Lydia, 23 Oct: a hold at a check is not live
+ * until the break is reachable at all times, including from inside the check
+ * sheet), as design's 4e03b7f Lesson Check frame draws it.
+ */
+describe("Take a break, inside the check", () => {
+  const takeBreak = () => screen.getByRole("button", { name: "Take a break" });
+
+  it.each([
+    ["as it opens", () => {}],
+    [
+      "after a miss",
+      () => fireEvent.click(screen.getByRole("button", { name: "Oxygen" })),
+    ],
+    [
+      "after a right answer",
+      () =>
+        fireEvent.click(screen.getByRole("button", { name: "Carbon dioxide" })),
+    ],
+  ] as const)("is there and starts the child's break %s", (_, reach) => {
+    const onTakeBreak = vi.fn();
+    const onAnswered = vi.fn();
+    mountWith({ onTakeBreak, onAnswered });
+    reach();
+    const answered = onAnswered.mock.calls.length;
+
+    fireEvent.click(takeBreak());
+
+    expect(onTakeBreak).toHaveBeenCalledOnce();
+    // It answers nothing.
+    expect(onAnswered).toHaveBeenCalledTimes(answered);
+  });
+
+  it("sits across from QUICK CHECK, in the frame's quiet navy words", () => {
+    mount();
+
+    const row = takeBreak().parentElement;
+    expect(row?.textContent).toBe("Quick checkTake a break");
+    expect(classes(row as Element)).toEqual(
+      expect.arrayContaining(["flex", "items-center", "justify-between"]),
+    );
+    const own = classes(takeBreak());
+    expect(own).toEqual(
+      expect.arrayContaining([
+        "text-[13px]",
+        "font-medium",
+        "text-nevo-navy",
+        "cursor-pointer",
+      ]),
+    );
+    expect(own).not.toContain("bg-nevo-navy");
+    expect(own).not.toContain("w-full");
   });
 });
 
@@ -88,9 +282,10 @@ describe("a spoken check (B16)", () => {
       <QuickCheckSheet
         check={{ ...CHECK, promptAudio: "https://cdn.example/q.mp3" }}
         open
-        onOpenChange={() => {}}
+        onTapOut={() => {}}
         onAnswered={() => {}}
         onContinue={() => {}}
+        onTakeBreak={() => {}}
       />,
     );
 
@@ -129,9 +324,10 @@ describe("the reading accommodation on a quick check (D30)", () => {
         check={CHECK}
         open
         reading={reading}
-        onOpenChange={() => {}}
+        onTapOut={() => {}}
         onAnswered={() => {}}
         onContinue={() => {}}
+        onTakeBreak={() => {}}
       />,
     );
 
@@ -191,4 +387,123 @@ describe("the sheet's look (design, 13 Oct)", () => {
     expect(note.className.split(" ")).toContain("text-nevo-violet-text");
     expect(note.className.split(" ")).not.toContain("text-nevo-violet");
   });
+});
+
+/**
+ * SCRUM-275, LYDIA 22 OCT: "Two identical navy buttons is a defect, not a
+ * choice. One primary per sheet and it is the action that progresses the
+ * check, so Try again or Send. Keep going is secondary, not navy, not
+ * full-width."
+ */
+const classes = (el: Element) => (el.getAttribute("class") ?? "").split(/\s+/);
+/** A navy, full-width button: what only the primary may be. */
+const navyFullWidth = () =>
+  screen
+    .getAllByRole("button")
+    .filter(
+      (b) => classes(b).includes("bg-nevo-navy") && classes(b).includes("w-full"),
+    );
+const keepGoing = () => screen.getByRole("button", { name: "Keep going" });
+
+type Handlers = {
+  open?: boolean;
+  onTapOut?: () => void;
+  onAnswered?: () => void;
+  onContinue?: () => void;
+  onTakeBreak?: () => void;
+};
+const sheet = (handlers: Handlers) => (
+  <QuickCheckSheet
+    check={CHECK}
+    open={handlers.open ?? true}
+    onTapOut={handlers.onTapOut ?? (() => {})}
+    onAnswered={handlers.onAnswered ?? (() => {})}
+    onContinue={handlers.onContinue ?? (() => {})}
+    onTakeBreak={handlers.onTakeBreak ?? (() => {})}
+  />
+);
+const mountWith = (handlers: Handlers) => render(sheet(handlers));
+
+/*
+ * NO MOVING ON PAST THE CHECK BEFORE A RIGHT ANSWER (Olayinka, 23 Oct, under
+ * Lydia's gate ruling the same day). The Keep going it had before an answer
+ * (SCRUM-275, 22 Oct) is gone: the way out is tapping out, back to the
+ * section. Try again stays, and Keep going after a right answer.
+ */
+describe("Keep going (Olayinka, 23 Oct)", () => {
+  it("is not there before any answer", () => {
+    mountWith({});
+
+    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+  });
+
+  it("is not there after a miss: Try again is", () => {
+    const onContinue = vi.fn();
+    mountWith({ onContinue });
+
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+
+    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    expect(onContinue).not.toHaveBeenCalled();
+  });
+
+  it("is the frame's way on after a right answer, and is drawn once", () => {
+    const onContinue = vi.fn();
+    mountWith({ onContinue });
+
+    fireEvent.click(screen.getByRole("button", { name: "Carbon dioxide" }));
+    expect(screen.getAllByRole("button", { name: "Keep going" })).toHaveLength(1);
+    fireEvent.click(keepGoing());
+
+    expect(onContinue).toHaveBeenCalledOnce();
+  });
+});
+
+describe("one navy primary per sheet (SCRUM-275)", () => {
+  const states = [
+    ["as it opens", () => {}],
+    [
+      "after a miss",
+      () => fireEvent.click(screen.getByRole("button", { name: "Oxygen" })),
+    ],
+    [
+      "after a right answer",
+      () =>
+        fireEvent.click(screen.getByRole("button", { name: "Carbon dioxide" })),
+    ],
+  ] as const;
+
+  it.each(states)("has no more than one navy full-width button %s", (_, reach) => {
+    mount();
+    reach();
+
+    expect(navyFullWidth().length).toBeLessThanOrEqual(1);
+  });
+
+  it("makes Try again the one primary after a miss", () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+
+    expect(navyFullWidth()).toEqual([
+      screen.getByRole("button", { name: "Try again" }),
+    ]);
+  });
+
+  it(
+    "draws Keep going secondary after a right answer: not navy, not full width, 44px, a pointer",
+    () => {
+      mount();
+      fireEvent.click(screen.getByRole("button", { name: "Carbon dioxide" }));
+
+      const own = classes(keepGoing());
+      expect(own).not.toContain("bg-nevo-navy");
+      expect(own).not.toContain("w-full");
+      expect(own).toContain("w-fit");
+      expect(own).toContain("h-11");
+      expect(own).toContain("cursor-pointer");
+      // Named on the button itself, not only in a child span.
+      expect(keepGoing().firstChild?.nodeType).toBe(Node.TEXT_NODE);
+    },
+  );
 });

@@ -110,3 +110,37 @@ describe("the interactive version, as an activity", () => {
     ).toBeInTheDocument();
   });
 });
+
+/**
+ * SCRUM-288 on the teacher's side (the hub, 24 Oct; Teslim b52edeb). A teacher
+ * approved an activity without ever seeing the safety line a child gets. It
+ * sits above the steps, as on the child's card, word for word.
+ */
+describe("the activity's safety line", () => {
+  const ACTIVITY = {
+    type: "activity",
+    title: "Watch osmosis in a yam strip",
+    materials: ["Yam", "Salt water"],
+    steps: [
+      { id: "step-1", instruction: "Place one strip in plain water." },
+      { id: "step-2", instruction: "Place one strip in salt water." },
+    ],
+    outcome: "The strip in salt water goes soft.",
+  };
+
+  it("shows it above the steps, word for word", () => {
+    open({ ...ACTIVITY, safety: "Let an adult do the cutting, and do not taste the salt water." });
+
+    const line = screen.getByText("Let an adult do the cutting, and do not taste the salt water.");
+    expect(screen.getByText("First")).toBeInTheDocument();
+    const firstStep = screen.getByText("Place one strip in plain water.");
+    // Before the steps in the document, never after them.
+    expect(line.compareDocumentPosition(firstStep) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("draws nothing in its place when the activity has none", () => {
+    open({ ...ACTIVITY, safety: null });
+
+    expect(screen.queryByText("First")).not.toBeInTheDocument();
+  });
+});

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
 import {
   useRuntimeAdaptation,
@@ -49,16 +49,22 @@ const STATE: RuntimeState = {
   breaksTaken: 0,
 };
 
-const run = (state: RuntimeState = STATE) =>
+/** The lesson session `POST /session` issued. */
+const SESSION = "5b1e0c3a-aaaa-4bbb-8ccc-ddddeeeeffff";
+
+const run = (state: RuntimeState = STATE, session: string | null = SESSION) =>
   renderHook(
-    ({ s }: { s: RuntimeState }) =>
-      useRuntimeAdaptation(LESSON.id, SEGMENTS as never, true, s, LESSON),
-    { initialProps: { s: state } },
+    ({ s, id }: { s: RuntimeState; id: string | null }) =>
+      useRuntimeAdaptation(LESSON.id, SEGMENTS as never, true, id, s, LESSON),
+    { initialProps: { s: state, id: session } },
   );
 
 /** The `signals` of the nth request. */
 const sent = (n = 0) =>
   (getAdaptation.mock.calls[n]![2] as { signals: RuntimeSignals }).signals;
+/** The options of the nth request, `signals` aside. */
+const asked = (n = 0) =>
+  getAdaptation.mock.calls[n]![2] as { mode?: string; sessionId?: string };
 
 afterEach(() => {
   cleanup();
@@ -159,7 +165,7 @@ describe("the mid-lesson request", () => {
     const { rerender } = run();
     await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(1));
 
-    rerender({ s: { ...STATE, replayCountOnSegment: 1 } });
+    rerender({ id: SESSION, s: { ...STATE, replayCountOnSegment: 1 } });
 
     await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(2));
     expect(sent(1).replayCountOnSegment).toBe(1);
@@ -171,6 +177,7 @@ describe("the mid-lesson request", () => {
     await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(1));
 
     rerender({
+      id: SESSION,
       s: { ...STATE, sessionDeclineCount: 1, declinedModalities: ["audio"] },
     });
 
@@ -195,10 +202,13 @@ describe("the mid-lesson request", () => {
 
     // 25 minutes in, the child takes a break and comes back...
     now += 25 * 60_000;
-    rerender({ s: { ...STATE, breaksTaken: 1 } });
+    rerender({ id: SESSION, s: { ...STATE, breaksTaken: 1 } });
     // ...and a minute later moves on.
     now += 60_000;
-    rerender({ s: { ...STATE, breaksTaken: 1, currentSegmentId: "seg-2" } });
+    rerender({
+      id: SESSION,
+      s: { ...STATE, breaksTaken: 1, currentSegmentId: "seg-2" },
+    });
 
     await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(2));
     expect(sent(1).continuousMinutes).toBeCloseTo(1, 5);
@@ -211,6 +221,7 @@ describe("the mid-lesson request", () => {
 
     // The next segment opens in its own modality: not a shift.
     rerender({
+      id: SESSION,
       s: { ...STATE, currentSegmentId: "seg-2", currentModality: "audio" },
     });
     await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(2));
@@ -218,9 +229,11 @@ describe("the mid-lesson request", () => {
 
     // An offer taken on that segment is.
     rerender({
+      id: SESSION,
       s: { ...STATE, currentSegmentId: "seg-2", currentModality: "text" },
     });
     rerender({
+      id: SESSION,
       s: {
         ...STATE,
         currentSegmentId: "seg-2",
@@ -244,6 +257,193 @@ describe("the mid-lesson request", () => {
 });
 
 /*
+ * THE LESSON SESSION, from the 20 Oct production run: the engine refuses an
+ * `in_lesson` read 409 `lesson_session_required` without an open sitting, and
+ * the first ask went before `POST /session` had answered.
+ */
+describe("the mid-lesson request and the lesson session", () => {
+  it("asks nothing while there is no session, even on a segment", async () => {
+    getAdaptation.mockResolvedValue(answer());
+
+    run(STATE, null);
+    // The request is built a microtask after the commit.
+    await act(async () => {});
+
+    expect(getAdaptation).not.toHaveBeenCalled();
+  });
+
+  it("asks as soon as the session lands, for the segment the child is on, naming it", async () => {
+    getAdaptation.mockResolvedValue(answer());
+    const { rerender } = run(STATE, null);
+    await act(async () => {});
+
+    rerender({ id: SESSION, s: STATE });
+
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(1));
+    expect(asked()).toMatchObject({ mode: "in_lesson", sessionId: SESSION });
+    expect(sent().currentSegmentId).toBe("seg-1");
+  });
+
+  it("names a new session on the next ask", async () => {
+    getAdaptation.mockResolvedValue(answer());
+    const { rerender } = run();
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(1));
+    expect(asked().sessionId).toBe(SESSION);
+
+    // A reroute opens a new sitting.
+    const rerouted = "7d2f1e4b-1111-4222-8333-999988887777";
+    rerender({ id: rerouted, s: STATE });
+
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(2));
+    expect(asked(1).sessionId).toBe(rerouted);
+  });
+});
+
+/*
+ * SCRUM-275, the 21 Oct run: the ask after an answer went beside that
+ * answer's write, not after it. The engine reads its error streak from the
+ * answers it has stored, so it could count one miss where there were two and
+ * hold the hint two misses earn. The ask now waits for the writes on their
+ * way - and still goes if one fails, so the engine is never left silent.
+ */
+describe("the mid-lesson request and the answers on their way", () => {
+  /** A write the test lands or fails by hand. */
+  const deferred = () => {
+    let land!: () => void;
+    let fail!: (e: unknown) => void;
+    const promise = new Promise<void>((res, rej) => {
+      land = res;
+      fail = rej;
+    });
+    return { promise, land, fail };
+  };
+
+  const runWith = (writes: { current: Promise<unknown>[] }) =>
+    renderHook(
+      ({ s }: { s: RuntimeState }) =>
+        useRuntimeAdaptation(
+          LESSON.id,
+          SEGMENTS as never,
+          true,
+          SESSION,
+          s,
+          LESSON,
+          null,
+          writes,
+        ),
+      { initialProps: { s: STATE } },
+    );
+
+  /** Long enough for any microtask chain to have run. */
+  const settle = () => act(() => new Promise((r) => setTimeout(r, 20)));
+
+  it("asks after the answer's write has landed, not beside it", async () => {
+    const order: string[] = [];
+    getAdaptation.mockImplementation(async () => {
+      order.push("ask");
+      return answer();
+    });
+    const writes = { current: [] as Promise<unknown>[] };
+    const { rerender } = runWith(writes);
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(1));
+
+    // The player writes the answer, then counts the miss.
+    const write = deferred();
+    writes.current.push(write.promise.then(() => order.push("written")));
+    rerender({ s: { ...STATE, consecutiveErrors: 1 } });
+    await settle();
+
+    expect(getAdaptation).toHaveBeenCalledTimes(1);
+
+    write.land();
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(2));
+    expect(order).toEqual(["ask", "written", "ask"]);
+    expect(sent(1).consecutiveErrors).toBe(1);
+  });
+
+  it("still asks when the write fails, so the engine is not left silent", async () => {
+    getAdaptation.mockResolvedValue(answer());
+    const writes = { current: [] as Promise<unknown>[] };
+    const { rerender } = runWith(writes);
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(1));
+
+    const write = deferred();
+    writes.current.push(write.promise);
+    rerender({ s: { ...STATE, consecutiveErrors: 1 } });
+    await settle();
+    expect(getAdaptation).toHaveBeenCalledTimes(1);
+
+    write.fail(new Error("offline"));
+
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(2));
+    expect(sent(1).consecutiveErrors).toBe(1);
+  });
+
+  it("waits for every write still on its way, not only the newest", async () => {
+    getAdaptation.mockResolvedValue(answer());
+    const writes = { current: [] as Promise<unknown>[] };
+    const { rerender } = runWith(writes);
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(1));
+
+    const first = deferred();
+    const second = deferred();
+    writes.current.push(first.promise, second.promise);
+    rerender({ s: { ...STATE, consecutiveErrors: 2 } });
+
+    second.land();
+    await settle();
+    expect(getAdaptation).toHaveBeenCalledTimes(1);
+
+    first.land();
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(2));
+  });
+
+  it("asks once, with the newest count, when a second miss comes before the first write lands", async () => {
+    getAdaptation.mockResolvedValue(answer());
+    const writes = { current: [] as Promise<unknown>[] };
+    const { rerender } = runWith(writes);
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(1));
+
+    const first = deferred();
+    writes.current.push(first.promise);
+    rerender({ s: { ...STATE, consecutiveErrors: 1 } });
+    // The first ask is waiting on its write when the second miss comes.
+    await settle();
+    const second = deferred();
+    writes.current.push(second.promise);
+    rerender({ s: { ...STATE, consecutiveErrors: 2 } });
+
+    first.land();
+    second.land();
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalledTimes(2));
+    await settle();
+
+    expect(getAdaptation).toHaveBeenCalledTimes(2);
+    expect(sent(1).consecutiveErrors).toBe(2);
+  });
+
+  it("still asks nothing before the session, whatever is on its way (#837)", async () => {
+    getAdaptation.mockResolvedValue(answer());
+    const writes = { current: [Promise.resolve()] as Promise<unknown>[] };
+    renderHook(() =>
+      useRuntimeAdaptation(
+        LESSON.id,
+        SEGMENTS as never,
+        true,
+        null,
+        STATE,
+        LESSON,
+        null,
+        writes,
+      ),
+    );
+    await settle();
+
+    expect(getAdaptation).not.toHaveBeenCalled();
+  });
+});
+
+/*
  * B42 AND B46, backend's 5 Oct definitions: the cooldown counts from an
  * adaptation APPLIED ON SCREEN, and the instruction names its own segment.
  */
@@ -260,7 +460,15 @@ describe("what the engine is told about adaptations applied", () => {
 
   const ask = (applied: { current: AppliedAdaptations }) =>
     renderHook(() =>
-      useRuntimeAdaptation(LESSON.id, SEGMENTS as never, true, STATE, LESSON, applied),
+      useRuntimeAdaptation(
+        LESSON.id,
+        SEGMENTS as never,
+        true,
+        SESSION,
+        STATE,
+        LESSON,
+        applied,
+      ),
     );
 
   it("counts the seconds since one was applied, rounded down", async () => {
@@ -287,6 +495,7 @@ describe("what the engine is told about adaptations applied", () => {
         LESSON.id,
         SEGMENTS as never,
         true,
+        SESSION,
         STATE,
         LESSON,
         applied,

@@ -145,11 +145,34 @@ export interface InteractiveActivityStep {
 export interface InteractiveActivityVariant {
   type: "activity";
   title: string;
+  /**
+   * "Source context shown before the actionable steps, not a task" (spec, 21
+   * Oct). Optional and nullable: an activity stored before it has none.
+   * Typed, and not drawn: frame d6b9fbc removed the intro paragraph.
+   */
+  introduction?: string | null;
   /** What is needed. Often empty. */
   materials: string[];
   steps: InteractiveActivityStep[];
-  /** What should happen by the end. */
-  outcome: string;
+  /**
+   * THE TWO "WHAT YOU SHOULD SEE" LINES (SCRUM-273, backend acc5b27; spec 22
+   * Oct): what to watch for while the child works, and what should be seen
+   * once the steps are done. Each is copied from the uploaded source and
+   * each is optional - an absent line is OMITTED, never null, "" or a generic
+   * sentence, though the spec still types both as nullable. The server's old
+   * default, "You have completed the activity.", is suppressed on reads and
+   * removed from stored activities, and nothing here stands in for it. See
+   * `InteractiveContent.outcome`.
+   */
+  inProgress?: string | null;
+  outcome?: string | null;
+  /**
+   * THE SOURCE'S SAFETY SENTENCE (backend 92af149; spec 23 Oct: "Authored
+   * safety instructions; show before activity steps"). Nullable. Drawn word
+   * for word as the card's FIRST row, above the steps (SCRUM-288, frame
+   * 1a3016b) - see `interactiveFor` and `InteractiveSegment`.
+   */
+  safety?: string | null;
 }
 
 /**
@@ -394,6 +417,19 @@ export interface CalculationVariant {
 /** One rewrite of a segment. `body` defaults to `""` on the wire. */
 export interface DepthVariantBody {
   body: string;
+  /*
+   * Withheld from children while `pending` (Teslim, 18 Oct), until a teacher
+   * approves the lesson's rewrites. The rest is the record of who did what to
+   * it; the redesign's edit adds the last three (19 Oct, not yet deployed).
+   */
+  reviewStatus?: "approved" | "pending" | (string & {});
+  reviewedBy?: string | null;
+  reviewedByName?: string | null;
+  reviewedAt?: string | null;
+  /** Nevo's own wording, kept once a teacher has changed it. */
+  originalBody?: string;
+  editedBy?: string | null;
+  editedAt?: string | null;
 }
 
 /**

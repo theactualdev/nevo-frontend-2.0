@@ -100,7 +100,11 @@ export interface BaselineRunContext {
     | "upper_primary"
     | "junior_secondary"
     | "senior_secondary";
-  formFactor?: "tablet_touch" | "desktop_cursor" | "mobile_touch";
+  /**
+   * The spec's `BaselineFormFactor`. `mobile_touch` is still accepted and
+   * stored as `phone_touch`, the word this app sends for a phone.
+   */
+  formFactor?: "tablet_touch" | "desktop_cursor" | "phone_touch" | "mobile_touch";
   /** Onboarding only: the warm-up has no motor step to run or skip. */
   motorStepSkipped?: boolean;
   /**

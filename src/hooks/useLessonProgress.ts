@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  isCompletedSessionUnavailable,
   LESSON_STATUS,
   lessonsApi,
   type LessonProgressResponse,
@@ -100,6 +101,13 @@ export interface LessonProgressState {
    */
   opened: LessonSessionResponse | null;
   /**
+   * `POST /session` answered 409 `completed_session_unavailable`: the lesson
+   * is completed and its completed sitting cannot be found (Teslim, 21 Oct).
+   * There is no sitting to play under and asking again finds the same, so
+   * the session is not retried and nothing is held for later.
+   */
+  unavailable: boolean;
+  /**
    * This player's own slot for what it holds before any session exists - an
    * answer given offline is held under it (`holdAnswer` in
    * `pendingProgress`) and becomes the session's when one opens.
@@ -117,6 +125,7 @@ const IDLE: LessonProgressState = {
   sessionId: null,
   saved: null,
   opened: null,
+  unavailable: false,
   localId: "",
 };
 
@@ -165,6 +174,9 @@ export function useLessonProgress(
   const [completionSaved, setCompletionSaved] = useState(false);
   const [saved, setSaved] = useState<LessonProgressResponse | null>(null);
   const [opened, setOpened] = useState<LessonSessionResponse | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
+  /** The open was refused for good - see `unavailable`. Never retried. */
+  const refused = useRef(false);
   /**
    * This player's own slot for a position held before any session exists.
    * Claimed while mounted, so the shell's flush leaves it to us.
@@ -287,7 +299,7 @@ export function useLessonProgress(
     const owner = getSession()?.userId ?? null;
 
     const open = () => {
-      if (cancelled || opening || sessionId.current) return;
+      if (cancelled || opening || sessionId.current || refused.current) return;
       opening = true;
       void lessonsApi
         .startSession(lessonId)
@@ -310,8 +322,22 @@ export function useLessonProgress(
           pending.current = null;
           if (held) write(held.status, held);
         })
-        .catch(() => {
+        .catch((err: unknown) => {
           opening = false;
+          /*
+           * A COMPLETED LESSON WITH NO SITTING TO REOPEN (409
+           * `completed_session_unavailable`). Not a failed open: it is the
+           * server's answer, and the same one every time. So not held, not
+           * retried - on the connection's return or the next move - and no
+           * "couldn't save" claim: nothing was owed. The player shows the
+           * lesson's nothing-state.
+           */
+          if (isCompletedSessionUnavailable(err)) {
+            refused.current = true;
+            pending.current = null;
+            if (!cancelled) setUnavailable(true);
+            return;
+          }
           // No session yet means no progress endpoint to call. The lesson
           // still plays; the position is held - even if the player has
           // already closed - and the completion screen is where a missed
@@ -436,6 +462,7 @@ export function useLessonProgress(
     sessionId: issued,
     saved,
     opened,
+    unavailable,
     localId,
   };
 }

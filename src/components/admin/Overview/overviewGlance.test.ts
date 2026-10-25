@@ -164,3 +164,30 @@ describe("classes that haven't run a lesson", () => {
     expect(glanceRows(null, null, [])).toEqual([]);
   });
 });
+
+/**
+ * SCRUM-243 (D04, 96cd4b4): children held for a date of birth check get the
+ * second row, routed to the checks. Unread holds draw no row - absent is not
+ * zero - and none held draws none.
+ */
+describe("the date of birth hold row", () => {
+  const hold = { id: "ac", studentId: "s1", blocksAccess: true } as unknown as import("@/lib/api/ageChecks").AgeCheck;
+
+  it("comes second, after consent, and routes to the checks", () => {
+    const rows = glanceRows([student("a", "pending")], [flag("1", "s1")], null, [hold, { ...hold, id: "ac2" }]);
+    expect(rows.map((r) => r.key)).toEqual(["consent", "dob", "flags"]);
+    const dob = rows[1];
+    expect(dob.title).toBe("2 students are on hold for a date of birth check");
+    expect(dob.href).toBe("/admin/students/date-of-birth");
+    expect(dob.action).toBe("Open date of birth checks");
+  });
+
+  it("says 'student is' for one", () => {
+    expect(glanceRows(null, null, null, [hold])[0].title).toBe("1 student is on hold for a date of birth check");
+  });
+
+  it("draws nothing when none are held or the read failed", () => {
+    expect(glanceRows(null, null, null, [])).toEqual([]);
+    expect(glanceRows(null, null, null, null)).toEqual([]);
+  });
+});
