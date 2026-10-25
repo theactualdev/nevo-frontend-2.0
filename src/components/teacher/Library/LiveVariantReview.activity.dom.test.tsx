@@ -143,4 +143,14 @@ describe("the activity's safety line", () => {
 
     expect(screen.queryByText("First")).not.toBeInTheDocument();
   });
+
+  // Lydia, 25 Oct: the first letter is capitalised on render only. The parser
+  // keeps the words after "Safety:" as written, so a line can start lowercase.
+  it("starts with a capital on screen, the rest as written", () => {
+    open({ ...ACTIVITY, safety: "let an adult do the cutting, and do not taste the salt water." });
+
+    expect(
+      screen.getByText("Let an adult do the cutting, and do not taste the salt water."),
+    ).toBeInTheDocument();
+  });
 });
