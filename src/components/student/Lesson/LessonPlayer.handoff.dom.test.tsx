@@ -358,7 +358,8 @@ describe("the server hands a child off from the quick check (B94)", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(screen.queryByText(PROMPT)).toBeNull();
-    expect(screen.getByRole("button", { name: "Keep going" })).toBeTruthy();
+    // Still the check, answered right: its way on (Lydia, 25 Oct).
+    expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
   });
 });
 

@@ -616,7 +616,7 @@ describe("a wait the system owns", () => {
 
     now = 3_500;
     fireEvent.click(screen.getByRole("button", { name: "One half" }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(sent("system_busy")).toEqual([
       { reason: "blocked_by_modal", durationMs: 2_500 },

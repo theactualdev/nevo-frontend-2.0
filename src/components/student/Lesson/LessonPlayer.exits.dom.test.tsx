@@ -471,7 +471,7 @@ describe("a review session's outcome", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     fireEvent.click(screen.getByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     next();
 
     // B28: the outcome, and no `recallSuccessful` - the server derives that.
@@ -519,7 +519,7 @@ describe("a review session's outcome", () => {
 
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     next();
 
     await waitFor(() =>

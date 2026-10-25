@@ -365,7 +365,7 @@ describe("the two-miss hint, end to end", () => {
     fireEvent.click(within(sheet()).getByRole("button", { name: /The numerator/ }));
     await landed(n);
 
-    expect(within(sheet()).getByRole("button", { name: "Keep going" })).toBeTruthy();
+    expect(within(sheet()).getByRole("button", { name: "Continue" })).toBeTruthy();
     expect(text()).not.toContain(HINT);
   });
 });

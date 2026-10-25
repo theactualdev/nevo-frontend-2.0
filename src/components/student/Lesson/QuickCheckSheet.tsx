@@ -11,7 +11,6 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/shared";
 import type { QuickCheck } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { KeepGoingButton } from "./AffectiveLayer";
 import { AnswerCheck, AnswerDot, AnswerOption } from "./AnswerOption";
 import { READING_BODY, READING_HEADING } from "./readingSupport";
 import { SpokenPrompt } from "./SpokenPrompt";
@@ -53,7 +52,7 @@ function centredCard(): boolean {
 /**
  * Inline comprehension check (Lesson Check frame) — a bottom sheet on mobile,
  * a centred card on tablet/desktop, over the dimmed player. Feedback is warm
- * and system-owned: a correct pick is affirmed plainly (navy) and "Keep going"
+ * and system-owned: a correct pick is affirmed plainly (navy) and "Continue"
  * advances; a miss is marked softly in violet — never red — and offers "Try
  * again". The check is only spent by a correct answer.
  *
@@ -77,8 +76,9 @@ function centredCard(): boolean {
  * gate ruling of the same day). The Keep going it carried before any answer
  * (Lydia, SCRUM-275, 22 Oct: "A child whose only way past is the right answer
  * is trapped") is gone, because tapping out is the way out now and it goes
- * back to the section, not on past it. Try again stays after a miss, and Keep
- * going after a right answer (`onContinue`) is the frame's way on.
+ * back to the section, not on past it. Try again stays after a miss, and
+ * Continue after a right answer (`onContinue`) is the frame's way on.
+ * Olayinka, 25 Oct: "the child shouldn't be able to move with a wrong answer."
  *
  * THE BREAK IS INSIDE IT (Lydia, 23 Oct: a hold at a check is not live until
  * the break is reachable at all times, including from inside the check
@@ -86,9 +86,11 @@ function centredCard(): boolean {
  * frame draws it on a section's checks (design 4e03b7f), and starts the
  * child's own break - see `onTakeBreak`.
  *
- * ONE PRIMARY (Lydia, SCRUM-275, 22 Oct): Try again, navy and full width, is
- * the action that progresses the check. Keep going is secondary - see
- * `KeepGoingButton` - so two identical navy buttons never stand together.
+ * ONE PRIMARY (Lydia, SCRUM-275, 22 Oct): navy and full width is the action
+ * that progresses the check - Try again after a miss, and since Lydia's 25 Oct
+ * ruling Continue after a right answer, as the Lesson Check frame's
+ * `qc-correct` draws it (17d). It was the secondary Keep going there. The two
+ * never stand together: each belongs to its own answer.
  *
  * A SPOKEN CHECK (B16) says its question aloud on opening, with the printed
  * question still in place - see `SpokenPrompt`. The reading accommodation's
@@ -157,7 +159,7 @@ export function QuickCheckSheet({
     correct: boolean,
     answered: { selectedId: string; responseTimeMs?: number },
   ) => void;
-  /** "Keep going" after a correct answer — close the sheet and advance. */
+  /** "Continue" after a correct answer — close the sheet and advance. */
   onContinue: () => void;
   /** "Take a break" - the child's own break, from inside the check. */
   onTakeBreak: () => void;
@@ -362,7 +364,11 @@ export function QuickCheckSheet({
           </Button>
         )}
         {/* The way on, and only after a right answer. */}
-        {correct && <KeepGoingButton onClick={onContinue} className="mt-5" />}
+        {correct && (
+          <Button className="mt-5 w-full" onClick={onContinue}>
+            Continue
+          </Button>
+        )}
       </SheetContent>
     </Sheet>
   );
