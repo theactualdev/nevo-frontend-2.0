@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import type { AdminClass } from "@/lib/api/classes";
 import type { SchoolTerm } from "@/lib/api/school";
@@ -91,6 +91,26 @@ describe("the When filter", () => {
     );
     expect(lastCall().dateTo).toBeUndefined();
     await waitFor(() => expect(visibleText(container)).toMatch(/3 adaptations this half-term/));
+  });
+
+  /*
+   * 25 Oct: the week was read twice on every visit - once on load and again
+   * when the school record (wanted only for "This half-term") arrived - and
+   * the second read landing late made the test below fail at random on other
+   * lanes' PRs. The calendar is held back here until the week has drawn.
+   */
+  it("reads the week once on load, even when the school's calendar arrives after it", async () => {
+    let releaseCalendar: (s: unknown) => void = () => {};
+    schoolGet.mockReturnValue(new Promise((r) => (releaseCalendar = r)));
+    logSpy.mockResolvedValue({ events: [], total: 9, limit: 5, offset: 0 });
+    const { container } = render(<AdaptationLogView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/9 adaptations in the last 7 days/));
+
+    await act(async () => {
+      releaseCalendar(school([TERM]));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(logSpy).toHaveBeenCalledTimes(1);
   });
 
   it("says the half-term is not set, and asks for nothing, rather than guessing one", async () => {
