@@ -92,6 +92,8 @@ const reviewState = (over: Record<string, unknown> = {}) => {
     amend: vi.fn(),
     remove: vi.fn(),
     refresh: vi.fn(),
+    signedOff: null,
+    missingKeyPoints: 0,
     ...over,
   });
 };
@@ -216,18 +218,6 @@ describe("a lesson with key points waiting", () => {
     ).toBeInTheDocument();
   });
 
-  it("closes the banner with the reassurance the frame carries", () => {
-    show();
-
-    expect(screen.getByText(/Nothing you did is lost\./)).toBeInTheDocument();
-  });
-
-  it("puts a heading over the cards", () => {
-    show();
-
-    expect(screen.getByText("Key points Nevo found")).toBeInTheDocument();
-  });
-
   it("offers no ready panel while anything is waiting", () => {
     show();
 
@@ -291,20 +281,6 @@ describe("the section rows once a teacher has checked them", () => {
     expect(screen.queryByText("Worth a look")).not.toBeInTheDocument();
   });
 
-  it("numbers a flagged section as the list below does, from 1 (T51)", () => {
-    // `sequenceOrder` is the server's sort key and nothing says it starts at
-    // 1. The review list used it as the number, so a 0 read "Section 0" above
-    // "Section 1" for the same section in the list.
-    const FIRST = seg({ id: "s-0", sequenceOrder: 0, title: null, needsReview: true });
-    const SECOND = seg({ id: "s-9", sequenceOrder: 1, title: "Inside the leaf" });
-    sectionReview([FIRST], []);
-
-    showWith([SECOND, FIRST]);
-
-    expect(screen.queryByText("Section 0")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Section 1").length).toBeGreaterThanOrEqual(2);
-  });
-
   it("marks only the section that is still waiting", () => {
     sectionReview([FLAGGED_B], ["s-1"]);
 
@@ -357,16 +333,112 @@ describe("the section rows once a teacher has checked them", () => {
     expect(screen.getByText("How leaves work")).toBeInTheDocument();
     expect(screen.getByText("Worth a look")).toBeInTheDocument();
   });
+});
 
-  it("keeps the approved section in the review list, shown as checked", () => {
-    // The OTHER half, and the reason the review list is built differently: a
-    // teacher who accepts a section must see it settle, not vanish.
-    sectionReview([], ["s-1"]);
+/**
+ * THE WAY INTO C07k (Lydia, 19 Oct; design 534ba31).
+ *
+ * C06b's per-item key point list and the per-section approvals are retired,
+ * and the needs-review state is one card that routes into the four-step
+ * review. It is drawn on the server's `reviewComplete` - `signedOff` here -
+ * and nowhere else: a deployment without the redesign answers neither way,
+ * and the page then has nothing to route into.
+ */
+describe("the way into the four-step review", () => {
+  it("says how many things need a look, and links to the review", () => {
+    reviewState({
+      keyPoints: [kp("kp-1", true), kp("kp-2", true)],
+      outstanding: 2,
+      ready: false,
+      signedOff: false,
+    });
 
-    showWith([FLAGGED_A]);
+    show();
 
-    expect(screen.getByText("Checked")).toBeInTheDocument();
-    expect(screen.queryByText("Worth a look")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /2 things need a quick look/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Review in four steps/ })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-9/review",
+    );
+  });
+
+  it("counts a section with no key point as something to look at", () => {
+    reviewState({ outstanding: 0, missingKeyPoints: 1, signedOff: false });
+
+    show();
+
+    expect(screen.getByRole("heading", { name: /1 thing needs a quick look/ })).toBeInTheDocument();
+  });
+
+  it("still asks for the approval when nothing is flagged", () => {
+    reviewState({ signedOff: false });
+
+    show();
+
+    expect(
+      screen.getByRole("heading", { name: "Nothing needs a look, just your approval" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
+  });
+
+  it("lists no key points and approves nothing on this page", () => {
+    reviewState({
+      keyPoints: [kp("kp-1", true), kp("kp-3", false)],
+      outstanding: 1,
+      ready: false,
+      signedOff: false,
+    });
+
+    show();
+
+    expect(screen.queryByText("Key points Nevo found")).not.toBeInTheDocument();
+    expect(screen.queryByText(kp("kp-1", true).text)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Accept|Approve/ })).not.toBeInTheDocument();
+  });
+
+  it("is the ready state once the lesson is signed off", () => {
+    reviewState({ signedOff: true });
+
+    show();
+
+    expect(screen.getByText("Ready when you are")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Review in four steps/ })).not.toBeInTheDocument();
+  });
+
+  it("draws no way in on a deployment that cannot say", () => {
+    reviewState({ signedOff: null });
+
+    show();
+
+    expect(screen.queryByRole("link", { name: /Review in four steps/ })).not.toBeInTheDocument();
+  });
+
+  it("waits for the review read before it says anything", () => {
+    reviewState({ signedOff: false, loading: true });
+
+    show();
+
+    expect(screen.queryByRole("link", { name: /Review in four steps/ })).not.toBeInTheDocument();
+  });
+
+  it("shows the lesson's total minutes and no per-section breakdown", () => {
+    // Lydia, 19 Oct: "No per-segment minutes anywhere in the flow."
+    render(
+      <LiveLessonDetail
+        lesson={
+          {
+            ...LESSON,
+            estimatedMinutes: 12,
+            segments: [seg({ estimatedMinutes: 4 }), seg({ id: "s-2", sequenceOrder: 2, estimatedMinutes: 8 })],
+          } as LessonDetailResponse
+        }
+        modules={[]}
+        assignments={[]}
+      />,
+    );
+
+    expect(screen.getByText("Total: 12 min")).toBeInTheDocument();
+    expect(screen.queryByText(/Segment 1:/)).not.toBeInTheDocument();
   });
 });
 

@@ -168,9 +168,9 @@ export interface InteractiveActivityVariant {
   outcome?: string | null;
   /**
    * THE SOURCE'S SAFETY SENTENCE (backend 92af149; spec 23 Oct: "Authored
-   * safety instructions; show before activity steps"). Nullable. While the
-   * player has no designed way to draw it, an activity carrying one is not
-   * offered at all - SCRUM-280's hard rule; see `interactiveFor`.
+   * safety instructions; show before activity steps"). Nullable. Drawn word
+   * for word as the card's FIRST row, above the steps (SCRUM-288, frame
+   * 1a3016b) - see `interactiveFor` and `InteractiveSegment`.
    */
   safety?: string | null;
 }
@@ -417,6 +417,19 @@ export interface CalculationVariant {
 /** One rewrite of a segment. `body` defaults to `""` on the wire. */
 export interface DepthVariantBody {
   body: string;
+  /*
+   * Withheld from children while `pending` (Teslim, 18 Oct), until a teacher
+   * approves the lesson's rewrites. The rest is the record of who did what to
+   * it; the redesign's edit adds the last three (19 Oct, not yet deployed).
+   */
+  reviewStatus?: "approved" | "pending" | (string & {});
+  reviewedBy?: string | null;
+  reviewedByName?: string | null;
+  reviewedAt?: string | null;
+  /** Nevo's own wording, kept once a teacher has changed it. */
+  originalBody?: string;
+  editedBy?: string | null;
+  editedAt?: string | null;
 }
 
 /**
