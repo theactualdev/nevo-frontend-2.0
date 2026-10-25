@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { InteractiveSegment } from "./InteractiveSegment";
+import { asSentence } from "@/lib/lessons/asSentence";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
 import type { LessonDetailResponse } from "@/lib/api/lessons";
 import type { InteractiveContent } from "@/lib/types";
@@ -418,6 +419,33 @@ describe("the safety line (SCRUM-288)", () => {
 
     expect(screen.queryByText("First")).toBeNull();
     expect(card(container)).toEqual(["heading", "needs", "steps"]);
+  });
+
+  /*
+   * LYDIA, 25 OCT: "Capitalise the first letter on render only. The parser
+   * keeps the authored words exactly as written." The parser keeps the words
+   * after "Safety:", so Osmosis's line arrived as "let an adult…".
+   */
+  it("starts with a capital on screen, however the line was stored", () => {
+    const stored = "let an adult do the cutting. do not taste the salt water.";
+    const content = { ...activity(), safety: stored };
+    render(<InteractiveSegment content={content} />);
+
+    expect(
+      screen.getByText("Let an adult do the cutting. do not taste the salt water."),
+    ).toBeInTheDocument();
+    // Only the first letter; the stored words themselves are untouched.
+    expect(content.safety).toBe(stored);
+  });
+
+  it("changes nothing but a lowercase first letter", () => {
+    expect(asSentence("let an adult cut it.")).toBe("Let an adult cut it.");
+    expect(asSentence("  wear gloves.")).toBe("  Wear gloves.");
+    expect(asSentence("Already a sentence.")).toBe("Already a sentence.");
+    // A number or a quote first is not a letter to capitalise.
+    expect(asSentence("2 adults should watch.")).toBe("2 adults should watch.");
+    expect(asSentence('"hot" means hot.')).toBe('"hot" means hot.');
+    expect(asSentence("éteignez le feu.")).toBe("Éteignez le feu.");
   });
 
   it("is drawn from the wire's `safety`, through the adapter", () => {
