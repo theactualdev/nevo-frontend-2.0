@@ -1,4 +1,3 @@
-import type { ServerAnswerBlock } from "@/lib/answerBlocks";
 import {
   api,
   ApiError,
@@ -60,21 +59,34 @@ export type AskNevoCategory =
   | "flag_review"
   | "general";
 
+/**
+ * `AnswerBlockResponse` - one piece of an answer, already parsed by the
+ * server (`ask_nevo/formatting.py`). "A client that only handles `paragraph`
+ * can render `text` for every block and still be correct." The server strips
+ * emphasis markers from these, so they never carry a stray `**`.
+ */
+export interface AnswerBlock {
+  type: "paragraph" | "bullets" | "steps" | "heading";
+  /** The words of a paragraph or a heading. */
+  text?: string;
+  /** The entries of a list of bullets or of steps. */
+  items?: string[];
+  /** A heading's level; 0 for anything else. */
+  level?: number;
+}
+
 export interface AskNevoAnswer {
   /**
-   * The answer as the server's own small Markdown (Teslim 09a29d8): blank-line
-   * paragraphs, headings, `- ` and `1. ` lists, and bold, italic and code
-   * kept inline. Rendered by `NevoAnswer`, never as HTML.
+   * The answer as Markdown (`render_answer`): `**bold**`, "- " bullets,
+   * "1." steps. NOT FOR PRINTING AS IT IS - a child saw the asterisks (Teslim,
+   * 25 Oct). `blocks` is what the drawer draws; this is the last fallback.
    */
   answer: string;
+  /** The same answer in renderable pieces. Required on the contract. */
+  blocks?: AnswerBlock[];
   /**
-   * The same answer as blocks, with the inline emphasis stripped - which is
-   * why `answer` is drawn first and these only when it is empty.
-   */
-  blocks?: ServerAnswerBlock[];
-  /**
-   * One block per line, as plain text. Defaults to "" on the contract; the
-   * last fallback.
+   * The answer as one paragraph of plain text. Defaults to "" on the
+   * contract, so it is only preferred when it says something.
    */
   plainText?: string;
   /** `structured` means `answer` carries markup; `plain` means it does not. */
@@ -136,18 +148,16 @@ export interface ThreadMessage {
   text: string;
   /** ISO 8601. */
   createdAt: string;
-  /*
-   * The stored shape beside `text`, kept "so reopening a chat shows what was
-   * shown" (the backend's `blocks_for`). Nevo's `text` is the same Markdown a
-   * live answer carries, so the drawer draws that and these are the fallback,
-   * exactly as for a live reply (Teslim 09a29d8: "Do the same for live replies
-   * AND reopened history").
+  /**
+   * The answer in renderable pieces, as it was given (Teslim, 25 Oct: render
+   * them "for live replies AND reopened history"). Required on the contract;
+   * an asker's own message carries none, and `text` is then the whole of it.
    *
-   * Worth knowing: `contract-check.mjs` cannot see this field. Its
-   * `propertiesOf` does not descend into a nested `$ref`, so nothing under
-   * `messages[]` is checked at all.
+   * Worth knowing: `contract-check.mjs` cannot check this. Its `propertiesOf`
+   * does not descend into a nested `$ref`, so nothing under `messages[]` is
+   * checked at all.
    */
-  blocks?: ServerAnswerBlock[];
+  blocks?: AnswerBlock[];
 }
 
 export interface ThreadTranscript {

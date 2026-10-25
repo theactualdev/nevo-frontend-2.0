@@ -12,8 +12,9 @@ import {
   type ThreadTranscript,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth/session";
-import type { ServerAnswerBlock } from "@/lib/answerBlocks";
-import { NevoAnswer } from "@/components/shared/NevoAnswer";
+import type { AnswerBlock } from "@/lib/api/askNevo";
+import { answerBlocksFor } from "@/lib/answerMarkdown";
+import { AnswerBlocks } from "@/components/shared/AnswerBlocks";
 import {
   ASK_NEVO_CONTEXTS,
   CANNOT_HELP_LINE,
@@ -85,7 +86,7 @@ type Turn =
       /** The answer's Markdown, or a canned answer's sentence. */
       text: string;
       /** The server's blocks and plain text, drawn only when `text` is empty. */
-      blocks?: ServerAnswerBlock[];
+      blocks?: AnswerBlock[];
       plainText?: string;
       action?: { label: string; href: string };
       /** Present only on a REAL answer - what the vote is cast against. */
@@ -297,8 +298,10 @@ export function AskNevo() {
                * THE ANSWER'S OWN SHAPE (Teslim 09a29d8, 25 Oct). This picked
                * `plainText` for a structured answer and printed it in one
                * `<p>`, which flattened its headings, lists and paragraphs
-               * into one run. The Markdown is drawn now, by `NevoAnswer`; the
-               * blocks and plain text ride along as its fallbacks.
+               * into one run. It is drawn by block now, through the shared
+               * `AnswerBlocks` the student drawer uses, from the Markdown so
+               * bold and code survive (`answerBlocksFor`); the server's blocks
+               * and plain text ride along as the fallbacks.
                */
               text: res.answer,
               blocks: res.blocks,
@@ -520,10 +523,13 @@ export function AskNevo() {
                     ) : t.kind === "answer" ? (
                       <div key={i} className="mt-3.5 flex justify-start">
                         <div className="max-w-[88%] rounded-[14px_14px_14px_4px] border border-nevo-violet/35 bg-nevo-violet/15 px-4 py-3.5">
-                          <NevoAnswer
-                            answer={t.text}
-                            blocks={t.blocks}
-                            plainText={t.plainText}
+                          <AnswerBlocks
+                            blocks={answerBlocksFor({
+                              answer: t.text,
+                              blocks: t.blocks,
+                              plainText: t.plainText,
+                            })}
+                            text={t.text}
                             className="text-[14.5px] leading-[1.6] text-nevo-near-black"
                           />
                           {t.interactionId && (
@@ -821,9 +827,9 @@ function HistoryItem({
           >
             <div className="max-w-[88%] rounded-[14px_14px_14px_4px] border border-nevo-violet/35 bg-nevo-violet/15 px-4 py-3.5">
               {/* A reopened answer looks as it did when it was given. */}
-              <NevoAnswer
-                answer={m.text}
-                blocks={m.blocks}
+              <AnswerBlocks
+                blocks={answerBlocksFor({ answer: m.text, blocks: m.blocks })}
+                text={m.text}
                 className="text-[14.5px] leading-[1.6] text-nevo-near-black"
               />
             </div>
