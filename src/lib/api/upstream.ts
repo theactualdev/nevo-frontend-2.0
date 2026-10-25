@@ -21,10 +21,13 @@ export const API_ORIGIN =
  * The Render addresses the API has answered from. `nevo-backend-2-0` is the
  * service behind api.nevolearning.com (same spec, 17 Oct); `-kn3d` was the API
  * from 29 Sep to 17 Oct, and invoice rows written then may still name it.
+ * `-zxoz` is where it answers since 25 Oct, when api.nevolearning.com stopped
+ * answering - CI names it directly until the domain is pointed there.
  */
 const RENDER_API_HOSTS = new Set([
   "nevo-backend-2-0.onrender.com",
   "nevo-backend-2-0-kn3d.onrender.com",
+  "nevo-backend-2-0-zxoz.onrender.com",
 ]);
 
 /**

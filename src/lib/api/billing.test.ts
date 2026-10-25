@@ -70,6 +70,12 @@ describe("invoicePdfPath", () => {
       ),
     ).toBe("/api/billing/invoices/s1/NEV-3.pdf");
     // Another app on the same hosting provider is still somebody else.
+    // Where the API answers since 25 Oct.
+    expect(
+      invoicePdfPath(
+        "https://nevo-backend-2-0-zxoz.onrender.com/api/billing/invoices/s1/NEV-4.pdf",
+      ),
+    ).toBe("/api/billing/invoices/s1/NEV-4.pdf");
     expect(invoicePdfPath("https://someone-else.onrender.com/x.pdf")).toBeNull();
   });
 
