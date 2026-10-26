@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
+import { RECOVERY_LINE } from "./QuickCheckSheet";
 import { clearSession, setSession } from "@/lib/auth/session";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
 
@@ -323,7 +324,7 @@ describe("a hand-off with no guided questions (Teslim, 21 Oct)", () => {
     expect(screen.queryByText(/think it through/i)).toBeNull();
     expect(screen.queryByText(PROMPT)).toBeNull();
     expect(screen.getByRole("dialog")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe(RECOVERY_LINE);
     expect(trackEvent).not.toHaveBeenCalledWith(
       "guided_question_shown",
       expect.anything(),

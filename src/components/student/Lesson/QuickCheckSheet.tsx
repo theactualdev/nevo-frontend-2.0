@@ -11,7 +11,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/shared";
 import type { QuickCheck } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { AnswerCheck, AnswerDot, AnswerOption } from "./AnswerOption";
+import { AnswerCheck, AnswerOption } from "./AnswerOption";
 import { READING_BODY, READING_HEADING } from "./readingSupport";
 import { SpokenPrompt } from "./SpokenPrompt";
 
@@ -30,13 +30,13 @@ function msSince(start: number | null): number | null {
 const SWIPE_CLOSES_AT_PX = 80;
 const SWIPE_STARTS_AT_PX = 8;
 
-/** The Lesson Check frame's `qc-recovery` line, under the gate (17d S1). */
+/** The Lesson Check frame's `qc-recovery` line, after a miss (17d S1). */
 export const RECOVERY_LINE = "Let's look at this another way.";
 
 /**
- * How long the held miss stays up before the sheet gives way under the gate:
- * time to read one short line. A PROVISIONAL CALL - no frame says when, and it
- * is asked of design (SCRUM-282). About the sheet, nothing about the child.
+ * How long the held miss stays up before the sheet gives way: time to read
+ * one short line. A PROVISIONAL CALL - no frame says when, and it is asked of
+ * design (SCRUM-282). About the sheet, nothing about the child.
  */
 export const GIVES_WAY_AFTER_MS = 1800;
 
@@ -53,15 +53,14 @@ function centredCard(): boolean {
  * Inline comprehension check (Lesson Check frame) — a bottom sheet on mobile,
  * a centred card on tablet/desktop, over the dimmed player. Feedback is warm
  * and system-owned: a correct pick is affirmed plainly (navy) and "Continue"
- * advances; a miss is marked softly in violet — never red — and offers "Try
- * again". The check is only spent by a correct answer.
+ * advances; a miss is held without a verdict and the sheet gives way to the
+ * section's other ways in (below). The check is only spent by a correct
+ * answer.
  *
- * NO "SEE IT EXPLAINED" (design D93, confirmed 6 Oct). The frame's recovery
- * state draws "Try again" alone. It went back to the segment and explained
- * nothing - no field carries an explanation. A child who cannot reach the
- * answer is the Socratic hand-off's to move on (SCRUM-241): the server says
- * so on the reply to a miss, and the player closes this sheet for the panel -
- * see `handOffFrom` in `LessonPlayer`, and `SocraticPanel`.
+ * NO "SEE IT EXPLAINED" (design D93, confirmed 6 Oct). A child who cannot
+ * reach the answer is also the Socratic hand-off's (SCRUM-241): the server
+ * says so on the reply to a miss, and the player closes this sheet for the
+ * panel - see `handOffFrom` in `LessonPlayer`, and `SocraticPanel`.
  *
  * Mount keyed on the segment id so the chosen answer resets per segment.
  *
@@ -76,9 +75,11 @@ function centredCard(): boolean {
  * gate ruling of the same day). The Keep going it carried before any answer
  * (Lydia, SCRUM-275, 22 Oct: "A child whose only way past is the right answer
  * is trapped") is gone, because tapping out is the way out now and it goes
- * back to the section, not on past it. Try again stays after a miss, and
- * Continue after a right answer (`onContinue`) is the frame's way on.
- * Olayinka, 25 Oct: "the child shouldn't be able to move with a wrong answer."
+ * back to the section, not on past it. Continue after a right answer
+ * (`onContinue`) is the frame's way on. Olayinka, 25 Oct: "the child
+ * shouldn't be able to move with a wrong answer." Lydia, 26 Oct: a check
+ * carrying its own authored answer "gates normally" - and the client cannot
+ * yet tell an authored key from a generated one, so every check holds.
  *
  * THE BREAK IS INSIDE IT (Lydia, 23 Oct: a hold at a check is not live until
  * the break is reachable at all times, including from inside the check
@@ -87,24 +88,25 @@ function centredCard(): boolean {
  * child's own break - see `onTakeBreak`.
  *
  * ONE PRIMARY (Lydia, SCRUM-275, 22 Oct): navy and full width is the action
- * that progresses the check - Try again after a miss, and since Lydia's 25 Oct
- * ruling Continue after a right answer, as the Lesson Check frame's
- * `qc-correct` draws it (17d). It was the secondary Keep going there. The two
- * never stand together: each belongs to its own answer.
+ * that progresses the check - since Lydia's 25 Oct ruling Continue after a
+ * right answer, as the Lesson Check frame's `qc-correct` draws it (17d). A
+ * miss has no button at all (`qc-recovery`).
  *
  * A SPOKEN CHECK (B16) says its question aloud on opening, with the printed
  * question still in place - see `SpokenPrompt`. The reading accommodation's
  * typographic half reaches the question, the answers and the note (D30).
  *
- * UNDER THE GATE A MISS IS THE FRAME'S `qc-recovery` (17d S1; Lesson Check
- * frame, design 52e3ae3), and only while the server says the gate is on
- * (`gated`). The answer picked is simply held - navy, no dot, no cross - the
- * line reads "Let's look at this another way.", and there is no Try again:
- * "the sheet gives way to the re-presentation in the player behind it - the
- * alternative arriving is the response." It gives way by itself once the
- * line has been read (`GIVES_WAY_AFTER_MS`, a provisional call - no frame says
- * when), asked afresh when Next opens it again. With the gate off, which it
- * is in production, a miss is drawn exactly as before.
+ * A MISS IS THE FRAME'S `qc-recovery` (17d S1; Lesson Check frame, design
+ * 52e3ae3) - Lydia ruled on 25 Oct to ship it ahead of the gate, and
+ * Olayinka switched it on for every check on 26 Oct. The answer picked is
+ * simply held - navy, no dot, no cross - the line reads "Let's look at this
+ * another way.", and there is no Try again: "the sheet gives way to the
+ * re-presentation in the player behind it - the alternative arriving is the
+ * response." It gives way by itself once the line has been read
+ * (`GIVES_WAY_AFTER_MS`, a provisional call - no frame says when), to the
+ * section's other ways in (`WaysInCard`), and is asked afresh when Next
+ * opens it again. It was "Not quite" and a Try again that put the same
+ * question straight back.
  *
  * THE ENGINE'S HINT, WHILE THE CHECK IS OPEN, IS HERE WITH ITS QUESTION
  * (Lydia, SCRUM-275, 21 Oct): "a hint that arrives after the moment it was
@@ -124,19 +126,13 @@ export function QuickCheckSheet({
   reading = false,
   onAudioBusy,
   hint,
-  gated = false,
   onGiveWay,
 }: {
   check: QuickCheck;
   open: boolean;
   /**
-   * The server says the comprehension gate is on (`comprehensionGate
-   * .required`). Off, a miss is drawn as it always was.
-   */
-  gated?: boolean;
-  /**
-   * Under the gate, a miss has been read and the sheet gives way to the ways
-   * in behind it. The system's move, not the child's: never `onTapOut`.
+   * A miss has been read and the sheet gives way to the ways in behind it.
+   * The system's move, not the child's: never `onTapOut`.
    */
   onGiveWay?: () => void;
   /**
@@ -169,7 +165,7 @@ export function QuickCheckSheet({
   const correct = chosenId === check.correctId;
 
   // When the question was last put in front of the child: on opening, and
-  // again on "Try again".
+  // again once a miss has given way.
   const askedAt = useRef<number | null>(null);
   useEffect(() => {
     if (open && chosenId === null) askedAt.current = performance.now();
@@ -191,8 +187,8 @@ export function QuickCheckSheet({
     onTapOut();
   };
 
-  // Under the gate, a miss is held - not marked - and then gives way.
-  const recovering = gated && resolved && !correct;
+  // A miss is held - not marked - and then gives way.
+  const recovering = resolved && !correct;
   const giveWay = useRef(onGiveWay);
   useEffect(() => {
     giveWay.current = onGiveWay;
@@ -245,8 +241,9 @@ export function QuickCheckSheet({
   const tone = (id: string) => {
     if (!resolved) return "idle";
     if (id !== chosenId) return "muted";
-    // The frame's `qc-recovery` holds the pick in navy: no verdict on it.
-    return correct || recovering ? "navy" : "violet";
+    // Right or not, the pick is held in navy: `qc-recovery` puts no verdict
+    // on a miss.
+    return "navy";
   };
 
   return (
@@ -322,13 +319,7 @@ export function QuickCheckSheet({
               reading={reading}
               tone={tone(option.id)}
               trailing={
-                resolved && option.id === chosenId ? (
-                  correct ? (
-                    <AnswerCheck />
-                  ) : recovering ? undefined : (
-                    <AnswerDot />
-                  )
-                ) : undefined
+                correct && option.id === chosenId ? <AnswerCheck /> : undefined
               }
               onSelect={() => choose(option.id)}
             />
@@ -350,19 +341,10 @@ export function QuickCheckSheet({
               reading && READING_BODY,
             )}
           >
-            {correct
-              ? check.correctNote
-              : recovering
-                ? RECOVERY_LINE
-                : check.recoveryNote}
+            {correct ? check.correctNote : RECOVERY_LINE}
           </p>
         )}
 
-        {resolved && !correct && !recovering && (
-          <Button className="mt-5 w-full" onClick={() => setChosenId(null)}>
-            Try again
-          </Button>
-        )}
         {/* The way on, and only after a right answer. */}
         {correct && (
           <Button className="mt-5 w-full" onClick={onContinue}>

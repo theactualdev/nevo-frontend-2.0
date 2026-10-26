@@ -928,6 +928,13 @@ export interface LessonQuestionAttempt {
    * (rule 5).
    */
   comprehensionGate?: ComprehensionGate | null;
+  /**
+   * A MARKED MISS'S RE-TEACHING, AT ONCE (Teslim, cdba131, 26 Oct): set on a
+   * wrong answer when the sitting holds a re-teach for that question, whether
+   * the gate is on or not - "use that response rather than wait for a later
+   * adapt call". Null on a right answer.
+   */
+  reteaching?: ReteachingResponse | null;
 }
 
 /** `SocraticHandoffPrompt` - one guided question a hand-off opens with. */

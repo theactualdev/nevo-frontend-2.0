@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
+import { GIVES_WAY_AFTER_MS, RECOVERY_LINE } from "./QuickCheckSheet";
 import { LESSON_STATUS } from "@/lib/api/lessons";
 import { ApiError } from "@/lib/api/client";
 import { clearSession, setSession } from "@/lib/auth/session";
@@ -143,6 +144,16 @@ const REVIEW = {
   assessment: undefined,
 } as unknown as Lesson;
 
+/**
+ * Asked again as a child is now (26 Oct): the miss holds a beat and the
+ * sheet gives way, then Next opens the check afresh. No Try again any more.
+ */
+const askAgain = async () => {
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+    timeout: GIVES_WAY_AFTER_MS + 2000,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+};
 const next = () =>
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
 const statuses = () => progress.report.mock.calls.map((c) => c[0]);
@@ -315,7 +326,7 @@ describe("every answer to a check is stored as it is given", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: /The denominator/ }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await askAgain();
     fireEvent.click(screen.getByRole("button", { name: /The numerator/ }));
 
     expect(saveAttempt.mock.calls).toEqual([
@@ -1139,7 +1150,7 @@ describe("no way on past an unpassed check (Olayinka, 23 Oct)", () => {
       within(dialog).getByRole("button", { name: /The denominator/ }),
     );
 
-    expect(within(dialog).getByRole("button", { name: "Try again" })).toBeEnabled();
+    expect(within(dialog).getByRole("status").textContent).toBe(RECOVERY_LINE);
     expect(wayOn()).toBeNull();
   });
 

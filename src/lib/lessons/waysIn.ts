@@ -7,7 +7,7 @@ import {
 } from "@/lib/constants/lessonModality";
 
 /**
- * THE WAYS IN, AFTER A MISS UNDER THE GATE (SCRUM-282; 17d S1-S3).
+ * THE WAYS IN, AFTER A MISS ON A CHECK (SCRUM-282; 17d S1-S3).
  *
  * The server names the routes a section has (`reteaching.availableRoutes`)
  * and the one it suggests (`recommendedRoute`). This only decides which of

@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
+import { GIVES_WAY_AFTER_MS } from "./QuickCheckSheet";
 import { clearSession, setSession } from "@/lib/auth/session";
 import type { Lesson } from "@/lib/types";
 
@@ -143,6 +144,16 @@ const HANDOFF = {
   advanceAfterHandoff: true,
 };
 
+/**
+ * Asked again as a child is now (26 Oct): the miss holds a beat and the
+ * sheet gives way, then Next opens the check afresh. No Try again any more.
+ */
+const askAgain = async () => {
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+    timeout: GIVES_WAY_AFTER_MS + 2000,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+};
 const next = () =>
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
 const miss = async () =>
@@ -323,13 +334,13 @@ describe("the server hands a child off from the quick check (B94)", () => {
 
     for (let i = 0; i < 4; i++) {
       await miss();
-      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+      await askAgain();
     }
     await new Promise((r) => setTimeout(r, 0));
 
     expect(checkOnScreen()).toBeTruthy();
     expect(screen.queryByText(/think it through/i)).toBeNull();
-  });
+  }, 20_000);
 
   it("draws nothing for a hand-off with no prompts (rule 5)", async () => {
     saveAttempt.mockResolvedValue(reply({ ...HANDOFF, guidedPrompts: [] }));
@@ -351,7 +362,7 @@ describe("the server hands a child off from the quick check (B94)", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     await miss();
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await askAgain();
     fireEvent.click(screen.getByRole("button", { name: /The numerator/ }));
 
     land(reply(HANDOFF));
@@ -421,7 +432,7 @@ describe("a hand-off panel is an adaptation applied (B74)", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     await miss();
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await askAgain();
     await miss();
 
     lands[0](reply(HANDOFF));
