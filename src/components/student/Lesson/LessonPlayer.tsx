@@ -2701,12 +2701,20 @@ export function LessonPlayer({
       : null;
   const waysHere = waysInFor(reteachHere, {
     formats: formatsHere,
-    densities: densitySegments.map((d) => d.id as Density),
+    // The paces the section's text has, over a picture too (Lydia, 26 Oct,
+    // D3) - so long as the section has its text to show them in.
+    densities: formatsHere.includes(MODALITY.TEXT)
+      ? textChips.map((d) => d.id as Density)
+      : [],
   });
   /*
    * TAKING ONE PRESSES THE SECTION'S OWN CONTROL - the format group or the
    * pace chip - so it is exactly the child's pick there, held and signalled
    * as that is. A pace already on is left on: the chip toggles, a way does not.
+   *
+   * A PACE TAKEN OVER A PICTURE BRINGS THE TEXT IN IT (D3): "Simplify gives
+   * them the simpler text and the picture stays one tap away rather than
+   * being replaced" - the format group still holds it.
    */
   const takeWay = (way: WayIn) => {
     const presses = WAY_IN_PRESSES[way];
@@ -2715,6 +2723,7 @@ export function LessonPlayer({
       return;
     }
     if (manualDensity !== presses.density) pickDensity(presses.density);
+    if (modality !== MODALITY.TEXT) pickFormat(MODALITY.TEXT);
   };
 
   /*

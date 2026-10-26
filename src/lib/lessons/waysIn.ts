@@ -29,15 +29,24 @@ import {
  *    guided steps (Lydia, 24 Oct), and it is never named unless the question
  *    has markable steps;
  *  - `calculation_scaffold` belongs to the calculation screen, not this card;
- *  - a TEXT format route has no words in the frame, so it is not named.
+ *  - a TEXT format route is "Try it as text" (Lydia, 26 Oct, D2: "If the
+ *    control says Text, the offer says 'Try it as text'"). The frame has no
+ *    words for it, so these are the server's.
  */
-export type WayIn = "picture" | "audio" | "activity" | "simpler" | "slower";
+export type WayIn =
+  | "picture"
+  | "audio"
+  | "activity"
+  | "text"
+  | "simpler"
+  | "slower";
 
-/** The Lesson Player frame's words for each (17d; `wTok`). */
+/** The Lesson Player frame's words for each (17d; `wTok`), and D2's. */
 export const WAY_IN_LABEL: Record<WayIn, string> = {
   picture: "See it as a picture",
   audio: "Listen to it",
   activity: "Try it yourself",
+  text: "Try it as text",
   simpler: "A simpler version",
   slower: "One step at a time",
 };
@@ -50,6 +59,7 @@ export const WAY_IN_PRESSES: Record<
   picture: { format: MODALITY.VISUAL },
   audio: { format: MODALITY.AUDIO },
   activity: { format: MODALITY.INTERACTIVE },
+  text: { format: MODALITY.TEXT },
   simpler: { density: DENSITY.SIMPLIFY },
   slower: { density: DENSITY.SLOWER },
 };
@@ -62,6 +72,7 @@ export function wayOf(route: TeachingRoute | null | undefined): WayIn | null {
       if (route.format === MODALITY.VISUAL) return "picture";
       if (route.format === MODALITY.AUDIO) return "audio";
       if (route.format === MODALITY.INTERACTIVE) return "activity";
+      if (route.format === MODALITY.TEXT) return "text";
       return null;
     case "simplify":
       return "simpler";
@@ -76,7 +87,12 @@ export function wayOf(route: TeachingRoute | null | undefined): WayIn | null {
 export interface ServedHere {
   /** The formats the section's own format group offers. */
   formats: readonly Modality[];
-  /** The pace chips on screen - none while the text is not what shows. */
+  /**
+   * The paces the section's TEXT has, whatever is on screen now. Over a
+   * picture they are still offered (Lydia, 26 Oct, D3: "A child looking at a
+   * picture who still has not got it should not have a route taken away");
+   * taking one brings the text in that pace, the picture one tap away.
+   */
   densities: readonly Density[];
 }
 

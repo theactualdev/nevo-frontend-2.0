@@ -50,13 +50,12 @@ describe("the ways in a section's re-teaching names", () => {
     ]);
   });
 
-  it("never names re-chunking, the panel, a text format or the solver's scaffold", () => {
+  it("never names re-chunking, the panel or the solver's scaffold", () => {
     const { ways } = waysInFor(
       reteaching([
         route("rechunk"),
         route("simpler_presentation"),
         route("panel"),
-        route("format", "text"),
         route("calculation_scaffold"),
         route("slower"),
       ]),
@@ -64,6 +63,18 @@ describe("the ways in a section's re-teaching names", () => {
     );
 
     expect(ways).toEqual(["slower"]);
+  });
+
+  it("names the text as the server does, \"Try it as text\" (Lydia, 26 Oct, D2)", () => {
+    const { ways } = waysInFor(
+      reteaching([route("format", "text"), route("format", "visual")]),
+      EVERYTHING,
+    );
+
+    expect(ways.map((w) => WAY_IN_LABEL[w])).toEqual([
+      "Try it as text",
+      "See it as a picture",
+    ]);
   });
 
   it("names only what this screen can serve", () => {
@@ -82,7 +93,7 @@ describe("the ways in a section's re-teaching names", () => {
     expect(ways).toEqual(["picture", "slower"]);
   });
 
-  it("names no pace while the text is not what is on screen", () => {
+  it("names no pace the section's text does not have", () => {
     const { ways } = waysInFor(
       reteaching([route("simplify"), route("slower")]),
       { formats: ["text", "visual"], densities: [] },

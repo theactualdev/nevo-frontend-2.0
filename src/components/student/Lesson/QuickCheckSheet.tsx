@@ -35,8 +35,9 @@ export const RECOVERY_LINE = "Let's look at this another way.";
 
 /**
  * How long the held miss stays up before the sheet gives way: time to read
- * one short line. A PROVISIONAL CALL - no frame says when, and it is asked of
- * design (SCRUM-282). About the sheet, nothing about the child.
+ * one short line. Lydia, 26 Oct (D1): "1.8 seconds is fine. Long enough to
+ * land, short enough not to feel like a penalty." About the sheet, nothing
+ * about the child.
  */
 export const GIVES_WAY_AFTER_MS = 1800;
 
@@ -103,7 +104,7 @@ function centredCard(): boolean {
  * another way.", and there is no Try again: "the sheet gives way to the
  * re-presentation in the player behind it - the alternative arriving is the
  * response." It gives way by itself once the line has been read
- * (`GIVES_WAY_AFTER_MS`, a provisional call - no frame says when), to the
+ * (`GIVES_WAY_AFTER_MS`, 1.8 seconds - Lydia's D1, 26 Oct), to the
  * section's other ways in (`WaysInCard`), and is asked afresh when Next
  * opens it again. It was "Not quite" and a Try again that put the same
  * question straight back.

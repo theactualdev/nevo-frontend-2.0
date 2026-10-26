@@ -299,6 +299,65 @@ describe("on every check, whatever the server's gate", () => {
     expect(card()).toBeNull();
   });
 
+  /*
+   * LYDIA, 26 OCT, D3: "A child looking at a picture who still has not got it
+   * should not have a route taken away from them. Simplify gives them the
+   * simpler text and the picture stays one tap away rather than being
+   * replaced." And D2: the text is "Try it as text".
+   */
+  it("offers Simplify and Slower over a picture, and a simpler version brings the simpler text", async () => {
+    api.saveAttempt.mockResolvedValue(reply(false, GATE_OFF, RETEACHING));
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "Picture" }));
+    expect(
+      await screen.findByRole("img", { name: "Picture of a fraction" }),
+    ).toBeInTheDocument();
+    await missAndWait();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+      timeout: GIVES_WAY_AFTER_MS + 2000,
+    });
+
+    expect(ways().map((b) => b.getAttribute("aria-label"))).toEqual([
+      "See it as a picture",
+      "A simpler version",
+      "One step at a time",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "A simpler version" }));
+
+    expect(await screen.findByText("The top number.")).toBeInTheDocument();
+    expect(api.saveSegmentChoice).toHaveBeenCalledWith(
+      "lesson-1",
+      SESSION,
+      SEG_1,
+      { modality: "text" },
+    );
+    // The picture one tap away, not taken.
+    expect(screen.getByRole("button", { name: "Picture" })).toBeInTheDocument();
+  });
+
+  it("names the text \"Try it as text\", and taking it brings the text", async () => {
+    api.saveAttempt.mockResolvedValue(
+      reply(false, GATE_OFF, {
+        ...RETEACHING,
+        availableRoutes: [route("format", "text")],
+        recommendedRoute: route("format", "text"),
+      }),
+    );
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "Picture" }));
+    await screen.findByRole("img", { name: "Picture of a fraction" });
+    await missAndWait();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+      timeout: GIVES_WAY_AFTER_MS + 2000,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Try it as text" }));
+
+    expect(
+      await screen.findByText("The number on top is the numerator."),
+    ).toBeInTheDocument();
+  });
+
   it("opens on no ways in when the sitting's read says the gate is off, whatever it carries", async () => {
     api.comprehension.mockResolvedValue({ ...GATE_OFF, reteaching: RETEACHING });
     await open();
