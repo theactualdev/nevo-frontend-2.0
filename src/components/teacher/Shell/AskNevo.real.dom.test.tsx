@@ -175,6 +175,49 @@ describe("a question that got no answer", () => {
   });
 });
 
+/*
+ * SCRUM-56: a teacher's 30 questions a day. The drawer read every refusal as
+ * "couldn't reach Nevo... try asking again in a moment", so a teacher whose
+ * allowance was spent was sent to keep trying until tomorrow.
+ */
+describe("a teacher whose questions for today are used up", () => {
+  it("is told the limit resets tomorrow, not that Nevo couldn't be reached", async () => {
+    const { ApiError } = await import("@/lib/api/client");
+    ask.mockRejectedValue(
+      new ApiError(429, "Too many", {
+        detail: {
+          code: "ask_nevo_daily_limit",
+          message: "You have used today's questions.",
+          resetsAt: "2026-10-27T00:00:00Z",
+        },
+      }),
+    );
+    openOn("/teacher/dashboard");
+    askQuestion("What needs my attention today?");
+
+    expect(
+      await screen.findByText(
+        "You've reached today's Ask Nevo limit. It'll reset tomorrow.",
+        {},
+        { timeout: 3000 },
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t reach Nevo/)).not.toBeInTheDocument();
+  });
+
+  it("keeps an ordinary rate limit as a moment's wait", async () => {
+    const { ApiError } = await import("@/lib/api/client");
+    ask.mockRejectedValue(new ApiError(429, "Too many", { detail: "Slow down" }));
+    openOn("/teacher/dashboard");
+    askQuestion("What needs my attention today?");
+
+    expect(
+      await screen.findByText(/couldn.t reach Nevo just now/, {}, { timeout: 3000 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/reset tomorrow/)).not.toBeInTheDocument();
+  });
+});
+
 describe("the signed-out walkthrough", () => {
   beforeEach(() => {
     signedIn.value = false;

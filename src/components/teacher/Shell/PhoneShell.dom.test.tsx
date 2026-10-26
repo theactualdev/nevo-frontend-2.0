@@ -11,7 +11,7 @@ vi.mock("@/hooks/useCurrentUser", () => ({
   useCurrentUser: () => ({
     name: "Ms. Adeyemi",
     initials: "MA",
-    school: "Corona Secondary School",
+    school: "Brightgate Academy",
     photoUrl: null,
   }),
 }));
@@ -64,7 +64,7 @@ describe("the drawer", () => {
     const drawer = open();
 
     expect(drawer).toHaveTextContent("Ms. Adeyemi");
-    expect(drawer).toHaveTextContent("Corona Secondary School");
+    expect(drawer).toHaveTextContent("Brightgate Academy");
     for (const tab of ["Home", "Classes", "Library", "Insights", "Connect"]) {
       expect(screen.getAllByRole("link", { name: tab }).length).toBeGreaterThan(0);
     }

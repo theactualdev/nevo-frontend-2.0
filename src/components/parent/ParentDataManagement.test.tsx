@@ -37,7 +37,7 @@ const TOKEN = "parent-token-abc";
 const INVITATION: ParentInvitation = {
   invitationId: "inv-1",
   studentFirstName: "Amara",
-  schoolName: "Corona Secondary School",
+  schoolName: "Brightgate Academy",
   schoolPhone: null,
   schoolEmail: null,
   parentName: "Ngozi Okafor",
@@ -73,7 +73,7 @@ describe("what the page names", () => {
 
     expect(screen.getByText(/Amara[’']s data on Nevo/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/Corona Secondary School enrolled Amara/i),
+      screen.getByText(/Brightgate Academy enrolled Amara/i),
     ).toBeInTheDocument();
   });
 });
@@ -314,7 +314,7 @@ describe("the school's own contact details", () => {
     // A "call your school" line with nothing after it is worse than no line.
     render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
 
-    expect(screen.queryByRole("link", { name: /Corona/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Brightgate/i })).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /support@nevolearning/i }),
     ).toBeInTheDocument();
@@ -327,7 +327,7 @@ describe("the school's own contact details", () => {
         token={TOKEN}
         invitation={inv({
           schoolPhone: "+234 801 234 5678",
-          schoolEmail: "office@corona.edu.ng",
+          schoolEmail: "office@brightgate.edu.ng",
         })}
       />,
     );
@@ -336,9 +336,9 @@ describe("the school's own contact details", () => {
       "href",
       "tel:+2348012345678",
     );
-    expect(screen.getByRole("link", { name: /office@corona\.edu\.ng/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /office@brightgate\.edu\.ng/ })).toHaveAttribute(
       "href",
-      "mailto:office@corona.edu.ng",
+      "mailto:office@brightgate.edu.ng",
     );
   });
 });

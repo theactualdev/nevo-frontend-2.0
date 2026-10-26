@@ -137,7 +137,7 @@ export function getTeacherClass(id: string): TeacherClass | null {
   return TEACHER_CLASSES.find((c) => c.id === id) ?? null;
 }
 
-export const SCHOOL_LINE = "Corona Secondary School · Second term";
+export const SCHOOL_LINE = "Brightgate Academy · Second term";
 
 /** Status presentation (frame): label, label colour, dot. */
 export const STATUS_LABEL: Record<StudentStatus, string> = {

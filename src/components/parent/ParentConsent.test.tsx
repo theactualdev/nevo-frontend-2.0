@@ -44,7 +44,7 @@ const TOKEN = "consent-token-xyz";
 const INVITATION: ParentInvitation = {
   invitationId: "inv-1",
   studentFirstName: "Amara",
-  schoolName: "Corona Secondary School",
+  schoolName: "Brightgate Academy",
   schoolPhone: null,
   schoolEmail: null,
   parentName: "Ngozi Okafor",
@@ -88,7 +88,7 @@ describe("the request", () => {
         name: /Amara[’']s school would like your okay to get Amara started on Nevo\./,
       }),
     ).toBeInTheDocument();
-    expect(screen.getAllByText(/Corona Secondary School/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Brightgate Academy/).length).toBeGreaterThan(0);
   });
 
   it("states all three promises, including the right to withdraw", () => {
@@ -546,7 +546,7 @@ describe("having a question first", () => {
         token={TOKEN}
         invitation={inv({
           schoolPhone: "+234 1 271 0044",
-          schoolEmail: "office@coronaschools.edu.ng",
+          schoolEmail: "office@brightgate.edu.ng",
         })}
       />,
     );
@@ -557,8 +557,8 @@ describe("having a question first", () => {
       "tel:+23412710044",
     );
     expect(
-      screen.getByRole("link", { name: /office@coronaschools\.edu\.ng/ }),
-    ).toHaveAttribute("href", "mailto:office@coronaschools.edu.ng");
+      screen.getByRole("link", { name: /office@brightgate\.edu\.ng/ }),
+    ).toHaveAttribute("href", "mailto:office@brightgate.edu.ng");
   });
 
   it("degrades to prose when the school gave no contact details", () => {
@@ -666,7 +666,7 @@ describe("an invitation that asks for more than one thing", () => {
       <ParentConsent token={TOKEN} invitation={twoTypes()} />,
     );
 
-    expect(visibleText(container)).toMatch(/Corona Secondary School/);
+    expect(visibleText(container)).toMatch(/Brightgate Academy/);
     expect(visibleText(container)).not.toMatch(
       /error|invalid|unsupported|something went wrong/i,
     );
