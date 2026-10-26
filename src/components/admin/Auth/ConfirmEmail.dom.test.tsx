@@ -141,14 +141,14 @@ describe("ConfirmEmail", () => {
  * matched /expired/i would pass against either wording and catch nothing.
  */
 describe("D01b's own copy", () => {
-  it("says what AC-03 says, including the 24 hours and the address", async () => {
+  it("says what AC-03 says, with the backend's 48 hours and the address", async () => {
     verify.mockResolvedValue(
       state({ status: "expired", email: "f.adebayo@brightgate.edu.ng", message: "Ran out." }),
     );
     const { container } = render(<ConfirmEmail token="t8" />);
 
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/Confirmation links last 24 hours/i),
+      expect(visibleText(container)).toMatch(/Confirmation links last 48 hours/i),
     );
     expect(visibleText(container)).toMatch(/f\.adebayo@brightgate\.edu\.ng/);
     // The server's one-liner knows neither fact, so it must not win here.
@@ -160,7 +160,7 @@ describe("D01b's own copy", () => {
     const { container } = render(<ConfirmEmail token="t9" />);
 
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/Confirmation links last 24 hours/i),
+      expect(visibleText(container)).toMatch(/Confirmation links last 48 hours/i),
     );
     expect(visibleText(container)).not.toMatch(/null|undefined|send a fresh one to\s*\./i);
   });

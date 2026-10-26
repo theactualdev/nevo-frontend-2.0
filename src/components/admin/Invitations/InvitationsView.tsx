@@ -102,6 +102,20 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
+/**
+ * A RESEND ANSWER IS NOT A WHOLE INVITATION (SCRUM-212). `resend_invite`
+ * returns the new token, expiry and delivery, and no role, name, email or
+ * status - absent or null. Swapping it in for the row dropped the role, the
+ * teachers-only filter then dropped the row, and a list of one read "No
+ * invites yet". Keep the row; take only the values the answer carries.
+ */
+export function withResend(row: Invitation, answer: Invitation): Invitation {
+  const carried = Object.fromEntries(
+    Object.entries(answer).filter(([, value]) => value !== undefined && value !== null),
+  ) as Partial<Invitation>;
+  return { ...row, ...carried };
+}
+
 export function InvitationsView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [invites, setInvites] = useState<Invitation[]>([]);
@@ -232,8 +246,9 @@ export function InvitationsView() {
     });
     invitesApi
       .resend(invite.id)
-      .then((updated) => {
-        setInvites((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      .then((answer) => {
+        const updated = withResend(invite, answer);
+        setInvites((prev) => prev.map((i) => (i.id === updated.id ? withResend(i, answer) : i)));
         /*
          * `deliveryStatus` was returned by this very call and never read, so
          * the toast said "Invite resent to <name>" over a backend answer of
@@ -245,13 +260,14 @@ export function InvitationsView() {
          * `needsManualDelivery(...)`, so a null or absent `deliveryStatus` -
          * nullable in the contract, and cast unchecked by the client - fell
          * through to "Invite resent to <name>" over a response that
-         * established nothing.
+         * established nothing. Read from THIS answer, never the kept row: a
+         * row's old "sent" is no news about this resend.
          */
-        if (!confirmedSent(updated.deliveryStatus)) {
+        if (!confirmedSent(answer.deliveryStatus)) {
           setHandout(updated);
           say(
             unconfirmedResendToast(
-              updated.deliveryStatus,
+              answer.deliveryStatus,
               Boolean(joinLink(updated.token)),
             ),
           );
