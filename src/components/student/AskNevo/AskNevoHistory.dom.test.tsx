@@ -156,7 +156,7 @@ describe("looking back at a past conversation", () => {
           messageId: "m-2",
           author: "nevo",
           sequence: 2,
-          text: "**Two steps**\n\n1. Light lands\n2. Sugar is made",
+          text: "**Two steps**\n\n1. Light lands\n2. **Sugar** is made",
           blocks: [
             { type: "heading", text: "Two steps", items: [] },
             { type: "steps", text: "", items: ["Light lands", "Sugar is made"] },
@@ -177,6 +177,8 @@ describe("looking back at a past conversation", () => {
       "Sugar is made",
     ]);
     expect(steps[0].closest("ol")).not.toBeNull();
+    // Its bold kept, though the stored blocks have none.
+    expect(screen.getByText("Sugar").tagName).toBe("STRONG");
     expect(document.body.textContent).not.toContain("**");
   });
 
