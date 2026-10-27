@@ -169,6 +169,20 @@ describe("toPrompt", () => {
     );
   });
 
+  it("says a motor-speed day was named and could not be given (7c98014)", () => {
+    // No warm-up screen is drawn for it; the motor step is onboarding's.
+    expect(
+      toPrompt({
+        dimension: "motor_speed",
+        itemId: "device:motor_speed",
+        served: false,
+      }),
+    ).toEqual({ state: "none", cannotPresent: "motor_speed" });
+    expect(
+      toPrompt({ dimension: "motor_speed", served: false, doneToday: false }),
+    ).toEqual({ state: "none", cannotPresent: "motor_speed", doneToday: false });
+  });
+
   it("runs another dimension's own task when no question was served", () => {
     expect(toPrompt({ dimension: "attention", served: false })).toMatchObject({
       state: "ready",
