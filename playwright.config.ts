@@ -44,7 +44,11 @@ export default defineConfig({
    * `undefined` restores Playwright's default for a signed-out run.
    */
   workers:
-    process.env.E2E_ADMIN_EMAIL || process.env.E2E_TEACHER_EMAIL ? 1 : undefined,
+    process.env.E2E_ADMIN_EMAIL ||
+    process.env.E2E_TEACHER_EMAIL ||
+    process.env.E2E_SENCO_EMAIL
+      ? 1
+      : undefined,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
