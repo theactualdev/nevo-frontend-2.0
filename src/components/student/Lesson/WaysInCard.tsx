@@ -7,7 +7,8 @@ import { READING_BODY } from "./readingSupport";
 /**
  * "LET'S TRY THIS ANOTHER WAY." (17d S1-S2; Nevo Lesson Player Frame
  * `showWaysIn`, design 52e3ae3) - the other ways into a section, in place
- * above its content, after a miss on its check while the gate is on.
+ * above its content, after a miss on its check - any check since 26 Oct
+ * (Olayinka), ahead of the server's own gate.
  *
  * Only what the section can serve is listed, so the set varies and the card
  * never assumes four (`waysInFor`). The server's suggestion carries the same

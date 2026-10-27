@@ -138,14 +138,13 @@ describe("tapping out of the check", () => {
   it("asks the check afresh after tapping out of a miss", () => {
     const view = mountWith({});
     fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
-    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe(RECOVERY_LINE);
 
     content.root?.onOpenChange?.(false);
     view.rerender(sheet({ open: true }));
 
     expect(screen.queryByRole("status")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Oxygen" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Oxygen" })).toBeEnabled();
   });
 
   it("puts no close button of its own on the sheet", () => {
@@ -308,14 +307,14 @@ describe("a spoken check (B16)", () => {
   });
 });
 
-describe("a miss (D93)", () => {
-  it("offers Try again alone: no See it explained, no save claimed", () => {
+describe("a miss (D93; 17d S1)", () => {
+  it("offers nothing to press: no Try again, no See it explained, no save claimed", () => {
     mount();
 
     fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
 
-    expect(screen.getByRole("status").textContent).toBe(CHECK.recoveryNote);
-    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe(RECOVERY_LINE);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     expect(screen.queryByRole("button", { name: /explained/i })).toBeNull();
     expect(document.body.textContent).not.toMatch(/saved/i);
   });
@@ -382,7 +381,7 @@ describe("the sheet's look (design, 13 Oct)", () => {
     expect(className).not.toContain("rounded-t-[20px]");
   });
 
-  it("sets the retry note in the darker violet, never soft violet on cream (D210)", () => {
+  it("sets the line after a miss in the darker violet, as qc-recovery does, never soft violet on cream (D210)", () => {
     mount();
 
     fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
@@ -398,7 +397,8 @@ describe("the sheet's look (design, 13 Oct)", () => {
  * choice. One primary per sheet and it is the action that progresses the
  * check." Since her 25 Oct ruling the way on after a right answer is the
  * Lesson Check frame's navy Continue (`qc-correct`), so each answer has its
- * one primary: Try again after a miss, Continue after a right answer.
+ * one primary: Continue after a right answer. A miss has none at all - the
+ * frame's `qc-recovery` gives way instead.
  */
 const classes = (el: Element) => (el.getAttribute("class") ?? "").split(/\s+/);
 /** A navy, full-width button: what only the primary may be. */
@@ -436,7 +436,7 @@ const mountWith = (handlers: Handlers) => render(sheet(handlers));
  * NO MOVING ON PAST THE CHECK BEFORE A RIGHT ANSWER (Olayinka, 23 Oct, under
  * Lydia's gate ruling the same day; and 25 Oct: "the child shouldn't be able
  * to move with a wrong answer"). The way out is tapping out, back to the
- * section. Try again stays after a miss, and Continue is the way on after a
+ * section. A miss gives way to the section's other ways in, and Continue is the way on after a
  * right answer (Lydia, 25 Oct; the Lesson Check frame's `qc-correct`).
  */
 describe("the way on (Olayinka, 23 and 25 Oct; Lydia, 25 Oct)", () => {
@@ -446,13 +446,13 @@ describe("the way on (Olayinka, 23 and 25 Oct; Lydia, 25 Oct)", () => {
     expect(wayOn()).toBeNull();
   });
 
-  it("is not there after a miss: Try again is", () => {
+  it("is not there after a miss, and nor is Try again", () => {
     const onContinue = vi.fn();
     mountWith({ onContinue });
 
     fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
 
-    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     expect(wayOn()).toBeNull();
     expect(onContinue).not.toHaveBeenCalled();
   });
@@ -491,13 +491,11 @@ describe("one navy primary per sheet (SCRUM-275)", () => {
     expect(navyFullWidth().length).toBeLessThanOrEqual(1);
   });
 
-  it("makes Try again the one primary after a miss", () => {
+  it("has no button at all after a miss (qc-recovery)", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
 
-    expect(navyFullWidth()).toEqual([
-      screen.getByRole("button", { name: "Try again" }),
-    ]);
+    expect(navyFullWidth()).toEqual([]);
   });
 
   it("makes Continue the one primary after a right answer, navy and full width (Lydia, 25 Oct)", () => {
@@ -511,11 +509,10 @@ describe("one navy primary per sheet (SCRUM-275)", () => {
 });
 
 /*
- * SCRUM-282: A MISS UNDER THE GATE IS THE FRAME'S `qc-recovery` (17d S1) -
- * and only while the server says the gate is on. Off, which it is in
- * production, a miss is drawn exactly as above.
+ * SCRUM-282: A MISS IS THE FRAME'S `qc-recovery` (17d S1) - shipped ahead of
+ * the gate (Lydia, 25 Oct), on every check (Olayinka, 26 Oct).
  */
-describe("a miss while the gate is on (17d S1)", () => {
+describe("a miss, held and giving way (17d S1)", () => {
   const gatedSheet = (over: Partial<Parameters<typeof QuickCheckSheet>[0]> = {}) =>
     render(
       <QuickCheckSheet
@@ -525,7 +522,6 @@ describe("a miss while the gate is on (17d S1)", () => {
         onAnswered={() => {}}
         onContinue={() => {}}
         onTakeBreak={() => {}}
-        gated
         {...over}
       />,
     );
@@ -578,7 +574,6 @@ describe("a miss while the gate is on (17d S1)", () => {
         onAnswered={() => {}}
         onContinue={() => {}}
         onTakeBreak={() => {}}
-        gated
         onGiveWay={onGiveWay}
       />,
     );
@@ -600,16 +595,13 @@ describe("a miss while the gate is on (17d S1)", () => {
     expect(onGiveWay).not.toHaveBeenCalled();
   });
 
-  it("is drawn as before while the gate is off", () => {
-    vi.useFakeTimers();
-    const onGiveWay = vi.fn();
-    gatedSheet({ gated: false, onGiveWay });
+  it("never says the old \"Not quite\" with its Try again", () => {
+    gatedSheet();
 
     fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
-    act(() => vi.advanceTimersByTime(GIVES_WAY_AFTER_MS * 2));
 
-    expect(screen.getByRole("status").textContent).toBe(CHECK.recoveryNote);
-    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
-    expect(onGiveWay).not.toHaveBeenCalled();
+    expect(screen.getByRole("status").textContent).not.toBe(CHECK.recoveryNote);
+    expect(document.body.textContent).not.toMatch(/not quite/i);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 });

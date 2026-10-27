@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
+import { GIVES_WAY_AFTER_MS } from "./QuickCheckSheet";
 import { clearSession, setSession } from "@/lib/auth/session";
 import type { Lesson } from "@/lib/types";
 
@@ -183,13 +184,29 @@ const open = async (first: unknown) => {
   );
   await landed(n);
 };
+/**
+ * Asked again as a child is now (26 Oct): the miss holds a beat and the
+ * sheet gives way, then Next opens the check afresh. No Try again any more.
+ */
+const askAgain = async () => {
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+    timeout: GIVES_WAY_AFTER_MS + 2000,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+};
+/*
+ * Each miss now holds a beat and gives way before the check is asked again
+ * (`askAgain`), so these runs of three to five misses take longer than the
+ * default five seconds.
+ */
+vi.setConfig({ testTimeout: 30_000 });
 const sheet = () => screen.getByRole("dialog");
 /** A miss on the check, and the engine's answer to the ask it makes. */
 const missAnswered = async (res: unknown) => {
   const n = await answered(res);
   fireEvent.click(within(sheet()).getByRole("button", { name: /The denominator/ }));
   await landed(n);
-  fireEvent.click(within(sheet()).getByRole("button", { name: "Try again" }));
+  await askAgain();
 };
 const hintInSheet = () => within(sheet()).queryByText(HINT);
 const offered = () =>
@@ -252,7 +269,9 @@ describe("retain keeps the help on screen", () => {
 
     await missAnswered(RETAIN);
 
-    expect(hintInSheet()).toBe(card);
+    // Redrawn as the sheet opens again after each miss gives way (26 Oct);
+    // the same hint, and still offered once.
+    expect(hintInSheet()?.textContent).toBe(card?.textContent);
     expect(offered()).toBe(1);
     expect(appliedCount()).toBe(1);
   });
@@ -283,7 +302,9 @@ describe("help resent under its decision id is not new", () => {
     await missAnswered(resend(offer()));
     await missAnswered(resend(offer()));
 
-    expect(hintInSheet()).toBe(card);
+    // Redrawn as the sheet opens again after each miss gives way (26 Oct);
+    // the same hint, and still offered once.
+    expect(hintInSheet()?.textContent).toBe(card?.textContent);
     expect(offered()).toBe(1);
     expect(appliedCount()).toBe(1);
   });
@@ -357,7 +378,9 @@ describe("the two-miss hint, end to end", () => {
   it("is in the check, held without its events again, and gone once the question is solved", async () => {
     const card = await hintArrives();
     await missAnswered(resend(offer()));
-    expect(hintInSheet()).toBe(card);
+    // Redrawn as the sheet opens again after each miss gives way (26 Oct);
+    // the same hint, and still offered once.
+    expect(hintInSheet()?.textContent).toBe(card?.textContent);
     expect(offered()).toBe(1);
     expect(appliedCount()).toBe(1);
 

@@ -2146,10 +2146,11 @@ export function LessonPlayer({
    * touched: nothing timed is sent from here - the wait only decides when to
    * ask, and what is asked is a read.
    *
-   * ONLY WHILE THE QUESTION IS STILL OPEN: its check is up on that section,
-   * unpassed and not handed off. Answering it right, a hand-off arriving,
-   * the sheet closing (a tap-out), leaving the section or the lesson
-   * unmounting each ends that, and the read with it - see `unresolvedCheck`.
+   * ONLY WHILE THE QUESTION IS STILL OPEN: its check is up on that section -
+   * or gave way there after a miss - unpassed and not handed off. Answering
+   * it right, a hand-off arriving, a tap-out, leaving the section or the
+   * lesson unmounting each ends that, and the read with it - see
+   * `unresolvedCheck` and `gaveWayOn`.
    * A read already on its way when that happens is not followed.
    */
   const reread = useRef<{ timer: ReturnType<typeof setTimeout> | null } | null>(
@@ -2160,10 +2161,19 @@ export function LessonPlayer({
     if (pending?.timer != null) clearTimeout(pending.timer);
     reread.current = null;
   }, []);
-  // The section whose check is up and still unresolved, or null.
+  /*
+   * A MISS THAT GAVE WAY IS STILL AN OPEN QUESTION. Since 26 Oct every miss
+   * holds a beat and the sheet gives way to the section's other ways in
+   * (`QuickCheckSheet`'s `qc-recovery`) - the system's move, not the child's.
+   * So the question stays open on that section, and a hand-off the server
+   * timed for later still comes, until the child taps out, passes it or leaves
+   * the section. Tapping out is the child leaving the question, as before.
+   */
+  const [gaveWayOn, setGaveWayOn] = useState<string | null>(null);
+  // The section whose check is up - or gave way - and is still unresolved.
   const unresolvedCheck =
     phase === "segments" &&
-    checkOpen &&
+    (checkOpen || gaveWayOn === segment.id) &&
     !passedChecks.has(segment.id) &&
     !handedOff.has(segment.id)
       ? segment.id
@@ -2258,6 +2268,7 @@ export function LessonPlayer({
   const tapOutOfCheck = () => {
     if (!checkOpen) return;
     fragmented();
+    setGaveWayOn(null);
     setCheckOpen(false);
   };
 
@@ -2636,22 +2647,26 @@ export function LessonPlayer({
   };
 
   /*
-   * SCRUM-282: THE GATE'S WAYS IN, ONLY WHILE THE SERVER SAYS THE GATE IS ON.
+   * SCRUM-282: THE WAYS IN, AFTER A MISS ON ANY CHECK.
    *
    * Lydia, 23 Oct: a missed in-lesson check no longer moves the child on; the
    * section is offered another way, in place, position kept, and the child
-   * moves on once they have got it. The server owns all of it - whether the
-   * gate is on (`comprehensionGate.required`), which ways in the section has
-   * and which it suggests (`reteaching`). The gate is OFF in production, so
-   * none of this draws today: no `required`, no card, and a miss looks as it
-   * always has (rule 5).
+   * moves on once they have got it - "a gate with no ways out is worse than
+   * no gate". The player holds every check (Olayinka, 25 Oct; Lydia, 26 Oct),
+   * so Olayinka switched the ways in on for every check on 26 Oct, ahead of
+   * the server's own gate. The server says which ways the section has and
+   * which it suggests (`reteaching`); nothing here chooses one.
    *
-   * Where it is said: the sitting's own read as it opens
-   * (`GET .../comprehension`, so a reload comes back to the ways in it left),
-   * and every answer's reply after that. Only for a live lesson the child is
-   * working through - a finished lesson opened again gates nothing.
+   * Where it is said: THE ANSWER'S OWN REPLY. Since Teslim's cdba131 a marked
+   * miss returns its re-teaching at once (`reteaching`, top level), whether
+   * the gate is on or not - "use that response rather than wait for a later
+   * adapt call". The nested `comprehensionGate.reteaching` is read where the
+   * top level is absent. And the sitting's read as it opens
+   * (`GET .../comprehension`), which names it only while the server's gate is
+   * on, so a reload comes back to the ways in it left then. Only for a live
+   * lesson the child is working through - a finished lesson opened again
+   * holds nothing. No re-teaching sent is no card (rule 5).
    */
-  const [gateOn, setGateOn] = useState(false);
   const [reteach, setReteach] = useState<ReteachingResponse | null>(null);
   const gateSitting =
     choicesHeld && progress.opened ? (progress.sessionId ?? null) : null;
@@ -2663,31 +2678,22 @@ export function LessonPlayer({
       .comprehension(lesson.id, gateSitting)
       .then((gate) => {
         if (gateAsked.current !== gateSitting) return;
-        setGateOn(gate.required === true);
         if (gate.required === true && gate.reteaching) {
           setReteach(gate.reteaching);
         }
       })
-      // Unread is the gate as it was: off, with nothing to offer.
+      // Unread is nothing to offer yet: the next miss's reply brings it.
       .catch(() => {});
   }, [gateSitting, lesson.id]);
-  /** What an answer's reply says of the gate, for the section it answered. */
-  const noteGate = (segmentId: string, stored: LessonQuestionAttempt) => {
-    const gate = stored.comprehensionGate;
-    if (!gate) return;
-    setGateOn(gate.required === true);
-    if (
-      gate.required === true &&
-      stored.correct === false &&
-      gate.reteaching?.segmentId === segmentId
-    ) {
-      setReteach(gate.reteaching);
-    }
+  /** A miss's re-teaching, from its reply, for the section it answered. */
+  const noteReteaching = (segmentId: string, stored: LessonQuestionAttempt) => {
+    if (stored.correct !== false) return;
+    const given = stored.reteaching ?? stored.comprehensionGate?.reteaching;
+    if (given?.segmentId === segmentId) setReteach(given);
   };
   // The ways in for this section, while its check is still to pass. Not on a
   // calculation, whose ways are the solver's (Lydia, 23 Oct).
   const reteachHere =
-    gateOn &&
     !isCalculation(segment) &&
     reteach?.segmentId === segment.id &&
     !passedChecks.has(segment.id)
@@ -2695,12 +2701,20 @@ export function LessonPlayer({
       : null;
   const waysHere = waysInFor(reteachHere, {
     formats: formatsHere,
-    densities: densitySegments.map((d) => d.id as Density),
+    // The paces the section's text has, over a picture too (Lydia, 26 Oct,
+    // D3) - so long as the section has its text to show them in.
+    densities: formatsHere.includes(MODALITY.TEXT)
+      ? textChips.map((d) => d.id as Density)
+      : [],
   });
   /*
    * TAKING ONE PRESSES THE SECTION'S OWN CONTROL - the format group or the
    * pace chip - so it is exactly the child's pick there, held and signalled
    * as that is. A pace already on is left on: the chip toggles, a way does not.
+   *
+   * A PACE TAKEN OVER A PICTURE BRINGS THE TEXT IN IT (D3): "Simplify gives
+   * them the simpler text and the picture stays one tap away rather than
+   * being replaced" - the format group still holds it.
    */
   const takeWay = (way: WayIn) => {
     const presses = WAY_IN_PRESSES[way];
@@ -2709,6 +2723,7 @@ export function LessonPlayer({
       return;
     }
     if (manualDensity !== presses.density) pickDensity(presses.density);
+    if (modality !== MODALITY.TEXT) pickFormat(MODALITY.TEXT);
   };
 
   /*
@@ -3521,7 +3536,7 @@ export function LessonPlayer({
               />
             )}
             {feedback && <FeedbackStrip message={feedback} />}
-            {/* SCRUM-282: the other ways in, in place, under the gate only. */}
+            {/* SCRUM-282: the other ways in, in place, after a miss. */}
             <WaysInCard
               ways={waysHere.ways}
               suggested={waysHere.suggested}
@@ -3811,9 +3826,12 @@ export function LessonPlayer({
           // `hintInSheet`.
           hint={hintInSheet ? hintCard : null}
           reading={readingOn}
-          // Under the gate a miss is held, then gives way to the ways in.
-          gated={gateOn}
-          onGiveWay={() => setCheckOpen(false)}
+          // A miss is held, then gives way to the ways in - the question
+          // still open on this section (`gaveWayOn`).
+          onGiveWay={() => {
+            setGaveWayOn(segment.id);
+            setCheckOpen(false);
+          }}
           onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
           onAnswered={(correct, answered) => {
             const checkpointId = segment.quickCheck?.id;
@@ -3839,11 +3857,11 @@ export function LessonPlayer({
                 responseTimeMs: answered.responseTimeMs,
                 hinted: hintedSegments.current.has(segment.id),
               }),
-              // B94: the server's answer may hand this child off; and it says
-              // where the gate stands (SCRUM-282).
+              // B94: the server's answer may hand this child off; and a miss
+              // brings the section's other ways in (SCRUM-282).
               (stored) => {
                 handOffFrom(segment.id, stored);
-                noteGate(segment.id, stored);
+                noteReteaching(segment.id, stored);
               },
             );
             if (correct) answeredRight.current.add(segment.id);

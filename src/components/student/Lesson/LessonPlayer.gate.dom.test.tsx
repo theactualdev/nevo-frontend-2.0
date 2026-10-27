@@ -15,13 +15,14 @@ import { calculationFromVariant } from "@/lib/lessons/fromContent";
 import type { Lesson } from "@/lib/types";
 
 /**
- * SCRUM-282, THE PARTS THAT ONLY SHOW WHILE THE GATE IS ON.
+ * SCRUM-282: A MISS IS HELD, GIVES WAY, AND THE SECTION OFFERS ITS OTHER WAYS
+ * IN - on every check (Olayinka, 26 Oct), ahead of the server's own gate.
  *
  * Lydia, 23 Oct: a missed check no longer moves the child on; the section is
  * offered another way, in place, and they move on once they have got it.
- * The server says whether the gate is on (`comprehensionGate.required`) and
- * which ways in the section has (`reteaching`). OFF IN PRODUCTION, so the
- * first test here is that nothing changes while it is.
+ * The player holds every check (Olayinka, 25 Oct; Lydia, 26 Oct). The server
+ * says which ways in the section has (`reteaching`), on the miss's own reply
+ * since Teslim's cdba131 - gate on or off.
  */
 
 const SESSION = "4f1c2a9e-8b7d-4c3a-9e2f-1a2b3c4d5e6f";
@@ -147,7 +148,11 @@ const GATE_ON = { required: true, canAdvance: false, segmentId: SEG_1 };
 const GATE_OFF = { required: false, canAdvance: true };
 
 /** The server's reply to an answer, marked. */
-const reply = (correct: boolean, gate: Record<string, unknown> | null) => ({
+const reply = (
+  correct: boolean,
+  gate: Record<string, unknown> | null,
+  reteaching?: unknown,
+) => ({
   id: "att-1",
   lessonId: "lesson-1",
   sessionId: SESSION,
@@ -159,6 +164,7 @@ const reply = (correct: boolean, gate: Record<string, unknown> | null) => ({
   correct,
   submittedAt: "2026-10-25T12:00:00Z",
   ...(gate ? { comprehensionGate: gate } : {}),
+  ...(reteaching !== undefined ? { reteaching } : {}),
 });
 
 const next = () =>
@@ -211,7 +217,7 @@ afterEach(() => {
   clearSession();
 });
 
-describe("with the gate off, as it is in production", () => {
+describe("on every check, whatever the server's gate", () => {
   it("asks where the gate stands once, as the sitting opens", async () => {
     await open();
 
@@ -219,41 +225,143 @@ describe("with the gate off, as it is in production", () => {
     expect(api.comprehension).toHaveBeenCalledWith("lesson-1", SESSION);
   });
 
-  it("draws a miss exactly as before, and offers no ways in", async () => {
+  it("holds a miss, gives way, and offers the ways in the miss's own reply names - the gate off", async () => {
+    api.saveAttempt.mockResolvedValue(reply(false, GATE_OFF, RETEACHING));
     await open();
     await missAndWait();
 
-    expect(screen.getByRole("status").textContent).toBe("Not quite.");
-    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe(RECOVERY_LINE);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+      timeout: GIVES_WAY_AFTER_MS + 2000,
+    });
+    expect(card()).toBeInTheDocument();
+    expect(ways().map((b) => b.getAttribute("aria-label"))).toEqual([
+      "See it as a picture",
+      "A simpler version",
+      "One step at a time",
+    ]);
+  });
+
+  it("reads the reply's own re-teaching before the gate's (Teslim, cdba131)", async () => {
+    api.saveAttempt.mockResolvedValue(
+      reply(
+        false,
+        {
+          ...GATE_ON,
+          reteaching: { ...RETEACHING, availableRoutes: [route("slower")], recommendedRoute: route("slower") },
+        },
+        RETEACHING,
+      ),
+    );
+    await open();
+    await missAndWait();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+      timeout: GIVES_WAY_AFTER_MS + 2000,
+    });
+
+    // The reply's three ways, not the gate's one.
+    expect(ways()).toHaveLength(3);
+  });
+
+  it("holds the miss and draws no card when the reply names no ways in (rule 5)", async () => {
+    api.comprehension.mockRejectedValue(new Error("offline"));
+    api.saveAttempt.mockResolvedValue(reply(false, null));
+    await open();
+    await missAndWait();
+
+    expect(screen.getByRole("status").textContent).toBe(RECOVERY_LINE);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     expect(card()).toBeNull();
+  });
+
+  it("takes no ways in from a right answer's reply", async () => {
+    api.saveAttempt.mockResolvedValue(reply(true, GATE_OFF, RETEACHING));
+    await open();
+    next();
+    fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
+    await act(async () => {});
+
+    expect(card()).toBeNull();
+  });
+
+  it("takes no ways in from an unmarkable answer's reply, which is never a miss", async () => {
+    api.saveAttempt.mockResolvedValue({
+      ...reply(false, GATE_OFF, RETEACHING),
+      correct: null,
+    });
+    await open();
+    await missAndWait();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+      timeout: GIVES_WAY_AFTER_MS + 2000,
+    });
+
+    expect(card()).toBeNull();
+  });
+
+  /*
+   * LYDIA, 26 OCT, D3: "A child looking at a picture who still has not got it
+   * should not have a route taken away from them. Simplify gives them the
+   * simpler text and the picture stays one tap away rather than being
+   * replaced." And D2: the text is "Try it as text".
+   */
+  it("offers Simplify and Slower over a picture, and a simpler version brings the simpler text", async () => {
+    api.saveAttempt.mockResolvedValue(reply(false, GATE_OFF, RETEACHING));
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "Picture" }));
+    expect(
+      await screen.findByRole("img", { name: "Picture of a fraction" }),
+    ).toBeInTheDocument();
+    await missAndWait();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+      timeout: GIVES_WAY_AFTER_MS + 2000,
+    });
+
+    expect(ways().map((b) => b.getAttribute("aria-label"))).toEqual([
+      "See it as a picture",
+      "A simpler version",
+      "One step at a time",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "A simpler version" }));
+
+    expect(await screen.findByText("The top number.")).toBeInTheDocument();
+    expect(api.saveSegmentChoice).toHaveBeenCalledWith(
+      "lesson-1",
+      SESSION,
+      SEG_1,
+      { modality: "text" },
+    );
+    // The picture one tap away, not taken.
+    expect(screen.getByRole("button", { name: "Picture" })).toBeInTheDocument();
+  });
+
+  it("names the text \"Try it as text\", and taking it brings the text", async () => {
+    api.saveAttempt.mockResolvedValue(
+      reply(false, GATE_OFF, {
+        ...RETEACHING,
+        availableRoutes: [route("format", "text")],
+        recommendedRoute: route("format", "text"),
+      }),
+    );
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "Picture" }));
+    await screen.findByRole("img", { name: "Picture of a fraction" });
+    await missAndWait();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+      timeout: GIVES_WAY_AFTER_MS + 2000,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Try it as text" }));
+
+    expect(
+      await screen.findByText("The number on top is the numerator."),
+    ).toBeInTheDocument();
   });
 
   it("opens on no ways in when the sitting's read says the gate is off, whatever it carries", async () => {
     api.comprehension.mockResolvedValue({ ...GATE_OFF, reteaching: RETEACHING });
     await open();
 
-    expect(card()).toBeNull();
-  });
-
-  it("draws no ways in, whatever else it sends, while it says the gate is off", async () => {
-    api.comprehension.mockResolvedValue({ ...GATE_OFF, reteaching: RETEACHING });
-    api.saveAttempt.mockResolvedValue(
-      reply(false, { ...GATE_OFF, reteaching: RETEACHING }),
-    );
-    await open();
-    await missAndWait();
-
-    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
-    expect(card()).toBeNull();
-  });
-
-  it("draws nothing gate-only when the server says nothing about the gate", async () => {
-    api.comprehension.mockRejectedValue(new Error("offline"));
-    api.saveAttempt.mockResolvedValue(reply(false, null));
-    await open();
-    await missAndWait();
-
-    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
     expect(card()).toBeNull();
   });
 });
@@ -341,7 +449,7 @@ describe("with the gate on", () => {
     expect(card()).toBeNull();
   });
 
-  it("takes the card away when the server says the gate is off again", async () => {
+  it("keeps the card through a later miss whose reply names none", async () => {
     api.comprehension.mockResolvedValue({ ...GATE_ON, reteaching: RETEACHING });
     api.saveAttempt.mockResolvedValue(reply(false, GATE_OFF));
     await open();
@@ -351,7 +459,7 @@ describe("with the gate on", () => {
     fireEvent.click(await screen.findByRole("button", { name: /The denominator/ }));
     await act(async () => {});
 
-    expect(card()).toBeNull();
+    expect(card()).toBeInTheDocument();
   });
 
   it("draws no ways for a section the re-teaching is not about", async () => {
