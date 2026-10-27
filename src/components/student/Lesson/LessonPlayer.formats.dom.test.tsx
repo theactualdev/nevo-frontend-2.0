@@ -151,28 +151,25 @@ describe("the format group", () => {
     expect(group()).not.toBeNull();
   });
 
-  it("keeps its row's height, unseen and out of reach, on a section with one format", () => {
-    // Taking the row away would lift the progress between sections (rule 7).
+  /*
+   * Lydia, 26 Oct #7: "Reserve the space only on sections that have more
+   * than one format, and drop it entirely on sections with one, where the
+   * control can never appear."
+   */
+  it("holds no space for it on a section with one format, in a lesson that has one", () => {
     render(
       <LessonPlayer
         lesson={lesson(seg("s1", ["text", "audio"]), seg("s2", ["text"]))}
         plan={null}
       />,
     );
-    const rows = () =>
-      [...document.querySelectorAll("header > *, header > .flex-col > *")].map(
-        (row) => row.className.replace(/\binvisible\b/, "").trim(),
-      );
-    const before = rows();
+    expect(group()).not.toBeNull();
 
     next();
 
-    expect(rows()).toEqual(before);
-    const held = document.querySelector("header > .flex-col > *")!;
-    expect(held).toHaveClass("invisible");
-    expect(held).toHaveAttribute("aria-hidden", "true");
-    expect(held).toHaveAttribute("inert");
     expect(group()).toBeNull();
+    expect(document.querySelector("header .invisible")).toBeNull();
+    expect(document.querySelector("header [inert]")).toBeNull();
   });
 
   it("falls back to the section's own channels on a payload with no formats list", () => {

@@ -167,13 +167,6 @@ const densitiesFor = (segment: LessonSegment) =>
       : segment.text?.body[id] !== undefined,
   );
 
-/** What holds the chip row's height, unseen, on a segment that has none. */
-const HELD_CHIPS: ToggleSegment[] = DENSITIES.map(({ id, label }) => ({
-  id,
-  label,
-  state: "default",
-}));
-
 // Each density is its own event type in the backend ingest contract.
 const DENSITY_TRIGGER: Record<Density, SignalEventType> = {
   [DENSITY.SIMPLIFY]: SIGNAL_EVENT_TYPES.SIMPLIFY_TRIGGER,
@@ -1923,18 +1916,6 @@ export function LessonPlayer({
     // The system-owned wait closes with it (SCRUM-94.9).
     trackBusy(BUSY_REASON.MODALITY_SWITCH, BUSY_PHASE.END);
   };
-  /*
-   * THE FORMAT ROW'S HEIGHT IS THE LESSON'S, as the chip row's is (below): a
-   * section with one format has no group, and taking the row away there
-   * would lift the position line and the progress between one section and
-   * the next. Held, unseen, wherever the lesson has a group anywhere - but
-   * not on the solver, which draws no row and needs the room.
-   */
-  const formatsInLesson = useMemo(
-    () => lesson.segments.some((s) => formatsOf(s, undefined).length >= 2),
-    [lesson],
-  );
-
   const go = (next: number) => {
     if (next < 0 || next >= total) return;
     // A switch still on its way stays with the segment it was made on: the
@@ -2480,19 +2461,6 @@ export function LessonPlayer({
   );
   const densitySegments = modality === MODALITY.TEXT ? textChips : [];
   /*
-   * THE CHIP ROW'S HEIGHT IS THE LESSON'S, NOT THE SEGMENT'S. Whether a
-   * segment offers a chip is down to its own content - since B114, whether
-   * the server broke its body into chunks - so taking the row away on a
-   * segment with none lifted the position line, the progress and the column
-   * 62px from one segment to the next. A lesson with a chip anywhere holds
-   * the row on every segment; a lesson with none has no row at all.
-   */
-  const chipsInLesson = useMemo(
-    () => lesson.segments.some((s) => densitiesFor(s).length > 0),
-    [lesson],
-  );
-
-  /*
    * B45: KEPT AS THE SCREEN CHANGES, READ AS THE CHILD LEAVES. React runs a
    * commit's effect cleanups before its setups, so the time-on-segment
    * cleanup reads the segment being left before the next one's version
@@ -2912,10 +2880,23 @@ export function LessonPlayer({
   const calcShowing =
     modality === MODALITY.INTERACTIVE && isCalculation(segment);
   const calcBlocking = calcShowing && !solvedCalcs.has(segment.id);
-  // The control column's two rows, drawn or held - see the header.
-  const formatRow = showFormats || (formatsInLesson && !calcShowing);
+  /*
+   * THE CONTROL COLUMN'S TWO ROWS, AND THE SPACE HELD FOR THEM (Lydia, 26 Oct
+   * #7): "Reserve the space only on sections that have more than one format,
+   * and drop it entirely on sections with one, where the control can never
+   * appear. A header that jumps is worse than dead space, and permanent dead
+   * space on a section that can never use it is worse than tight."
+   *
+   * So a section with one format has no format row, and its chips' row only
+   * where its text offers chips. A section with two or more holds its chips'
+   * row, unseen, over a picture or a recording, where its text has chips to
+   * come back to - switching format there never moves the header. Between
+   * sections the header follows the section: that is the ruling, and it
+   * replaces the lesson-wide hold (round 12's R4) this kept until 27 Oct.
+   */
+  const formatRow = showFormats;
   const densityRow =
-    densitySegments.length > 0 || (chipsInLesson && !calcShowing);
+    densitySegments.length > 0 || (showFormats && textChips.length > 0);
   /*
    * THE SUPPORT LEVEL, ONE VALUE FOR THE DOTS AND THE SOLVER (B116). The
    * engine config's starting level is "client-applied ... Support dots only
@@ -3374,28 +3355,19 @@ export function LessonPlayer({
             different job from the format marker. */}
         {(formatRow || densityRow) && (
           <div className="flex flex-col items-end gap-2">
-            {/* The format group, only for a section with two formats or more.
-                HELD, UNSEEN, on a section with fewer in a lesson that has a
-                group anywhere (`formatsInLesson`), as the chip row is held
-                below - not on the solver. Its height is one pill row. */}
+            {/* The format group, only for a section with two formats or more,
+                and nothing held in its place on one with fewer (Lydia, 26 Oct
+                #7). */}
             {formatRow && (
-              <div
-                className={cn("flex justify-end", !showFormats && "invisible")}
-                aria-hidden={!showFormats || undefined}
-                inert={!showFormats}
-              >
-                {showFormats ? (
-                  <FormatGroup
-                    formats={formatsHere}
-                    // Mid-switch the pill picked reads selected (frame).
-                    current={switchingHere ?? modality}
-                    recommended={recommendedHere}
-                    onPick={pickFormat}
-                    busy={switchingHere !== null}
-                  />
-                ) : (
-                  <div className="h-[52px]" />
-                )}
+              <div className="flex justify-end">
+                <FormatGroup
+                  formats={formatsHere}
+                  // Mid-switch the pill picked reads selected (frame).
+                  current={switchingHere ?? modality}
+                  recommended={recommendedHere}
+                  onPick={pickFormat}
+                  busy={switchingHere !== null}
+                />
               </div>
             )}
             {/* Frame: the density toggle sits on its own right-aligned row,
@@ -3403,13 +3375,11 @@ export function LessonPlayer({
                 Absent entirely when the segment has no reshapes to offer,
                 rather than an empty pill rail.
 
-                HELD, UNSEEN, WHERE THIS SCREEN HAS NO CHIPS IN A LESSON THAT
-                HAS THEM - over a picture or a recording, or on a segment whose
-                text offers none (`chipsInLesson`): taking the row away lifted
-                the position line and the progress 62px between one segment
-                and the next - a change of version is felt, not seen (rule 7).
-                Not on the solver: 17a draws no row there, and it needs the
-                room. */}
+                HELD, UNSEEN, OVER A PICTURE OR A RECORDING of a section whose
+                text has chips, so switching format there never lifts the
+                position line and the progress - a change of version is felt,
+                not seen (rule 7). Nowhere else (Lydia, 26 Oct #7): see
+                `densityRow`. */}
             {densityRow && (
               <div
                 className={cn(
@@ -3421,11 +3391,7 @@ export function LessonPlayer({
               >
                 <AdaptiveToggleBar
                   segments={
-                    densitySegments.length > 0
-                      ? densitySegments
-                      : textChips.length > 0
-                        ? textChips
-                        : HELD_CHIPS
+                    densitySegments.length > 0 ? densitySegments : textChips
                   }
                   onSelect={pickDensity}
                 />
