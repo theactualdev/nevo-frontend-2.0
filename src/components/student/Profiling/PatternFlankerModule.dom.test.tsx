@@ -292,7 +292,7 @@ describe("Word Conflict, after 2B, for SS alone", () => {
   const shown = () => {
     const card = screen.getByTestId("word-conflict");
     return {
-      word: card.querySelector("p")!.textContent,
+      word: card.querySelector("[data-word]")!.textContent,
       arrow: card.querySelector("svg")!.getAttribute("data-arrow"),
     };
   };

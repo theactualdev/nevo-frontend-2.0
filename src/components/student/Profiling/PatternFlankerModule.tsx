@@ -498,8 +498,15 @@ function WordConflict({
         data-testid="word-conflict"
         className="flex flex-col items-center gap-[18px] rounded-[12px] bg-nevo-cream-elevated px-10 py-7 sm:gap-[26px] sm:px-[72px] sm:py-10"
       >
-        <p className="text-[46px] leading-none font-semibold tracking-[0.04em] text-nevo-navy sm:text-[60px] lg:text-[68px]">
-          {trial.word === "left" ? "LEFT" : "RIGHT"}
+        {/* Sized to the longer word whichever is shown, so the card never
+            changes width between trials of a timed task. */}
+        <p className="grid text-center text-[46px] leading-none font-semibold tracking-[0.04em] text-nevo-navy sm:text-[60px] lg:text-[68px]">
+          <span data-word className="col-start-1 row-start-1">
+            {trial.word === "left" ? "LEFT" : "RIGHT"}
+          </span>
+          <span aria-hidden className="invisible col-start-1 row-start-1">
+            RIGHT
+          </span>
         </p>
         <ArrowRight
           aria-hidden
