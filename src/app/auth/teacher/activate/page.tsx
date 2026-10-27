@@ -13,7 +13,7 @@ export const metadata: Metadata = {
  * NO FIXTURE IDENTITY. This page used to pass `TEACHER_INVITE.email` and
  * `TEACHER_INVITE.school` as the activating teacher's own details, and the
  * form treats the prop as the fallback when the link carries no `?email=`.
- * So a real invitee could be shown `a.adeyemi@coronaschools.edu.ng` and a
+ * So a real invitee could be shown the fixture teacher's address and a
  * school they have never heard of as their own - and the post-activation
  * sign-in would then be attempted against that address.
  *

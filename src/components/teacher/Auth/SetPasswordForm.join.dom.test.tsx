@@ -117,12 +117,12 @@ describe("joining by link", () => {
     lookupJoin.mockResolvedValue({
       status: "valid",
       role: "teacher",
-      schoolName: "Corona Secondary",
+      schoolName: "Brightgate Academy",
       expiresAt: "",
     });
     render(<SetPasswordForm mode="activation" />);
 
-    expect(await screen.findByText("Corona Secondary")).toBeInTheDocument();
+    expect(await screen.findByText("Brightgate Academy")).toBeInTheDocument();
     expect(lookupJoin).toHaveBeenCalledWith("j-1");
   });
 

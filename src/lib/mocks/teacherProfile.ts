@@ -20,8 +20,8 @@ export const TEACHER_PROFILE: TeacherProfile = {
   initials: "MA",
   name: "Adunni Adeyemi",
   subjects: "Mathematics & English",
-  school: "Corona Secondary School",
-  email: "a.adeyemi@coronaschools.edu.ng",
+  school: "Brightgate Academy",
+  email: "a.adeyemi@brightgate.edu.ng",
 };
 
 export interface SettingRow {

@@ -97,33 +97,33 @@ describe("whenLabel", () => {
 
 describe("weekCopy", () => {
   it("names the child rather than guessing a pronoun", () => {
-    const c = weekCopy("week", amara, 9, "Corona Secondary School");
+    const c = weekCopy("week", amara, 9, "Brightgate Academy");
     expect(c.heading).toBe("Amara’s week");
     expect(c.sub).toBe("What Amara covered and mastered in each subject.");
     expect(`${c.heading} ${c.sub}`).not.toMatch(/\b(she|her|he|his)\b/i);
   });
 
   it("B2's panel says it is quiet, with no verdict on the child", () => {
-    const c = weekCopy("quiet", amara, 9, "Corona Secondary School");
+    const c = weekCopy("quiet", amara, 9, "Brightgate Academy");
     expect(c.panel?.title).toBe("A quiet week so far");
     expect(c.panel?.body).toMatch(/No Nevo lessons have come through for Amara since Monday/);
   });
 
   it("B3's panel names the school's break", () => {
-    const c = weekCopy("break", amara, 9, "Corona Secondary School");
-    expect(c.panel?.title).toBe("Corona Secondary School is on break");
+    const c = weekCopy("break", amara, 9, "Brightgate Academy");
+    expect(c.panel?.title).toBe("Brightgate Academy is on break");
     expect(c.panel?.body).not.toMatch(/quiet/i);
   });
 
   it("B6 counts the subjects it was sent", () => {
-    const c = weekCopy("first", amara, 9, "Corona Secondary School");
+    const c = weekCopy("first", amara, 9, "Brightgate Academy");
     expect(c.heading).toBe("Amara’s subjects");
     expect(c.sub).toBe("Nine subjects, all set up and ready.");
     expect(c.panel?.title).toBe("Amara is all set up");
   });
 
   it("falls back to 'your child' when the name is missing", () => {
-    const c = weekCopy("week", childWords(null), 3, "Corona");
+    const c = weekCopy("week", childWords(null), 3, "Brightgate");
     expect(c.heading).toBe("Your child’s week");
     expect(c.sub).toBe("What your child covered and mastered in each subject.");
   });
@@ -232,9 +232,9 @@ describe("B4: since setup", () => {
   });
 
   it("calls the page the child's subjects, since the school set up Nevo", () => {
-    const copy = weekCopy("since_setup", amara, 2, "Corona Secondary School");
+    const copy = weekCopy("since_setup", amara, 2, "Brightgate Academy");
     expect(copy.heading).toBe("Amara’s subjects");
-    expect(copy.sub).toBe("What Amara has covered and mastered since Corona Secondary School set up Nevo.");
+    expect(copy.sub).toBe("What Amara has covered and mastered since Brightgate Academy set up Nevo.");
     expect(copy.panel).toBeNull();
   });
 

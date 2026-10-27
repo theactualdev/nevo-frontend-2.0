@@ -199,26 +199,27 @@ describe("what a failed sign-in says", () => {
 /**
  * The school eyebrow.
  *
- * This door shipped "Corona Secondary School · Lagos" as a literal above
+ * This door shipped the frame's sample school and "· Lagos" as a literal above
  * "Welcome back", so every teacher at every school was greeted by one tenant's
  * name on the first screen they ever see. It is the frame's own text, taken
  * literally: the frame resolves school identity pre-auth from a school-specific
  * URL, and nothing hands this door a school.
  *
- * The assertion is deliberately about ANY school name rather than the string
- * "Corona", because the failure this guards is not that one fixture leaked. It
- * is that a pre-auth screen claims to know which school you are at. Swapping
- * Corona for a different hardcoded school would pass a Corona-only test.
+ * The assertion is deliberately about ANY school name rather than one string,
+ * because the failure this guards is not that one fixture leaked. It is that a
+ * pre-auth screen claims to know which school you are at. Swapping one
+ * hardcoded school for another would pass a one-name test.
  */
 describe("the school eyebrow", () => {
   it("names no school at all before the teacher has signed in", () => {
     render(<TeacherSignIn />);
 
-    expect(screen.queryByText(/Corona/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Brightgate/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Secondary School/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/\bSchool\b\s*·/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\bAcademy\b\s*·/)).not.toBeInTheDocument();
     // Nothing pre-auth yields a school, so any "School" claim here is invented.
-    expect(screen.queryByText(/coronaschools/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/brightgate\.edu/i)).not.toBeInTheDocument();
   });
 
   it("still welcomes the teacher", () => {

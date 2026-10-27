@@ -45,7 +45,7 @@ const acceptDpa = vi.fn(async (...args: unknown[]) => {
 const AGREEMENT: DpaAgreement = {
   version: "2026-10",
   schoolId: "s1",
-  schoolName: "Corona Secondary School",
+  schoolName: "Brightgate Academy",
   schoolAddress: "12 Awolowo Road, Ikoyi, Lagos",
   contractStart: "2026-09-01T00:00:00Z",
   contractEnd: "2027-08-31T00:00:00Z",
@@ -65,7 +65,7 @@ const shown = (c: HTMLElement) => (c.textContent ?? "").replace(/\u2019/g, "'");
 
 const renderStep = () =>
   render(
-    <DpaStep schoolName="Corona Secondary School" onBack={() => {}} onDone={() => {}} />,
+    <DpaStep schoolName="Brightgate Academy" onBack={() => {}} onDone={() => {}} />,
   );
 
 describe("DpaStep acceptance gate", () => {
@@ -126,7 +126,7 @@ describe("the agreement as the server states it (8 Oct)", () => {
     const { container } = renderStep();
     await waitFor(() => expect(shown(container)).toMatch(/Nevo Learning Limited/));
     const text = shown(container);
-    expect(text).toMatch(/Corona Secondary School, 12 Awolowo Road, Ikoyi, Lagos/);
+    expect(text).toMatch(/Brightgate Academy, 12 Awolowo Road, Ikoyi, Lagos/);
     expect(text).toMatch(/1 September 2026 to 31 August 2027/);
     expect(text).toMatch(/The school remains the data controller for its learners and staff\./);
     expect(text).toMatch(/Version 2026-10/);

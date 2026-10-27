@@ -12,7 +12,7 @@ import {
   type ThreadTranscript,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth/session";
-import type { AnswerBlock } from "@/lib/api/askNevo";
+import { allowanceSpent, type AnswerBlock } from "@/lib/api/askNevo";
 import { answerBlocksFor } from "@/lib/answerMarkdown";
 import { AnswerBlocks } from "@/components/shared/AnswerBlocks";
 import {
@@ -46,6 +46,15 @@ import { useAskNevoClass } from "./askNevoScope";
  */
 
 const THINKING_MS = 850;
+
+/**
+ * The day's allowance is spent (SCRUM-56): a teacher's 30 a day, refused as a
+ * 429 `ask_nevo_daily_limit`. The ticket's own words - "calm, non-punitive",
+ * "never accusatory" - and never "try again in a moment", which sends a
+ * teacher to keep trying something that cannot work until tomorrow. The
+ * student drawer reads the same code; this one read only "failed".
+ */
+const ALLOWANCE_SPENT = "You've reached today's Ask Nevo limit. It'll reset tomorrow.";
 
 /**
  * CONVERSATION HISTORY (C15 §"Conversation history"). The frame's own words:
@@ -95,7 +104,9 @@ type Turn =
     }
   | { kind: "cannothelp" }
   /** A signed-in question that got no answer. Not a sample - nothing at all. */
-  | { kind: "failed" };
+  | { kind: "failed" }
+  /** The day's allowance is spent. Not a failure, and never shown as one. */
+  | { kind: "spent" };
 
 const SPARKLE = (size: number) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -265,6 +276,8 @@ export function AskNevo() {
      * Same bug as the notification feed and the four hooks in PR #148. Only a
      * genuine failure falls back, and it says so.
      */
+    /** The day's allowance ran out: said as that, not as a failure. */
+    let spent = false;
     const live = askNevoApi
       .ask({
         role: "teacher",
@@ -281,7 +294,10 @@ export function AskNevo() {
         },
         question,
       })
-      .catch(() => null);
+      .catch((cause) => {
+        spent = allowanceSpent(cause);
+        return null;
+      });
 
     void Promise.all([live, beat]).then(([res]) => {
       if (!alive.current) return;
@@ -318,9 +334,11 @@ export function AskNevo() {
              * invented children, in the voice of the assistant, is the worst
              * thing this drawer can say. It says the question did not land.
              */
-            getToken()
-            ? { kind: "failed" as const }
-            : cannedFor(question),
+            spent
+            ? { kind: "spent" as const }
+            : getToken()
+              ? { kind: "failed" as const }
+              : cannedFor(question),
       ]);
       setThinking(false);
       requestAnimationFrame(() =>
@@ -586,6 +604,12 @@ export function AskNevo() {
                         <p className="max-w-[88%] text-[14px] leading-[1.55] text-nevo-near-black/68">
                           We couldn&rsquo;t reach Nevo just now. Try asking
                           again in a moment.
+                        </p>
+                      </div>
+                    ) : t.kind === "spent" ? (
+                      <div key={i} className="mt-3.5 flex justify-start">
+                        <p className="max-w-[88%] text-[14px] leading-[1.55] text-nevo-near-black/68">
+                          {ALLOWANCE_SPENT}
                         </p>
                       </div>
                     ) : (

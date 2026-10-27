@@ -284,8 +284,9 @@ test.describe("a signed-in teacher", () => {
 
     const marks = await sampleMarks(page);
     expect(marks, `The class list rendered fixture data: ${marks.join(", ")}`).toEqual([]);
-    // A school name is still a fair tell: no real tenant is called this.
-    await expect(page.getByText(/Corona Secondary School/)).toHaveCount(0);
+    // The fixture's school line is still a fair tell: no real school's line
+    // reads this (Brightgate Academy is the invented sample school, SCRUM-218).
+    await expect(page.getByText(/Brightgate Academy · Second term/)).toHaveCount(0);
   });
 
   test("shows a real class's real children", async ({ page, request }) => {

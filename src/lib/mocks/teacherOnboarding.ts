@@ -12,7 +12,7 @@
  *
  * `TEACHER_INVITE` IS GONE (16 Sep). Its last reader was the SSO callback's
  * "Signing you in through {school}", which meant a teacher of any school was
- * told they were being signed in through Corona Secondary School. The callback
+ * told they were being signed in through the fixture's school. The callback
  * now says "your school", so nothing consumes this fixture.
  *
  * It is deleted rather than left unused on purpose: a fixture identity sitting
