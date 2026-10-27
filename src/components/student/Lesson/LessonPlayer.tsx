@@ -739,6 +739,22 @@ export function LessonPlayer({
    * Only for a live lesson the child is working through, as `choicesHeld`:
    * a finished lesson opened again is a sitting on work that ended.
    */
+  /*
+   * HOW MANY OF A SECTION'S CHECKS ARE BEHIND THE CHILD, in order (Lydia, 23
+   * Oct #1: asked one after another, each gating on its own). A section is
+   * passed - `passedChecks` - once every one is. A check is passed by a right
+   * answer alone, the server's mark read back or the sheet's own, and nothing
+   * is counted here beyond which of them that is (rule 3).
+   */
+  const [checksDone, setChecksDone] = useState<ReadonlyMap<string, number>>(
+    () => new Map(),
+  );
+  /*
+   * The section whose check was just answered right, its way on not yet
+   * taken: the sheet stays on that check, with "Next check" or "Finish",
+   * until it is - see `checkShown`.
+   */
+  const [rightOn, setRightOn] = useState<string | null>(null);
   // Once a lesson: the read is the server's word as the sitting opened, and a
   // pass made after it is added where the answer lands.
   const passesAsked = useRef<string | null>(null);
@@ -783,22 +799,6 @@ export function LessonPlayer({
       })
       .catch(() => {});
   }, [choicesHeld, sittingOpen, lesson]);
-  /*
-   * HOW MANY OF A SECTION'S CHECKS ARE BEHIND THE CHILD, in order (Lydia, 23
-   * Oct #1: asked one after another, each gating on its own). A section is
-   * passed - `passedChecks` - once every one is. A check is passed by a right
-   * answer alone, the server's mark read back or the sheet's own, and nothing
-   * is counted here beyond which of them that is (rule 3).
-   */
-  const [checksDone, setChecksDone] = useState<ReadonlyMap<string, number>>(
-    () => new Map(),
-  );
-  /*
-   * The section whose check was just answered right, its way on not yet
-   * taken: the sheet stays on that check, with "Next check" or "Finish",
-   * until it is - see `checkShown`.
-   */
-  const [rightOn, setRightOn] = useState<string | null>(null);
   const [checkOpen, setCheckOpen] = useState(false);
   /*
    * B94 / SCRUM-241: THE SERVER HANDING A CHILD OFF FROM A QUICK CHECK to the
