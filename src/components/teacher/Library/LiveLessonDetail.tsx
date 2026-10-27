@@ -545,7 +545,8 @@ export function LiveLessonDetail({
            * C06b's needs-review state, as ported to C07k (design 534ba31): one
            * card, the count of what the flow will stop on, and the way in.
            * The per-item key point list and the per-section approvals that
-           * stood here are retired; reviewing happens once, in four steps.
+           * stood here are retired; reviewing happens once, in five steps since
+           * the checks got their own (SCRUM-291).
            */
           <div className="mt-[26px] max-w-[600px] rounded-[12px] bg-nevo-cream-elevated px-7 py-[26px] shadow-elevation-1">
             <h3 className="text-[18px] font-semibold text-nevo-near-black">
@@ -560,14 +561,14 @@ export function LiveLessonDetail({
             </h3>
             <p className="mt-[9px] text-[14.5px] leading-[1.55] text-pretty text-nevo-near-black/68">
               <span className="hidden xl:inline">
-                Nevo will walk you through it in four calm steps: what it made,
-                the key points, the rewrites, then live. It only stops you on
+                Nevo will walk you through it in five calm steps: what it made,
+                the key points, the checks, the rewrites, then live. It only stops you on
                 the few things it is genuinely unsure about, and each carries
                 the action that resolves it.
               </span>
               <span className="xl:hidden">
-                Nevo walks you through it in four calm steps: what it made, the
-                key points, the rewrites, then live. It only stops you on the
+                Nevo walks you through it in five calm steps: what it made, the
+                key points, the checks, the rewrites, then live. It only stops you on the
                 few things it is unsure about.
               </span>
             </p>
@@ -575,7 +576,7 @@ export function LiveLessonDetail({
               href={`/teacher/lessons/${lesson.id}/review`}
               className="mt-5 inline-flex h-[46px] cursor-pointer items-center gap-2 rounded-[10px] bg-nevo-navy px-[22px] text-[14.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
             >
-              Review in four steps
+              Review in five steps
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M9 6l6 6-6 6" />
               </svg>
