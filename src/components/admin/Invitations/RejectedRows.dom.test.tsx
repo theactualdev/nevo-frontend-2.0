@@ -186,3 +186,35 @@ describe("the download", () => {
     }
   });
 });
+
+/*
+ * CL-07 (SCRUM-149). The unknown-class reason used to name a status - `No
+ * class called "JSS 2A".` - and stop. It now says what to do, and the list
+ * offers the way to class creation beside it.
+ */
+describe("a row naming a class the school doesn't have", () => {
+  it("says what to do, in CL-07's words, from the parser itself", async () => {
+    const { parseInviteCsv } = await import("./csv");
+    const outcome = parseInviteCsv(
+      "name,email,class\nChisom Eze,chisom.e@school.edu.ng,JSS 2A\n",
+      [],
+    );
+    expect(outcome.rows[0].error).toBe(
+      "Names JSS 2A, which is not a class in this school. Create your classes first, then import your staff.",
+    );
+    expect(outcome.rows[0].unknownClass).toBe(true);
+  });
+
+  it("offers the way to class creation", () => {
+    setup({ broken: [brokenRow({ unknownClass: true })] });
+    expect(screen.getByRole("link", { name: "Create your classes" })).toHaveAttribute(
+      "href",
+      "/admin/classes",
+    );
+  });
+
+  it("offers no such link for any other reason", () => {
+    setup({ broken: [brokenRow({ className: "", error: "No name in this row." })] });
+    expect(screen.queryByRole("link", { name: "Create your classes" })).toBeNull();
+  });
+});

@@ -61,6 +61,53 @@ describe("a confirmed resend", () => {
     expect(within(row("Amaka Obi")).getByText("Invite resent to amaka@school.edu.ng")).toBeInTheDocument();
   }, 10_000);
 
+  /*
+   * SCRUM-212. What `resend_invite` actually returns: the new token, expiry
+   * and delivery, with role, name, email and status null. The row used to be
+   * swapped for this, lost its role, fell out of the teachers-only list, and a
+   * list of one read "No invites yet".
+   */
+  const backendAnswer = (id: string, over: Partial<Invitation> = {}) =>
+    ({
+      id,
+      token: `new-${id}`,
+      role: null,
+      email: null,
+      name: null,
+      status: null,
+      classId: null,
+      createdAt: "2026-10-20T09:00:00Z",
+      expiresAt: "2099-02-01T00:00:00Z",
+      consentStatus: null,
+      deliveryStatus: "sent",
+      ...over,
+    }) as unknown as Invitation;
+
+  it("keeps the row when the answer carries only what the backend sends", async () => {
+    list.mockResolvedValue([invite("Amaka Obi")]);
+    resend.mockImplementation(async (id: string) => backendAnswer(id));
+    render(<InvitationsView />);
+    await screen.findByText("Amaka Obi");
+
+    fireEvent.click(within(row("Amaka Obi")).getByRole("button", { name: "Resend" }));
+    await waitFor(() =>
+      expect(within(row("Amaka Obi")).getByText("Invite resent to amaka@school.edu.ng")).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("No invites yet")).toBeNull();
+  });
+
+  it("never reads an old 'sent' off the row as news about this resend", async () => {
+    resend.mockImplementation(async (id: string) => backendAnswer(id, { deliveryStatus: null }));
+    render(<InvitationsView />);
+    await screen.findByText("Bayo Ade");
+
+    fireEvent.click(within(row("Amaka Obi")).getByRole("button", { name: "Resend" }));
+    await waitFor(() => expect(resend).toHaveBeenCalled());
+    // The row still stands, and nothing claims an email went.
+    await screen.findAllByText("Amaka Obi");
+    expect(screen.queryByText(/Invite resent/)).toBeNull();
+  });
+
   it("is never claimed for a resend nobody was emailed about", async () => {
     resend.mockImplementation(async (id: string) =>
       invite(id, { deliveryStatus: "email_not_configured" }),

@@ -29,6 +29,11 @@ export interface ParsedRow {
   error: string | null;
   /** Resolved from `className`; null when unmatched or absent. */
   classId: string | null;
+  /**
+   * The row names a class the school doesn't have. CL-07: the cure is to
+   * create the classes first, so the rejected list offers the way there.
+   */
+  unknownClass?: boolean;
 }
 
 /**
@@ -163,12 +168,16 @@ export function parseInviteCsv(
     const matched = className ? byName.get(className.toLowerCase()) : undefined;
 
     let error: string | null = null;
+    let unknownClass = false;
     if (!name) {
       error = "No name in this row.";
     } else if (email && !EMAIL.test(email)) {
       error = "That email doesn't look right.";
     } else if (className && !matched) {
-      error = `No class called "${className}".`;
+      // CL-07 (SCRUM-149): say what to do, not only what is wrong. The row
+      // number sits beside this in the list, so the sentence doesn't repeat it.
+      error = `Names ${className}, which is not a class in this school. Create your classes first, then import your staff.`;
+      unknownClass = true;
     } else if (!email) {
       error = "A teacher needs an email to be invited.";
     } else {
@@ -188,6 +197,7 @@ export function parseInviteCsv(
       className,
       classId: matched?.id ?? null,
       error,
+      ...(unknownClass ? { unknownClass } : {}),
     };
   });
 

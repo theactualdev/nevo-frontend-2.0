@@ -15,7 +15,9 @@ import type { StudentSignInDetail } from "@/lib/api/students";
  * read, so the code and the ID alone open nothing.
  */
 
-const HEADER = ["First name", "Last name", "Class", "Student ID", "School code"];
+// "Student ID / Admission Number": SCRUM-208's one label, used identically
+// everywhere - a school may know the number by either name.
+const HEADER = ["First name", "Last name", "Class", "Student ID / Admission Number", "School code"];
 
 /**
  * One cell, quoted when it must be. A cell that opens with = + - @ is

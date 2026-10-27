@@ -20,9 +20,8 @@ import { setSession } from "@/lib/auth/session";
  *
  * NO PASSWORD ANYWHERE. `POST /consents/parent/{token}/account` and
  * `POST /auth/login/parent` were both removed on 11 Sep - "gone, not
- * deprecated". A code to the contact the school holds is the whole of parent
- * auth now, which is the better shape for the families this is for: password
- * login was email-only, and most of these parents are reachable by SMS.
+ * deprecated". A code to the email address the school holds is the whole of
+ * parent auth now: nothing for a parent to remember or reset.
  *
  * THE RESPONSE IS UNIVERSAL, and that is the point of the screen rather than a
  * detail of it. D03: "whatever the parent types, the next screen is the same,
@@ -33,47 +32,26 @@ import { setSession } from "@/lib/auth/session";
  * there is nothing here to branch on, and no error state for "we don't know
  * you" to occupy. A throttled send answers identically too.
  *
- * TWO DEVIATIONS FROM D03, both flagged to design rather than resolved here:
+ * EMAIL ONLY, AS D03 DRAWS IT (SCRUM-126). The field took a phone number
+ * too, built to design's 14 Sep "SMS is the path to get right" before
+ * SCRUM-162 (20 Sep) made parent contact email only. It was held open until
+ * the backend half of SCRUM-162 landed, because narrowing it early would have
+ * locked out parents whose school recorded a phone. That has landed:
+ * `ParentContactMethod` is `email` and nothing else ("SMS was removed on 20
+ * September by ruling"). So a code sent to a phone went nowhere, and the
+ * screen said "Check your phone" over a dead end. Refusing it at the field is
+ * the honest version.
  *
- *  1. THE FIELD TAKES A PHONE NUMBER TOO. D03 says "Email only, no password";
- *     design's 14 Sep ruling on the sister screen said the opposite - "SMS is
- *     the path to get right, not the fallback" - and this was built to the
- *     newer ruling.
- *
- *     **SCRUM-162 (20 Sep) REVERSES THAT AGAIN: parent contact is email only.**
- *     D03 was right. The field has deliberately NOT been narrowed yet, and the
- *     reason is worth stating because it looks like an omission:
- *
- *     This screen does not COLLECT a contact, it accepts one the school already
- *     recorded. The data-minimisation argument the ruling rests on - "you cannot
- *     collect personal data you have no use for" - is answered by the import
- *     template and the consent record, both of which are email-only already.
- *     Narrowing the field here collects nothing less; it only locks out every
- *     parent whose school recorded a phone number before 20 Sep, which in
- *     Nigeria is most of them, and it locks them out of the surface that exists
- *     to give them control over their own child's data.
- *
- *     **The trigger to narrow it is the BACKEND half of SCRUM-162.** Once
- *     `ParentContactMethod` loses `sms` and SMS sending is unwired, a code sent
- *     to a phone goes nowhere, and accepting one becomes a dead end that fails
- *     silently - which is worse than refusing it at the field. At that point
- *     this is a label and a validator, as it always was. Not before.
- *  2. THE RESEND READS "Send it again". D03 draws "Resend code"; the 14 Sep
- *     ruling says "Send it again" and says it for both paths. Two parent auth
- *     screens with two wordings for one action is the worse outcome, so this
- *     follows the newer wording.
+ * ONE DEVIATION FROM D03, flagged to design rather than resolved here: THE
+ * RESEND READS "Send it again". D03 draws "Resend code"; the 14 Sep ruling
+ * says "Send it again" and says it for both paths. Two parent auth screens
+ * with two wordings for one action is the worse outcome, so this follows the
+ * newer wording.
  */
 
-/** Long enough to be a number or an address, short enough to be neither. */
-function looksLikeContact(v: string): boolean {
-  const t = v.trim();
-  if (t.includes("@")) return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
-  // A phone number, however the parent writes it: spaces, dashes, +234, 0803.
-  return t.replace(/\D/g, "").length >= 7;
-}
-
-function byEmail(v: string): boolean {
-  return v.includes("@");
+/** Shape only - never a verdict on whether the address is known. */
+function looksLikeEmail(v: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
 
 const FIELD =
@@ -95,10 +73,10 @@ export function ParentSignIn() {
 
   async function send(isResend: boolean) {
     const value = contact.trim();
-    if (!looksLikeContact(value)) {
+    if (!looksLikeEmail(value)) {
       // Shape only. This is NOT "we don't know that address" - the screen
       // cannot know that, and must never imply it.
-      setError("Enter an email address or a phone number.");
+      setError("Enter an email address.");
       return;
     }
     setBusy(true);
@@ -172,13 +150,13 @@ export function ParentSignIn() {
               htmlFor="parent-contact"
               className="mt-7 block text-[14px] font-medium text-nevo-near-black/80"
             >
-              Email or phone number
+              Email address
             </label>
             <input
               id="parent-contact"
-              type="text"
+              type="email"
               inputMode="email"
-              autoComplete="username"
+              autoComplete="email"
               value={contact}
               onChange={(e) => {
                 setContact(e.target.value);
@@ -189,9 +167,6 @@ export function ParentSignIn() {
               }}
               className={FIELD}
             />
-            <p className="mt-1.5 text-[12.5px] text-nevo-near-black/50">
-              Whichever one your child’s school has for you.
-            </p>
 
             <button
               type="button"
@@ -212,12 +187,10 @@ export function ParentSignIn() {
         ) : (
           <>
             <h1 className="mt-5 text-[26px] font-semibold tracking-[-0.01em]">
-              {byEmail(sent) ? "Check your email" : "Check your phone"}
+              Check your email
             </h1>
             <p className="mt-3 text-[15px] leading-[1.55] text-nevo-near-black/72">
-              {byEmail(sent)
-                ? "If that address has an account, we’ve sent a code. Enter it below."
-                : "If that number has an account, we’ve sent a code. Enter it below."}
+              If that address has an account, we’ve sent a code. Enter it below.
             </p>
 
             <p className="mt-6 text-[14px] font-medium text-nevo-near-black/80">
@@ -271,7 +244,7 @@ export function ParentSignIn() {
                 setResent(false);
               }}
             >
-              Try a different one
+              Try a different email
             </button>
           </>
         )}
