@@ -9,6 +9,8 @@ import {
 import { LessonPlayer } from "./LessonPlayer";
 import { RECOVERY_LINE } from "./QuickCheckSheet";
 import { clearSession, setSession } from "@/lib/auth/session";
+import { calculationFromVariant } from "@/lib/lessons/fromContent";
+import type { CalculationVariant } from "@/lib/api/variants";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
 
 /**
@@ -305,6 +307,114 @@ describe("Keep going, from the moment the panel opens", () => {
       segmentId: SEG_1,
       promptId: "p-9",
     });
+  });
+});
+
+/*
+ * Lydia, 26 Oct #1: "The calculation is already guided steps, so opening the
+ * panel inside it is a second scaffold on top of the one the child is
+ * already in." Neither way in reaches it there.
+ */
+describe("never on a calculation (Lydia, 26 Oct #1)", () => {
+  const CALC_LESSON = {
+    id: "lesson-1",
+    title: "Fractions Lesson 3",
+    segments: [
+      {
+        id: SEG_1,
+        modalities: ["text", "interactive"],
+        text: { heading: "Adding", body: { default: "Add them." } },
+        calculationVariant: "co_construction",
+        calculation: calculationFromVariant({
+          type: "co_construction",
+          conceptId: "c-1",
+          fullEquation: "1/4 + 2/4 = 3/4",
+          expression: "1/4 + 2/4",
+          answer: "3/4",
+          scaffold: null,
+          manipulative: { kind: "fraction_bar", parts: 4, rows: 1, labels: [] },
+          steps: [
+            {
+              stepId: "s1",
+              stepNumber: 1,
+              prompt: "What are the denominators?",
+              expectedInput: "selection",
+              input: "choice",
+              options: [
+                { value: "4 and 4", label: "4 and 4" },
+                { value: "1 and 2", label: "1 and 2" },
+              ],
+              answer: "4 and 4",
+              targets: [],
+              hint: "",
+              confirmationText: "",
+              visualUpdate: "",
+              assembles: "1/4 + 2/4 = ?",
+              equationState: "1/4 + 2/4 = ?/4",
+              unit: null,
+              narrationAudio: null,
+            },
+          ],
+          completionStatement: "",
+        } as unknown as CalculationVariant),
+        quickCheck: { ...QUICK_CHECK, id: "cp-calc" },
+      },
+      { id: SEG_2, ...text("Denominators") },
+    ],
+  } as unknown as Lesson;
+  const CALC_PLAN = {
+    lessonId: "lesson-1",
+    segments: [{ segmentId: SEG_1, startModality: "interactive" }],
+  } as AdaptationPlan;
+
+  it("draws no panel the engine sends for it, and counts none shown", () => {
+    runtime.value = {
+      offeredBreak: null,
+      reason: null,
+      plan: {
+        lessonId: "lesson-1",
+        segments: [],
+        adjustment: "show_socratic_panel",
+        guidedPrompts: [{ id: "p-9", prompt: "Which number counts the parts?" }],
+      } as AdaptationPlan,
+      forSegmentId: SEG_1,
+    };
+    render(<LessonPlayer lesson={CALC_LESSON} plan={CALC_PLAN} live />);
+
+    expect(screen.getByText("What are the denominators?")).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Which part is unclear?" }),
+    ).toBeNull();
+    expect(screen.queryByText(/think it through/i)).toBeNull();
+    expect(trackEvent).not.toHaveBeenCalledWith(
+      "guided_question_shown",
+      expect.anything(),
+    );
+  });
+
+  it("opens no hand-off the server sends for its check: the check stays", async () => {
+    saveAttempt.mockResolvedValue(
+      reply({ questionId: "cp-calc", segmentId: SEG_1, ...HANDOFF }),
+    );
+    render(<LessonPlayer lesson={CALC_LESSON} plan={CALC_PLAN} live />);
+    fireEvent.click(screen.getByRole("button", { name: "4 and 4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check my answer" }));
+    next();
+
+    await miss();
+    await waitFor(() =>
+      expect(saveAttempt).toHaveBeenCalledWith(
+        "lesson-1",
+        expect.objectContaining({ problemId: "cp-calc" }),
+      ),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(screen.queryByText(PROMPT)).toBeNull();
+    expect(screen.queryByText(/think it through/i)).toBeNull();
+    // Still on the calculation, its check unpassed: not handed on past it.
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Denominators" })).toBeNull();
   });
 });
 
