@@ -331,8 +331,9 @@ describe("Word Conflict, after 2B, for SS alone", () => {
       asked.map((a) => a.word === "LEFT"),
     );
     expect(words.every((p) => p.chosenOption === "left")).toBe(true);
-    // Eight practice first, then the thirty-two as congruent or incongruent.
-    expect(words.slice(0, 8).every((p) => p.congruency === "practice")).toBe(true);
+    // Eight practice first, marked so, then the thirty-two unmarked.
+    expect(words.slice(0, 8).every((p) => p.practice === true)).toBe(true);
+    expect(words.slice(8).some((p) => "practice" in p)).toBe(false);
     expect(
       words.slice(8).map((p) => p.congruency).filter((c) => c === "congruent"),
     ).toHaveLength(16);

@@ -295,11 +295,12 @@ export function PatternFlankerModule({
                 {
                   /*
                    * The trial as it was shown, and the word tapped - never a
-                   * mark of the child. A practice trial goes as `practice`,
-                   * as the motor step's do, so it is never read as one of
-                   * the thirty-two.
+                   * mark of the child. A practice trial is marked so, and is
+                   * not sent: the contract takes `inhibition` only as
+                   * congruent or incongruent (see `baselineTrials`).
                    */
-                  congruency: t.practice ? "practice" : t.condition,
+                  congruency: t.condition,
+                  ...(t.practice ? { practice: true } : {}),
                   word: t.word,
                   arrow: t.arrow,
                   chosenOption: i === 0 ? "left" : "right",
