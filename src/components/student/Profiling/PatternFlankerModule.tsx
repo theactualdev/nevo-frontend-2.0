@@ -1,9 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AgeBand } from "@/lib/profiling/bands";
 import type { BaselineCapture } from "@/lib/profiling/capture";
+import {
+  wordConflictTrials,
+  type WordConflictTrial,
+} from "@/lib/profiling/wordConflict";
 import { AvatarBubble, ProfilingShell } from "./ProfilingShell";
 import { SettleBadge } from "./GridSpanModule";
 import { useTrialRunner } from "./useTrialRunner";
@@ -14,8 +19,14 @@ import { useTrialRunner } from "./useTrialRunner";
  * 2B: tap the direction of the CENTRE arrow, ignoring the flankers. No timer,
  * no score, no right/wrong - a tapped control presses soft-violet and the next
  * trial loads. Icons are navy shapes only (the four-colour system forbids other
- * hues; pairs differ by shape, never colour); the SS band's flankers go violet
- * to sharpen the interference.
+ * hues; pairs differ by shape, never colour).
+ *
+ * 2C, SS ONLY: WORD CONFLICT, after 2B (Lydia, 26-27 Oct; design 534ba31's
+ * \`Nevo Word Conflict Frame\`). The word says LEFT or RIGHT, the arrow under it
+ * agrees or not, and the child taps what the word says - Lydia's forty-trial
+ * list (\`wordConflictTrials\`), each pick recorded as \`inhibition\` with its
+ * condition. It replaces 2B's violet flankers for SS rather than adding to
+ * them.
  */
 
 /** Band icon pairs for 2A (frame's sets, navy with cream detail). */
@@ -145,11 +156,15 @@ const SIZE: Record<
 
 /**
  * How a band's flanker is drawn (`09b`): P1-3's centre arrow stands alone
- * ("single central arrow, no flankers"), and SS's flankers are violet
- * ("colour interference · violet flankers (Stroop-like)").
+ * ("single central arrow, no flankers").
+ *
+ * SS'S FLANKERS ARE NO LONGER VIOLET (Lydia, 27 Oct): "SS pupils lose the
+ * violet flankers in 2B, since that is the condition 2C replaces." The colour
+ * interference they stood for is Word Conflict now, after 2B - see
+ * `WordConflictTrial`.
  */
-function flankerLook(band: AgeBand): { alone: boolean; violet: boolean } {
-  return { alone: band === "p13", violet: band === "ss" };
+function flankerLook(band: AgeBand): { alone: boolean } {
+  return { alone: band === "p13" };
 }
 
 /**
@@ -186,8 +201,8 @@ export function warmUpPattern(band: AgeBand): {
 
 /**
  * The daily warm-up's flanker round for a band (D81, 6 Oct), drawn the way
- * this module draws that band's: P1-3's arrow alone, SS's flankers violet, and
- * the band's own centre-arrow size.
+ * this module draws that band's: P1-3's arrow alone, and the band's own
+ * centre-arrow size.
  *
  * The trial is the warm-up frame's one - centre pointing right, flankers
  * against it - which is an incongruent trial every band with flankers runs
@@ -197,7 +212,6 @@ export function warmUpPattern(band: AgeBand): {
 export function warmUpFlanker(band: AgeBand): {
   trial: FlankerTrial;
   alone: boolean;
-  violet: boolean;
   arrow: string;
 } {
   const look = flankerLook(band);
@@ -222,11 +236,19 @@ export function PatternFlankerModule({
 }) {
   const flankerTrials = FLANKER_TRIALS[band] ?? FLANKER_TRIALS.p46;
   const size = SIZE[band] ?? SIZE.p46;
+  // SS alone runs 2C after 2B, its order drawn once for the run.
+  const [conflictTrials] = useState<WordConflictTrial[]>(() =>
+    band === "ss" ? wordConflictTrials() : [],
+  );
   const { act, trial, picked, settling, pick } = useTrialRunner({
     module: "pattern_flanker",
     counts: [
       ["pattern", PATTERN_TRIALS.length],
       ["flanker", flankerTrials.length],
+      // The act IS the dimension the server takes: `inhibition` (4c5706a).
+      ...(conflictTrials.length > 0
+        ? [["inhibition", conflictTrials.length] as [string, number]]
+        : []),
     ],
     capture,
     onComplete,
@@ -243,7 +265,7 @@ export function PatternFlankerModule({
   const congruency = flankerTrial.congruency
     ? { congruency: flankerTrial.congruency }
     : {};
-  const { violet: flankViolet, alone: singleArrow } = flankerLook(band);
+  const { alone: singleArrow } = flankerLook(band);
 
   return (
     <ProfilingShell filled={settling ? 2 : 1} active={settling ? -1 : 1}>
@@ -252,7 +274,9 @@ export function PatternFlankerModule({
           text={
             act === "pattern"
               ? "Same, or different?"
-              : "Which way is the middle arrow pointing?"
+              : act === "inhibition"
+                ? "Tap what the word says, not the way the arrow points."
+                : "Which way is the middle arrow pointing?"
           }
         />
       )}
@@ -260,6 +284,31 @@ export function PatternFlankerModule({
       <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-8 sm:gap-11">
         {settling ? (
           <SettleBadge />
+        ) : act === "inhibition" ? (
+          <WordConflict
+            trial={conflictTrials[Math.min(trial, conflictTrials.length - 1)]}
+            at={trial}
+            picked={picked}
+            onPick={(i, t, e) =>
+              pick(
+                i,
+                {
+                  /*
+                   * The trial as it was shown, and the word tapped - never a
+                   * mark of the child. A practice trial goes as `practice`,
+                   * as the motor step's do, so it is never read as one of
+                   * the thirty-two.
+                   */
+                  congruency: t.practice ? "practice" : t.condition,
+                  word: t.word,
+                  arrow: t.arrow,
+                  chosenOption: i === 0 ? "left" : "right",
+                  correct: t.word === (i === 0 ? "left" : "right"),
+                },
+                e,
+              )
+            }
+          />
         ) : act === "pattern" ? (
           <>
             <div className="flex flex-col items-center justify-center gap-3.5 sm:flex-row sm:gap-8">
@@ -327,12 +376,7 @@ export function PatternFlankerModule({
                     className={cn(
                       central
                         ? cn("text-nevo-navy", size.arrow)
-                        : cn(
-                            "size-[28px] sm:size-[34px]",
-                            flankViolet
-                              ? "text-nevo-violet"
-                              : "text-nevo-near-black/40",
-                          ),
+                        : "size-[28px] text-nevo-near-black/40 sm:size-[34px]",
                     )}
                     style={{
                       transform: `rotate(${central ? targetRotate : flankRotate}deg)`,
@@ -417,6 +461,75 @@ export function FlankerButtons({
         onClick={(e) => onPick(1, e)}
       />
     </div>
+  );
+}
+
+/**
+ * 2C's trial (`Nevo Word Conflict Frame`): the word in its card, the arrow
+ * under it in violet, and Left and Right - arrow and word - below. Stacked
+ * full width on a phone, side by side at 180px from `sm` up, as drawn.
+ *
+ * WHAT IS ANSWERED IS THE WORD. The arrow agrees with it on a congruent
+ * trial and points the other way on an incongruent one; nothing on screen
+ * says which, and nothing says whether a tap matched (no score, no
+ * right/wrong, as every module here).
+ */
+function WordConflict({
+  trial,
+  at,
+  picked,
+  onPick,
+}: {
+  trial: WordConflictTrial;
+  /** The trial's place in the run, so each one mounts afresh. */
+  at: number;
+  picked: number;
+  onPick: (
+    index: 0 | 1,
+    trial: WordConflictTrial,
+    e: React.MouseEvent,
+  ) => void;
+}) {
+  return (
+    <>
+      <div
+        key={at}
+        data-testid="word-conflict"
+        className="flex flex-col items-center gap-[18px] rounded-[12px] bg-nevo-cream-elevated px-10 py-7 sm:gap-[26px] sm:px-[72px] sm:py-10"
+      >
+        <p className="text-[46px] leading-none font-semibold tracking-[0.04em] text-nevo-navy sm:text-[60px] lg:text-[68px]">
+          {trial.word === "left" ? "LEFT" : "RIGHT"}
+        </p>
+        <ArrowRight
+          aria-hidden
+          data-arrow={trial.arrow}
+          strokeWidth={2}
+          className="size-[72px] text-nevo-violet sm:size-24 lg:size-[104px]"
+          style={{ transform: `rotate(${trial.arrow === "left" ? 180 : 0}deg)` }}
+        />
+      </div>
+      <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row">
+        {(["left", "right"] as const).map((side, i) => (
+          <TrialButton
+            key={side}
+            label={side === "left" ? "Left" : "Right"}
+            icon={
+              <span className="flex items-center gap-2.5">
+                <ArrowRight
+                  aria-hidden
+                  strokeWidth={2.4}
+                  className={cn("size-5 sm:size-[22px]", side === "left" && "rotate-180")}
+                />
+                {side === "left" ? "Left" : "Right"}
+              </span>
+            }
+            className="w-full sm:h-16 sm:text-lg"
+            pressed={picked === i}
+            onClick={(e) => onPick(i as 0 | 1, trial, e)}
+          />
+        ))}
+      </div>
+    </>
   );
 }
 

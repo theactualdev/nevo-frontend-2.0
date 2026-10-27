@@ -272,3 +272,114 @@ describe("PatternFlankerModule — where a tap landed", () => {
     expect(picks(capture, "pattern")[0]).toMatchObject({ x: 33.5, y: 610 });
   });
 });
+
+/*
+ * 2C, WORD CONFLICT, SS ONLY (Lydia, 26-27 Oct; design 534ba31). After 2B the
+ * word says LEFT or RIGHT, the arrow agrees or not, and the child taps what
+ * the word says. Forty trials - eight practice, thirty-two scored - each
+ * recorded as `inhibition` with its condition. SS's 2B flankers are no longer
+ * violet: that is the condition 2C replaces.
+ */
+describe("Word Conflict, after 2B, for SS alone", () => {
+  /** Through 2A and 2B, to the first Word Conflict trial. */
+  const toTheWords = () => {
+    throughThePatterns();
+    for (let i = 0; i < 3; i++) {
+      fireEvent.click(screen.getByLabelText("Right"));
+      act(() => void vi.advanceTimersByTime(500));
+    }
+  };
+  const shown = () => {
+    const card = screen.getByTestId("word-conflict");
+    return {
+      word: card.querySelector("p")!.textContent,
+      arrow: card.querySelector("svg")!.getAttribute("data-arrow"),
+    };
+  };
+
+  it("asks what the word says, with the word over an arrow", () => {
+    render(<PatternFlankerModule band="ss" onComplete={() => {}} />);
+    toTheWords();
+
+    expect(
+      screen.getByText("Tap what the word says, not the way the arrow points."),
+    ).toBeTruthy();
+    expect(["LEFT", "RIGHT"]).toContain(shown().word);
+    expect(["left", "right"]).toContain(shown().arrow);
+    expect(screen.getByRole("button", { name: "Left" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Right" })).toBeTruthy();
+  });
+
+  it("runs forty trials and records each as inhibition, matched against the word", () => {
+    const capture = new BaselineCapture("conflict");
+    const done = vi.fn();
+    render(<PatternFlankerModule band="ss" capture={capture} onComplete={done} />);
+    toTheWords();
+
+    const asked: { word: string | null; arrow: string | null }[] = [];
+    for (let i = 0; i < 40; i++) {
+      asked.push(shown());
+      // Always Left: right on a LEFT trial, wrong on a RIGHT one.
+      fireEvent.click(screen.getByRole("button", { name: "Left" }));
+      act(() => void vi.advanceTimersByTime(500));
+    }
+    act(() => void vi.advanceTimersByTime(2000));
+
+    const words = picks(capture, "inhibition");
+    expect(words).toHaveLength(40);
+    expect(words.map((p) => p.correct)).toEqual(
+      asked.map((a) => a.word === "LEFT"),
+    );
+    expect(words.every((p) => p.chosenOption === "left")).toBe(true);
+    // Eight practice first, then the thirty-two as congruent or incongruent.
+    expect(words.slice(0, 8).every((p) => p.congruency === "practice")).toBe(true);
+    expect(
+      words.slice(8).map((p) => p.congruency).filter((c) => c === "congruent"),
+    ).toHaveLength(16);
+    expect(
+      words.slice(8).map((p) => p.congruency).filter((c) => c === "incongruent"),
+    ).toHaveLength(16);
+    // The arrow disagrees exactly on the incongruent ones.
+    words.slice(8).forEach((p) =>
+      expect(p.word === p.arrow).toBe(p.congruency === "congruent"),
+    );
+    expect(done).toHaveBeenCalledTimes(1);
+  }, 30_000);
+
+  it("says nothing about whether a tap matched", () => {
+    render(<PatternFlankerModule band="ss" onComplete={() => {}} />);
+    toTheWords();
+
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
+
+    expect(document.body.textContent).not.toMatch(/correct|wrong|right!|try again|well done/i);
+  });
+
+  it.each(["p13", "p46", "jss"] as const)("is not run for %s", (band) => {
+    const done = vi.fn();
+    render(<PatternFlankerModule band={band} onComplete={done} />);
+    throughThePatterns();
+    for (let i = 0; i < 3; i++) {
+      fireEvent.click(screen.getByLabelText("Right"));
+      act(() => void vi.advanceTimersByTime(500));
+    }
+    act(() => void vi.advanceTimersByTime(2000));
+
+    expect(screen.queryByTestId("word-conflict")).toBeNull();
+    expect(done).toHaveBeenCalledTimes(1);
+  });
+
+  it("draws SS's 2B flankers grey, no longer violet", () => {
+    render(<PatternFlankerModule band="ss" onComplete={() => {}} />);
+    throughThePatterns();
+
+    const flankers = [
+      ...document.querySelectorAll<SVGElement>("svg.lucide-arrow-right"),
+    ].filter((a) => a.getAttribute("stroke-width") === "2.6" && !a.closest("button"));
+    expect(flankers.length).toBeGreaterThan(0);
+    for (const f of flankers) {
+      expect(f.getAttribute("class")).not.toContain("text-nevo-violet");
+      expect(f.getAttribute("class")).toContain("text-nevo-near-black/40");
+    }
+  });
+});
