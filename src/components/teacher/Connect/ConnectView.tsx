@@ -15,6 +15,7 @@ import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { ComposeModal } from "./ComposeModal";
 import { MaybeSample } from "@/components/shared/SampleRegion";
+import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * C10 Connect - individual threads between a teacher and their students, and
@@ -286,11 +287,6 @@ export function ConnectView() {
           <h1 className="text-[21px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-2xl">
             Connect
           </h1>
-          {sample && (
-            <p className="mt-1 text-[13px] leading-[1.5] text-nevo-near-black/55 italic">
-              We couldn&rsquo;t reach your messages, so these are samples.
-            </p>
-          )}
         </div>
         {newMessageButton(true)}
       </div>
@@ -313,6 +309,21 @@ export function ConnectView() {
               <div className="h-12 w-[45%] animate-pulse self-end rounded-[14px] bg-nevo-navy/10" />
             </div>
           </div>
+        </div>
+      ) : sample ? (
+        /*
+         * THE READ FAILED. Signed in, this listed sample conversations under
+         * a line saying so - "invented data presented as real" (Lydia,
+         * SCRUM-200, 28 Oct). Not the empty state either: that says there
+         * are none.
+         */
+        <div className="flex flex-1 items-start justify-center border-t border-nevo-near-black/8 p-10 max-md:border-t-0 max-md:px-[18px] max-md:py-6 xl:p-12">
+          <ReadFailed
+            as="h2"
+            title="We couldn’t load your messages just now"
+            body="They haven’t gone anywhere. Try again in a moment."
+            className="w-full"
+          />
         </div>
       ) : threads.length === 0 ? (
         /* C14 A4 - the governing empty state. */

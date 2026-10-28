@@ -45,12 +45,24 @@ beforeEach(() => {
 });
 
 describe("the lessons on the shelf", () => {
-  it("are marked as samples when the read failed", () => {
+  // SCRUM-200 (Lydia, 28 Oct): a failed read shows no sample, marked or not.
+  it("are not there at all when the read failed", () => {
     state({ live: false, sample: true });
     render(<LessonLibrary />);
 
-    expect(screen.getByText("Fractions 3")).toBeInTheDocument();
-    expect(sampleRegions()).toEqual(["teacher:library"]);
+    expect(screen.queryByText("Fractions 3")).not.toBeInTheDocument();
+    expect(sampleRegions()).toEqual([]);
+    expect(
+      screen.getByRole("heading", { name: "We couldn’t load your lessons just now" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("are not called an empty shelf when the read failed", () => {
+    state({ cards: [], live: false, sample: true });
+    render(<LessonLibrary />);
+
+    expect(screen.queryByText("Nothing here yet")).not.toBeInTheDocument();
   });
 
   it("are marked on the signed-out walkthrough too", () => {

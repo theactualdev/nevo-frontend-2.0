@@ -61,8 +61,29 @@ beforeEach(() => {
 });
 
 describe("the conversations", () => {
-  it("are marked as samples when the messages read failed", () => {
+  // SCRUM-200 (Lydia, 28 Oct): a failed read shows no sample, marked or not.
+  it("are not there at all when the messages read failed", () => {
     threadsState({ live: false, sample: true });
+    render(<ConnectView />);
+
+    expect(screen.queryByText("Amara Okafor")).not.toBeInTheDocument();
+    expect(sampleRegions()).toEqual([]);
+    expect(
+      screen.getByRole("heading", { name: "We couldn’t load your messages just now" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("are not called an empty inbox when the read failed", () => {
+    threadsState({ threads: [], live: false, sample: true });
+    render(<ConnectView />);
+
+    expect(screen.queryByText("Connect with your students")).not.toBeInTheDocument();
+  });
+
+  it("are marked on the signed-out walkthrough", () => {
+    useHasSession.mockReturnValue(false);
+    threadsState({ live: false, sample: false });
     render(<ConnectView />);
 
     expect(screen.getAllByText("Amara Okafor").length).toBeGreaterThan(0);
@@ -85,7 +106,9 @@ describe("the conversations", () => {
  */
 describe("writing to someone who is not there", () => {
   it("offers no composer on a sample conversation, and says why", () => {
-    threadsState({ live: false, sample: true });
+    // The walkthrough's conversations: the only sample ones left.
+    useHasSession.mockReturnValue(false);
+    threadsState({ live: false, sample: false });
     render(<ConnectView />);
 
     expect(screen.getByText(/This is a sample conversation/)).toBeInTheDocument();
