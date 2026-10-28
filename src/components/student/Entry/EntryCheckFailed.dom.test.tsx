@@ -130,6 +130,30 @@ describe("Try again", () => {
   });
 });
 
+describe("Sign in another way, offline (Lydia, 26 Oct #3)", () => {
+  /*
+   * "Both screens need a way forward: try again, or sign in another way. No
+   * screen in Nevo leaves someone with only the browser's back button."
+   */
+  it("sits under Try again, and signs the child out to the door", () => {
+    online.mockReturnValue(false);
+    render(<EntryCheckFailed next={LESSON} />);
+
+    const retry = screen.getByRole("button", { name: "Try again" });
+    const another = screen.getByRole("button", { name: "Sign in another way" });
+    expect(
+      retry.compareDocumentPosition(another) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    fireEvent.click(another);
+
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+    expect(studentDestination).not.toHaveBeenCalled();
+  });
+});
+
 describe("Go back", () => {
   it("signs the child out to the door, never into the app", () => {
     render(<EntryCheckFailed next={LESSON} />);
