@@ -153,7 +153,7 @@ export function TeacherSsoCallback() {
           {/*
             "Signing you in through {school}" named `TEACHER_INVITE.school`, a
             fixture, so a teacher of any school was told they were being signed
-            in through Corona Secondary School.
+            in through the fixture's school, a real one in Lagos.
 
             Nothing on this screen knows the school. The teacher arrives here
             from the identity provider BEFORE the token exchange, so there is no

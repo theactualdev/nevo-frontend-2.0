@@ -519,8 +519,9 @@ export function StudentsView() {
                   </span>
                 ) : null}
                 <span>Student</span>
-                {/* D07's column, on the read since 8 Oct. */}
-                <span>Student ID</span>
+                {/* D07's column, on the read since 8 Oct. Both words, as SCRUM-208
+                    rules for this label everywhere, without exception. */}
+                <span>Student ID / Admission Number</span>
                 <span>Class</span>
                 <span>Consent</span>
                 <span>Status</span>

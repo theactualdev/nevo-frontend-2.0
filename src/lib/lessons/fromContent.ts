@@ -544,26 +544,29 @@ function lineOf(value: unknown): string | undefined {
 }
 
 /**
- * The segment's inline check, if it has one this app can honestly mark.
+ * The segment's inline checks this app can honestly mark, in the lesson's
+ * order.
  *
  * `toQuickCheck` returns null for a checkpoint with no answer key, a
  * multiple-answer one, or one whose key matches none of its options - all of
- * which exist in content parsed before the checkpoint contract did. The FIRST
- * markable checkpoint wins: the player draws one sheet per segment, and
- * showing a child the second question of two is worse than showing the first.
+ * which exist in content parsed before the checkpoint contract did - and
+ * those are left out.
+ *
+ * EVERY ONE OF THEM, NOT THE FIRST (Lydia, 23 Oct #1 and 25 Oct: "Several
+ * checks in one sheet is a straight bug fix: today a lesson with two checks
+ * in a section can't be finished"). The sheet asks them one after another,
+ * and each gates on its own - see the player.
  */
-function quickCheckFor(segment: ContentSegment): QuickCheck | undefined {
-  for (const checkpoint of segment.comprehensionCheckpoints) {
+function quickChecksFor(segment: ContentSegment): QuickCheck[] {
+  return segment.comprehensionCheckpoints.flatMap((checkpoint) => {
     const check = toQuickCheck(checkpoint);
+    if (!check) return [];
     // The concept rides along for a review's scheduler write - see
     // `QuickCheck.conceptId`. Omitted rather than null, like the assessment.
-    if (check) {
-      return checkpoint.conceptId
-        ? { ...check, conceptId: checkpoint.conceptId }
-        : check;
-    }
-  }
-  return undefined;
+    return [
+      checkpoint.conceptId ? { ...check, conceptId: checkpoint.conceptId } : check,
+    ];
+  });
 }
 
 /**
@@ -1238,7 +1241,8 @@ function segmentFor(
   segment: ContentSegment,
   lessonTitle: string,
 ): LessonSegment {
-  const quickCheck = quickCheckFor(segment);
+  const quickChecks = quickChecksFor(segment);
+  const quickCheck = quickChecks[0];
   const visual = visualFor(segment, lessonTitle);
   const audio = audioFor(segment, lessonTitle);
   const interactive = interactiveFor(segment, lessonTitle);
@@ -1271,8 +1275,10 @@ function segmentFor(
     ...(audio ? { audio } : {}),
     ...(interactive ? { interactive } : {}),
     // Omitted rather than set undefined: the player tests `segment.quickCheck`
-    // for presence, and an absent check must not gate progress.
+    // for presence, and an absent check must not gate progress. The rest of a
+    // section's checks only where there is more than one - see `quickChecks`.
     ...(quickCheck ? { quickCheck } : {}),
+    ...(quickChecks.length > 1 ? { quickChecks } : {}),
     // Both, because the player gates the solver on BOTH: the tag says a
     // calculation is here, the payload is what it draws.
     ...(calculation

@@ -306,9 +306,9 @@ export function TeacherSignIn() {
             className="flex flex-col items-start"
           >
             {/*
-              NO SCHOOL EYEBROW. The frame draws "Corona Secondary School ·
-              Lagos" here and this shipped it as a literal, so every teacher at
-              every school was greeted by one tenant's name.
+              NO SCHOOL EYEBROW. The frame draws its sample school's name and
+              "· Lagos" here and this shipped it as a literal, so every teacher
+              at every school was greeted by one tenant's name.
 
               The frame resolves school identity BEFORE auth, from the
               school-specific URL that D10 issues. Nothing hands this door a

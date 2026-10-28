@@ -62,10 +62,11 @@ const SEND =
  * lessons", "Review answers" - at the system's 44px (`md`) and sized to its
  * words rather than the sheet. Navy words, no fill.
  *
- * Shared by the quick check's sheet and the Socratic panel, so the one
- * action looks the same in both. Where it stands alone - the hand-off's
- * "Let's keep going.", a check answered right - it is still not promoted:
- * there is no check left to progress, so there is no primary.
+ * The Socratic panel's. Where it stands alone - the hand-off's "Let's keep
+ * going." - it is still not promoted: there is no check left to progress, so
+ * there is no primary. A quick check answered right is not this button any
+ * more: it is the Lesson Check frame's navy Continue (Lydia, 25 Oct) - see
+ * `QuickCheckSheet`.
  */
 export function KeepGoingButton({
   onClick,

@@ -32,7 +32,7 @@ const CHILD: ParentChild = {
   lastName: "Okafor",
   status: "active",
   schoolId: "sc-1",
-  schoolName: "Corona Secondary School",
+  schoolName: "Brightgate Academy",
 };
 
 const SIBLING: ParentChild = { ...CHILD, studentId: "s-2", firstName: "Tunde" };

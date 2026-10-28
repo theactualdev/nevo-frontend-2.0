@@ -199,7 +199,10 @@ type Stage =
  * WHICH SUBJECT. Finishing ONE subject is what records `domain_probe`
  * (`probe.submit_answer`), so one is run. The subjects are those the plan
  * found an item in. A JSS or SS child with more than one chooses, in the
- * frame's grid, listed in the server's order; anyone else - and a JSS or SS
+ * frame's grid, listed in the server's order with its suggested subject
+ * FIRST AND NOT PRESELECTED (Lydia, 26 Oct, design D8: "the probe's subject
+ * is listed first and not preselected, because preselecting makes the
+ * choice for them"); anyone else - and a JSS or SS
  * child with only one, where a grid of one is not a choice - runs the
  * server's suggested subject (`probeSubjectId`, Teslim 19 Oct: "use
  * probeSubjectId as the server's suggested first subject"), or the first the
@@ -406,7 +409,10 @@ export function DomainProbeModule({
       <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center">
         {stage.at === "choose" && (
           <SubjectChoice
-            subjects={openings.map((o) => o.subject)}
+            subjects={[
+              ...openings.filter((o) => o.suggested),
+              ...openings.filter((o) => !o.suggested),
+            ].map((o) => o.subject)}
             onChoose={choose}
           />
         )}

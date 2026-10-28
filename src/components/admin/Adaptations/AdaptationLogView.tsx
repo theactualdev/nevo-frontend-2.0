@@ -329,11 +329,20 @@ export function AdaptationLogView({ back = null }: { back?: Back | null } = {}) 
       .finally(() => setLoadingMore(false));
   };
 
+  /*
+   * The half-term counts only while it is the choice. `reload` used to depend
+   * on it whatever was chosen, so with "This week" showing, the school record
+   * arriving re-ran the week's read: every visit read the log twice, and the
+   * second answer could land after the admin had already moved on (25 Oct, it
+   * made a test fail at random on other lanes' PRs).
+   */
+  const rangeHalfTerm = choice.kind === "half-term" ? halfTerm : null;
+
   /** Query the chosen window, if there is one to query. */
   const reload = useCallback(() => {
-    const span = windowFor(choice, Date.now(), halfTerm);
+    const span = windowFor(choice, Date.now(), rangeHalfTerm);
     if (span) load(span, classId, types);
-  }, [load, choice, halfTerm, classId, types]);
+  }, [load, choice, rangeHalfTerm, classId, types]);
 
   useEffect(() => {
     reload();

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
+import { GIVES_WAY_AFTER_MS } from "./QuickCheckSheet";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { noteServerClock, resetServerClock } from "@/lib/api/serverClock";
 import type { Lesson } from "@/lib/types";
@@ -195,14 +196,24 @@ const pick = async (label: RegExp) => {
 };
 const miss = () => pick(/The denominator/);
 const right = () => pick(/The numerator/);
-const tryAgain = () =>
-  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+/**
+ * Asked again, the way a child is now (26 Oct): the miss is held a beat and
+ * the sheet gives way, then Next opens the check afresh. There is no Try
+ * again any more.
+ */
+const tryAgain = async () => {
+  await wait(GIVES_WAY_AFTER_MS);
+  next();
+  await flush();
+};
+/** How long `missThrice` takes after its first miss: two give-ways. */
+const ASKED_AGAIN_MS = 2 * GIVES_WAY_AFTER_MS;
 /** Three misses in a row, the third left on screen. */
 const missThrice = async () => {
   await miss();
-  tryAgain();
+  await tryAgain();
   await miss();
-  tryAgain();
+  await tryAgain();
   await miss();
 };
 /**
@@ -276,7 +287,8 @@ describe("the panel at the end of the grace window", () => {
     expect(panelFor("cp-a")).toBeNull();
     expect(screen.getByText("Which is on top?")).toBeTruthy();
 
-    await wait(WINDOW_MS - 1);
+    // The window runs from the run's FIRST miss.
+    await wait(WINDOW_MS - ASKED_AGAIN_MS - 1);
     expect(reads()).toBe(0);
     expect(panelFor("cp-a")).toBeNull();
 
@@ -301,7 +313,8 @@ describe("the panel at the end of the grace window", () => {
     await wait(WINDOW_MS);
     expect(reads()).toBe(1);
     expect(panelFor("cp-a")).toBeNull();
-    expect(screen.getByText("Which is on top?")).toBeTruthy();
+    // The miss gave way long ago; the child is on the section, nothing new.
+    expect(screen.queryByRole("dialog")).toBeNull();
 
     await wait(10 * 60_000);
     expect(reads()).toBe(1);
@@ -313,7 +326,7 @@ describe("the panel at the end of the grace window", () => {
     await missThrice();
     await wait(10_000);
     // A fourth miss names the same moment: the run's first miss set it.
-    tryAgain();
+    await tryAgain();
     await miss();
 
     await wait(WINDOW_MS - 10_000);
@@ -334,7 +347,7 @@ describe("the panel at the end of the grace window", () => {
     await missThrice();
 
     // By the device's own clock the deadline is 10s off already.
-    await wait(WINDOW_MS - 10_000);
+    await wait(WINDOW_MS - ASKED_AGAIN_MS - 10_000);
     expect(reads()).toBe(0);
     await wait(10_000 - 1);
     expect(reads()).toBe(0);
@@ -352,7 +365,7 @@ describe("no read once the question is no longer open", () => {
     next();
     await missThrice();
     await wait(10_000);
-    tryAgain();
+    await tryAgain();
     await right();
 
     await wait(10 * 60_000);
@@ -376,14 +389,37 @@ describe("no read once the question is no longer open", () => {
     expect(panelFor("cp-b")).toBeNull();
   });
 
+  /*
+   * A miss giving way is the system's move, so the question stays open (the
+   * first case above reads at the deadline after it). Tapping out is the
+   * child's, and ends it, as it always has.
+   */
+  it("is not made once the child taps out of the check, asked again after a miss gave way", async () => {
+    render(player());
+    await handedOffAtDeadline();
+    next();
+    await missThrice();
+    await wait(GIVES_WAY_AFTER_MS);
+    next();
+    await flush();
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: "Escape",
+    });
+    await flush();
+
+    await wait(10 * 60_000);
+    expect(reads()).toBe(1);
+    expect(panelFor("cp-b")).toBeNull();
+  });
+
   it("is not set for a third miss whose answer lands after the child has left", async () => {
     render(player());
     await handedOffAtDeadline();
     next();
     await miss();
-    tryAgain();
+    await tryAgain();
     await miss();
-    tryAgain();
+    await tryAgain();
     let land: () => void = () => {};
     saveAttempt.mockImplementationOnce(
       (_lesson: string, body: never) =>

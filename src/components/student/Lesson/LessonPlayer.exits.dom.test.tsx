@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
+import { GIVES_WAY_AFTER_MS } from "./QuickCheckSheet";
 import { LESSON_STATUS } from "@/lib/api/lessons";
 import { clearSession, setSession } from "@/lib/auth/session";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
@@ -106,6 +107,16 @@ const MODULAR = {
   ],
 } as unknown as Lesson;
 
+/**
+ * Asked again as a child is now (26 Oct): the miss holds a beat and the
+ * sheet gives way, then Next opens the check afresh. No Try again any more.
+ */
+const askAgain = async () => {
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+    timeout: GIVES_WAY_AFTER_MS + 2000,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+};
 const next = () =>
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
 const writes = () => progress.report.mock.calls;
@@ -469,9 +480,9 @@ describe("a review session's outcome", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: /The denominator/ }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await askAgain();
     fireEvent.click(screen.getByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     next();
 
     // B28: the outcome, and no `recallSuccessful` - the server derives that.
@@ -519,7 +530,7 @@ describe("a review session's outcome", () => {
 
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     next();
 
     await waitFor(() =>

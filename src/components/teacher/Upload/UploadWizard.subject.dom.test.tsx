@@ -56,7 +56,7 @@ const identity = (subjects: string[]) => ({
   name: "Amina Bello",
   initials: "AB",
   email: "amina@school.test",
-  school: "Corona",
+  school: "Brightgate",
   subjects,
   photoUrl: null,
 });

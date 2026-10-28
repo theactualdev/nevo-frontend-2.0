@@ -22,6 +22,9 @@ type Phase = "signing-in" | "success" | "error";
 /** A quiet beat on "You're in" before the redirect (matches the frame). */
 const SUCCESS_HOLD_MS = 900;
 
+/** The student door, where "Sign in another way" goes. */
+const SIGN_IN_DOOR = "/auth/login";
+
 /**
  * SSO callback (screen 00b) — the Student App's dedicated SSO entry point. The
  * identity provider redirects here after auth; we resolve the handshake, then:
@@ -62,9 +65,16 @@ const SUCCESS_HOLD_MS = 900;
  * sentence and drop "Let's try once more", which they could not honour.
  *
  * "CONTACT YOUR SCHOOL" IS AN INSTRUCTION, NOT A BUTTON. The IA: "no
- * navigation, informational only". It pushed `/auth/login` - the PIN door,
- * which a child who signs in through their school's identity provider has no
- * PIN for. What it should show is design's to say.
+ * navigation, informational only". It pushed `/auth/login` - the PIN door -
+ * dressed as that instruction, which it was not.
+ *
+ * "SIGN IN ANOTHER WAY" IS THE WAY FORWARD, every time (Lydia, 26 Oct #3):
+ * "Both screens need a way forward: try again, or sign in another way. No
+ * screen in Nevo leaves someone with only the browser's back button." It goes
+ * to the student door (`/auth/login`: the device's picker, or the full sign-in
+ * on an empty one), in place of this page - a spent code is nothing to come
+ * back to. The one primary is Try again where it can work, and this where it
+ * cannot.
  */
 export function SsoCallback() {
   // The SSO callback is a door: nothing on this page goes as the session it found
@@ -217,12 +227,14 @@ export function SsoCallback() {
               Try again
             </Button>
           )}
-          <p
-            className={
-              (canRetry ? "mt-2" : "mt-7") +
-              " flex h-12 items-center text-[15px] font-medium text-nevo-navy"
-            }
+          <Button
+            variant={canRetry ? "secondary" : "primary"}
+            className={(canRetry ? "mt-3" : "mt-7") + " w-full max-w-[360px]"}
+            onClick={() => router.replace(SIGN_IN_DOOR)}
           >
+            Sign in another way
+          </Button>
+          <p className="mt-2 flex h-12 items-center text-[15px] font-medium text-nevo-navy">
             Contact your school
           </p>
         </>

@@ -161,7 +161,10 @@ export function UploadResult({
   );
   const sections = useSegmentReview(lesson.id, segments);
   const checking = verdict.loading;
-  const blocked = !verdict.ready || checking;
+  /* The lesson page's gate, both halves: the server's `readyToAssign` and
+     its lesson-wide sign-off, which Assign waits for (Lydia, 25 Oct). */
+  const awaitingReview = verdict.signedOff === false;
+  const blocked = !verdict.ready || awaitingReview || checking;
   const review = lesson.reviewSegmentCount;
   const rereading = regenerate.state === "running";
 
@@ -268,7 +271,7 @@ export function UploadResult({
 
       {blocked && !checking && (
         <p className="mt-2.5 text-[13px] font-medium text-nevo-navy">
-          {stillToCheck(verdict.outstanding, sections.remaining)}
+          {stillToCheck(verdict.outstanding, sections.remaining, awaitingReview)}
         </p>
       )}
 

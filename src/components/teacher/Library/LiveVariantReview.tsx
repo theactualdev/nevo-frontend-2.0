@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { equationsOf, keyTermsOf } from "@/lib/lessons/fromContent";
+import { asSentence } from "@/lib/lessons/asSentence";
 import { AudioVariantPlayer } from "./AudioVariantPlayer";
 import { IllustrationWrapper } from "@/components/shared/IllustrationWrapper";
 import type { LessonSegment } from "@/lib/api/lessons";
@@ -340,13 +341,17 @@ function VariantBody({
           sits where the child's card puts it - above the steps, never after
           them - under the player frame's own "First" label (design 1a3016b),
           word for word. No line from the server, nothing drawn.
+
+          Its first letter is capitalised HERE, on screen only, as the child's
+          card does it (Lydia, 25 Oct: "The parser keeps the authored words
+          exactly as written"). So a teacher sees what the child sees.
         */}
         {safety && (
           <div className="flex items-start gap-2.5 rounded-[12px] bg-nevo-violet/8 px-4 py-[11px]">
             <span className="mt-0.5 shrink-0 font-mono text-[10px] tracking-[0.06em] text-nevo-navy uppercase">
               First
             </span>
-            <p className="text-[13.5px] leading-[1.5] text-nevo-near-black/82">{safety}</p>
+            <p className="text-[13.5px] leading-[1.5] text-nevo-near-black/82">{asSentence(safety)}</p>
           </div>
         )}
         {steps.length > 0 && (
@@ -454,7 +459,7 @@ export function LiveVariantReview({
       {/* No cap of its own at tablet - it conforms to its host (C16d, 8 Oct). */}
       <div className="mx-auto xl:max-w-[820px]">
         <Link
-          href={`/teacher/lessons/${lessonId}/review?step=3`}
+          href={`/teacher/lessons/${lessonId}/review?step=4`}
           className="inline-flex cursor-pointer items-center gap-[7px] text-[13px] text-nevo-near-black/55 transition-transform active:scale-[0.99] xl:text-[13.5px]"
         >
           <svg

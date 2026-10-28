@@ -8,7 +8,13 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { useState } from "react";
 import { HomeDashboard } from "./HomeDashboard";
+import { lessonsApi } from "@/lib/api/lessons";
+import {
+  flushPendingProgress,
+  holdProgress,
+} from "@/lib/lessons/pendingProgress";
 import { SAMPLE_ATTR } from "@/lib/sampleData";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
@@ -559,6 +565,53 @@ describe("Home's two lists", () => {
         "Halfway Fractions",
       ),
     ).toBeInTheDocument();
+  });
+
+  /*
+   * A COMPLETION HELD ON THIS DEVICE CAN LAND AFTER HOME HAS READ (24 Oct
+   * production run, Chidi on Photosynthesis). The shell flushes as Home first
+   * reads, so that first answer can be older than the server already is.
+   */
+  it("reads again once held progress lands, so a lesson finished by it leaves Pick up", async () => {
+    signIn();
+    const before = {
+      assignments: [assignment("photo", "Photosynthesis")],
+      recentProgress: [row("photo", "in_progress", 5, 3)],
+    };
+    // The dashboard leaves a finished assignment out.
+    const after = {
+      assignments: [],
+      recentProgress: [row("photo", "completed", 0, 3, { completedAt: at(0) })],
+    };
+    dashboard.useStudentDashboard.mockImplementation(() => {
+      const [landed, setLanded] = useState(false);
+      return {
+        data: landed ? after : before,
+        failed: false,
+        loading: false,
+        refresh: () => setLanded(true),
+      };
+    });
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockResolvedValue({} as never);
+    holdProgress("photo", {
+      sessionId: "sess-1",
+      status: "completed" as never,
+      segment: 3,
+    });
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+    expect(
+      within(section(/Pick up where you left off/)).getByText("Photosynthesis"),
+    ).toBeInTheDocument();
+
+    await act(() => flushPendingProgress());
+
+    expect(save).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByText("Photosynthesis")).toBeNull());
+    save.mockRestore();
   });
 
   it("does not tell a child whose only lesson is finished that a first one is coming", async () => {

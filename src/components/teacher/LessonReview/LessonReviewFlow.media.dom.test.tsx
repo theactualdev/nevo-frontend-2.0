@@ -128,7 +128,7 @@ const reviewWith = (items: LessonMediaItem[] | null, over: Partial<LessonReview>
     ...over,
   }) as unknown as LessonReview;
 
-const open = async (step?: 1 | 2 | 3 | 4) => {
+const open = async (step?: 1 | 2 | 3 | 4 | 5) => {
   render(<LessonReviewRoute lessonId="l-1" step={step} />);
   await screen.findByRole("navigation", { name: "Lesson review steps" });
 };
@@ -297,7 +297,7 @@ describe("the key-point press, which also signs media", () => {
     );
     await open();
 
-    expect(screen.getByText(/Step 1 of 4/)).toBeInTheDocument();
+    expect(screen.getByText(/Step 1 of 5/)).toBeInTheDocument();
     expect(within(screen.getByRole("navigation", { name: "Lesson review steps" })).getByRole("button", { name: /What I made/ })).toHaveAttribute("aria-current", "step");
   });
 });

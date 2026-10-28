@@ -136,3 +136,53 @@ describe("the concept an inline check is about", () => {
     expect(withCheck({ conceptId: null })).not.toHaveProperty("conceptId");
   });
 });
+
+/*
+ * Lydia, 23 Oct #1 and 25 Oct: a section with several checks asks them one
+ * after another, each gating on its own. "Several checks in one sheet is a
+ * straight bug fix: today a lesson with two checks in a section can't be
+ * finished." The adapter kept only the first.
+ */
+describe("a section's several checks", () => {
+  const withChecks = (checkpoints: Record<string, unknown>[]) => {
+    const base = lesson([]);
+    base.segments[0] = {
+      ...base.segments[0],
+      comprehensionCheckpoints: checkpoints.map((c) => checkpoint(c)),
+    } as unknown as ContentSegment;
+    const built = lessonFromContent(base);
+    if (!built) throw new Error("the adapter refused the lesson");
+    return built.segments[0];
+  };
+
+  it("carries every markable one, in order, the first as the section's check", () => {
+    const segment = withChecks([
+      { id: "cp-1" },
+      { id: "cp-2", conceptId: "concept-b" },
+      { id: "cp-3", conceptId: null },
+    ]);
+
+    expect(segment.quickChecks?.map((c) => c.id)).toEqual(["cp-1", "cp-2", "cp-3"]);
+    expect(segment.quickCheck?.id).toBe("cp-1");
+    expect(segment.quickChecks?.[1].conceptId).toBe("concept-b");
+    expect(segment.quickChecks?.[2]).not.toHaveProperty("conceptId");
+  });
+
+  it("leaves out one it cannot mark, keeping the order of the rest", () => {
+    const segment = withChecks([
+      { id: "cp-1", answerKey: "zzz" },
+      { id: "cp-2" },
+      { id: "cp-3" },
+    ]);
+
+    expect(segment.quickChecks?.map((c) => c.id)).toEqual(["cp-2", "cp-3"]);
+    expect(segment.quickCheck?.id).toBe("cp-2");
+  });
+
+  it("has no list for a section with one check", () => {
+    const segment = withChecks([{ id: "cp-1" }, { id: "cp-2", answerKey: "zzz" }]);
+
+    expect(segment.quickCheck?.id).toBe("cp-1");
+    expect(segment).not.toHaveProperty("quickChecks");
+  });
+});

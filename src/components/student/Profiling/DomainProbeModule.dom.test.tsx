@@ -426,15 +426,29 @@ describe("which subject (JSS and SS choose first, 09d)", () => {
     expect(screen.getByText("Which animal lives in water?")).toBeInTheDocument();
   });
 
-  it("leaves a JSS child's grid in the server's order, suggestion or not", () => {
-    // Whether the suggestion is listed first or preselected is design's call
-    // (09d draws neither); until then the grid is as it was.
+  it("lists a JSS child's suggested subject first, and preselects nothing (Lydia, 26 Oct, D8)", () => {
+    // "The probe's subject is listed first and not preselected, because
+    // preselecting makes the choice for them."
     renderModule({ band: "jss", openings: ENGLISH_SUGGESTED });
 
-    const names = screen
-      .getAllByRole("button")
-      .map((b) => b.textContent);
-    expect(names).toEqual(["Mathematics", "English"]);
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.map((b) => b.textContent)).toEqual(["English", "Mathematics"]);
+    // Nothing chosen or marked until the child taps.
+    for (const b of buttons) {
+      expect(b).not.toHaveAttribute("aria-pressed");
+      expect(b).not.toHaveAttribute("aria-current");
+    }
+    expect(screen.queryByText("Which word names a colour?")).toBeNull();
+    expect(screen.getByText(/which subject/i)).toBeInTheDocument();
+  });
+
+  it("keeps the server's order for the rest, and for a grid with no suggestion", () => {
+    renderModule({ band: "jss", openings: BOTH });
+
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Mathematics",
+      "English",
+    ]);
   });
 
   it("asks a Primary child no choice, which the frame does not draw", () => {

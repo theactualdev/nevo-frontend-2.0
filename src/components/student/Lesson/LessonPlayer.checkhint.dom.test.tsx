@@ -8,6 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
+import { GIVES_WAY_AFTER_MS } from "./QuickCheckSheet";
 import { calculationFromVariant } from "@/lib/lessons/fromContent";
 import { clearSession, setSession } from "@/lib/auth/session";
 import type { CalculationVariant } from "@/lib/api/variants";
@@ -154,6 +155,16 @@ const reply = (over: Record<string, unknown> = {}) => ({
 });
 
 const player = () => <LessonPlayer lesson={LESSON} plan={null} live />;
+/**
+ * Asked again as a child is now (26 Oct): the miss holds a beat and the
+ * sheet gives way, then Next opens the check afresh. No Try again any more.
+ */
+const askAgain = async () => {
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+    timeout: GIVES_WAY_AFTER_MS + 2000,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+};
 const next = () =>
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
 const miss = async () =>
@@ -252,7 +263,7 @@ describe("the engine's hint while a check is open (SCRUM-275 #2)", () => {
         advanceAfterHandoff: true,
       }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await askAgain();
     await miss();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
@@ -283,7 +294,7 @@ describe("the engine's hint while a check is open (SCRUM-275 #2)", () => {
       segmentId: SEG_1,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await askAgain();
     fireEvent.click(
       await screen.findByRole("button", { name: /The numerator/ }),
     );

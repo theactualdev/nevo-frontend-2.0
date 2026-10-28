@@ -390,6 +390,12 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
     expect(
       lastStep.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+    // IN SHORT with them, once, after the steps (Lydia, 26 Oct #2).
+    expect(screen.getAllByText("IN SHORT")).toHaveLength(1);
+    expect(
+      lastStep.compareDocumentPosition(screen.getByText("IN SHORT")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("keeps them under every view, each drawn once", () => {
@@ -437,6 +443,7 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
 
     expect(screen.getAllByRole("button", { name: "chlorophyll" })).toHaveLength(1);
     expect(screen.getAllByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toHaveLength(1);
+    expect(screen.getAllByText("IN SHORT")).toHaveLength(1);
   });
 
   it("puts the key terms and the equations under Expand, and not IN SHORT", () => {
@@ -456,12 +463,13 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
     expect(visibleText(unlabelled)).toBe("6CO2 + 6H2O → C6H12O6 + 6O2");
   });
 
-  it("draws no key points under Slower, and keeps the terms and equations", () => {
-    // Slower on a lesson with no authored steps is the standard body in
-    // parts, so what is part of the segment stays with it.
+  it("draws the key points under Slower too, with the terms and equations (Lydia, 26 Oct #2)", () => {
+    // "Pace and content are separate, and a child who needs more time should
+    // not get less support."
     render(<TextSegment content={boxes} density={DENSITY.SLOWER} />);
 
-    expect(screen.queryByText("IN SHORT")).toBeNull();
+    const box = screen.getByText("IN SHORT").parentElement!;
+    expect(visibleText(box)).toBe("IN SHORT Plants feed themselves. Light is the fuel.");
     expect(screen.getByText("chlorophyll")).toBeInTheDocument();
     expect(screen.getByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toBeInTheDocument();
   });

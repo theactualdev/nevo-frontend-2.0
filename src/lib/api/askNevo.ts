@@ -59,8 +59,31 @@ export type AskNevoCategory =
   | "flag_review"
   | "general";
 
+/**
+ * `AnswerBlockResponse` - one piece of an answer, already parsed by the
+ * server (`ask_nevo/formatting.py`). "A client that only handles `paragraph`
+ * can render `text` for every block and still be correct." The server strips
+ * emphasis markers from these, so they never carry a stray `**`.
+ */
+export interface AnswerBlock {
+  type: "paragraph" | "bullets" | "steps" | "heading";
+  /** The words of a paragraph or a heading. */
+  text?: string;
+  /** The entries of a list of bullets or of steps. */
+  items?: string[];
+  /** A heading's level; 0 for anything else. */
+  level?: number;
+}
+
 export interface AskNevoAnswer {
+  /**
+   * The answer as Markdown (`render_answer`): `**bold**`, "- " bullets,
+   * "1." steps. NOT FOR PRINTING AS IT IS - a child saw the asterisks (Teslim,
+   * 25 Oct). `blocks` is what the drawer draws; this is the last fallback.
+   */
   answer: string;
+  /** The same answer in renderable pieces. Required on the contract. */
+  blocks?: AnswerBlock[];
   /**
    * The answer as one paragraph of plain text. Defaults to "" on the
    * contract, so it is only preferred when it says something.
@@ -125,19 +148,16 @@ export interface ThreadMessage {
   text: string;
   /** ISO 8601. */
   createdAt: string;
-  /*
-   * `blocks: AnswerBlockResponse[]` is REQUIRED on this schema and is not
-   * declared here, which is a decision rather than an oversight.
+  /**
+   * The answer in renderable pieces, as it was given (Teslim, 25 Oct: render
+   * them "for live replies AND reopened history"). Required on the contract;
+   * an asker's own message carries none, and `text` is then the whole of it.
    *
-   * The contract's own description of that schema: "A client that only handles
-   * `paragraph` can render `text` for every block and still be correct, so
-   * adopting this is optional." The drawer renders `text`, so it is correct.
-   *
-   * Worth knowing: `contract-check.mjs` could not have caught this either way.
-   * Its `propertiesOf` does not descend into a nested `$ref`, so nothing under
-   * `messages[]` is checked at all. If structured answers ever need real
-   * rendering - lists, headings - this is where the type starts.
+   * Worth knowing: `contract-check.mjs` cannot check this. Its `propertiesOf`
+   * does not descend into a nested `$ref`, so nothing under `messages[]` is
+   * checked at all.
    */
+  blocks?: AnswerBlock[];
 }
 
 export interface ThreadTranscript {

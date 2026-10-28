@@ -123,15 +123,17 @@ export function TextSegment({
    * equation callout "is not guaranteed to be repeated in body", so the
    * rewrite took the equation off the screen altogether.
    *
-   * Key points are the frame's "IN SHORT", under every view but Expand and
-   * Slower. Lydia's checklist 13 calls them "two to four highlights beside
-   * the body" that "must never be what Simplify returns": Simplify returns
-   * its own rewritten text, and they stay beside it.
+   * Key points are the frame's "IN SHORT", under every view but Expand.
+   * Lydia's checklist 13 calls them "two to four highlights beside the body"
+   * that "must never be what Simplify returns": Simplify returns its own
+   * rewritten text, and they stay beside it. AND UNDER SLOWER (Lydia, 26 Oct
+   * #2): "Pace and content are separate, and a child who needs more time
+   * should not get less support." They sit after the body there too, the
+   * parts and the step cards alike, as the terms and equations do.
    */
   const keyTerms = content.keyTerms;
   const equations = content.equations;
-  const keyPoints =
-    !expand && density !== DENSITY.SLOWER ? content.keyPoints : undefined;
+  const keyPoints = !expand ? content.keyPoints : undefined;
   /*
    * The server's chunks are of the standard body, so they are asked of the
    * text actually shown. A reshape, or any other text standing in for the

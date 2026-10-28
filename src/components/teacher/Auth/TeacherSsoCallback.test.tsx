@@ -31,8 +31,8 @@ import { TeacherSsoCallback } from "./TeacherSsoCallback";
  *
  * WHAT WAS WRONG. The signing-in line read
  * `Signing you in through ${TEACHER_INVITE.school}`, a fixture, so a teacher of
- * any school was told they were being signed in through Corona Secondary
- * School - on an auth screen, mid-handshake, at the moment they are deciding
+ * any school was told they were being signed in through the fixture's school
+ * - on an auth screen, mid-handshake, at the moment they are deciding
  * whether to trust what they are looking at.
  *
  * Nothing on this screen knows the school: the teacher arrives BEFORE the token
@@ -68,7 +68,7 @@ describe("the signing-in line", () => {
     // signing-in phase before asserting what it does not say.
     expect(screen.getByRole("status", { name: /working/i })).toBeInTheDocument();
 
-    expect(screen.queryByText(/Corona/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Brightgate/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Secondary School/i)).not.toBeInTheDocument();
   });
 
@@ -89,7 +89,7 @@ describe("the error phase", () => {
     // and send to their IT lead, so a wrong school name here travels furthest.
     render(<TeacherSsoCallback />);
 
-    expect(screen.queryByText(/Corona/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Brightgate/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Secondary School/i)).not.toBeInTheDocument();
   });
 });

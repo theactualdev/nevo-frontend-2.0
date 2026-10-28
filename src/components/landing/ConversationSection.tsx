@@ -6,11 +6,16 @@ import { INQUIRY_ROLES, partnerInquiriesApi, type InquiryRoleLabel } from "@/lib
 /**
  * The single conversion path (SCRUM-43): every CTA on the page scrolls here.
  * Submitting posts a partner inquiry to the live backend (SCRUM-82,
- * `POST /api/v1/partner-inquiries`) - it never creates an account. The flow
- * completes optimistically: the POST is fired and the success state shows
- * immediately (the backend's cold start can take tens of seconds, and a failed
- * POST must never lose the conversation on a technicality - the founder-facing
- * success copy is the contract).
+ * `POST /api/v1/partner-inquiries`) - it never creates an account.
+ *
+ * THANK YOU ONLY ONCE IT IS SAVED (Jira audit, 26 Oct). This used to complete
+ * optimistically - the POST fired and forgotten, "Thank you. We will be in
+ * touch soon." shown at once - so a POST that failed lost the conversation
+ * silently while promising a reply. On 24 Oct the backend was suspended for
+ * hours, and anyone who wrote in then was thanked and never heard from. The
+ * reason given, a free-tier cold start of tens of seconds, goes with the paid
+ * plan. Now the button says it is sending, success waits for the save, and a
+ * failure keeps the form - and everything typed into it - with one calm line.
  */
 
 const fieldLabel: CSSProperties = {
@@ -77,8 +82,13 @@ function ConnectionPaths({ flipped }: { flipped?: boolean }) {
   );
 }
 
+/** Ours, not design's - in Lydia's copy list for her pass. */
+const DID_NOT_SEND =
+  "That didn't send. Everything you wrote is still here, so please try again in a moment.";
+
 export function ConversationSection() {
-  const [phase, setPhase] = useState<"form" | "fading" | "success">("form");
+  const [phase, setPhase] = useState<"form" | "sending" | "fading" | "success">("form");
+  const [failed, setFailed] = useState(false);
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -92,16 +102,24 @@ export function ConversationSection() {
       contact: String(data.get("contact") ?? ""),
       message: String(data.get("message") ?? "") || undefined,
     };
-    // Fire-and-forget: the POST lands even through a backend cold start while
-    // the founder-facing flow completes immediately.
-    void partnerInquiriesApi.submit(inquiry).catch(() => {});
-    setPhase("fading");
-    setTimeout(() => setPhase("success"), 300);
+    setFailed(false);
+    setPhase("sending");
+    partnerInquiriesApi
+      .submit(inquiry)
+      .then(() => {
+        setPhase("fading");
+        setTimeout(() => setPhase("success"), 300);
+      })
+      .catch(() => {
+        // The form never unmounted, so every field still holds what was typed.
+        setFailed(true);
+        setPhase("form");
+      });
   };
 
   const fading: CSSProperties = {
     transition: "opacity 300ms ease",
-    opacity: phase === "form" ? 1 : 0,
+    opacity: phase === "fading" ? 0 : 1,
   };
 
   return (
@@ -395,9 +413,18 @@ export function ConversationSection() {
                   cursor: "pointer",
                   transition: "filter 150ms ease",
                 }}
+                aria-busy={phase === "sending"}
               >
-                Request an introduction
+                {phase === "sending" ? "Sending…" : "Request an introduction"}
               </button>
+              {failed && (
+                <p
+                  role="alert"
+                  style={{ margin: "2px 0 0", fontSize: 14, lineHeight: 1.5, color: "#3b3f6e" }}
+                >
+                  {DID_NOT_SEND}
+                </p>
+              )}
             </form>
           </>
         )}

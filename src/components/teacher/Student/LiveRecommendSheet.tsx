@@ -8,6 +8,7 @@ import { assignmentsApi } from "@/lib/api/assignments";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { useLessonLibrary } from "@/hooks/useLessonLibrary";
 import { cn } from "@/lib/utils";
+import { awaitingSignOff, reviewHrefFor } from "@/lib/lessons/signOff";
 
 /**
  * C08c Recommend a Lesson, for a real student.
@@ -137,6 +138,8 @@ export function LiveRecommendSheet({
   const [error, setError] = useState<string | null>(null);
   /** The lesson a refusal is about, when there is one to open. */
   const [errorHref, setErrorHref] = useState("");
+  /** What that link says: a refusal about sections, or about the review. */
+  const [errorLink, setErrorLink] = useState("");
 
   const chosen = cards.find((c) => c.id === choice) ?? null;
 
@@ -145,7 +148,20 @@ export function LiveRecommendSheet({
     setBusy(true);
     setError(null);
     setErrorHref("");
+    setErrorLink("");
     try {
+      /*
+       * ASSIGN WAITS FOR THE LESSON-WIDE SIGN-OFF (Lydia, 25 Oct), and a
+       * recommendation is an assignment. The list below is the library, which
+       * carries no sign-off, so the one lesson being sent is asked about.
+       */
+      const held = await awaitingSignOff([chosen.id]);
+      if (held.has(chosen.id)) {
+        setError(`${chosen.title} isn${"’"}t reviewed yet, so it can${"’"}t go to ${firstName}.`);
+        setErrorHref(reviewHrefFor(chosen.id));
+        setErrorLink("Review it");
+        return;
+      }
       // Optional, so an untouched box sends nothing rather than "". Whitespace
       // is not a note: a teacher who tabbed through the field did not write to
       // this child, and an empty bubble on her dashboard would say they had.
@@ -381,7 +397,7 @@ export function LiveRecommendSheet({
                 href={errorHref}
                 className="cursor-pointer font-semibold text-nevo-navy underline-offset-2 hover:underline"
               >
-                Open the lesson and check them
+                {errorLink || "Open the lesson and check them"}
               </Link>
             </>
           )}

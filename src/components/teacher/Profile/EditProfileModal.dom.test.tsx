@@ -18,7 +18,7 @@ const PROFILE = {
   initials: "AB",
   email: "amina@school.test",
   subjects: "Mathematics",
-  school: "Corona Secondary",
+  school: "Brightgate Academy",
 } as unknown as TeacherProfile;
 
 const file = () =>
