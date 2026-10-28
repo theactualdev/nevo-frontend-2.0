@@ -77,6 +77,10 @@ async function reissue(storagePath: string) {
  * not opened yet failed its media, and the failure stuck after the signal came
  * back. A failure is retried once on `online`, from the top.
  *
+ * AND WHEN THE CHILD ASKS (`retry`; Lydia, 26 Oct, design D7: "If a recording
+ * fails, say it failed and let them try again"): the same from the top - a
+ * fresh link allowed again, and the element remounted.
+ *
  * `onFailed` IS TOLD ONCE PER FAILURE (B12), so the engine learns the child
  * did not see or hear it. A retry that fails again is a second failure and is
  * told again; a retry that works says nothing.
@@ -127,16 +131,17 @@ export function useMediaSource(
     }
   }, [storagePath]);
 
+  const retry = useCallback(() => {
+    refreshed.current = false;
+    setFailure(null);
+    setAttempt((a) => a + 1);
+  }, []);
+
   useEffect(() => {
     if (!failed) return;
-    const retry = () => {
-      refreshed.current = false;
-      setFailure(null);
-      setAttempt((a) => a + 1);
-    };
     window.addEventListener("online", retry);
     return () => window.removeEventListener("online", retry);
-  }, [failed]);
+  }, [failed, retry]);
 
-  return { src: current, failed, key: String(attempt), onError };
+  return { src: current, failed, key: String(attempt), onError, retry };
 }

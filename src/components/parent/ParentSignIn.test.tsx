@@ -46,7 +46,7 @@ const SESSION = {
 };
 
 const typeContact = (v: string) => {
-  fireEvent.change(screen.getByLabelText("Email or phone number"), {
+  fireEvent.change(screen.getByLabelText("Email address"), {
     target: { value: v },
   });
   fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
@@ -69,7 +69,7 @@ beforeEach(() => {
 describe("the universal response", () => {
   it("says the same thing whether or not the contact is known", async () => {
     // There is no signal to branch on - 202 either way - so there must be no
-    // branch. This asserts the copy is conditional on the MEDIUM only.
+    // branch. The copy is the same for every address.
     render(<ParentSignIn />);
     typeContact("ada.okoro@example.com");
 
@@ -99,20 +99,17 @@ describe("the universal response", () => {
   });
 });
 
-describe("email and phone", () => {
-  it("accepts a phone number, and says phone", async () => {
-    // D03 draws "Email address" and says email only. Design's 14 Sep ruling
-    // says SMS is the path to get right, not the fallback - and `request-code`
-    // takes `contact`, not `email`. Email-only would lock out every parent
-    // whose school holds a number. Flagged; this pins the decision.
+describe("email only", () => {
+  it("refuses a phone number at the field, because no code goes to a phone", () => {
+    // SCRUM-126. Parent contact has been email only since SCRUM-162 (20 Sep),
+    // and the backend's `ParentContactMethod` is `email` alone, so a code
+    // "sent" to a phone went nowhere while the screen said "Check your phone".
     render(<ParentSignIn />);
     typeContact("+234 803 123 4567");
 
-    expect(await screen.findByText("Check your phone")).toBeInTheDocument();
-    expect(
-      screen.getByText(/If that number has an account, we’ve sent a code/),
-    ).toBeInTheDocument();
-    expect(requestCode).toHaveBeenCalledWith("+234 803 123 4567");
+    expect(screen.getByRole("alert")).toHaveTextContent(/Enter an email address/i);
+    expect(screen.queryByText("Check your phone")).not.toBeInTheDocument();
+    expect(requestCode).not.toHaveBeenCalled();
   });
 
   it("sends no token, because a returning parent has no invitation", () => {
@@ -126,13 +123,11 @@ describe("email and phone", () => {
     expect(requestCode.mock.calls[0]).toHaveLength(1);
   });
 
-  it("rejects something that is neither, without implying it is unknown", () => {
+  it("rejects something that isn't an address, without implying it is unknown", () => {
     render(<ParentSignIn />);
     typeContact("hello");
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      /Enter an email address or a phone number/i,
-    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/Enter an email address/i);
     expect(requestCode).not.toHaveBeenCalled();
   });
 });
@@ -193,11 +188,11 @@ describe("the code", () => {
     expect(requestCode).toHaveBeenCalledTimes(2);
   });
 
-  it("lets a parent go back and try a different contact", async () => {
+  it("lets a parent go back and try a different email", async () => {
     await reachCode();
-    fireEvent.click(screen.getByRole("button", { name: "Try a different one" }));
+    fireEvent.click(screen.getByRole("button", { name: "Try a different email" }));
 
-    expect(screen.getByLabelText("Email or phone number")).toBeInTheDocument();
+    expect(screen.getByLabelText("Email address")).toBeInTheDocument();
     expect(screen.queryByLabelText("Digit 1 of 4")).not.toBeInTheDocument();
   });
 

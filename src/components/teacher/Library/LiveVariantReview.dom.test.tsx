@@ -73,7 +73,7 @@ describe("the retired approve step", () => {
 
     expect(screen.getByRole("link", { name: /Lesson review · Rewrites/ })).toHaveAttribute(
       "href",
-      "/teacher/lessons/l-1/review?step=3",
+      "/teacher/lessons/l-1/review?step=4",
     );
     // C07b is deleted (design 0d46d4f), and its card with it.
     expect(screen.queryByText("Reviewing happens in four calm steps now")).not.toBeInTheDocument();

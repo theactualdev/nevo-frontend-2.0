@@ -91,28 +91,30 @@ const recorded = (over: Partial<RecordReviewResponse> = {}): ReviewRecord => ({
 });
 
 describe("what the completion screen may claim (D40)", () => {
-  it("says the firmer line only where the server confirmed recall", () => {
+  // Lydia, 26 Oct #8: one line, whatever the scheduler said back.
+  it("says the one line where the server confirmed recall", () => {
     expect(
       reviewCompletionCopy(recorded({ recallSuccessful: true })).heading,
-    ).toBe(REVIEW_COPY.firmer);
+    ).toBe(REVIEW_COPY.seen);
   });
 
-  it("says the plain line where the server did not count it", () => {
-    expect(reviewCompletionCopy(recorded()).heading).toBe(REVIEW_COPY.again);
+  it("says the one line where the server did not count it", () => {
+    expect(reviewCompletionCopy(recorded()).heading).toBe(REVIEW_COPY.seen);
   });
 
-  it("says the plain line where nothing was recorded", () => {
+  it("says the one line where nothing was recorded", () => {
     expect(reviewCompletionCopy({ state: "unsent" }).heading).toBe(
-      REVIEW_COPY.again,
+      REVIEW_COPY.seen,
     );
     expect(reviewCompletionCopy({ state: "failed" }).heading).toBe(
-      REVIEW_COPY.again,
+      REVIEW_COPY.seen,
     );
   });
 
-  it("uses design's words exactly", () => {
-    expect(REVIEW_COPY.firmer).toBe("You've got this one more firmly now.");
-    expect(REVIEW_COPY.again).toBe("You've been through this one again.");
+  it("uses the ruled words exactly", () => {
+    expect(REVIEW_COPY.seen).toBe("You have seen this one before.");
+    expect(REVIEW_COPY.later).toBe("We'll bring it back later.");
+    expect(Object.keys(REVIEW_COPY)).toEqual(["seen", "later"]);
   });
 
   it("holds the heading while the write is in flight, and only then", () => {

@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
+import { GIVES_WAY_AFTER_MS, RECOVERY_LINE } from "./QuickCheckSheet";
 import { SIGNAL_EVENT_TYPES } from "@/lib/constants";
 import type { Lesson } from "@/lib/types";
 
@@ -152,14 +160,16 @@ describe("tapping out of the check (Olayinka, 23 Oct)", () => {
 });
 
 describe("no way on past a check that has not been passed (Olayinka, 23 Oct)", () => {
-  it("has no Keep going before an answer, nor after a miss", async () => {
+  it("has no way on before an answer, nor after a miss", async () => {
+    const wayOn = () =>
+      screen.queryByRole("button", { name: /^(Continue|Keep going)$/ });
     await openCheck();
-    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    expect(wayOn()).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Oxygen/ }));
 
-    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    expect(screen.getByText(RECOVERY_LINE)).toBeInTheDocument();
+    expect(wayOn()).toBeNull();
   });
 
   it("keeps the child on the section however they leave the sheet", async () => {
@@ -172,18 +182,25 @@ describe("no way on past a check that has not been passed (Olayinka, 23 Oct)", (
   });
 });
 
-describe("after a miss (D93)", () => {
-  it("offers Try again alone, and no See it explained", async () => {
+describe("after a miss (D93; 17d S1, on every check since 26 Oct)", () => {
+  it("holds the pick with the frame's line, gives way, and Next asks it afresh", async () => {
     await openCheck();
     fireEvent.click(screen.getByRole("button", { name: /Oxygen/ }));
 
-    expect(screen.getByText("Not quite. Let's look again.")).toBeInTheDocument();
+    expect(screen.getByText(RECOVERY_LINE)).toBeInTheDocument();
+    expect(screen.queryByText("Not quite. Let's look again.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     expect(screen.queryByRole("button", { name: /See it explained/i })).toBeNull();
     expect(screen.queryByText(/progress is saved/i)).toBeNull();
 
-    // Try again puts the question back, answerable straight away.
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(screen.queryByText("Not quite. Let's look again.")).toBeNull();
+    // It gives way by itself, the child still on the section...
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+      timeout: GIVES_WAY_AFTER_MS + 2000,
+    });
+    expect(screen.getByText("Inside a leaf")).toBeInTheDocument();
+    // ...and Next asks the question again, answerable straight away.
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.queryByText(RECOVERY_LINE)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Carbon dioxide/ }));
     expect(screen.getByText("That's it.")).toBeInTheDocument();
   });
@@ -193,7 +210,7 @@ describe("after a passed check (D185)", () => {
   it("says Lydia's line, about the work and not the child", async () => {
     await openCheck();
     fireEvent.click(screen.getByRole("button", { name: /Carbon dioxide/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(screen.getByText("That's it. Here's what's next.")).toBeInTheDocument();
     expect(screen.queryByText(/Nice/)).toBeNull();

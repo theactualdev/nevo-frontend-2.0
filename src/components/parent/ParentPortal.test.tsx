@@ -35,7 +35,7 @@ const TOKEN = "tok";
 const INVITATION: ParentInvitation = {
   invitationId: "inv-1",
   studentFirstName: "Amara",
-  schoolName: "Corona Secondary School",
+  schoolName: "Brightgate Academy",
   schoolPhone: null,
   schoolEmail: null,
   parentName: "Ngozi Okafor",

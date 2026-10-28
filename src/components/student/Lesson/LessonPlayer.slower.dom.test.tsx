@@ -255,12 +255,14 @@ describe("only while the text is on screen", () => {
   );
 });
 
-describe("the chip row's height is the lesson's, not the segment's", () => {
+describe("the chip row's space is the section's (Lydia, 26 Oct #7)", () => {
   /*
    * Since B114 a segment offers Slower only where the server broke its body
    * into chunks, so a lesson can have chips on one segment and none on the
-   * next. Taking the row away there moved the position line, the progress
-   * and the column 62px between the two (round 12's R4, back).
+   * next. Round 12's R4 held the row lesson-wide so the header never moved
+   * between them; Lydia ruled on 26 Oct: "Reserve the space only on sections
+   * that have more than one format, and drop it entirely on sections with
+   * one, where the control can never appear."
    */
   const twoSegments = (secondChunks?: typeof CHUNKS) =>
     ({
@@ -296,20 +298,44 @@ describe("the chip row's height is the lesson's, not the segment's", () => {
     document.querySelector("header [aria-label='Lesson pacing']")
       ?.parentElement ?? null;
 
-  it("keeps the header's rows, so the column top, from a segment with chips to one without", () => {
+  it("drops the row on a one-format section whose text has no chips", () => {
     render(<LessonPlayer lesson={twoSegments()} plan={PLAN} />);
-    const before = headerRows();
     expect(slowerChip()).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(screen.getByRole("heading", { name: "Next" })).toBeInTheDocument();
+    expect(chipRow()).toBeNull();
+    expect(document.querySelector("header .invisible")).toBeNull();
+  });
+
+  it("holds the row, unseen, over the picture of a section with more than one format", () => {
+    const [first] = twoSegments().segments;
+    const withPicture = {
+      ...twoSegments(),
+      segments: [
+        {
+          ...first,
+          modalities: ["text", "visual"],
+          visual: {
+            heading: "The leaf",
+            illustration: { src: "https://cdn.example/leaf.png", alt: "A leaf" },
+          },
+        },
+      ],
+    } as unknown as Lesson;
+    render(<LessonPlayer lesson={withPicture} plan={PLAN} />);
+    const before = headerRows();
+    expect(slowerChip()).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Picture" }));
+
+    // Switching format there never moves the header (rule 7).
+    expect(slowerChip()).toBeNull();
     expect(headerRows()).toEqual(before);
-    // Held, unseen and out of reach: nothing on it to tap.
     expect(chipRow()).toHaveClass("invisible");
     expect(chipRow()).toHaveAttribute("aria-hidden", "true");
     expect(chipRow()).toHaveAttribute("inert");
-    expect(slowerChip()).toBeNull();
   });
 
   it("draws no row anywhere in a lesson with no chips", () => {

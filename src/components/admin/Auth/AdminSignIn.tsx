@@ -24,7 +24,7 @@ import { SupportEmailLink } from "../SupportEmail";
  * Three things the frame draws that are deliberately absent, because each one
  * would be a control leading nowhere:
  *
- * - The school eyebrow ("Corona Secondary School · Lagos"). The frame resolves
+ * - The school eyebrow (the frame's sample school, "· Lagos"). The frame resolves
  *   school identity BEFORE auth, from the school-specific URL that D10 issues.
  *   Nothing hands us a school pre-auth, so naming one would be inventing it.
  * - "Continue with Microsoft 365". The provider comes from the school's own

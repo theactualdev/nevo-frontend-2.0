@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { QuickCheckSheet } from "./QuickCheckSheet";
+import {
+  GIVES_WAY_AFTER_MS,
+  QuickCheckSheet,
+  RECOVERY_LINE,
+} from "./QuickCheckSheet";
 import type { QuickCheck } from "@/lib/types";
 
 /**
@@ -134,14 +138,13 @@ describe("tapping out of the check", () => {
   it("asks the check afresh after tapping out of a miss", () => {
     const view = mountWith({});
     fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
-    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe(RECOVERY_LINE);
 
     content.root?.onOpenChange?.(false);
     view.rerender(sheet({ open: true }));
 
     expect(screen.queryByRole("status")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Oxygen" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Oxygen" })).toBeEnabled();
   });
 
   it("puts no close button of its own on the sheet", () => {
@@ -304,14 +307,14 @@ describe("a spoken check (B16)", () => {
   });
 });
 
-describe("a miss (D93)", () => {
-  it("offers Try again alone: no See it explained, no save claimed", () => {
+describe("a miss (D93; 17d S1)", () => {
+  it("offers nothing to press: no Try again, no See it explained, no save claimed", () => {
     mount();
 
     fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
 
-    expect(screen.getByRole("status").textContent).toBe(CHECK.recoveryNote);
-    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe(RECOVERY_LINE);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     expect(screen.queryByRole("button", { name: /explained/i })).toBeNull();
     expect(document.body.textContent).not.toMatch(/saved/i);
   });
@@ -378,7 +381,7 @@ describe("the sheet's look (design, 13 Oct)", () => {
     expect(className).not.toContain("rounded-t-[20px]");
   });
 
-  it("sets the retry note in the darker violet, never soft violet on cream (D210)", () => {
+  it("sets the line after a miss in the darker violet, as qc-recovery does, never soft violet on cream (D210)", () => {
     mount();
 
     fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
@@ -392,8 +395,10 @@ describe("the sheet's look (design, 13 Oct)", () => {
 /**
  * SCRUM-275, LYDIA 22 OCT: "Two identical navy buttons is a defect, not a
  * choice. One primary per sheet and it is the action that progresses the
- * check, so Try again or Send. Keep going is secondary, not navy, not
- * full-width."
+ * check." Since her 25 Oct ruling the way on after a right answer is the
+ * Lesson Check frame's navy Continue (`qc-correct`), so each answer has its
+ * one primary: Continue after a right answer. A miss has none at all - the
+ * frame's `qc-recovery` gives way instead.
  */
 const classes = (el: Element) => (el.getAttribute("class") ?? "").split(/\s+/);
 /** A navy, full-width button: what only the primary may be. */
@@ -403,7 +408,10 @@ const navyFullWidth = () =>
     .filter(
       (b) => classes(b).includes("bg-nevo-navy") && classes(b).includes("w-full"),
     );
-const keepGoing = () => screen.getByRole("button", { name: "Keep going" });
+const continueButton = () => screen.getByRole("button", { name: "Continue" });
+/** Any way on past the check: today's Continue, or the old Keep going. */
+const wayOn = () =>
+  screen.queryByRole("button", { name: /^(Continue|Keep going)$/ });
 
 type Handlers = {
   open?: boolean;
@@ -426,35 +434,37 @@ const mountWith = (handlers: Handlers) => render(sheet(handlers));
 
 /*
  * NO MOVING ON PAST THE CHECK BEFORE A RIGHT ANSWER (Olayinka, 23 Oct, under
- * Lydia's gate ruling the same day). The Keep going it had before an answer
- * (SCRUM-275, 22 Oct) is gone: the way out is tapping out, back to the
- * section. Try again stays, and Keep going after a right answer.
+ * Lydia's gate ruling the same day; and 25 Oct: "the child shouldn't be able
+ * to move with a wrong answer"). The way out is tapping out, back to the
+ * section. A miss gives way to the section's other ways in, and Continue is the way on after a
+ * right answer (Lydia, 25 Oct; the Lesson Check frame's `qc-correct`).
  */
-describe("Keep going (Olayinka, 23 Oct)", () => {
+describe("the way on (Olayinka, 23 and 25 Oct; Lydia, 25 Oct)", () => {
   it("is not there before any answer", () => {
     mountWith({});
 
-    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    expect(wayOn()).toBeNull();
   });
 
-  it("is not there after a miss: Try again is", () => {
+  it("is not there after a miss, and nor is Try again", () => {
     const onContinue = vi.fn();
     mountWith({ onContinue });
 
     fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
 
-    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
-    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(wayOn()).toBeNull();
     expect(onContinue).not.toHaveBeenCalled();
   });
 
-  it("is the frame's way on after a right answer, and is drawn once", () => {
+  it("is the frame's Continue after a right answer, drawn once, and no Keep going", () => {
     const onContinue = vi.fn();
     mountWith({ onContinue });
 
     fireEvent.click(screen.getByRole("button", { name: "Carbon dioxide" }));
-    expect(screen.getAllByRole("button", { name: "Keep going" })).toHaveLength(1);
-    fireEvent.click(keepGoing());
+    expect(screen.getAllByRole("button", { name: "Continue" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+    fireEvent.click(continueButton());
 
     expect(onContinue).toHaveBeenCalledOnce();
   });
@@ -481,29 +491,117 @@ describe("one navy primary per sheet (SCRUM-275)", () => {
     expect(navyFullWidth().length).toBeLessThanOrEqual(1);
   });
 
-  it("makes Try again the one primary after a miss", () => {
+  it("has no button at all after a miss (qc-recovery)", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
 
-    expect(navyFullWidth()).toEqual([
-      screen.getByRole("button", { name: "Try again" }),
-    ]);
+    expect(navyFullWidth()).toEqual([]);
   });
 
-  it(
-    "draws Keep going secondary after a right answer: not navy, not full width, 44px, a pointer",
-    () => {
-      mount();
-      fireEvent.click(screen.getByRole("button", { name: "Carbon dioxide" }));
+  it("makes Continue the one primary after a right answer, navy and full width (Lydia, 25 Oct)", () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Carbon dioxide" }));
 
-      const own = classes(keepGoing());
-      expect(own).not.toContain("bg-nevo-navy");
-      expect(own).not.toContain("w-full");
-      expect(own).toContain("w-fit");
-      expect(own).toContain("h-11");
-      expect(own).toContain("cursor-pointer");
-      // Named on the button itself, not only in a child span.
-      expect(keepGoing().firstChild?.nodeType).toBe(Node.TEXT_NODE);
-    },
-  );
+    expect(navyFullWidth()).toEqual([continueButton()]);
+    // Named on the button itself, not only in a child span.
+    expect(continueButton().textContent).toBe("Continue");
+  });
+});
+
+/*
+ * SCRUM-282: A MISS IS THE FRAME'S `qc-recovery` (17d S1) - shipped ahead of
+ * the gate (Lydia, 25 Oct), on every check (Olayinka, 26 Oct).
+ */
+describe("a miss, held and giving way (17d S1)", () => {
+  const gatedSheet = (over: Partial<Parameters<typeof QuickCheckSheet>[0]> = {}) =>
+    render(
+      <QuickCheckSheet
+        check={CHECK}
+        open
+        onTapOut={() => {}}
+        onAnswered={() => {}}
+        onContinue={() => {}}
+        onTakeBreak={() => {}}
+        {...over}
+      />,
+    );
+  afterEach(() => vi.useRealTimers());
+
+  it("holds the answer picked, says the frame's line, and offers no Try again", () => {
+    gatedSheet();
+
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+
+    expect(screen.getByRole("status").textContent).toBe(RECOVERY_LINE);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(wayOn()).toBeNull();
+    const held = screen.getByRole("button", { name: "Oxygen" });
+    // Navy, like a pick held - not the violet of a miss - and no dot on it.
+    expect(classes(held)).toContain("border-nevo-navy");
+    expect(classes(held)).not.toContain("border-nevo-violet");
+    expect(held.querySelector("svg, [data-answer-dot], span.rounded-full")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/not quite|wrong|incorrect/i);
+  });
+
+  it("gives way by itself once the line has been read - the system's move, not a tap-out", () => {
+    vi.useFakeTimers();
+    const onGiveWay = vi.fn();
+    const onTapOut = vi.fn();
+    gatedSheet({ onGiveWay, onTapOut });
+
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+    act(() => vi.advanceTimersByTime(GIVES_WAY_AFTER_MS - 1));
+    expect(onGiveWay).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
+
+    expect(onGiveWay).toHaveBeenCalledOnce();
+    expect(onTapOut).not.toHaveBeenCalled();
+    // Asked afresh when it opens again.
+    expect(screen.getByRole("button", { name: "Oxygen" })).toBeEnabled();
+  });
+
+  it("does not give way if the child has already tapped out", () => {
+    vi.useFakeTimers();
+    const onGiveWay = vi.fn();
+    const { rerender } = gatedSheet({ onGiveWay });
+
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+    rerender(
+      <QuickCheckSheet
+        check={CHECK}
+        open={false}
+        onTapOut={() => {}}
+        onAnswered={() => {}}
+        onContinue={() => {}}
+        onTakeBreak={() => {}}
+        onGiveWay={onGiveWay}
+      />,
+    );
+    act(() => vi.advanceTimersByTime(GIVES_WAY_AFTER_MS * 2));
+
+    expect(onGiveWay).not.toHaveBeenCalled();
+  });
+
+  it("affirms a right answer as it always has, and never gives way after one", () => {
+    vi.useFakeTimers();
+    const onGiveWay = vi.fn();
+    gatedSheet({ onGiveWay });
+
+    fireEvent.click(screen.getByRole("button", { name: "Carbon dioxide" }));
+    act(() => vi.advanceTimersByTime(GIVES_WAY_AFTER_MS * 2));
+
+    expect(screen.getByRole("status").textContent).toBe(CHECK.correctNote);
+    expect(continueButton()).toBeInTheDocument();
+    expect(onGiveWay).not.toHaveBeenCalled();
+  });
+
+  it("never says the old \"Not quite\" with its Try again", () => {
+    gatedSheet();
+
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+
+    expect(screen.getByRole("status").textContent).not.toBe(CHECK.recoveryNote);
+    expect(document.body.textContent).not.toMatch(/not quite/i);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
 });

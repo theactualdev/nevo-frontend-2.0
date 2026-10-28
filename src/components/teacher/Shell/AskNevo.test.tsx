@@ -270,6 +270,50 @@ describe("past conversations", () => {
     expect(screen.queryByRole("button", { name: "Helpful" })).not.toBeInTheDocument();
   });
 
+  // Teslim 09a29d8: "Do the same for live replies AND reopened history." A
+  // stored answer's `text` is the same Markdown a live one carries.
+  it("opens a past answer with its list and emphasis, as it was shown", async () => {
+    threads.mockResolvedValue([summary()]);
+    thread.mockResolvedValue({
+      threadId: SERVER_THREAD,
+      title: "What needs my attention today?",
+      role: "teacher",
+      createdAt: new Date().toISOString(),
+      messages: [
+        {
+          messageId: "m-1",
+          author: "asker",
+          sequence: 1,
+          // A teacher's own words are never read as Markdown.
+          text: "What about **JSS 2A**?",
+          blocks: [],
+          createdAt: new Date().toISOString(),
+        },
+        {
+          messageId: "m-2",
+          author: "nevo",
+          sequence: 2,
+          text: "Two things:\n\n1. Tunde **stalled** on Tuesday.\n2. Amara finished early.",
+          blocks: [],
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    openDrawer();
+    fireEvent.click(screen.getByRole("button", { name: "Past conversations" }));
+    fireEvent.click(await screen.findByRole("button", { name: /What needs my attention today\?/i }));
+
+    const items = await screen.findAllByRole("listitem");
+    expect(items.map((li) => li.textContent)).toEqual([
+      "Tunde stalled on Tuesday.",
+      "Amara finished early.",
+    ]);
+    expect(items[0].closest("ol")).not.toBeNull();
+    expect(items[0].querySelector("strong")?.textContent).toBe("stalled");
+    expect(screen.getByText("What about **JSS 2A**?")).toBeInTheDocument();
+  });
+
   it("orders a transcript by sequence, not by the order it arrived", async () => {
     threads.mockResolvedValue([summary()]);
     thread.mockResolvedValue({

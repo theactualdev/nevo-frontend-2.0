@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { ParsedRow } from "./csv";
 import { TEXT_ACTION } from "../Roster/primitives";
 
@@ -162,6 +163,13 @@ export function RejectedRows({
         Fix these rows in your file and upload it again. Everything else was
         imported and will not be duplicated.
       </p>
+      {/* CL-07: a row naming a class the school doesn't have is cured by
+          creating the class, so the way there sits beside the reason. */}
+      {broken.some((r) => r.unknownClass) && (
+        <Link href="/admin/classes" className={`mt-2 inline-block ${TEXT_ACTION}`}>
+          Create your classes
+        </Link>
+      )}
     </div>
   );
 }

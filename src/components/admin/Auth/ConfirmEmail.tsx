@@ -90,10 +90,15 @@ const HEADING: Record<EmailConfirmationStatus, string> = {
 /**
  * D01b's bodies, which say more than the server's `message` can.
  *
- * The frame names the 24-hour lifetime and the address the link went to. The
+ * The frame names the link's lifetime and the address the link went to. The
  * server's `message` is one sentence with no knowledge of either, so where the
  * frame has written copy it wins, and `message` is the fallback for the two
  * states D01b does not draw.
+ *
+ * 48 HOURS, NOT THE FRAME'S 24 (SCRUM-151). The backend's
+ * `CONFIRMATION_LIFETIME` is 48 hours, the confirmation email itself says "The
+ * link works for 48 hours", and Teslim asked for this screen to say 48 too. An
+ * admin told 24 would give up on a link that still works.
  *
  * `email` is nullable - an invalid token identifies nobody - so the address
  * clause is composed only when there is one, never as "sent to null".
@@ -101,8 +106,8 @@ const HEADING: Record<EmailConfirmationStatus, string> = {
 function bodyFor(status: EmailConfirmationStatus, email: string | null): string | null {
   if (status === "expired") {
     return email
-      ? `Confirmation links last 24 hours. We can send a fresh one to ${email}.`
-      : "Confirmation links last 24 hours. We can send a fresh one.";
+      ? `Confirmation links last 48 hours. We can send a fresh one to ${email}.`
+      : "Confirmation links last 48 hours. We can send a fresh one.";
   }
   if (status === "already_confirmed") {
     return "You’ve confirmed this address already – perhaps on another device, or by clicking the link twice. Nothing more to do here; just sign in and carry on.";

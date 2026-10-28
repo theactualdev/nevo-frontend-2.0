@@ -356,7 +356,7 @@ describe("the way into the four-step review", () => {
     show();
 
     expect(screen.getByRole("heading", { name: /2 things need a quick look/ })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Review in four steps/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Review in five steps/ })).toHaveAttribute(
       "href",
       "/teacher/lessons/l-9/review",
     );
@@ -381,6 +381,30 @@ describe("the way into the four-step review", () => {
     expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
   });
 
+  /*
+   * ASSIGN WAITS FOR THE SIGN-OFF (Lydia, 25 Oct), and this is the case that
+   * let it go: the server's `readyToAssign` is true and nothing is counted,
+   * but the lesson-wide sign-off is not in. Its pictures, narration and
+   * guiding questions would have reached children unreviewed.
+   */
+  it("holds Assign until the lesson is signed off, and says what waits", () => {
+    reviewState({ ready: true, signedOff: false });
+
+    show();
+
+    expect(screen.queryByRole("link", { name: "Assign to a class" })).not.toBeInTheDocument();
+    expect(screen.getByText("Review this lesson to assign it.")).toBeInTheDocument();
+  });
+
+  it("draws no Ready pill beside Needs review", () => {
+    reviewState({ ready: true, signedOff: false });
+
+    show();
+
+    expect(screen.getByText("Needs review")).toBeInTheDocument();
+    expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+  });
+
   it("lists no key points and approves nothing on this page", () => {
     reviewState({
       keyPoints: [kp("kp-1", true), kp("kp-3", false)],
@@ -402,7 +426,7 @@ describe("the way into the four-step review", () => {
     show();
 
     expect(screen.getByText("Ready when you are")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Review in four steps/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Review in five steps/ })).not.toBeInTheDocument();
   });
 
   it("draws no way in on a deployment that cannot say", () => {
@@ -410,7 +434,7 @@ describe("the way into the four-step review", () => {
 
     show();
 
-    expect(screen.queryByRole("link", { name: /Review in four steps/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Review in five steps/ })).not.toBeInTheDocument();
   });
 
   it("waits for the review read before it says anything", () => {
@@ -418,7 +442,7 @@ describe("the way into the four-step review", () => {
 
     show();
 
-    expect(screen.queryByRole("link", { name: /Review in four steps/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Review in five steps/ })).not.toBeInTheDocument();
   });
 
   it("shows the lesson's total minutes and no per-section breakdown", () => {

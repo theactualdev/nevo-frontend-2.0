@@ -13,6 +13,13 @@ import { useHydrated } from "./useHydrated";
 /** The namespace of a device-task day's `itemId` (B79): never a probe item. */
 const DEVICE_TASK_ID = "device:";
 
+/**
+ * A task the engine can name for the day that this screen has nothing to show
+ * for: the question task with no question served, and the motor-speed task,
+ * which has no warm-up of its own (Teslim's 7c98014, 27 Oct, rotated it in).
+ */
+export type UnpresentableTask = "domain" | "motor_speed";
+
 /** A question the engine served with the day's dimension. No answer key. */
 export interface WarmUpItem {
   itemId: string;
@@ -38,7 +45,7 @@ export interface WarmUpItem {
  */
 export type WarmUpPrompt =
   | { state: "waiting" }
-  | { state: "none"; doneToday?: boolean; cannotPresent?: "domain" }
+  | { state: "none"; doneToday?: boolean; cannotPresent?: UnpresentableTask }
   | {
       state: "ready";
       dimension: BaselineDimension;
@@ -114,6 +121,17 @@ export function toPrompt(res: Partial<RecalibratePrompt>): WarmUpPrompt {
   // Only a boolean is an answer. Absent is a deployment that does not say.
   const done =
     typeof res.doneToday === "boolean" ? { doneToday: res.doneToday } : {};
+  /*
+   * THE MOTOR-SPEED DAY (7c98014, 27 Oct). The engine now rotates the motor
+   * task into the daily warm-up, and no warm-up screen for it is drawn: the
+   * motor step is onboarding's. So it goes as the question task with no
+   * question does - the nothing-state, and the engine told it was skipped
+   * (B117) - never as silence, which it was, nor as onboarding's step run
+   * where no frame puts it.
+   */
+  if (dimension === "motor_speed") {
+    return { state: "none", cannotPresent: "motor_speed", ...done };
+  }
   if (
     typeof dimension !== "string" ||
     !(BASELINE_DIMENSIONS as readonly string[]).includes(dimension)

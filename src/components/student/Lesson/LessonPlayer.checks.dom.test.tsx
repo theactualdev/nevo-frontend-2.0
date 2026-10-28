@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
+import { GIVES_WAY_AFTER_MS, RECOVERY_LINE } from "./QuickCheckSheet";
 import { LESSON_STATUS } from "@/lib/api/lessons";
 import { ApiError } from "@/lib/api/client";
 import { clearSession, setSession } from "@/lib/auth/session";
@@ -143,6 +144,16 @@ const REVIEW = {
   assessment: undefined,
 } as unknown as Lesson;
 
+/**
+ * Asked again as a child is now (26 Oct): the miss holds a beat and the
+ * sheet gives way, then Next opens the check afresh. No Try again any more.
+ */
+const askAgain = async () => {
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+    timeout: GIVES_WAY_AFTER_MS + 2000,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+};
 const next = () =>
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
 const statuses = () => progress.report.mock.calls.map((c) => c[0]);
@@ -153,7 +164,7 @@ const leave = () =>
 const toAssessment = async () => {
   next();
   fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   next();
   fireEvent.click(screen.getByRole("button", { name: "Start" }));
 };
@@ -260,7 +271,7 @@ describe("leaving the after-lesson check (D36)", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     next();
     progress.report.mockClear();
 
@@ -315,7 +326,7 @@ describe("every answer to a check is stored as it is given", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: /The denominator/ }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await askAgain();
     fireEvent.click(screen.getByRole("button", { name: /The numerator/ }));
 
     expect(saveAttempt.mock.calls).toEqual([
@@ -517,7 +528,7 @@ describe("what the review tells the scheduler (B28)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     next();
   };
 
@@ -584,7 +595,7 @@ describe("which sitting the review names (Teslim, 19 Oct)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     next();
     return view;
   };
@@ -623,7 +634,7 @@ describe("which sitting the review names (Teslim, 19 Oct)", () => {
 
     expect(recordReview).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("heading", { name: "You've been through this one again." }),
+      screen.getByRole("heading", { name: "You have seen this one before." }),
     ).toBeTruthy();
     expect(screen.queryByText(/bring it back/i)).toBeNull();
   });
@@ -637,7 +648,7 @@ describe("which sitting the review names (Teslim, 19 Oct)", () => {
 
     expect(recordReview).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("heading", { name: "You've been through this one again." }),
+      screen.getByRole("heading", { name: "You have seen this one before." }),
     ).toBeTruthy();
   });
 
@@ -648,7 +659,7 @@ describe("which sitting the review names (Teslim, 19 Oct)", () => {
 
     expect(recordReview).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("heading", { name: "You've been through this one again." }),
+      screen.getByRole("heading", { name: "You have seen this one before." }),
     ).toBeTruthy();
   });
 });
@@ -686,66 +697,67 @@ describe("what the review's completion may claim (D40)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     next();
   };
 
-  it("says the firmer line, and the return, when the scheduler confirms both", async () => {
+  it("says the one line, and the return, when the scheduler confirms both (Lydia, 26 Oct #8)", async () => {
     recordReview.mockResolvedValue({ recallSuccessful: true, schedule });
     await finish();
 
     expect(
       await screen.findByRole("heading", {
-        name: "You've got this one more firmly now.",
+        name: "You have seen this one before.",
       }),
     ).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/firmly/i);
     expect(screen.getByText("We'll bring it back later.")).toBeTruthy();
   });
 
-  it("says the plain line, and the return, when the verdict is withheld", async () => {
+  it("says the one line, and the return, when the verdict is withheld", async () => {
     // What a student's write answers since d461b60: no verdict, never a "no".
     recordReview.mockResolvedValue({ recallSuccessful: null, outcome: null, schedule });
     await finish();
 
     expect(
       await screen.findByRole("heading", {
-        name: "You've been through this one again.",
+        name: "You have seen this one before.",
       }),
     ).toBeTruthy();
     expect(screen.getByText("We'll bring it back later.")).toBeTruthy();
   });
 
-  it("says the plain line when the scheduler did not count it", async () => {
+  it("says the one line when the scheduler did not count it", async () => {
     recordReview.mockResolvedValue({ recallSuccessful: false, schedule });
     await finish();
 
     expect(
       await screen.findByRole("heading", {
-        name: "You've been through this one again.",
+        name: "You have seen this one before.",
       }),
     ).toBeTruthy();
   });
 
-  it("says the plain line, and no return, when nothing was recorded", async () => {
+  it("says the one line, and no return, when nothing was recorded", async () => {
     // No concept on the URL: nothing to tell the scheduler, so nothing is.
     await finish(null);
 
     expect(recordReview).not.toHaveBeenCalled();
     expect(
       screen.getByRole("heading", {
-        name: "You've been through this one again.",
+        name: "You have seen this one before.",
       }),
     ).toBeTruthy();
     expect(screen.queryByText(/bring it back/i)).toBeNull();
   });
 
-  it("says the plain line, and no return, when the write failed", async () => {
+  it("says the one line, and no return, when the write failed", async () => {
     recordReview.mockRejectedValue(new Error("offline"));
     await finish();
 
     expect(
       await screen.findByRole("heading", {
-        name: "You've been through this one again.",
+        name: "You have seen this one before.",
       }),
     ).toBeTruthy();
     expect(screen.queryByText(/bring it back/i)).toBeNull();
@@ -755,8 +767,8 @@ describe("what the review's completion may claim (D40)", () => {
     recordReview.mockReturnValue(new Promise(() => {}));
     await finish();
 
-    // Kept in place but hidden, so the plain line is not swapped for the
-    // firmer one in front of the child a moment later.
+    // Kept in place but hidden, so the screen lands once, with whatever the
+    // scheduler said back.
     expect(screen.queryByRole("heading")).toBeNull();
     expect(document.querySelector("h2")?.className).toContain("invisible");
   });
@@ -765,11 +777,11 @@ describe("what the review's completion may claim (D40)", () => {
     recordReview.mockResolvedValue({ recallSuccessful: true, schedule });
     await finish();
     await screen.findByRole("heading", {
-      name: "You've got this one more firmly now.",
+      name: "You have seen this one before.",
     });
 
     expect(document.body.textContent).not.toMatch(
-      /strengthened|settling in|fully sticks|nicely paced/i,
+      /strengthened|settling in|fully sticks|nicely paced|firmly|been through/i,
     );
   });
 });
@@ -779,7 +791,7 @@ describe("an ordinary lesson's completion (D40)", () => {
     render(<LessonPlayer lesson={REVIEW} plan={null} />);
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     next();
 
     expect(
@@ -824,7 +836,7 @@ describe("the reading accommodation reaches the checks (D30)", () => {
 const intoCheck = async () => {
   next();
   fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   next();
 };
 
@@ -1127,18 +1139,20 @@ describe("no way on past an unpassed check (Olayinka, 23 Oct)", () => {
       key: "Escape",
     });
 
-  it("has no Keep going until the check is answered right", async () => {
+  it("has no way on until the check is answered right", async () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).queryByRole("button", { name: "Keep going" })).toBeNull();
+    const wayOn = () =>
+      within(dialog).queryByRole("button", { name: /^(Continue|Keep going)$/ });
+    expect(wayOn()).toBeNull();
 
     fireEvent.click(
       within(dialog).getByRole("button", { name: /The denominator/ }),
     );
 
-    expect(within(dialog).getByRole("button", { name: "Try again" })).toBeEnabled();
-    expect(within(dialog).queryByRole("button", { name: "Keep going" })).toBeNull();
+    expect(within(dialog).getByRole("status").textContent).toBe(RECOVERY_LINE);
+    expect(wayOn()).toBeNull();
   });
 
   it("after a miss and a tap out, records the miss and keeps the child on the section", async () => {
@@ -1173,7 +1187,7 @@ describe("no way on past an unpassed check (Olayinka, 23 Oct)", () => {
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
     fireEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Keep going" }),
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Continue" }),
     );
 
     expect(screen.getByRole("heading", { name: "Denominators" })).toBeInTheDocument();
@@ -1195,7 +1209,7 @@ describe("no way on past an unpassed check (Olayinka, 23 Oct)", () => {
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
     fireEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Keep going" }),
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Continue" }),
     );
 
     expect(screen.getByRole("button", { name: "I'm done" })).toBeInTheDocument();

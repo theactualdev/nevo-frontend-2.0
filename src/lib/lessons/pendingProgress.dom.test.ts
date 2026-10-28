@@ -6,6 +6,7 @@ import {
   holdAnswer,
   holdProgress,
   holdsAnswers,
+  onHeldProgressLanded,
   pendingProgressFor,
   sendHeldAnswers,
 } from "./pendingProgress";
@@ -133,6 +134,37 @@ describe("progress that could not be saved", () => {
     await flushPendingProgress();
 
     expect(pendingProgressFor("lesson-1")).toBeNull();
+  });
+
+  /*
+   * AND SAYS SO, because Home has already read its rows by then - the shell
+   * flushes as Home first reads (24 Oct production run).
+   */
+  it("tells the screens once when a held position lands", async () => {
+    vi.spyOn(lessonsApi, "saveProgress").mockResolvedValue({} as never);
+    holdAs("student-1", "lesson-a");
+    holdAs("student-1", "lesson-b");
+    const heard = vi.fn();
+    const stop = onHeldProgressLanded(heard);
+
+    await flushPendingProgress();
+    stop();
+
+    expect(heard).toHaveBeenCalledTimes(1);
+  });
+
+  it("says nothing when no held position reached the server", async () => {
+    vi.spyOn(lessonsApi, "saveProgress").mockRejectedValue(
+      new ApiError(0, "offline"),
+    );
+    holdAs("student-1", "lesson-1");
+    const heard = vi.fn();
+    const stop = onHeldProgressLanded(heard);
+
+    await flushPendingProgress();
+    stop();
+
+    expect(heard).not.toHaveBeenCalled();
   });
 
   it("sends nothing when nobody is signed in", async () => {

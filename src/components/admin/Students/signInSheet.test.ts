@@ -27,7 +27,7 @@ describe("signInCsv", () => {
       row({ firstName: "Chidi", lastName: "Adeyemi", admissionNumber: "BGA/2026/002" }),
     ]);
     const lines = csv.replace(/^﻿/, "").trim().split("\r\n");
-    expect(lines[0]).toBe("First name,Last name,Class,Student ID,School code");
+    expect(lines[0]).toBe("First name,Last name,Class,Student ID / Admission Number,School code");
     expect(lines.slice(1)).toEqual([
       "Chidi,Adeyemi,JSS 2A,BGA/2026/002,K7DQ",
       "Amara,Okafor,JSS 2A,BGA/2026/014,K7DQ",

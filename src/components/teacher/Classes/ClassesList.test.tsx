@@ -18,7 +18,7 @@ import { SCHOOL_LINE, TEACHER_CLASSES } from "@/lib/mocks/teacherClasses";
 /**
  * The school line under "My Classes", and the flash it used to show.
  *
- * `SCHOOL_LINE` is the fixture string "Corona Secondary School · Second term".
+ * `SCHOOL_LINE` is the fixture string "Brightgate Academy · Second term".
  * The header rendered it whenever `live` was false - and `live` is false for
  * the whole in-flight window, not only after a failure. So a real teacher at
  * a real school watched another school's name, and a term that is not

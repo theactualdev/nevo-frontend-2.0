@@ -11,6 +11,14 @@ const { create, useTeacherClasses, useLessonLibrary, useStudentDirectory, useHas
   }));
 
 vi.mock("@/lib/api/assignments", () => ({ assignmentsApi: { create } }));
+// Confirm asks each picked lesson's review for the sign-off (Lydia, 25 Oct).
+// Signed off unless a test says otherwise.
+const { review } = vi.hoisted(() => ({
+  review: vi.fn(async (_id: string): Promise<{ reviewComplete?: boolean }> => ({
+    reviewComplete: true,
+  })),
+}));
+vi.mock("@/lib/api/lessons", () => ({ lessonsApi: { review } }));
 vi.mock("@/hooks/useTeacherClasses", () => ({ useTeacherClasses }));
 vi.mock("@/hooks/useLessonLibrary", () => ({ useLessonLibrary }));
 vi.mock("@/hooks/useStudentDirectory", () => ({ useStudentDirectory }));

@@ -13,10 +13,13 @@ import { askNevoApi, asUuid } from "@/lib/api";
 import {
   allowanceSpent,
   safetyStop,
+  type AnswerBlock,
   type SafetyStop,
   type ThreadSummary,
   type ThreadTranscript,
 } from "@/lib/api/askNevo";
+import { AnswerBlocks } from "@/components/shared/AnswerBlocks";
+import { answerBlocksFor } from "@/lib/answerMarkdown";
 import { LessonContext } from "@/context/LessonContext";
 import { useAuth, useSignals } from "@/hooks";
 import { SIGNAL_EVENT_TYPES } from "@/lib/constants";
@@ -64,6 +67,8 @@ const PROMPTS = ["Explain this differently", "Give me a hint", "I'm stuck"];
 interface Message {
   who: "user" | "nevo";
   text: string;
+  /** A live answer's pieces, drawn by `AnswerBlocks` rather than `text`. */
+  blocks?: AnswerBlock[];
   /** The hands-to-teacher reply carries its action (frame's cannot-help state). */
   teacherAction?: boolean;
   /** Backend interaction id - carried for the helpfulness vote once the
@@ -333,6 +338,11 @@ export function AskNevo() {
           ? {
               who: "nevo",
               text: res.answer,
+              // Drawn by its pieces, never the Markdown string as it is: a
+              // child saw its asterisks (Teslim, 25 Oct). Read from the
+              // Markdown so bold and code are kept, which the server's own
+              // blocks strip; those are the fallback. See `answerBlocksFor`.
+              blocks: answerBlocksFor(res),
               interactionId: res.interactionId,
               // Frame 26's "Can't help · hands to teacher": the server's own
               // answer, with the way to the teacher beside it. Strictly
@@ -504,7 +514,7 @@ export function AskNevo() {
                 }
                 const bubble = (
                   <div className="flex max-w-[88%] flex-col gap-3 rounded-2xl rounded-bl-[5px] bg-nevo-violet/22 px-3.5 py-3 text-[15px] leading-[1.5]">
-                    {message.text}
+                    <AnswerBlocks blocks={message.blocks} text={message.text} />
                     {message.sample && (
                       <span className="text-[12.5px] leading-[1.4] text-nevo-near-black/60 italic">
                         I couldn&rsquo;t connect just now, so this is a sample
@@ -803,8 +813,13 @@ function ReadOnlyThread({
           </div>
         ) : (
           <div key={m.messageId} className="flex justify-start">
+            {/* Drawn as the live answer was - by its pieces, bold and code
+                kept (Teslim, 25 Oct). */}
             <div className="max-w-[88%] rounded-2xl rounded-bl-[5px] bg-nevo-violet/22 px-3.5 py-3 text-[15px] leading-[1.5]">
-              {m.text}
+              <AnswerBlocks
+                blocks={answerBlocksFor({ answer: m.text, blocks: m.blocks })}
+                text={m.text}
+              />
             </div>
           </div>
         ),

@@ -38,7 +38,7 @@ const AMARA: ParentChild = {
   lastName: "Okafor",
   status: "active",
   schoolId: "sc-1",
-  schoolName: "Corona Secondary School",
+  schoolName: "Brightgate Academy",
 };
 const TUNDE: ParentChild = { ...AMARA, studentId: "s-2", firstName: "Tunde" };
 

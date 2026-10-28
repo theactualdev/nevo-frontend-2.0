@@ -45,6 +45,7 @@ import type {
   DensityLevel,
   Lesson,
   LessonSegment,
+  QuickCheck,
   SegmentAdaptation,
 } from "@/lib/types";
 import { cn, randomId } from "@/lib/utils";
@@ -77,8 +78,10 @@ import {
   lessonsApi,
   type LessonQuestionAttempt,
   type LessonQuestionAttemptWrite,
+  type ReteachingResponse,
   type SegmentChoiceWrite,
 } from "@/lib/api/lessons";
+import { WAY_IN_PRESSES, waysInFor, type WayIn } from "@/lib/lessons/waysIn";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { msUntilServerTime } from "@/lib/api/serverClock";
 import {
@@ -128,6 +131,7 @@ import { ONE_MORE_BIT, PressedLine } from "./PressedLine";
 import { ScaffoldIndicator } from "./ScaffoldIndicator";
 import { QuickCheckSheet } from "./QuickCheckSheet";
 import { ReviewEntryScreen } from "./ReviewEntryScreen";
+import { WaysInCard } from "./WaysInCard";
 import {
   type ReviewAnswer,
   saveCheckOutcome,
@@ -163,13 +167,6 @@ const densitiesFor = (segment: LessonSegment) =>
         isChunkable(segment.text?.body.default, segment.text?.readingChunks)
       : segment.text?.body[id] !== undefined,
   );
-
-/** What holds the chip row's height, unseen, on a segment that has none. */
-const HELD_CHIPS: ToggleSegment[] = DENSITIES.map(({ id, label }) => ({
-  id,
-  label,
-  state: "default",
-}));
 
 // Each density is its own event type in the backend ingest contract.
 const DENSITY_TRIGGER: Record<Density, SignalEventType> = {
@@ -235,6 +232,19 @@ const PARTIAL_ENDING = {
 
 /** Why a calculation whose solver threw is its text - see `failedCalcs`. */
 const SOLVER_FAILED = "the solver failed on the device";
+
+/**
+ * A section's checks, in order: every one where it has several
+ * (`quickChecks`), else its one. Each gates on its own (Lydia, 23 Oct #1).
+ */
+function checksOf(segment: LessonSegment): QuickCheck[] {
+  if (segment.quickChecks?.length) return segment.quickChecks;
+  return segment.quickCheck ? [segment.quickCheck] : [];
+}
+
+/** What a check's evidence and answers are kept under: its id, else its place. */
+const checkKey = (segmentId: string, check: QuickCheck, at: number) =>
+  check.id ?? `${segmentId}:${at}`;
 
 /** A calculation segment whose Interactive modality routes to the solver (§8). */
 function isCalculation(segment: LessonSegment): boolean {
@@ -707,6 +717,81 @@ export function LessonPlayer({
   const [passedChecks, setPassedChecks] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  /*
+   * AND THE ONES PASSED BEFORE THIS PAGE LOADED (24 Oct production run, item
+   * 4: The Periodic Table's section 4 was asked again after a reload, though
+   * the server had marked it right). Passed is the SERVER'S MARK - a stored
+   * quick-check answer to this section's own question with `correct: true` -
+   * read back once the sitting opens, and nothing counted or decided here
+   * (rule 3). The whole lesson's answers, not one sitting's, because that is
+   * how the server's own comprehension gate counts a pass
+   * (`gate_for_position`); its `GET .../comprehension` names no passes while
+   * the gate is off, which it is in production, so it cannot be the source.
+   * Unread, every check is asked as it was before (rule 5).
+   *
+   * Only for a live lesson the child is working through, as `choicesHeld`:
+   * a finished lesson opened again is a sitting on work that ended.
+   */
+  /*
+   * HOW MANY OF A SECTION'S CHECKS ARE BEHIND THE CHILD, in order (Lydia, 23
+   * Oct #1: asked one after another, each gating on its own). A section is
+   * passed - `passedChecks` - once every one is. A check is passed by a right
+   * answer alone, the server's mark read back or the sheet's own, and nothing
+   * is counted here beyond which of them that is (rule 3).
+   */
+  const [checksDone, setChecksDone] = useState<ReadonlyMap<string, number>>(
+    () => new Map(),
+  );
+  /*
+   * The section whose check was just answered right, its way on not yet
+   * taken: the sheet stays on that check, with "Next check" or "Finish",
+   * until it is - see `checkShown`.
+   */
+  const [rightOn, setRightOn] = useState<string | null>(null);
+  // Once a lesson: the read is the server's word as the sitting opened, and a
+  // pass made after it is added where the answer lands.
+  const passesAsked = useRef<string | null>(null);
+  const sittingOpen = Boolean(progress.opened);
+  useEffect(() => {
+    if (!choicesHeld || !sittingOpen || passesAsked.current === lesson.id) {
+      return;
+    }
+    passesAsked.current = lesson.id;
+    lessonsApi
+      .attempts(lesson.id)
+      .then((rows) => {
+        const right = new Set(
+          rows.flatMap((r) =>
+            r.source === "checkpoint" && r.correct === true ? [r.questionId] : [],
+          ),
+        );
+        /*
+         * A SECTION'S CHECKS ARE ASKED IN ORDER, so what it has behind it is
+         * the run of them from the first that the server marked right: a
+         * section with every one is passed, and one part way opens on the
+         * first it has not.
+         */
+        const done = new Map<string, number>();
+        const passed: string[] = [];
+        for (const s of lesson.segments) {
+          const checks = checksOf(s);
+          let n = 0;
+          while (n < checks.length && checks[n].id && right.has(checks[n].id!)) n++;
+          if (n === 0) continue;
+          done.set(s.id, n);
+          if (n === checks.length) passed.push(s.id);
+        }
+        if (done.size === 0) return;
+        setChecksDone((prev) => {
+          const next = new Map(prev);
+          for (const [id, n] of done) next.set(id, Math.max(n, prev.get(id) ?? 0));
+          return next;
+        });
+        if (passed.length === 0) return;
+        setPassedChecks((prev) => new Set([...prev, ...passed]));
+      })
+      .catch(() => {});
+  }, [choicesHeld, sittingOpen, lesson]);
   const [checkOpen, setCheckOpen] = useState(false);
   /*
    * B94 / SCRUM-241: THE SERVER HANDING A CHILD OFF FROM A QUICK CHECK to the
@@ -891,7 +976,8 @@ export function LessonPlayer({
    * What is sent is B28's `outcome` - what happened, not a mark - and the
    * server decides whether it counts as recall. Since d461b60 it decides
    * that for a student from the answers it marked in the named sitting, and
-   * answers `recallSuccessful: null`, so the firmer line cannot show (asked).
+   * answers `recallSuccessful: null` - and the screen says one line whatever
+   * it answers (Lydia, 26 Oct #8): see `reviewCompletionCopy`.
    *
    * A failure is not announced. The scheduler missing one outcome costs a
    * slightly wrong interval; telling a child their review did not count would
@@ -984,10 +1070,12 @@ export function LessonPlayer({
               : { rightOnPick: first ? 1 : null, hinted: false },
         };
       }),
-      ...lesson.segments.map((s) => ({
-        conceptId: s.quickCheck?.conceptId,
-        evidence: checkRecall.current.get(s.id),
-      })),
+      ...lesson.segments.flatMap((s) =>
+        checksOf(s).map((check, at) => ({
+          conceptId: check.conceptId,
+          evidence: checkRecall.current.get(checkKey(s.id, check, at)),
+        })),
+      ),
     ].flatMap((q) =>
       q.conceptId === reviewConceptId && q.evidence ? [q.evidence] : [],
     );
@@ -1080,6 +1168,22 @@ export function LessonPlayer({
   );
 
   const segment = asEntered(lesson.segments[index]);
+  /*
+   * THE CHECK THE SHEET ASKS on this section: the first not yet behind the
+   * child, or - while a right answer's way on is still to be taken - the one
+   * just answered, so "Next check" or "Finish" stays with it. A section's last
+   * check stays the one shown once it is passed. Null with no check at all.
+   */
+  const checksHere = checksOf(segment);
+  const checkShown = (() => {
+    if (checksHere.length === 0) return null;
+    const done = checksDone.get(segment.id) ?? 0;
+    const at = Math.min(
+      rightOn === segment.id ? done - 1 : done,
+      checksHere.length - 1,
+    );
+    return { check: checksHere[Math.max(0, at)], at: Math.max(0, at) };
+  })();
 
   /*
    * THE PACE HELD ON THE SECTION ON SCREEN as the sitting's word lands with a
@@ -1760,12 +1864,19 @@ export function LessonPlayer({
    * condition that draws it below - and not again as the child opens it,
    * which is theirs. Once per segment, like a hint: a return visit or a
    * re-render is not the engine applying it again.
+   *
+   * NEVER ON A CALCULATION (Lydia, 26 Oct #1): "The calculation is already
+   * guided steps, so opening the panel inside it is a second scaffold on top
+   * of the one the child is already in." A missed step gets more support
+   * inside the step, fewer steps or a slower pace - the solver's own - so an
+   * engine panel sent for a calculation is drawn nowhere, and not counted.
    */
-  const panelOnScreen =
-    segmentShowing &&
+  const enginePanel =
     contentHere &&
     action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
-    guidedPrompts.length > 0;
+    guidedPrompts.length > 0 &&
+    !isCalculation(segment);
+  const panelOnScreen = segmentShowing && enginePanel;
   const countedPanels = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!panelOnScreen || countedPanels.current.has(segment.id)) return;
@@ -1880,18 +1991,6 @@ export function LessonPlayer({
     // The system-owned wait closes with it (SCRUM-94.9).
     trackBusy(BUSY_REASON.MODALITY_SWITCH, BUSY_PHASE.END);
   };
-  /*
-   * THE FORMAT ROW'S HEIGHT IS THE LESSON'S, as the chip row's is (below): a
-   * section with one format has no group, and taking the row away there
-   * would lift the position line and the progress between one section and
-   * the next. Held, unseen, wherever the lesson has a group anywhere - but
-   * not on the solver, which draws no row and needs the room.
-   */
-  const formatsInLesson = useMemo(
-    () => lesson.segments.some((s) => formatsOf(s, undefined).length >= 2),
-    [lesson],
-  );
-
   const go = (next: number) => {
     if (next < 0 || next >= total) return;
     // A switch still on its way stays with the segment it was made on: the
@@ -2055,11 +2154,17 @@ export function LessonPlayer({
    * exists. False means there is no handoff." So a reply without it is no
    * hand-off at all, whatever else it carries: no panel, and the check stays
    * the way on. There is no panel that ends nowhere.
+   *
+   * AND NONE ON A CALCULATION (Lydia, 26 Oct #1), whatever the server sends:
+   * Teslim's 4c5706a stopped the three-miss hand-off there, and one still
+   * arriving is passed over - the check stays, as with no hand-off at all.
    */
   const openHandoff = (segmentId: string, stored: LessonQuestionAttempt) => {
     if (stored.handoffTo !== "socratic_panel") return;
     if (stored.advanceAfterHandoff !== true) return;
-    if (answeredRight.current.has(segmentId)) return;
+    const on = lesson.segments.find((s) => s.id === segmentId);
+    if (on && isCalculation(asEntered(on))) return;
+    if (answeredRight.current.has(stored.questionId ?? segmentId)) return;
     const prompts = (stored.guidedPrompts ?? []).flatMap((p) =>
       p?.id && p.prompt?.trim() ? [{ id: p.id, prompt: p.prompt }] : [],
     );
@@ -2103,10 +2208,11 @@ export function LessonPlayer({
    * touched: nothing timed is sent from here - the wait only decides when to
    * ask, and what is asked is a read.
    *
-   * ONLY WHILE THE QUESTION IS STILL OPEN: its check is up on that section,
-   * unpassed and not handed off. Answering it right, a hand-off arriving,
-   * the sheet closing (a tap-out), leaving the section or the lesson
-   * unmounting each ends that, and the read with it - see `unresolvedCheck`.
+   * ONLY WHILE THE QUESTION IS STILL OPEN: its check is up on that section -
+   * or gave way there after a miss - unpassed and not handed off. Answering
+   * it right, a hand-off arriving, a tap-out, leaving the section or the
+   * lesson unmounting each ends that, and the read with it - see
+   * `unresolvedCheck` and `gaveWayOn`.
    * A read already on its way when that happens is not followed.
    */
   const reread = useRef<{ timer: ReturnType<typeof setTimeout> | null } | null>(
@@ -2117,10 +2223,19 @@ export function LessonPlayer({
     if (pending?.timer != null) clearTimeout(pending.timer);
     reread.current = null;
   }, []);
-  // The section whose check is up and still unresolved, or null.
+  /*
+   * A MISS THAT GAVE WAY IS STILL AN OPEN QUESTION. Since 26 Oct every miss
+   * holds a beat and the sheet gives way to the section's other ways in
+   * (`QuickCheckSheet`'s `qc-recovery`) - the system's move, not the child's.
+   * So the question stays open on that section, and a hand-off the server
+   * timed for later still comes, until the child taps out, passes it or leaves
+   * the section. Tapping out is the child leaving the question, as before.
+   */
+  const [gaveWayOn, setGaveWayOn] = useState<string | null>(null);
+  // The section whose check is up - or gave way - and is still unresolved.
   const unresolvedCheck =
     phase === "segments" &&
-    checkOpen &&
+    (checkOpen || gaveWayOn === segment.id) &&
     !passedChecks.has(segment.id) &&
     !handedOff.has(segment.id)
       ? segment.id
@@ -2215,6 +2330,9 @@ export function LessonPlayer({
   const tapOutOfCheck = () => {
     if (!checkOpen) return;
     fragmented();
+    setGaveWayOn(null);
+    // A right answer whose way on was not taken: next time, the next check.
+    setRightOn(null);
     setCheckOpen(false);
   };
 
@@ -2426,19 +2544,6 @@ export function LessonPlayer({
   );
   const densitySegments = modality === MODALITY.TEXT ? textChips : [];
   /*
-   * THE CHIP ROW'S HEIGHT IS THE LESSON'S, NOT THE SEGMENT'S. Whether a
-   * segment offers a chip is down to its own content - since B114, whether
-   * the server broke its body into chunks - so taking the row away on a
-   * segment with none lifted the position line, the progress and the column
-   * 62px from one segment to the next. A lesson with a chip anywhere holds
-   * the row on every segment; a lesson with none has no row at all.
-   */
-  const chipsInLesson = useMemo(
-    () => lesson.segments.some((s) => densitiesFor(s).length > 0),
-    [lesson],
-  );
-
-  /*
    * B45: KEPT AS THE SCREEN CHANGES, READ AS THE CHILD LEAVES. React runs a
    * commit's effect cleanups before its setups, so the time-on-segment
    * cleanup reads the segment being left before the next one's version
@@ -2590,6 +2695,86 @@ export function LessonPlayer({
       atShownMs: shownSoFar(),
     };
     setModality(to);
+  };
+
+  /*
+   * SCRUM-282: THE WAYS IN, AFTER A MISS ON ANY CHECK.
+   *
+   * Lydia, 23 Oct: a missed in-lesson check no longer moves the child on; the
+   * section is offered another way, in place, position kept, and the child
+   * moves on once they have got it - "a gate with no ways out is worse than
+   * no gate". The player holds every check (Olayinka, 25 Oct; Lydia, 26 Oct),
+   * so Olayinka switched the ways in on for every check on 26 Oct, ahead of
+   * the server's own gate. The server says which ways the section has and
+   * which it suggests (`reteaching`); nothing here chooses one.
+   *
+   * Where it is said: THE ANSWER'S OWN REPLY. Since Teslim's cdba131 a marked
+   * miss returns its re-teaching at once (`reteaching`, top level), whether
+   * the gate is on or not - "use that response rather than wait for a later
+   * adapt call". The nested `comprehensionGate.reteaching` is read where the
+   * top level is absent. And the sitting's read as it opens
+   * (`GET .../comprehension`), which names it only while the server's gate is
+   * on, so a reload comes back to the ways in it left then. Only for a live
+   * lesson the child is working through - a finished lesson opened again
+   * holds nothing. No re-teaching sent is no card (rule 5).
+   */
+  const [reteach, setReteach] = useState<ReteachingResponse | null>(null);
+  const gateSitting =
+    choicesHeld && progress.opened ? (progress.sessionId ?? null) : null;
+  const gateAsked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!gateSitting || gateAsked.current === gateSitting) return;
+    gateAsked.current = gateSitting;
+    lessonsApi
+      .comprehension(lesson.id, gateSitting)
+      .then((gate) => {
+        if (gateAsked.current !== gateSitting) return;
+        if (gate.required === true && gate.reteaching) {
+          setReteach(gate.reteaching);
+        }
+      })
+      // Unread is nothing to offer yet: the next miss's reply brings it.
+      .catch(() => {});
+  }, [gateSitting, lesson.id]);
+  /** A miss's re-teaching, from its reply, for the section it answered. */
+  const noteReteaching = (segmentId: string, stored: LessonQuestionAttempt) => {
+    if (stored.correct !== false) return;
+    const given = stored.reteaching ?? stored.comprehensionGate?.reteaching;
+    if (given?.segmentId === segmentId) setReteach(given);
+  };
+  // The ways in for this section, while its check is still to pass. Not on a
+  // calculation, whose ways are the solver's (Lydia, 23 Oct).
+  const reteachHere =
+    !isCalculation(segment) &&
+    reteach?.segmentId === segment.id &&
+    !passedChecks.has(segment.id)
+      ? reteach
+      : null;
+  const waysHere = waysInFor(reteachHere, {
+    formats: formatsHere,
+    // The paces the section's text has, over a picture too (Lydia, 26 Oct,
+    // D3) - so long as the section has its text to show them in.
+    densities: formatsHere.includes(MODALITY.TEXT)
+      ? textChips.map((d) => d.id as Density)
+      : [],
+  });
+  /*
+   * TAKING ONE PRESSES THE SECTION'S OWN CONTROL - the format group or the
+   * pace chip - so it is exactly the child's pick there, held and signalled
+   * as that is. A pace already on is left on: the chip toggles, a way does not.
+   *
+   * A PACE TAKEN OVER A PICTURE BRINGS THE TEXT IN IT (D3): "Simplify gives
+   * them the simpler text and the picture stays one tap away rather than
+   * being replaced" - the format group still holds it.
+   */
+  const takeWay = (way: WayIn) => {
+    const presses = WAY_IN_PRESSES[way];
+    if ("format" in presses) {
+      pickFormat(presses.format);
+      return;
+    }
+    if (manualDensity !== presses.density) pickDensity(presses.density);
+    if (modality !== MODALITY.TEXT) pickFormat(MODALITY.TEXT);
   };
 
   /*
@@ -2778,10 +2963,23 @@ export function LessonPlayer({
   const calcShowing =
     modality === MODALITY.INTERACTIVE && isCalculation(segment);
   const calcBlocking = calcShowing && !solvedCalcs.has(segment.id);
-  // The control column's two rows, drawn or held - see the header.
-  const formatRow = showFormats || (formatsInLesson && !calcShowing);
+  /*
+   * THE CONTROL COLUMN'S TWO ROWS, AND THE SPACE HELD FOR THEM (Lydia, 26 Oct
+   * #7): "Reserve the space only on sections that have more than one format,
+   * and drop it entirely on sections with one, where the control can never
+   * appear. A header that jumps is worse than dead space, and permanent dead
+   * space on a section that can never use it is worse than tight."
+   *
+   * So a section with one format has no format row, and its chips' row only
+   * where its text offers chips. A section with two or more holds its chips'
+   * row, unseen, over a picture or a recording, where its text has chips to
+   * come back to - switching format there never moves the header. Between
+   * sections the header follows the section: that is the ruling, and it
+   * replaces the lesson-wide hold (round 12's R4) this kept until 27 Oct.
+   */
+  const formatRow = showFormats;
   const densityRow =
-    densitySegments.length > 0 || (chipsInLesson && !calcShowing);
+    densitySegments.length > 0 || (showFormats && textChips.length > 0);
   /*
    * THE SUPPORT LEVEL, ONE VALUE FOR THE DOTS AND THE SOLVER (B116). The
    * engine config's starting level is "client-applied ... Support dots only
@@ -3240,28 +3438,19 @@ export function LessonPlayer({
             different job from the format marker. */}
         {(formatRow || densityRow) && (
           <div className="flex flex-col items-end gap-2">
-            {/* The format group, only for a section with two formats or more.
-                HELD, UNSEEN, on a section with fewer in a lesson that has a
-                group anywhere (`formatsInLesson`), as the chip row is held
-                below - not on the solver. Its height is one pill row. */}
+            {/* The format group, only for a section with two formats or more,
+                and nothing held in its place on one with fewer (Lydia, 26 Oct
+                #7). */}
             {formatRow && (
-              <div
-                className={cn("flex justify-end", !showFormats && "invisible")}
-                aria-hidden={!showFormats || undefined}
-                inert={!showFormats}
-              >
-                {showFormats ? (
-                  <FormatGroup
-                    formats={formatsHere}
-                    // Mid-switch the pill picked reads selected (frame).
-                    current={switchingHere ?? modality}
-                    recommended={recommendedHere}
-                    onPick={pickFormat}
-                    busy={switchingHere !== null}
-                  />
-                ) : (
-                  <div className="h-[52px]" />
-                )}
+              <div className="flex justify-end">
+                <FormatGroup
+                  formats={formatsHere}
+                  // Mid-switch the pill picked reads selected (frame).
+                  current={switchingHere ?? modality}
+                  recommended={recommendedHere}
+                  onPick={pickFormat}
+                  busy={switchingHere !== null}
+                />
               </div>
             )}
             {/* Frame: the density toggle sits on its own right-aligned row,
@@ -3269,13 +3458,11 @@ export function LessonPlayer({
                 Absent entirely when the segment has no reshapes to offer,
                 rather than an empty pill rail.
 
-                HELD, UNSEEN, WHERE THIS SCREEN HAS NO CHIPS IN A LESSON THAT
-                HAS THEM - over a picture or a recording, or on a segment whose
-                text offers none (`chipsInLesson`): taking the row away lifted
-                the position line and the progress 62px between one segment
-                and the next - a change of version is felt, not seen (rule 7).
-                Not on the solver: 17a draws no row there, and it needs the
-                room. */}
+                HELD, UNSEEN, OVER A PICTURE OR A RECORDING of a section whose
+                text has chips, so switching format there never lifts the
+                position line and the progress - a change of version is felt,
+                not seen (rule 7). Nowhere else (Lydia, 26 Oct #7): see
+                `densityRow`. */}
             {densityRow && (
               <div
                 className={cn(
@@ -3287,11 +3474,7 @@ export function LessonPlayer({
               >
                 <AdaptiveToggleBar
                   segments={
-                    densitySegments.length > 0
-                      ? densitySegments
-                      : textChips.length > 0
-                        ? textChips
-                        : HELD_CHIPS
+                    densitySegments.length > 0 ? densitySegments : textChips
                   }
                   onSelect={pickDensity}
                 />
@@ -3402,10 +3585,14 @@ export function LessonPlayer({
               />
             )}
             {feedback && <FeedbackStrip message={feedback} />}
-            {(handoffHere ||
-              (contentHere &&
-                action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
-                guidedPrompts.length > 0)) && (
+            {/* SCRUM-282: the other ways in, in place, after a miss. */}
+            <WaysInCard
+              ways={waysHere.ways}
+              suggested={waysHere.suggested}
+              onTake={takeWay}
+              reading={readingOn}
+            />
+            {(handoffHere || enginePanel) && (
                 <SocraticPanel
                   key={
                     handoffHere
@@ -3580,8 +3767,9 @@ export function LessonPlayer({
                   /*
                    * EVERY STEP THE CHILD COMMITS IS WRITTEN, each wrong try its
                    * own answer, for the server to mark: the engine's error
-                   * streak - what offers a hint and opens the Socratic panel -
-                   * is read from marked answers alone, so a calculation got
+                   * streak - what offers a hint, though never the Socratic
+                   * panel here (Lydia, 26 Oct #1) - is read from marked
+                   * answers alone, so a calculation got
                    * wrong could never make support rise (Lydia, 17 Oct). In
                    * addition to the step's signal below, never in the child's
                    * way, and nothing the server says back changes the solver.
@@ -3674,10 +3862,16 @@ export function LessonPlayer({
         </div>
       </div>
 
-      {segment.quickCheck && (
+      {checkShown && (
         <QuickCheckSheet
-          key={`check-${segment.id}`}
-          check={segment.quickCheck}
+          // Remounted per check, so each is asked with nothing picked.
+          key={`check-${segment.id}-${checkShown.at}`}
+          check={checkShown.check}
+          position={
+            checksHere.length > 1
+              ? { at: checkShown.at + 1, of: checksHere.length }
+              : undefined
+          }
           open={checkOpen}
           onTapOut={tapOutOfCheck}
           onTakeBreak={takeBreakFromCheck}
@@ -3685,9 +3879,17 @@ export function LessonPlayer({
           // `hintInSheet`.
           hint={hintInSheet ? hintCard : null}
           reading={readingOn}
+          // A miss is held, then gives way to the ways in - the question
+          // still open on this section (`gaveWayOn`).
+          onGiveWay={() => {
+            setGaveWayOn(segment.id);
+            setCheckOpen(false);
+          }}
           onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
           onAnswered={(correct, answered) => {
-            const checkpointId = segment.quickCheck?.id;
+            const { check, at } = checkShown;
+            const checkpointId = check.id;
+            const key = checkKey(segment.id, check, at);
             // The catalogue's keys, `source` naming a quick check's answer
             // from the after-lesson check's; the pick goes up on the attempt
             // below, where the server marks it - with the time it took as the
@@ -3704,30 +3906,46 @@ export function LessonPlayer({
                 questionId: checkpointId,
                 segmentId: segment.id,
                 source: "checkpoint",
-                choice: segment.quickCheck?.options.find(
+                choice: check.options.find(
                   (o) => o.id === answered.selectedId,
                 ),
                 responseTimeMs: answered.responseTimeMs,
                 hinted: hintedSegments.current.has(segment.id),
               }),
-              // B94: the server's answer may hand this child off.
-              (stored) => handOffFrom(segment.id, stored),
+              // B94: the server's answer may hand this child off; and a miss
+              // brings the section's other ways in (SCRUM-282).
+              (stored) => {
+                handOffFrom(segment.id, stored);
+                noteReteaching(segment.id, stored);
+              },
             );
-            if (correct) answeredRight.current.add(segment.id);
+            if (correct) answeredRight.current.add(checkpointId ?? segment.id);
             noteAnswer(correct);
             // Which pick first got it, for the scheduler - a miss re-opens the
             // check until it is passed, so "passed" is true of everyone.
-            const seen = checkRecall.current.get(segment.id);
+            const seen = checkRecall.current.get(key);
             const picks = (seen?.picks ?? 0) + 1;
-            checkRecall.current.set(segment.id, {
+            checkRecall.current.set(key, {
               picks,
               rightOnPick: seen?.rightOnPick ?? (correct ? picks : null),
               hinted: seen?.hinted ?? hintedSegments.current.has(segment.id),
             });
-            if (correct)
+            if (!correct) return;
+            // This check is behind the child; the section once every one is.
+            setRightOn(segment.id);
+            setChecksDone((prev) =>
+              new Map(prev).set(
+                segment.id,
+                Math.max(at + 1, prev.get(segment.id) ?? 0),
+              ),
+            );
+            if (at + 1 >= checksHere.length)
               setPassedChecks((prev) => new Set(prev).add(segment.id));
           }}
           onContinue={() => {
+            setRightOn(null);
+            // "Next check": the next of the section's, in this same sheet.
+            if (checkShown.at + 1 < checksHere.length) return;
             setCheckOpen(false);
             // Lydia's words (D185, 13 Oct): about the work, not the child.
             setFeedback("That's it. Here's what's next.");

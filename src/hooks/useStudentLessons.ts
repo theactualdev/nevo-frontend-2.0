@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import type {
   LessonStatus,
@@ -8,6 +8,7 @@ import type {
 } from "@/components/student/Lessons/lessonCatalog";
 import { unavailableReason } from "@/lib/lessons/availability";
 import { isFinishedRow } from "@/lib/lessons/finishedRow";
+import { onHeldProgressLanded } from "@/lib/lessons/pendingProgress";
 import { segmentPlace } from "@/lib/lessons/segmentPlace";
 import { useStudentAssignments } from "./useStudentAssignments";
 import { useStudentDashboard } from "./useStudentDashboard";
@@ -68,7 +69,11 @@ export interface StudentLessons {
 }
 
 export function useStudentLessons(): StudentLessons {
-  const { data, failed, loading } = useStudentDashboard();
+  const { data, failed, loading, refresh } = useStudentDashboard();
+  // Read again once anything this device held reaches the server, so a
+  // completion that lands after the first read still files under Completed.
+  // See `onHeldProgressLanded`.
+  useEffect(() => onHeldProgressLanded(refresh), [refresh]);
   /*
    * AND EVERY ASSIGNMENT, FINISHED ONES INCLUDED - which the dashboard leaves
    * out (22 Oct production run: a child whose only lesson was finished read

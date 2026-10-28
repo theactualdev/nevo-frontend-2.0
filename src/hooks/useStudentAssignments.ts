@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { assignmentsApi, type Assignment } from "@/lib/api/assignments";
+import { onHeldProgressLanded } from "@/lib/lessons/pendingProgress";
 import { useLiveQuery } from "./useLiveQuery";
 
 /**
@@ -24,8 +25,14 @@ import { useLiveQuery } from "./useLiveQuery";
  *
  * Only ever a supplement to the dashboard. While it loads, or when it fails,
  * the screens draw from the dashboard as they did before it existed.
+ *
+ * Read again when held progress lands, as the dashboard is: a held completion
+ * finishes its assignment too. See `onHeldProgressLanded`.
  */
 export function useStudentAssignments() {
   const run = useCallback(() => assignmentsApi.list(), []);
-  return useLiveQuery<Assignment[]>(run, []);
+  const query = useLiveQuery<Assignment[]>(run, []);
+  const { refresh } = query;
+  useEffect(() => onHeldProgressLanded(refresh), [refresh]);
+  return query;
 }

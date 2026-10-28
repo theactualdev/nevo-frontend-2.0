@@ -20,7 +20,7 @@ export function LessonReviewRoute({
   step,
 }: {
   lessonId: string;
-  step?: 1 | 2 | 3 | 4;
+  step?: 1 | 2 | 3 | 4 | 5;
 }) {
   const hydrated = useHydrated();
   const flow = useLessonReviewFlow(lessonId);

@@ -106,7 +106,7 @@ describe("the Student ID column", () => {
   it("heads the column and shows each child's admission number", async () => {
     render(<StudentsView />);
     await screen.findByText("Chisom Eze");
-    expect(screen.getByText("Student ID")).toBeInTheDocument();
+    expect(screen.getByText("Student ID / Admission Number")).toBeInTheDocument();
     expect(screen.getByText("BGA/2026/014")).toBeInTheDocument();
   });
 
