@@ -34,6 +34,14 @@ export interface TeamMember {
    * answer, and then no level is shown for anyone.
    */
   accessLevel?: AdminAccessLevel | null;
+  /**
+   * Who made them senior, and when (6b2b961, 27 Oct) - D03b's "Made senior by
+   * Mrs. F. Adebayo · 13 October". Null for a founder, who started senior, and
+   * for anyone standard.
+   */
+  seniorPromotedBy?: string | null;
+  seniorPromotedByName?: string | null;
+  seniorPromotedAt?: string | null;
 }
 
 /**

@@ -80,6 +80,45 @@ const open = async (name: string) => {
   return screen.getByRole("dialog", { name: `${name} Adebayo's access` });
 };
 
+describe("Made senior by (D03b; 6b2b961)", () => {
+  it("says who made a senior senior, and when", async () => {
+    list.mockResolvedValue([
+      ME_SENIOR,
+      BUKOLA,
+      member("u-3", "Grace", "senior", {
+        seniorPromotedBy: "u-me",
+        seniorPromotedByName: "Folake Adebayo",
+        seniorPromotedAt: "2026-10-13T09:00:00Z",
+      }),
+    ]);
+    render(<AdminTeamView />);
+    const sheet = await open("Grace");
+    expect(within(sheet).getByText("Made senior by Folake Adebayo · 13 October")).toBeInTheDocument();
+  });
+
+  it("says nothing for a senior with no recorded promotion - a founder starts senior", async () => {
+    render(<AdminTeamView />);
+    const sheet = await open("Grace");
+    expect(within(sheet).queryByText(/^Made senior/)).toBeNull();
+  });
+
+  it("takes who and when from the server's answer to a promotion", async () => {
+    promoteSenior.mockImplementation(async (id: string) => ({
+      ...BUKOLA,
+      userId: id,
+      accessLevel: "senior",
+      seniorPromotedBy: "u-me",
+      seniorPromotedByName: null,
+      seniorPromotedAt: "2026-10-28T09:00:00Z",
+    }));
+    render(<AdminTeamView />);
+    const sheet = await open("Bukola");
+    fireEvent.click(within(sheet).getByRole("button", { name: "Make Bukola Adebayo senior" }));
+    // No name sent, but it was the viewer: "you".
+    expect(await within(sheet).findByText("Made senior by you · 28 October")).toBeInTheDocument();
+  });
+});
+
 describe("on someone else's record", () => {
   it("says Standard, and offers a senior viewer Make senior", async () => {
     render(<AdminTeamView />);
