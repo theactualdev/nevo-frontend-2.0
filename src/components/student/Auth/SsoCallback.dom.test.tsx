@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { SsoCallback } from "./SsoCallback";
 import { ApiError } from "@/lib/api/client";
 import { clearSession, getSession } from "@/lib/auth/session";
@@ -227,6 +234,42 @@ describe("the error screen offers only what works", () => {
       screen.queryByRole("button", { name: "Contact your school" }),
     ).toBeNull();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  /*
+   * Lydia, 26 Oct #3: "Both screens need a way forward: try again, or sign
+   * in another way. No screen in Nevo leaves someone with only the
+   * browser's back button."
+   */
+  it("offers Sign in another way, to the student door, where Try again cannot work", async () => {
+    render(<SsoCallback />);
+
+    const another = await screen.findByRole("button", {
+      name: "Sign in another way",
+    });
+    // The one way forward here, so the primary.
+    expect(another).toHaveAttribute("data-variant", "primary");
+    fireEvent.click(another);
+
+    expect(replace).toHaveBeenCalledWith("/auth/login");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("offers it under Try again, which stays the one primary, where a retry can work", async () => {
+    setUrl("provider=microsoft&code=c&state=state-1");
+    ssoCallback.mockRejectedValue(new ApiError(0, "Network"));
+
+    render(<SsoCallback />);
+
+    const retry = await screen.findByRole("button", { name: "Try again" });
+    const another = screen.getByRole("button", { name: "Sign in another way" });
+    // The one filled navy button is Try again.
+    expect(retry.className).toContain("bg-nevo-navy");
+    expect(another).toHaveAttribute("data-variant", "secondary");
+    expect(another.className).not.toContain("bg-nevo-navy");
+    expect(
+      retry.compareDocumentPosition(another) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("carries the icon mark, as 00b draws it", async () => {

@@ -39,7 +39,11 @@ export function afterRetry(destination: string): string | null {
  *  - OFFLINE: "Offline (full screen)", less what cannot be true here. "Your
  *    progress is saved - and your downloaded lessons are still here" and "See
  *    saved lessons" come out: nothing says anything was saved, and a door into
- *    the saved lessons is a door past the check. "Try again" stays, as drawn.
+ *    the saved lessons is a door past the check. "Try again" stays, as drawn,
+ *    and "Sign in another way" goes under it (Lydia, 26 Oct #3: "Both screens
+ *    need a way forward: try again, or sign in another way. No screen in Nevo
+ *    leaves someone with only the browser's back button."). It is Go back's
+ *    door, below; the door needs the network like every sign-in does.
  *  - ANY OTHER FAILURE: the generic error, "Something went wrong. We're on it.
  *    Try again or go back." The failure was reported as it happened, so "We're
  *    on it" is true.
@@ -108,6 +112,13 @@ export function EntryCheckFailed({ next }: { next?: string }) {
         onClick={retry}
       >
         Try again
+      </Button>
+      <Button
+        variant="ghost"
+        className="mt-2 h-12 w-full max-w-[290px] text-[15px] font-normal sm:max-w-[340px]"
+        onClick={backToTheDoor}
+      >
+        Sign in another way
       </Button>
     </main>
   );
