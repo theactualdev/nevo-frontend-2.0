@@ -976,7 +976,8 @@ export function LessonPlayer({
    * What is sent is B28's `outcome` - what happened, not a mark - and the
    * server decides whether it counts as recall. Since d461b60 it decides
    * that for a student from the answers it marked in the named sitting, and
-   * answers `recallSuccessful: null`, so the firmer line cannot show (asked).
+   * answers `recallSuccessful: null` - and the screen says one line whatever
+   * it answers (Lydia, 26 Oct #8): see `reviewCompletionCopy`.
    *
    * A failure is not announced. The scheduler missing one outcome costs a
    * slightly wrong interval; telling a child their review did not count would
