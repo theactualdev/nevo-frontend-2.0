@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { assignmentsApi } from "@/lib/api/assignments";
 import { useLessonLibrary } from "@/hooks/useLessonLibrary";
@@ -14,6 +14,11 @@ import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { cn } from "@/lib/utils";
 import { dayOf, longDay, soonestOpening } from "./pastDate";
 import { MaybeSample } from "@/components/shared/SampleRegion";
+import {
+  awaitingSignOff,
+  notReviewedTail,
+  reviewHrefFor,
+} from "@/lib/lessons/signOff";
 
 /**
  * C07i Lesson Assignment: four steps, each a direct question - conversational
@@ -393,6 +398,23 @@ export function AssignWizard({
         )[0]?.id;
   const classes = classChoice ?? new Set(firstClass ? [firstClass] : []);
   const picked = [...chosen].filter((id) => offered.has(id));
+  /*
+   * ASSIGN WAITS FOR THE LESSON-WIDE SIGN-OFF (Lydia, 25 Oct), at this door
+   * too. The lesson page holds Assign until the server's `reviewComplete`,
+   * but step 1 offers the whole library, and the library list carries no
+   * sign-off - so any lesson could be picked here and sent unreviewed.
+   *
+   * Leaving them off the list, as lessons still being read are, would mean
+   * reading the review of every lesson in the library on every open. So
+   * Confirm asks about the PICKED ones, at the moment of sending, and a lesson
+   * the server says is not signed off sends the teacher back to step 1, where
+   * it is named with the way to its review. Their classes and time are kept.
+   */
+  const [unreviewed, setUnreviewed] = useState<string[]>([]);
+  /** Still picked and still held. Unticking one clears it from the line. */
+  const heldPicks = lessons.filter(
+    (l) => picked.includes(l.id) && unreviewed.includes(l.id),
+  );
 
   /** Tomorrow in `YYYY-MM-DD`, local. Called from a handler, never render. */
   const tomorrow = () => {
@@ -524,6 +546,14 @@ export function AssignWizard({
     setSubmitting(true);
     setError("");
     setErrorHref("");
+    const held = await awaitingSignOff(picked);
+    if (held.size > 0) {
+      setSubmitting(false);
+      setUnreviewed([...held]);
+      setStep(1);
+      return;
+    }
+    setUnreviewed([]);
     const lessonIds = picked;
     /*
      * ONE REQUEST FOR A STUDENT PICK, one per class otherwise.
@@ -904,6 +934,25 @@ export function AssignWizard({
                   />
                 ))}
                 </MaybeSample>
+                {heldPicks.length > 0 && (
+                  <p
+                    role="status"
+                    className="text-[14px] leading-[1.55] font-medium text-nevo-navy"
+                  >
+                    {heldPicks.map((l, i) => (
+                      <Fragment key={l.id}>
+                        {i > 0 && (i === heldPicks.length - 1 ? " and " : ", ")}
+                        <Link
+                          href={reviewHrefFor(l.id)}
+                          className="cursor-pointer font-semibold underline underline-offset-2"
+                        >
+                          {l.title}
+                        </Link>
+                      </Fragment>
+                    ))}
+                    {notReviewedTail(heldPicks.length)}
+                  </p>
+                )}
               </div>
             )}
 

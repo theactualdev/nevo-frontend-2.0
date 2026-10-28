@@ -471,8 +471,13 @@ export interface LessonReview {
   rewriteCount?: number;
   pendingRewriteCount?: number;
   /**
-   * Both current sign-offs are in (a lesson with no rewrites needs only the
-   * first). NOT the assignment gate - `readyToAssign` keeps its old meaning.
+   * Every current sign-off is in: key points, rewrites where there are any,
+   * and guiding questions where there are any (Teslim d5f4057).
+   *
+   * HALF OF THE ASSIGNMENT GATE since Lydia's ruling of 25 Oct: "Assign waits
+   * for the lesson-wide sign-off." `readyToAssign` keeps its own meaning and
+   * Assign waits for both - see `LessonDetailActions` and
+   * `lib/lessons/signOff`.
    */
   reviewComplete?: boolean;
   /**
