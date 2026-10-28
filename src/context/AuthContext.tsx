@@ -10,6 +10,7 @@ import {
 } from "react";
 import { ApiError, authApi } from "@/lib/api";
 import { clearSession, getSession } from "@/lib/auth/session";
+import { clearAllKeptDrafts } from "@/lib/drafts/keptDraft";
 import { onSessionEnd } from "@/lib/auth/sessionEnd";
 import type { UserRole } from "@/lib/constants";
 import { sweepStoredCaptures } from "@/lib/profiling/capture";
@@ -159,6 +160,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(() => {
     // Server-side revoke is best-effort; the local session always clears.
     void authApi.logout().catch(() => {});
+    // A deliberate sign-out leaves no unsaved drafts behind on a shared
+    // tablet (SCRUM-246 keeps them only across a LAPSE). Before the session
+    // clears, while it can still say whose they are.
+    clearAllKeptDrafts();
     /*
      * AND IT CLEARS NOW, not when the revoke answers. `logout` cleared the
      * token and the role cookie in its `finally`, after the round trip - but
