@@ -50,6 +50,7 @@ function coverNote(flagged: number, without: number, flaggedWord: string): strin
 
 export function StepMedia({
   media,
+  remade = new Set(),
   flagged,
   onFlag,
   approved,
@@ -59,6 +60,13 @@ export function StepMedia({
   retryRefusal,
 }: {
   media: MediaView;
+  /**
+   * Items this teacher flagged and sent back in this visit. One that is
+   * waiting again is the remake, and says so (design 11; Lydia, 26 Oct: "A
+   * teacher who flagged something and sees an identical picture will either
+   * flag it again or assume we ignored them").
+   */
+  remade?: ReadonlySet<string>;
   flagged: ReadonlySet<string>;
   onFlag: (mediaId: string) => void;
   /** Nothing shown is still waiting: this step's media is approved. */
@@ -102,6 +110,10 @@ export function StepMedia({
   const shownRecordings = allRecordings ? recordings : recordings.slice(0, RECORDINGS_SHOWN);
   const flaggedPictures = pictures.filter((p) => flagged.has(p.item.id)).length;
   const flaggedRecordings = recordings.filter((r) => flagged.has(r.item.id)).length;
+  /** Back from a remake this teacher asked for, and waiting for a look. */
+  const isRemade = (row: MediaRow) =>
+    remade.has(row.item.id) && row.item.status === "awaiting_review";
+
   // Once approved, a flag has nothing left to act on.
   const canFlag = (row: MediaRow) => !approved && row.item.status === "awaiting_review" && !working;
 
@@ -151,10 +163,16 @@ export function StepMedia({
                         <FlagIcon />
                       </button>
                     )}
-                    {isFlagged && (
+                    {isFlagged ? (
                       <span className="absolute bottom-[7px] left-[7px] rounded-full bg-nevo-violet/32 px-[9px] py-0.5 text-[10px] font-semibold text-nevo-navy">
                         Flagged
                       </span>
+                    ) : (
+                      isRemade(row) && (
+                        <span className="absolute bottom-[7px] left-[7px] rounded-full bg-nevo-navy px-[9px] py-0.5 text-[10px] font-semibold text-nevo-cream">
+                          Remade
+                        </span>
+                      )
                     )}
                   </MediaTile>
                   <span className="mt-[7px] block text-[12px] leading-[1.3] text-nevo-near-black/60">
@@ -208,7 +226,14 @@ export function StepMedia({
                     disabled={unplayable}
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="text-[14px] font-medium text-nevo-near-black xl:text-[15px]">{row.label}</div>
+                    <div className="flex flex-wrap items-center gap-2 text-[14px] font-medium text-nevo-near-black xl:text-[15px]">
+                      {row.label}
+                      {isRemade(row) && !isFlagged && (
+                        <span className="rounded-full bg-nevo-navy px-2 py-px text-[10.5px] font-semibold text-nevo-cream">
+                          Remade
+                        </span>
+                      )}
+                    </div>
                     {playing && (
                       <div className="mt-2 h-1 overflow-hidden rounded-full bg-nevo-navy/14">
                         <span className="block h-full rounded-full bg-nevo-navy" style={{ width: `${Math.max(4, sampler.progress * 100)}%` }} />

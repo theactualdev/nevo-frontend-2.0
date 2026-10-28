@@ -76,6 +76,13 @@ export interface LessonReviewFlowState {
    * stops the press, so a teacher's flag is never overridden by the approval.
    */
   approveMedia: (approve: string[], remake: string[]) => Promise<boolean>;
+  /**
+   * The pictures and recordings this teacher flagged and sent back in this
+   * visit (design 11; Lydia, 26 Oct: "show remade as remade"). The server
+   * keeps an item's id through a remake and says nothing of it, so this is
+   * the one record there is, and it lasts as long as the visit.
+   */
+  remade: ReadonlySet<string>;
   /** Try a failed picture or recording again. */
   retryMedia: (mediaId: string) => Promise<boolean>;
 }
@@ -88,6 +95,7 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
   const [working, setWorking] = useState<ReviewWork | null>(null);
   const [refused, setRefused] = useState<LessonReviewFlowState["refused"]>(null);
   const [changed, setChanged] = useState(false);
+  const [remade, setRemade] = useState<ReadonlySet<string>>(() => new Set());
 
   const readLesson = useCallback(
     () => lessonsApi.detail(lessonId).then(setLesson),
@@ -248,7 +256,10 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
       setWorking("media");
       setRefused(null);
       try {
-        for (const id of remake) await mediaApi.retry(lessonId, id);
+        for (const id of remake) {
+          await mediaApi.retry(lessonId, id);
+          setRemade((s) => new Set(s).add(id));
+        }
         if (approve.length > 0) await mediaApi.approve(lessonId, approve);
         await rereadAll().catch(() => {});
         return true;
@@ -302,6 +313,7 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
     resolveMissing,
     editRewrite,
     approveMedia,
+    remade,
     retryMedia,
   };
 }
