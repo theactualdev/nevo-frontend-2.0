@@ -180,13 +180,25 @@ describe("both checks done and it still holds (S5, design cb527bf)", () => {
     const said = (await card()).textContent ?? "";
     expect(said).toMatch(/we’ve heard back from Mrs\. Adeyemi\. The two still differ/);
     expect(said).toMatch(/Your record reads 14 March 2013; Mrs\. Adeyemi’s doesn’t match it\./);
-    expect(said).toMatch(/You and Mrs\. Adeyemi together\. Settle Tunde’s real date between you\./);
+    // Not a dead end (Lydia, 28 Oct): one agreed date, then support.
+    expect(said).toMatch(
+      /You and Mrs\. Adeyemi together\. Agree Tunde’s real date between you, then send it to us at support@nevolearning\.com\./,
+    );
     expect(said).toMatch(/Tunde’s record is removed on 19 November 2026\./);
     // Held from the frame: no roster route sets the date, and no day count is ours to give.
     expect(screen.queryByRole("link", { name: /Set the agreed date/ })).toBeNull();
     expect(said).not.toMatch(/days from today/);
     // The server tells the parent nothing after their own second check.
     expect(said).not.toMatch(/We’ve let/);
+  });
+
+  it("says where the agreed date goes - support, by email, with the child named", async () => {
+    held.mockResolvedValue([both()]);
+    render(<DobHoldView />);
+    const link = within(await card()).getByRole("link", { name: "support@nevolearning.com" });
+    const href = link.getAttribute("href") ?? "";
+    expect(href.startsWith("mailto:support@nevolearning.com?")).toBe(true);
+    expect(decodeURIComponent(href)).toMatch(/Agreed date of birth for Tunde/);
   });
 
   it("emails support with the child's first name, not a form", async () => {

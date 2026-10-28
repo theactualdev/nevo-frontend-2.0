@@ -46,9 +46,14 @@ import type { Back } from "../back";
  * Now it is a calm card that never re-offers the check: what the hold waits
  * on (one date both sides agree), who can move it (the school and the parent
  * together), and an email to support for anyone who thinks it's wrong.
- * Held from the frame, and asked: "Set the agreed date in the roster" (no
- * route sets it), and "We've let {parent} know the dates still don't match"
- * (the server tells the parent nothing after their own second check).
+ *
+ * NO DEAD END (Lydia, 28 Oct). Design's "Set the agreed date in the roster"
+ * ships without its button - no route sets a date of birth - so the card
+ * says what to do instead: agree one date with the parent, then send it to
+ * support. Without that, it would be the dead end it replaced.
+ * "We've let {parent} know the dates still don't match" waits for the notice
+ * Teslim is asked for: today the server tells the parent nothing after their
+ * own second check, and Lydia wants that notice rather than the line alone.
  */
 
 const SUPPORT = "support@nevolearning.com";
@@ -423,6 +428,9 @@ function BothCheckedCard({ check, person }: { check: AgeCheck; person: Person })
   const mail = `mailto:${SUPPORT}?subject=${encodeURIComponent(
     `Date of birth check for ${person.first}`,
   )}&body=${encodeURIComponent(`About ${person.first}’s date of birth check:\n\n`)}`;
+  const agreed = `mailto:${SUPPORT}?subject=${encodeURIComponent(
+    `Agreed date of birth for ${person.first}`,
+  )}`;
   return (
     <li className="rounded-xl bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-lg:px-5 max-lg:py-[18px]">
       <div className="flex items-start justify-between gap-4 max-lg:flex-col max-lg:gap-2.5">
@@ -462,7 +470,12 @@ function BothCheckedCard({ check, person }: { check: AgeCheck; person: Person })
         <div className="rounded-[10px] bg-nevo-cream px-4 py-3.5">
           <span className="block text-[12.5px] font-semibold text-nevo-near-black/60">Who can move it</span>
           <p className="m-0 mt-1 text-[14px] leading-[1.55] text-nevo-near-black/78">
-            You and {parent} together. Settle {person.first}&rsquo;s real date between you.
+            You and {parent} together. Agree {person.first}&rsquo;s real date between you, then
+            send it to us at{" "}
+            <a href={agreed} className="cursor-pointer font-semibold text-nevo-navy hover:underline">
+              {SUPPORT}
+            </a>
+            .
           </p>
         </div>
       </div>
