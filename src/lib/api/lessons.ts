@@ -51,6 +51,13 @@ export interface LessonSummary {
    * apart before making a claim about whether a lesson is assigned.
    */
   assignmentCount?: number;
+  /**
+   * The lesson-wide sign-off, as the review itself says it (Teslim 294584b,
+   * 27 Oct): key points, checks, guiding questions and rewrites all current.
+   * Assign waits for it (Lydia, 25 Oct). Absent on an older deployment, and
+   * absent is not "no".
+   */
+  reviewComplete?: boolean;
   /** Shipped 31 Aug. Free text; only the staged upload routes can set one. */
   subject?: string | null;
   /**
