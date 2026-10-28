@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -178,13 +178,31 @@ export function AdminSidebar() {
   const [hasUnread, setHasUnread] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
 
+  /*
+   * False once the rail unmounts, so an unread read that settles afterwards
+   * sets nothing. One still in flight when a test's page was torn down called
+   * setState with no `window` left, and that unhandled rejection failed other
+   * lanes' unit runs at random (#879, 27 Oct).
+   */
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
   /** A boolean, read whatever the body's key - see `unreadFrom`. */
   const refreshUnread = useCallback(() => {
     if (!signedIn) return;
     notificationsApi
       .unreadExists()
-      .then((res) => setHasUnread(unreadFrom(res)))
-      .catch(() => setHasUnread(false));
+      .then((res) => {
+        if (alive.current) setHasUnread(unreadFrom(res));
+      })
+      .catch(() => {
+        if (alive.current) setHasUnread(false);
+      });
   }, [signedIn]);
 
   /*
