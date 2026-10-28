@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   useWarmUpPrompt,
+  type UnpresentableTask,
   type WarmUpItem,
   type WarmUpPrompt,
 } from "@/hooks/useWarmUpDimension";
@@ -262,7 +263,7 @@ export function WarmUpRun({
    * The task the engine named that this screen cannot give: the heard round
    * above, or the question task with no question to ask (`cannotPresent`).
    */
-  const cannotPresent: BaselineDimension | null = unheard
+  const cannotPresent: BaselineDimension | UnpresentableTask | null = unheard
     ? "reading"
     : prompt.state === "none"
       ? (prompt.cannotPresent ?? null)
