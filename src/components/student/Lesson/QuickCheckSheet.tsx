@@ -116,6 +116,15 @@ function centredCard(): boolean {
  * the segment moved on. The player decides whether there is one (`hint`);
  * this only gives it its place, under the question and over the answers, as
  * the Lesson Player frame's answer sheet draws its hint.
+ *
+ * SEVERAL CHECKS, ONE AFTER ANOTHER IN THIS SHEET (Lydia, 23 Oct #1; design
+ * 4e03b7f's `qc-multi`). The player hands it one check at a time and says
+ * where it is (`position`), and the sheet says so in Lydia's words - "Check
+ * 2 of 4" (26 Oct, D4: "It works at any count and it matches 'Segment 4 of
+ * 6' that the player already shows") - in place of the frame's three lines,
+ * whose middle one was wrong past three checks. After a right answer the
+ * frame's "Next check", or "Finish" on the last; a miss is a single check's
+ * miss, on this check alone. One check is the sheet as it always was.
  */
 export function QuickCheckSheet({
   check,
@@ -128,8 +137,14 @@ export function QuickCheckSheet({
   onAudioBusy,
   hint,
   onGiveWay,
+  position,
 }: {
   check: QuickCheck;
+  /**
+   * Where this check is among its section's, counted from 1, where the
+   * section has more than one. Absent for a section's only check.
+   */
+  position?: { at: number; of: number };
   open: boolean;
   /**
    * A miss has been read and the sheet gives way to the ways in behind it.
@@ -156,7 +171,10 @@ export function QuickCheckSheet({
     correct: boolean,
     answered: { selectedId: string; responseTimeMs?: number },
   ) => void;
-  /** "Continue" after a correct answer — close the sheet and advance. */
+  /**
+   * The way on after a correct answer: "Continue", or with several checks
+   * "Next check" and, on the last, "Finish". The player decides where it goes.
+   */
   onContinue: () => void;
   /** "Take a break" - the child's own break, from inside the check. */
   onTakeBreak: () => void;
@@ -297,6 +315,11 @@ export function QuickCheckSheet({
             Take a break
           </button>
         </div>
+        {position && (
+          <p className="mt-2 text-[13.5px] font-medium text-nevo-violet-text">
+            Check {position.at} of {position.of}
+          </p>
+        )}
         {check.promptAudio && (
           <div className="mt-3">
             <SpokenPrompt src={check.promptAudio} onBusy={onAudioBusy} />
@@ -349,7 +372,11 @@ export function QuickCheckSheet({
         {/* The way on, and only after a right answer. */}
         {correct && (
           <Button className="mt-5 w-full" onClick={onContinue}>
-            Continue
+            {!position
+              ? "Continue"
+              : position.at < position.of
+                ? "Next check"
+                : "Finish"}
           </Button>
         )}
       </SheetContent>
