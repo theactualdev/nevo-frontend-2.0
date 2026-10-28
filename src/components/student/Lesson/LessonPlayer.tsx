@@ -45,6 +45,7 @@ import type {
   DensityLevel,
   Lesson,
   LessonSegment,
+  QuickCheck,
   SegmentAdaptation,
 } from "@/lib/types";
 import { cn, randomId } from "@/lib/utils";
@@ -238,6 +239,19 @@ const PARTIAL_ENDING = {
 
 /** Why a calculation whose solver threw is its text - see `failedCalcs`. */
 const SOLVER_FAILED = "the solver failed on the device";
+
+/**
+ * A section's checks, in order: every one where it has several
+ * (`quickChecks`), else its one. Each gates on its own (Lydia, 23 Oct #1).
+ */
+function checksOf(segment: LessonSegment): QuickCheck[] {
+  if (segment.quickChecks?.length) return segment.quickChecks;
+  return segment.quickCheck ? [segment.quickCheck] : [];
+}
+
+/** What a check's evidence and answers are kept under: its id, else its place. */
+const checkKey = (segmentId: string, check: QuickCheck, at: number) =>
+  check.id ?? `${segmentId}:${at}`;
 
 /** A calculation segment whose Interactive modality routes to the solver (§8). */
 function isCalculation(segment: LessonSegment): boolean {
@@ -725,6 +739,22 @@ export function LessonPlayer({
    * Only for a live lesson the child is working through, as `choicesHeld`:
    * a finished lesson opened again is a sitting on work that ended.
    */
+  /*
+   * HOW MANY OF A SECTION'S CHECKS ARE BEHIND THE CHILD, in order (Lydia, 23
+   * Oct #1: asked one after another, each gating on its own). A section is
+   * passed - `passedChecks` - once every one is. A check is passed by a right
+   * answer alone, the server's mark read back or the sheet's own, and nothing
+   * is counted here beyond which of them that is (rule 3).
+   */
+  const [checksDone, setChecksDone] = useState<ReadonlyMap<string, number>>(
+    () => new Map(),
+  );
+  /*
+   * The section whose check was just answered right, its way on not yet
+   * taken: the sheet stays on that check, with "Next check" or "Finish",
+   * until it is - see `checkShown`.
+   */
+  const [rightOn, setRightOn] = useState<string | null>(null);
   // Once a lesson: the read is the server's word as the sitting opened, and a
   // pass made after it is added where the answer lands.
   const passesAsked = useRef<string | null>(null);
@@ -742,9 +772,28 @@ export function LessonPlayer({
             r.source === "checkpoint" && r.correct === true ? [r.questionId] : [],
           ),
         );
-        const passed = lesson.segments.flatMap((s) =>
-          s.quickCheck?.id && right.has(s.quickCheck.id) ? [s.id] : [],
-        );
+        /*
+         * A SECTION'S CHECKS ARE ASKED IN ORDER, so what it has behind it is
+         * the run of them from the first that the server marked right: a
+         * section with every one is passed, and one part way opens on the
+         * first it has not.
+         */
+        const done = new Map<string, number>();
+        const passed: string[] = [];
+        for (const s of lesson.segments) {
+          const checks = checksOf(s);
+          let n = 0;
+          while (n < checks.length && checks[n].id && right.has(checks[n].id!)) n++;
+          if (n === 0) continue;
+          done.set(s.id, n);
+          if (n === checks.length) passed.push(s.id);
+        }
+        if (done.size === 0) return;
+        setChecksDone((prev) => {
+          const next = new Map(prev);
+          for (const [id, n] of done) next.set(id, Math.max(n, prev.get(id) ?? 0));
+          return next;
+        });
         if (passed.length === 0) return;
         setPassedChecks((prev) => new Set([...prev, ...passed]));
       })
@@ -1027,10 +1076,12 @@ export function LessonPlayer({
               : { rightOnPick: first ? 1 : null, hinted: false },
         };
       }),
-      ...lesson.segments.map((s) => ({
-        conceptId: s.quickCheck?.conceptId,
-        evidence: checkRecall.current.get(s.id),
-      })),
+      ...lesson.segments.flatMap((s) =>
+        checksOf(s).map((check, at) => ({
+          conceptId: check.conceptId,
+          evidence: checkRecall.current.get(checkKey(s.id, check, at)),
+        })),
+      ),
     ].flatMap((q) =>
       q.conceptId === reviewConceptId && q.evidence ? [q.evidence] : [],
     );
@@ -1123,6 +1174,22 @@ export function LessonPlayer({
   );
 
   const segment = asEntered(lesson.segments[index]);
+  /*
+   * THE CHECK THE SHEET ASKS on this section: the first not yet behind the
+   * child, or - while a right answer's way on is still to be taken - the one
+   * just answered, so "Next check" or "Finish" stays with it. A section's last
+   * check stays the one shown once it is passed. Null with no check at all.
+   */
+  const checksHere = checksOf(segment);
+  const checkShown = (() => {
+    if (checksHere.length === 0) return null;
+    const done = checksDone.get(segment.id) ?? 0;
+    const at = Math.min(
+      rightOn === segment.id ? done - 1 : done,
+      checksHere.length - 1,
+    );
+    return { check: checksHere[Math.max(0, at)], at: Math.max(0, at) };
+  })();
 
   /*
    * THE PACE HELD ON THE SECTION ON SCREEN as the sitting's word lands with a
@@ -2115,7 +2182,7 @@ export function LessonPlayer({
     if (stored.advanceAfterHandoff !== true) return;
     const on = lesson.segments.find((s) => s.id === segmentId);
     if (on && isCalculation(asEntered(on))) return;
-    if (answeredRight.current.has(segmentId)) return;
+    if (answeredRight.current.has(stored.questionId ?? segmentId)) return;
     const prompts = (stored.guidedPrompts ?? []).flatMap((p) =>
       p?.id && p.prompt?.trim() ? [{ id: p.id, prompt: p.prompt }] : [],
     );
@@ -2282,6 +2349,8 @@ export function LessonPlayer({
     if (!checkOpen) return;
     fragmented();
     setGaveWayOn(null);
+    // A right answer whose way on was not taken: next time, the next check.
+    setRightOn(null);
     setCheckOpen(false);
   };
 
@@ -3826,10 +3895,16 @@ export function LessonPlayer({
         </div>
       </div>
 
-      {segment.quickCheck && (
+      {checkShown && (
         <QuickCheckSheet
-          key={`check-${segment.id}`}
-          check={segment.quickCheck}
+          // Remounted per check, so each is asked with nothing picked.
+          key={`check-${segment.id}-${checkShown.at}`}
+          check={checkShown.check}
+          position={
+            checksHere.length > 1
+              ? { at: checkShown.at + 1, of: checksHere.length }
+              : undefined
+          }
           open={checkOpen}
           onTapOut={tapOutOfCheck}
           onTakeBreak={takeBreakFromCheck}
@@ -3845,7 +3920,9 @@ export function LessonPlayer({
           }}
           onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
           onAnswered={(correct, answered) => {
-            const checkpointId = segment.quickCheck?.id;
+            const { check, at } = checkShown;
+            const checkpointId = check.id;
+            const key = checkKey(segment.id, check, at);
             // The catalogue's keys, `source` naming a quick check's answer
             // from the after-lesson check's; the pick goes up on the attempt
             // below, where the server marks it - with the time it took as the
@@ -3862,7 +3939,7 @@ export function LessonPlayer({
                 questionId: checkpointId,
                 segmentId: segment.id,
                 source: "checkpoint",
-                choice: segment.quickCheck?.options.find(
+                choice: check.options.find(
                   (o) => o.id === answered.selectedId,
                 ),
                 responseTimeMs: answered.responseTimeMs,
@@ -3875,21 +3952,33 @@ export function LessonPlayer({
                 noteReteaching(segment.id, stored);
               },
             );
-            if (correct) answeredRight.current.add(segment.id);
+            if (correct) answeredRight.current.add(checkpointId ?? segment.id);
             noteAnswer(correct);
             // Which pick first got it, for the scheduler - a miss re-opens the
             // check until it is passed, so "passed" is true of everyone.
-            const seen = checkRecall.current.get(segment.id);
+            const seen = checkRecall.current.get(key);
             const picks = (seen?.picks ?? 0) + 1;
-            checkRecall.current.set(segment.id, {
+            checkRecall.current.set(key, {
               picks,
               rightOnPick: seen?.rightOnPick ?? (correct ? picks : null),
               hinted: seen?.hinted ?? hintedSegments.current.has(segment.id),
             });
-            if (correct)
+            if (!correct) return;
+            // This check is behind the child; the section once every one is.
+            setRightOn(segment.id);
+            setChecksDone((prev) =>
+              new Map(prev).set(
+                segment.id,
+                Math.max(at + 1, prev.get(segment.id) ?? 0),
+              ),
+            );
+            if (at + 1 >= checksHere.length)
               setPassedChecks((prev) => new Set(prev).add(segment.id));
           }}
           onContinue={() => {
+            setRightOn(null);
+            // "Next check": the next of the section's, in this same sheet.
+            if (checkShown.at + 1 < checksHere.length) return;
             setCheckOpen(false);
             // Lydia's words (D185, 13 Oct): about the work, not the child.
             setFeedback("That's it. Here's what's next.");

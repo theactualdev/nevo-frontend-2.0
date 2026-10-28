@@ -498,6 +498,13 @@ export interface LessonSegment {
   calculationRefused?: string;
   /** Optional inline comprehension check shown after this segment. */
   quickCheck?: QuickCheck;
+  /**
+   * EVERY check the section has, in order, where it has more than one - the
+   * first is `quickCheck`. Asked one after another in the same sheet, each
+   * gating on its own (Lydia, 23 Oct #1; "Check 2 of 4", 26 Oct D4). Absent
+   * for a section with one check or none.
+   */
+  quickChecks?: QuickCheck[];
 }
 
 export interface AssessmentQuestion {
