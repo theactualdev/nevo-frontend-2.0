@@ -90,6 +90,14 @@ describe("the ask", () => {
     expect(await screen.findByRole("heading", { name: "Thank you - we’ve got that." })).toBeInTheDocument();
   });
 
+  it("'I have a question' emails support with the child's name - a person, not a form", async () => {
+    render(<ParentDateCheck />);
+    await screen.findByRole("heading", { name: /Can you confirm/ });
+    const href = screen.getByRole("link", { name: "I have a question" }).getAttribute("href") ?? "";
+    expect(href.startsWith("mailto:support@nevolearning.com?")).toBe(true);
+    expect(decodeURIComponent(href)).toMatch(/Amara’s date of birth/);
+  });
+
   it("won't send a date that doesn't exist", async () => {
     render(<ParentDateCheck />);
     await screen.findByRole("heading", { name: /Can you confirm/ });

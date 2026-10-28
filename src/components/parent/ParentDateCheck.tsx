@@ -36,7 +36,14 @@ import { parentApi, type ParentChild } from "@/lib/api/parent";
  *
  * Nothing here computes whether the dates agree or what happens next. The
  * thank-you says what the school and the server do, in design's words.
+ *
+ * "I HAVE A QUESTION" (drawn under the confirm; where it goes was not) is an
+ * email to support with the child's first name in the subject - a person
+ * reads it and replies, as D30 says of its own support link. Flagged for
+ * Lydia via the Hub, 28 Oct.
  */
+
+const SUPPORT = "support@nevolearning.com";
 
 type Read =
   | { kind: "loading" }
@@ -243,13 +250,23 @@ export function ParentDateCheck() {
               That didn&rsquo;t go through, and nothing has changed. Try again in a moment.
             </p>
           ) : null}
-          <button
-            type="submit"
-            disabled={!iso || sending}
-            className="mt-6 flex h-[54px] w-full cursor-pointer items-center justify-center rounded-xl bg-nevo-navy text-[16px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-default disabled:opacity-50 md:w-auto md:px-10"
-          >
-            {sending ? "Sending…" : "Confirm date of birth"}
-          </button>
+          <div className="mt-6 flex flex-col items-center gap-3 md:items-start">
+            <button
+              type="submit"
+              disabled={!iso || sending}
+              className="flex h-[54px] w-full cursor-pointer items-center justify-center rounded-xl bg-nevo-navy text-[16px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-default disabled:opacity-50 md:w-auto md:px-10"
+            >
+              {sending ? "Sending…" : "Confirm date of birth"}
+            </button>
+            <a
+              href={`mailto:${SUPPORT}?subject=${encodeURIComponent(
+                `A question about ${first}’s date of birth`,
+              )}`}
+              className="cursor-pointer py-1.5 text-[15px] font-semibold text-nevo-navy hover:opacity-75"
+            >
+              I have a question
+            </a>
+          </div>
         </form>
       </>
     );
