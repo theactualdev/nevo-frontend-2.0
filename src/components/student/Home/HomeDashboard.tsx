@@ -6,12 +6,14 @@ import { isOpenToStudent, unavailableReason } from "@/lib/lessons/availability";
 import { isFinishedRow } from "@/lib/lessons/finishedRow";
 import { onHeldProgressLanded } from "@/lib/lessons/pendingProgress";
 import { lessonHref } from "@/lib/lessons/lessonHref";
+import { reviewSessionHref } from "@/lib/lessons/reviewHref";
 import { segmentPlace, type SegmentPlace } from "@/lib/lessons/segmentPlace";
 import { BookOpen, ChevronRight, Clock, Play, Shapes } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useHydrated } from "@/hooks/useHydrated";
-import type { DashboardProgressRow } from "@/lib/api/students";
+import type { DashboardProgressRow, LearningWork } from "@/lib/api/students";
+import { DUE_CHIP_LINK } from "@/components/student/Progress/dueChip";
 import { useDisplayName } from "@/components/student/Shell/useDisplayName";
 import {
   EmptyArt,
@@ -353,6 +355,29 @@ export function HomeDashboard() {
   const nothingSet = signedIn && Boolean(live) && !everSet;
 
   /*
+   * A DUE REVIEW, FIRST, AND NEVER IN THE WAY (SCRUM-75; Lydia, 28 Oct): "Home,
+   * with next-work, due item first. Interrupting a child as they open the app
+   * takes the choice away and teaches them that opening Nevo means being made
+   * to do something. The spaced return works whether they take it now or next
+   * session." The 5 Aug ticket put a review entry screen in front of the app
+   * on opening; nothing here sends a child anywhere.
+   *
+   * WHAT IS DUE IS THE ENGINE'S `nextWork`, and its order is the engine's: a
+   * concept the scheduler holds due, in a lesson set for this child, comes
+   * before any new work (`progression.next_work`). So Home reads that one
+   * item and nothing else - the scheduler's own rows carry no name to show.
+   * Only `kind: "review"` draws here: new work has no frame or words on Home
+   * yet, and is asked. A review with no name is left off - a chip with no
+   * concept is not one a child can recognise.
+   */
+  const dueReview: LearningWork | null =
+    signedIn &&
+    live?.nextWork?.kind === "review" &&
+    live.nextWork.conceptName?.trim()
+      ? live.nextWork
+      : null;
+
+  /*
    * NO CAUGHT-UP LINE UNTIL THE BACKEND SAYS SO - signed in or not.
    *
    * "All caught up" is a status, and the front end does not state a status
@@ -457,6 +482,39 @@ export function HomeDashboard() {
         <EmptyState line="Your teacher is setting up your first lesson" />
       ) : (
         <>
+          {/*
+            THE DUE REVIEW, FIRST (SCRUM-75) - see `dueReview`. Frame 22's own
+            heading and chip, as Subject Detail draws them: no Home frame
+            draws a review yet. The chip opens the review session, whose entry
+            screen still lets the child say "Not now"; ending it comes back
+            Home, where it was opened.
+          */}
+          {dueReview && (
+            <section
+              aria-labelledby="home-review"
+              className="mt-7 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:140ms]"
+            >
+              <h2
+                id="home-review"
+                className="text-[17px] font-semibold tracking-[-0.01em] text-nevo-near-black"
+              >
+                Ready for another look
+              </h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  href={reviewSessionHref(
+                    dueReview.lessonId,
+                    dueReview.conceptId,
+                  )}
+                  aria-label={`Take another look at ${dueReview.conceptName.trim()}`}
+                  className={DUE_CHIP_LINK}
+                >
+                  {dueReview.conceptName.trim()}
+                </Link>
+              </div>
+            </section>
+          )}
+
           {/*
             NOTHING NEW TODAY, AND THE ONLY LESSON IS PART-WAY (design D99,
             6 Oct). "Today" means open from today - `isOpenToStudent` reads
