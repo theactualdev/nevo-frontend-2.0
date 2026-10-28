@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { authApi, teamApi } from "@/lib/api";
 import { invitesApi } from "@/lib/api/invites";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
 import {
   DOOR_HREF,
   DOOR_LABEL,
@@ -177,7 +177,7 @@ export function SetPasswordForm({
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [consent, setConsent] = useState(false);
-  const [phase, setPhase] = useState<"form" | "saving" | "done">("form");
+  const [phase, setPhase] = useState<"form" | "saving" | "done" | "mismatch">("form");
   const [error, setError] = useState("");
   const [landing, setLanding] = useState<"console" | "signin">("console");
   /** The console they turned out to belong to - what the success line names. */
@@ -317,10 +317,35 @@ export function SetPasswordForm({
           password,
         });
       }
-    } catch {
+    } catch (err: unknown) {
+      /*
+       * THE ACCOUNT NO LONGER MATCHES THE INVITE (backend 4c5706a, #895).
+       *
+       * An invited teacher can be given classes before they join, which
+       * reserves an account under the invitation's own id. If that account
+       * has since moved school, changed role or address, or stopped being
+       * "invited", the accept answers 409 `invited_teacher_conflict` - and
+       * nothing is written, so this same link answers the same way every
+       * time. A resend keeps the invitation's id, so it does too. The form
+       * with its button would invite a retry that cannot succeed; this says
+       * so and names the one thing that can, a new invite.
+       */
+      if (
+        err instanceof ApiError &&
+        err.status === 409 &&
+        apiErrorCode(err.detail) === "invited_teacher_conflict"
+      ) {
+        setPhase("mismatch");
+        return;
+      }
       setPhase("form");
+      // The reset path's line, drawn here too: a 4xx is the server refusing
+      // the link; no status, or a 5xx, is ours, and the same link may work.
+      const status = err instanceof ApiError ? err.status : 0;
       setError(
-        "We couldn't activate your account with this link. It may have expired, and your school admin can send a new one.",
+        status >= 400 && status < 500
+          ? "We couldn't activate your account with this link. It may have expired, and your school admin can send a new one."
+          : "We couldn’t reach Nevo just now, so your account isn’t set up yet. Try again in a moment.",
       );
       return;
     }
@@ -417,6 +442,28 @@ export function SetPasswordForm({
             ? "Taking you to your console…"
             : "Taking you to sign in…"}
         </span>
+      </div>
+    );
+  }
+
+  // No button: this link answers the same way however often it is tried.
+  if (phase === "mismatch") {
+    return (
+      <div className="flex w-full max-w-[440px] flex-col items-center px-6 text-center">
+        <AuthWordmark />
+        {shownSchool && (
+          <span className="text-[12.5px] font-semibold tracking-[0.14em] text-nevo-violet uppercase">
+            {shownSchool}
+          </span>
+        )}
+        <h1 className="mt-3.5 text-[30px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black max-md:text-[26px]">
+          This invite no longer matches your account
+        </h1>
+        <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
+          The account set up for you has changed since this invite was sent,
+          so this link can’t finish it. Ask your school administrator to send
+          you a new invite – sending this one again won’t work.
+        </p>
       </div>
     );
   }

@@ -19,6 +19,7 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/lib/api/invites", () => ({ invitesApi: { acceptJoin, lookupJoin } }));
 
 import { SetPasswordForm } from "./SetPasswordForm";
+import { ApiError } from "@/lib/api/client";
 import { clearSession, getSession } from "@/lib/auth/session";
 
 /**
@@ -131,5 +132,74 @@ describe("joining by link", () => {
     render(<SetPasswordForm mode="activation" />);
 
     expect(lookupJoin).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 4c5706a: an invited teacher's reserved account can stop matching their
+ * invite, and the accept answers 409 `invited_teacher_conflict` every time.
+ */
+describe("an invite that no longer matches the account", () => {
+  const conflict = () =>
+    new ApiError(409, "conflict", { detail: { code: "invited_teacher_conflict" } });
+
+  it("says so, names a new invite as the way on, and offers no retry", async () => {
+    acceptJoin.mockRejectedValue(conflict());
+    render(<SetPasswordForm mode="activation" />);
+    activate();
+
+    expect(
+      await screen.findByRole("heading", { name: "This invite no longer matches your account" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/send you a new invite/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Activate my account/ })).toBeNull();
+    expect(screen.queryByLabelText("Password")).toBeNull();
+  });
+
+  it("signs nobody in and goes nowhere", async () => {
+    acceptJoin.mockRejectedValue(conflict());
+    render(<SetPasswordForm mode="activation" />);
+    activate();
+
+    await screen.findByRole("heading", { name: "This invite no longer matches your account" });
+    expect(getSession()).toBeNull();
+    expect(loginPassword).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("keeps the school the link is from above it", async () => {
+    lookupJoin.mockResolvedValue({
+      status: "valid",
+      role: "teacher",
+      schoolName: "Brightgate Academy",
+      expiresAt: "",
+    });
+    acceptJoin.mockRejectedValue(conflict());
+    render(<SetPasswordForm mode="activation" />);
+    await screen.findByText("Brightgate Academy");
+    activate();
+
+    await screen.findByRole("heading", { name: "This invite no longer matches your account" });
+    expect(screen.getByText("Brightgate Academy")).toBeInTheDocument();
+  });
+
+  it("leaves any other refusal of the link on the form, as before", async () => {
+    acceptJoin.mockRejectedValue(
+      new ApiError(409, "used", { detail: { code: "join_link_used" } }),
+    );
+    render(<SetPasswordForm mode="activation" />);
+    activate();
+
+    expect(await screen.findByText(/couldn't activate your account/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Activate my account/ })).toBeInTheDocument();
+  });
+
+  it("does not blame the link when Nevo could not be reached", async () => {
+    acceptJoin.mockRejectedValue(new TypeError("Failed to fetch"));
+    render(<SetPasswordForm mode="activation" />);
+    activate();
+
+    expect(await screen.findByText(/couldn’t reach Nevo just now/)).toBeInTheDocument();
+    expect(screen.queryByText(/may have expired/)).toBeNull();
   });
 });
