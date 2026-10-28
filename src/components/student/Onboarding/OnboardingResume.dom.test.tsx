@@ -15,7 +15,8 @@ import { clearSession, setSession } from "@/lib/auth/session";
  * Finishing onboarding for a child who already has an account, as Lydia ruled
  * 17 Oct (SCRUM-244): all four modules before any lesson. The server's
  * readiness says what is left and nothing is inferred here - a child with the
- * three done goes straight to Module 4, a child with all four goes Home.
+ * three done goes straight to Module 4, a child with all four is told it is
+ * already done (design 5bb9ee2) and goes on.
  *
  * And a Module 4 with no question bank moves the child on, never to a dead
  * end, with no placement filled in here - Teslim's 19 Oct no-question-bank
@@ -109,6 +110,39 @@ vi.mock("@/components/student/Profiling/DomainProbeModule", () => ({
 }));
 
 const HOME = "/student/dashboard";
+/** Where the nothing-state's "Go to my lessons" goes. */
+const LESSONS = "/student/lessons";
+/** The nothing-state's one way out (design 5bb9ee2). */
+const NOTHING = "Go to my lessons";
+/** "Already done"'s one way on (design 5bb9ee2). */
+const ON = "Continue to Nevo";
+
+/** The nothing-state: the frame's words and its one way out, nothing else. */
+function expectNothingState() {
+  expect(screen.getByRole("heading").textContent).toBe(
+    "Nothing to do here right now",
+  );
+  expect(document.body.textContent).toContain(
+    "There's no warm-up waiting at the moment. You can go on to Nevo and come back any time.",
+  );
+  expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
+    NOTHING,
+  ]);
+}
+
+/**
+ * "You've already done this part" - shown, with nothing taken yet - and then
+ * its one way on, pressed.
+ */
+async function carryOn() {
+  const on = await screen.findByRole("button", { name: ON });
+  expect(screen.getByRole("heading").textContent).toBe(
+    "You've already done this part",
+  );
+  expect(screen.getAllByRole("button")).toHaveLength(1);
+  expect(replace).not.toHaveBeenCalled();
+  fireEvent.click(on);
+}
 
 const MATHS = { subjectId: "sub-maths", name: "Mathematics", probeAvailable: true };
 const ART = { subjectId: "sub-art", name: "Art", probeAvailable: false };
@@ -215,10 +249,11 @@ afterEach(() => {
 });
 
 describe("where the server's answer starts a child", () => {
-  it("sends a child with all four done Home, and asks nothing", async () => {
+  it("tells a child with all four done it is already done, asks nothing, and sends them Home", async () => {
     readiness.mockResolvedValue(ALL_DONE);
     render(<OnboardingResume />);
 
+    await carryOn();
     await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
     expect(screen.queryByTestId("module-four")).toBeNull();
     expect(screen.queryByRole("button", { name: "after profiling" })).toBeNull();
@@ -289,6 +324,49 @@ describe("where the server's answer starts a child", () => {
   });
 });
 
+/*
+ * Design 5bb9ee2, 28 Oct, BP-M4-AFTER-PIN: "a returning sign-in can land
+ * here; neither state is a dead end". The frame's "already done" is drawn as
+ * the backend's 409; the probe has none, so it is shown on readiness holding
+ * Module 4 `completed` (Hub, 28 Oct).
+ */
+describe("Module 4 already done (design 5bb9ee2)", () => {
+  it("is said after the baseline run when the server already holds Module 4, then on", async () => {
+    readiness.mockResolvedValue(ready({ grid_span: true, domain_probe: true }));
+    render(<OnboardingResume returnTo="/student/lessons/les-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "after profiling" }));
+
+    await carryOn();
+    expect(screen.queryByTestId("module-four")).toBeNull();
+    expect(next).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith("/student/lessons/les-1"),
+    );
+  });
+
+  it("says the frame's words, never a conflict", async () => {
+    readiness.mockResolvedValue(ALL_DONE);
+    render(<OnboardingResume />);
+
+    await screen.findByRole("button", { name: ON });
+    expect(document.body.textContent).toContain(
+      "Your answers from before are saved, so there's nothing to do again here. You can carry straight on to Nevo.",
+    );
+    expect(document.body.textContent).not.toMatch(/conflict|409/i);
+  });
+
+  it("is not said to a child who has just sat Module 4: they go straight on", async () => {
+    readiness.mockResolvedValue(THREE_DONE);
+    render(<OnboardingResume />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "after probe" }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
+    expect(screen.queryByRole("button", { name: ON })).toBeNull();
+  });
+});
+
 describe("a Module 4 with no bank moves the child on (Olayinka, 19 Oct)", () => {
   it("sends a child with only Module 4 left and no subject with items Home, once readiness read again says no bank", async () => {
     readiness.mockResolvedValueOnce(NOTHING_TO_ASK).mockResolvedValue(NO_BANK);
@@ -298,7 +376,7 @@ describe("a Module 4 with no bank moves the child on (Olayinka, 19 Oct)", () => 
     // Replaced, not pushed: Back does not return here. Nothing was drawn on
     // the way - no Module 4, no screen to dismiss - and nothing was asked.
     expect(screen.queryByTestId("module-four")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Home" })).toBeNull();
+    expect(screen.queryByRole("button", { name: NOTHING })).toBeNull();
     expect(next).not.toHaveBeenCalled();
     expect(report).not.toHaveBeenCalled();
   });
@@ -310,7 +388,7 @@ describe("a Module 4 with no bank moves the child on (Olayinka, 19 Oct)", () => 
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
     expect(screen.queryByTestId("module-four")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Home" })).toBeNull();
+    expect(screen.queryByRole("button", { name: NOTHING })).toBeNull();
   });
 
   it("maps three when the server holds the probe as unavailable, then moves them on", async () => {
@@ -334,6 +412,8 @@ describe("a Module 4 with no bank moves the child on (Olayinka, 19 Oct)", () => 
     render(<OnboardingResume />);
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
+    // Readiness says complete, but Module 4 was never sat: not "already done".
+    expect(screen.queryByRole("button", { name: ON })).toBeNull();
     expect(screen.queryByTestId("module-four")).toBeNull();
     expect(screen.queryByRole("button", { name: "after profiling" })).toBeNull();
     expect(next).not.toHaveBeenCalled();
@@ -376,12 +456,12 @@ describe("a Module 4 with no bank moves the child on (Olayinka, 19 Oct)", () => 
  * available with nothing to ask, flagged to backend - not a move on.
  */
 describe("nothing to ask while readiness holds Module 4 owed (Teslim, 21 Oct)", () => {
-  it("is the nothing-state, Home offered not taken, and reported - not a move on", async () => {
+  it("is the nothing-state, its way to the lessons offered not taken, and reported - not a move on", async () => {
     readiness.mockResolvedValue(NOTHING_TO_ASK);
     render(<OnboardingResume />);
 
-    const home = await screen.findByRole("button", { name: "Home" });
-    expect(document.body.textContent).toBe("Home");
+    const home = await screen.findByRole("button", { name: NOTHING });
+    expectNothingState();
     await act(async () => {});
     expect(replace).not.toHaveBeenCalled();
     expect(screen.queryByTestId("module-four")).toBeNull();
@@ -391,7 +471,7 @@ describe("nothing to ask while readiness holds Module 4 owed (Teslim, 21 Oct)", 
     expect(report).toHaveBeenCalledWith({ subjectIds: [], status: undefined });
 
     fireEvent.click(home);
-    expect(replace).toHaveBeenCalledWith(HOME);
+    expect(replace).toHaveBeenCalledWith(LESSONS);
   });
 
   it("is the same when the only subject answers with no items, on both reads", async () => {
@@ -399,7 +479,7 @@ describe("nothing to ask while readiness holds Module 4 owed (Teslim, 21 Oct)", 
     next.mockResolvedValue(EMPTY);
     render(<OnboardingResume />);
 
-    expect(await screen.findByRole("button", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: NOTHING })).toBeInTheDocument();
     await act(async () => {});
     expect(replace).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalledTimes(2);
@@ -409,13 +489,13 @@ describe("nothing to ask while readiness holds Module 4 owed (Teslim, 21 Oct)", 
   it("does not spend the one-time move on, so a later no-bank answer still moves the child on", async () => {
     readiness.mockResolvedValue(NOTHING_TO_ASK);
     render(<OnboardingResume />);
-    await screen.findByRole("button", { name: "Home" });
+    await screen.findByRole("button", { name: NOTHING });
 
     readiness.mockResolvedValue(NO_BANK);
     await arriveAgain();
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
-    expect(screen.queryByRole("button", { name: "Home" })).toBeNull();
+    expect(screen.queryByRole("button", { name: NOTHING })).toBeNull();
   });
 
   it("maps four for a child with the baseline to do, then plans Module 4 again after the run", async () => {
@@ -438,7 +518,7 @@ describe("nothing to ask while readiness holds Module 4 owed (Teslim, 21 Oct)", 
 });
 
 describe("the loop guard, while the server still refuses the lesson", () => {
-  it("leaves a child who comes back on the nothing-state, Home offered, not taken", async () => {
+  it("leaves a child who comes back on the nothing-state, its way to the lessons offered, not taken", async () => {
     // Home, a lesson, 409 `onboarding_required`, here: moved on. Home, the
     // lesson, 409, here again - and this time they stay.
     readiness.mockResolvedValue(NO_BANK);
@@ -447,14 +527,14 @@ describe("the loop guard, while the server still refuses the lesson", () => {
 
     await arriveAgain();
 
-    const home = await screen.findByRole("button", { name: "Home" });
-    expect(document.body.textContent).toBe("Home");
+    const home = await screen.findByRole("button", { name: NOTHING });
+    expectNothingState();
     await act(async () => {});
     expect(replace).not.toHaveBeenCalled();
     expect(screen.queryByTestId("module-four")).toBeNull();
 
     fireEvent.click(home);
-    expect(replace).toHaveBeenCalledWith(HOME);
+    expect(replace).toHaveBeenCalledWith(LESSONS);
   });
 
   it("keeps them there on every arrival after", async () => {
@@ -462,11 +542,11 @@ describe("the loop guard, while the server still refuses the lesson", () => {
     render(<OnboardingResume />);
     await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
     await arriveAgain();
-    await screen.findByRole("button", { name: "Home" });
+    await screen.findByRole("button", { name: NOTHING });
 
     await arriveAgain();
 
-    expect(await screen.findByRole("button", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: NOTHING })).toBeInTheDocument();
     await act(async () => {});
     expect(replace).not.toHaveBeenCalled();
   });
@@ -496,13 +576,13 @@ describe("the loop guard, while the server still refuses the lesson", () => {
     await arriveAgain();
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
-    expect(screen.queryByRole("button", { name: "Home" })).toBeNull();
+    expect(screen.queryByRole("button", { name: NOTHING })).toBeNull();
   });
 
   it("is not used up by a read that failed", async () => {
     readiness.mockRejectedValue(new ApiError(0, "offline"));
     render(<OnboardingResume />);
-    await screen.findByRole("button", { name: "Home" });
+    await screen.findByRole("button", { name: NOTHING });
 
     readiness.mockResolvedValue(NO_BANK);
     await arriveAgain();
@@ -512,17 +592,17 @@ describe("the loop guard, while the server still refuses the lesson", () => {
 });
 
 describe("the nothing-state, where a read failed", () => {
-  it("is a way Home, not an automatic one, when readiness cannot be read", async () => {
+  it("is a way to the lessons, not an automatic one, when readiness cannot be read", async () => {
     readiness.mockRejectedValue(new ApiError(0, "offline"));
     render(<OnboardingResume />);
 
-    const home = await screen.findByRole("button", { name: "Home" });
-    expect(document.body.textContent).toBe("Home");
+    const home = await screen.findByRole("button", { name: NOTHING });
+    expectNothingState();
     expect(screen.queryByTestId("module-four")).toBeNull();
     await act(async () => {});
     expect(replace).not.toHaveBeenCalled();
     fireEvent.click(home);
-    expect(replace).toHaveBeenCalledWith(HOME);
+    expect(replace).toHaveBeenCalledWith(LESSONS);
   });
 
   it("is the same when Module 4's first item cannot be read", async () => {
@@ -532,7 +612,7 @@ describe("the nothing-state, where a read failed", () => {
     next.mockRejectedValue(new ApiError(0, "offline"));
     render(<OnboardingResume />);
 
-    expect(await screen.findByRole("button", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: NOTHING })).toBeInTheDocument();
     expect(screen.queryByTestId("module-four")).toBeNull();
     await act(async () => {});
     expect(replace).not.toHaveBeenCalled();
@@ -546,7 +626,7 @@ describe("the nothing-state, where a read failed", () => {
     fireEvent.click(await screen.findByRole("button", { name: "after profiling" }));
     fireEvent.click(await screen.findByRole("button", { name: "probe failed" }));
 
-    expect(await screen.findByRole("button", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: NOTHING })).toBeInTheDocument();
     await act(async () => {});
     expect(replace).not.toHaveBeenCalled();
   });
@@ -574,14 +654,15 @@ describe("a visitor with no session", () => {
  * BACK TO THE LESSON THEY TAPPED START ON, from the 20 Oct production run: a
  * child sent here by a lesson's refusal finished the probe and landed on
  * Home. Every way out that means "onboarding is done" goes back; the
- * nothing-state's own button still goes Home.
+ * nothing-state's own button goes to the lessons.
  */
 describe("the way back to the page that was refused", () => {
   const LESSON = "/student/lessons/les-1?assignment=asg-1";
 
-  it("goes back for a child with all four done on arrival", async () => {
+  it("goes back for a child with all four done on arrival, once they carry on", async () => {
     readiness.mockResolvedValue(ALL_DONE);
     render(<OnboardingResume returnTo={LESSON} />);
+    await carryOn();
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
     expect(replace).not.toHaveBeenCalledWith(HOME);
@@ -597,16 +678,17 @@ describe("the way back to the page that was refused", () => {
     expect(replace).not.toHaveBeenCalledWith(HOME);
   });
 
-  it("goes back when the server already holds Module 4", async () => {
+  it("says already done, then goes back, when the server already holds Module 4", async () => {
     // The three and the probe held, readiness not yet saying complete.
     readiness.mockResolvedValue({ ...ALL_DONE, complete: false });
     render(<OnboardingResume returnTo={LESSON} />);
+    await carryOn();
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("goes back on the one-time move on, and offers Home the next time", async () => {
+  it("goes back on the one-time move on, and offers the lessons the next time", async () => {
     readiness.mockResolvedValue(NO_BANK);
     render(<OnboardingResume returnTo={LESSON} />);
     await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
@@ -614,11 +696,11 @@ describe("the way back to the page that was refused", () => {
     // The lesson refused again: here again, and this time they stay.
     await arriveAgain({ returnTo: LESSON });
 
-    const home = await screen.findByRole("button", { name: "Home" });
+    const home = await screen.findByRole("button", { name: NOTHING });
     await act(async () => {});
     expect(replace).not.toHaveBeenCalled();
     fireEvent.click(home);
-    expect(replace).toHaveBeenCalledWith(HOME);
+    expect(replace).toHaveBeenCalledWith(LESSONS);
   });
 
   it("goes back once, then Home, while the lesson still refuses a child readiness calls done", async () => {
@@ -629,14 +711,16 @@ describe("the way back to the page that was refused", () => {
      */
     readiness.mockResolvedValue(ALL_DONE);
     render(<OnboardingResume returnTo={LESSON} />);
+    await carryOn();
     await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
 
     await arriveAgain({ returnTo: LESSON });
 
+    await carryOn();
     await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
     expect(replace).not.toHaveBeenCalledWith(LESSON);
     // Home, not the nothing-state: readiness says onboarding is done.
-    expect(screen.queryByRole("button", { name: "Home" })).toBeNull();
+    expect(screen.queryByRole("button", { name: NOTHING })).toBeNull();
   });
 
   it("goes Home the next time after Module 4 is sat, if the lesson still refuses", async () => {
@@ -648,6 +732,7 @@ describe("the way back to the page that was refused", () => {
     readiness.mockResolvedValue(ALL_DONE);
     await arriveAgain({ returnTo: LESSON });
 
+    await carryOn();
     await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
     expect(replace).not.toHaveBeenCalledWith(LESSON);
   });
@@ -657,6 +742,7 @@ describe("the way back to the page that was refused", () => {
     // same arrival must not read it twice and turn the way back into Home.
     readiness.mockResolvedValue(ALL_DONE);
     const { rerender } = render(<OnboardingResume returnTo={LESSON} />);
+    await carryOn();
     await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
 
     rerender(<OnboardingResume returnTo={LESSON} />);
@@ -668,10 +754,12 @@ describe("the way back to the page that was refused", () => {
   it("still goes back to another lesson the child is refused", async () => {
     readiness.mockResolvedValue(ALL_DONE);
     render(<OnboardingResume returnTo={LESSON} />);
+    await carryOn();
     await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
 
     await arriveAgain({ returnTo: "/student/lessons/les-2" });
 
+    await carryOn();
     await waitFor(() =>
       expect(replace).toHaveBeenCalledWith("/student/lessons/les-2"),
     );
@@ -680,12 +768,14 @@ describe("the way back to the page that was refused", () => {
   it("still goes back for another child on the same tablet", async () => {
     readiness.mockResolvedValue(ALL_DONE);
     render(<OnboardingResume returnTo={LESSON} />);
+    await carryOn();
     await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
 
     clearSession();
     signIn("student-2");
     await arriveAgain({ returnTo: LESSON });
 
+    await carryOn();
     await waitFor(() => expect(replace).toHaveBeenCalledWith(LESSON));
   });
 
@@ -696,6 +786,7 @@ describe("the way back to the page that was refused", () => {
     readiness.mockResolvedValue(ALL_DONE);
     try {
       render(<OnboardingResume returnTo={LESSON} />);
+      await carryOn();
 
       await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
       expect(replace).not.toHaveBeenCalledWith(LESSON);
@@ -708,18 +799,19 @@ describe("the way back to the page that was refused", () => {
     readiness.mockResolvedValue(ALL_DONE);
     render(<OnboardingResume />);
 
+    await carryOn();
     await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
   });
 
-  it("keeps the nothing-state's button Home, a lesson to go back to or not", async () => {
+  it("keeps the nothing-state's button to the lessons, a lesson to go back to or not", async () => {
     readiness.mockRejectedValue(new ApiError(0, "offline"));
     render(<OnboardingResume returnTo={LESSON} />);
 
-    const home = await screen.findByRole("button", { name: "Home" });
+    const home = await screen.findByRole("button", { name: NOTHING });
     await act(async () => {});
     expect(replace).not.toHaveBeenCalled();
     fireEvent.click(home);
-    expect(replace).toHaveBeenCalledWith(HOME);
+    expect(replace).toHaveBeenCalledWith(LESSONS);
     expect(replace).not.toHaveBeenCalledWith(LESSON);
   });
 });
@@ -815,12 +907,14 @@ describe("the lesson a child was refused, and the server's way back", () => {
     readiness.mockResolvedValue({ ...ALL_DONE, returnTo: L2_PAGE });
     render(<OnboardingResume returnTo="/student/dashboard" />);
 
+    await carryOn();
     await waitFor(() => expect(replace).toHaveBeenCalledWith(L2_PAGE));
     expect(replace).not.toHaveBeenCalledWith("/student/dashboard");
 
     // The same lesson the child was refused: their link, assignment and all.
     readiness.mockResolvedValue({ ...ALL_DONE, returnTo: L1_PAGE });
     await arriveAgain({ returnTo: L1_LINK });
+    await carryOn();
     await waitFor(() => expect(replace).toHaveBeenCalledWith(L1_LINK));
   });
 
@@ -839,17 +933,18 @@ describe("the lesson a child was refused, and the server's way back", () => {
     readiness.mockResolvedValue({ ...ALL_DONE, returnTo: L1_PAGE });
     await arriveAgain({ returnTo: L1_PAGE });
 
+    await carryOn();
     await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
     expect(replace).not.toHaveBeenCalledWith(L1_PAGE);
   });
 
-  it("keeps the nothing-state's button Home, whatever the server names", async () => {
+  it("keeps the nothing-state's button to the lessons, whatever the server names", async () => {
     readiness.mockResolvedValue({ ...NOTHING_TO_ASK, returnTo: L1_PAGE });
     render(<OnboardingResume returnTo={L1_LINK} />);
 
-    const home = await screen.findByRole("button", { name: "Home" });
+    const home = await screen.findByRole("button", { name: NOTHING });
     await act(async () => {});
     fireEvent.click(home);
-    expect(replace.mock.calls).toEqual([[HOME]]);
+    expect(replace.mock.calls).toEqual([[LESSONS]]);
   });
 });

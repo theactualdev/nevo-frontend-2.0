@@ -765,11 +765,8 @@ function BadgeSpinner({ testId }: { testId: string }) {
  * No frame draws a button in either; "Home" is the frames' own label for a
  * button that goes there (32 Prototype, the lesson summary's second button;
  * 30 Flow Reference, "Back to lessons" / "Home").
- *
- * Exported for the one other nothing-state of the same shape: finishing
- * onboarding when Module 4 has nothing to ask (`OnboardingResume`).
  */
-export function HomeButton({
+function HomeButton({
   label = "Home",
   onClick,
 }: {
