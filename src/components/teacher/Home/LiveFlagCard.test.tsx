@@ -5,8 +5,9 @@ import type { TeacherFlag } from "@/hooks/useTeacherFlags";
 
 // `vi.mock` is hoisted above ordinary consts, so the spy has to be hoisted
 // with it or the factory closes over an uninitialised binding.
-const { acknowledgeFlag } = vi.hoisted(() => ({
+const { acknowledgeFlag, markFlagSeen } = vi.hoisted(() => ({
   acknowledgeFlag: vi.fn(async () => ({})),
+  markFlagSeen: vi.fn(async () => ({})),
 }));
 
 vi.mock("@/lib/api/intelligence", async (importOriginal) => {
@@ -14,7 +15,7 @@ vi.mock("@/lib/api/intelligence", async (importOriginal) => {
     await importOriginal<typeof import("@/lib/api/intelligence")>();
   return {
     ...actual,
-    intelligenceApi: { ...actual.intelligenceApi, acknowledgeFlag },
+    intelligenceApi: { ...actual.intelligenceApi, acknowledgeFlag, markFlagSeen },
   };
 });
 
@@ -48,6 +49,7 @@ const flag = (over: Partial<TeacherFlag> = {}): TeacherFlag => ({
 
 beforeEach(() => {
   acknowledgeFlag.mockClear();
+  markFlagSeen.mockClear();
   vi.useFakeTimers();
   vi.setSystemTime(FIXED_NOW);
 });
@@ -76,6 +78,8 @@ describe("LiveFlagCard", () => {
     fireEvent.click(screen.getByRole("link", { name: /Open Amara Kalu/ }));
 
     expect(acknowledgeFlag).not.toHaveBeenCalled();
+    // It is the teacher's own read instead (SCRUM-252).
+    expect(markFlagSeen).toHaveBeenCalledWith("flag-1");
     expect(
       screen.getByRole("link", { name: /Open Amara Kalu/ }),
     ).toHaveAttribute("href", "/teacher/students/student-9");
@@ -166,5 +170,28 @@ describe("LiveFlagCard - when it was noticed", () => {
   it("falls back to a date once a week has passed", () => {
     // Beyond a week "N days ago" stops being useful to a teacher.
     expect(noticed(60 * 24 * 20)).toMatch(/August/);
+  });
+});
+
+/**
+ * SCRUM-252: the tap is this teacher's read. It clears the card from their own
+ * Home (`POST …/seen`), and from nobody else's.
+ */
+describe("LiveFlagCard - the teacher's own read", () => {
+  it("records the read when they open a message from it", () => {
+    render(<LiveFlagCard flag={flag()} />);
+    fireEvent.click(screen.getByRole("link", { name: /Send them a message/ }));
+
+    expect(markFlagSeen).toHaveBeenCalledWith("flag-1");
+    expect(acknowledgeFlag).not.toHaveBeenCalled();
+  });
+
+  it("holds nothing up when the read does not land", () => {
+    markFlagSeen.mockRejectedValueOnce(new Error("offline"));
+    render(<LiveFlagCard flag={flag()} />);
+
+    expect(() =>
+      fireEvent.click(screen.getByRole("link", { name: /Open Amara Kalu/ })),
+    ).not.toThrow();
   });
 });

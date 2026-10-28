@@ -195,7 +195,7 @@ describe("a class's flags", () => {
     getFlags.mockResolvedValue([]);
     renderHook(() => useClassInsights("c-1"));
 
-    await waitFor(() => expect(getFlags).toHaveBeenCalledWith({ classId: "c-1", limit: 200 }));
+    await waitFor(() => expect(getFlags).toHaveBeenCalledWith({ classId: "c-1", limit: 200, openOnly: true }));
   });
 });
 
