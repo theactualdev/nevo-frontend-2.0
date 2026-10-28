@@ -460,6 +460,7 @@ export function LessonReviewFlow({
 
           {step === 1 && (
             <StepMade
+              lessonId={lesson.id}
               title={lesson.title}
               subject={lesson.subject ?? null}
               needLook={needLook}
@@ -561,6 +562,7 @@ export function LessonReviewFlow({
 /* --------------------------------- STEP 1 --------------------------------- */
 
 function StepMade({
+  lessonId,
   title,
   subject,
   needLook,
@@ -569,6 +571,7 @@ function StepMade({
   modules,
   segments,
 }: {
+  lessonId: string;
   title: string;
   subject: string | null;
   needLook: number;
@@ -612,14 +615,24 @@ function StepMade({
           <span className="text-[13.5px] font-semibold text-nevo-near-black xl:text-[14.5px]">
             How it&rsquo;s broken up
           </span>
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            aria-expanded={open}
-            className="shrink-0 cursor-pointer border-none bg-transparent text-[13px] font-semibold text-nevo-navy underline underline-offset-[3px]"
-          >
-            {open ? "Hide" : "See how it’s broken up"}
-          </button>
+          <span className="flex shrink-0 items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              aria-expanded={open}
+              className="shrink-0 cursor-pointer border-none bg-transparent text-[13px] font-semibold text-nevo-navy underline underline-offset-[3px]"
+            >
+              {open ? "Hide" : "See how it’s broken up"}
+            </button>
+            {/* C07d, as its port note has it: optional editing, "reached from
+                step 1 only when a teacher wants to change something". */}
+            <Link
+              href={`/teacher/lessons/${lessonId}/structure`}
+              className="shrink-0 text-[13px] font-semibold text-nevo-navy underline underline-offset-[3px]"
+            >
+              Change something
+            </Link>
+          </span>
         </div>
         {open && (
           <ul className="m-0 list-none p-0">

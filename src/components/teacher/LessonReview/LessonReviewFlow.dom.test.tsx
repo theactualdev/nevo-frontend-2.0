@@ -482,3 +482,18 @@ describe("the same at 73 sections as at 7", () => {
     expect(screen.getByRole("button", { name: "Accept all rewrites" })).toBeInTheDocument();
   });
 });
+
+/**
+ * C07d, as its port note has it: optional editing, "reached from step 1 only
+ * when a teacher wants to change something".
+ */
+describe("the way to change how it is broken up", () => {
+  it("is offered on step 1", async () => {
+    await open();
+
+    expect(screen.getByRole("link", { name: "Change something" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1/structure",
+    );
+  });
+});
