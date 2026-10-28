@@ -483,6 +483,78 @@ export interface LessonReview {
    * approves them first, where they are shown.
    */
   media?: LessonMedia | null;
+  /*
+   * SCRUM-291, THE CHECKS STEP (Teslim cdba131, 294584b; Lydia 26 Oct).
+   *
+   * Every in-lesson check, with its question and answer key. `teacherReviewed`
+   * is the server's answer to whether it needs a teacher: a check whose key
+   * was written in the lesson arrives reviewed (`authoredBy: "person"`, set at
+   * upload), and the checks sign-off reviews the rest. `markable: false` is a
+   * check with no prompt or no key; it never holds a child, and the sign-off
+   * leaves it out.
+   */
+  checks?: CheckReviewItem[];
+  checksContentHash?: string;
+  checksApproval?: ReviewSignoff | null;
+  /**
+   * The generated guiding questions behind a check (Teslim d5f4057), signed
+   * with their own press. A child gets none until they are approved.
+   */
+  guidedSteps?: GuidedStepsReviewItem[];
+  guidedStepsContentHash?: string;
+  guidedStepsApproval?: ReviewSignoff | null;
+  pendingGuidedStepCount?: number;
+}
+
+/** A choice's value, which the key names, and its label, which a child reads. */
+export interface CheckOption {
+  value: string | number | boolean;
+  label: string;
+}
+
+/** An answer key: one value, or several for a question with more than one right answer. */
+export type CheckAnswerKey =
+  | string
+  | number
+  | boolean
+  | (string | number | boolean)[]
+  | null;
+
+/** One in-lesson check, as the review shows it (`CheckReviewItem`). */
+export interface CheckReviewItem {
+  segmentId: string;
+  segmentTitle: string | null;
+  questionId: string;
+  questionPrompt: string;
+  questionAnswerType: string;
+  questionOptions: CheckOption[];
+  questionAnswerKey: CheckAnswerKey;
+  teacherReviewed: boolean;
+  markable: boolean;
+}
+
+/** One guiding question, with the answer it is marked against. */
+export interface GuidedCheckStep {
+  id: string;
+  prompt: string;
+  answerType: string;
+  options?: CheckOption[];
+  answerKey: CheckAnswerKey;
+  /** The feedback after a wrong answer. */
+  explanation?: string | null;
+}
+
+/** The guiding questions that lead to one check (`GuidedStepsReviewItem`). */
+export interface GuidedStepsReviewItem {
+  segmentId: string;
+  segmentTitle: string | null;
+  questionId: string;
+  questionPrompt: string;
+  reviewStatus: "pending_review" | "approved";
+  guidedQuestions?: string[];
+  steps: GuidedCheckStep[];
+  /** Steps whose explanation may state the answer, by the server's own test. */
+  answerLeakageStepIds?: string[];
 }
 
 /**
@@ -493,7 +565,7 @@ export interface LessonReview {
  */
 export interface ReviewSignoff {
   id: string;
-  kind: "key_points" | "rewrites";
+  kind: "key_points" | "rewrites" | "guided_steps" | "checks";
   approvedBy: string | null;
   approvedByName: string;
   approvedAt: string;
@@ -1085,6 +1157,24 @@ export const lessonsApi = {
   approveAllRewrites: (lessonId: string, expectedContentHash: string) =>
     api.post<LessonReview>(
       `/api/v1/lessons/${lessonId}/rewrites/approve-all`,
+      { expectedContentHash },
+    ),
+
+  /**
+   * SCRUM-291: the checks step's press. Refused with 409
+   * `key_points_approval_required` until the key points are signed, so the
+   * step comes after them.
+   */
+  approveAllChecks: (lessonId: string, expectedContentHash: string) =>
+    api.post<LessonReview>(
+      `/api/v1/lessons/${lessonId}/checks/approve-all`,
+      { expectedContentHash },
+    ),
+
+  /** The generated guiding questions, signed in the same step. */
+  approveAllGuidedSteps: (lessonId: string, expectedContentHash: string) =>
+    api.post<LessonReview>(
+      `/api/v1/lessons/${lessonId}/guided-steps/approve-all`,
       { expectedContentHash },
     ),
 

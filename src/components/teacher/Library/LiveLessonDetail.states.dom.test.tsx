@@ -356,7 +356,7 @@ describe("the way into the four-step review", () => {
     show();
 
     expect(screen.getByRole("heading", { name: /2 things need a quick look/ })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Review in four steps/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Review in five steps/ })).toHaveAttribute(
       "href",
       "/teacher/lessons/l-9/review",
     );
@@ -402,7 +402,7 @@ describe("the way into the four-step review", () => {
     show();
 
     expect(screen.getByText("Ready when you are")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Review in four steps/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Review in five steps/ })).not.toBeInTheDocument();
   });
 
   it("draws no way in on a deployment that cannot say", () => {
@@ -410,7 +410,7 @@ describe("the way into the four-step review", () => {
 
     show();
 
-    expect(screen.queryByRole("link", { name: /Review in four steps/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Review in five steps/ })).not.toBeInTheDocument();
   });
 
   it("waits for the review read before it says anything", () => {
@@ -418,7 +418,7 @@ describe("the way into the four-step review", () => {
 
     show();
 
-    expect(screen.queryByRole("link", { name: /Review in four steps/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Review in five steps/ })).not.toBeInTheDocument();
   });
 
   it("shows the lesson's total minutes and no per-section breakdown", () => {

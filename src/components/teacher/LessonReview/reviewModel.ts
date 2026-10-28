@@ -1,4 +1,9 @@
 import type {
+  CheckAnswerKey,
+  CheckOption,
+  CheckReviewItem,
+  GuidedCheckStep,
+  GuidedStepsReviewItem,
   KeyPoint,
   KeyPointConfidence,
   LessonReview,
@@ -186,18 +191,25 @@ export function signoffLine(record: ReviewSignoff, what?: string): string {
  * decided. A lesson with no rewrites has only the key points to sign.
  */
 export function approvalLines(review: LessonReview): string[] {
-  const points = review.keyPointApproval?.current ? review.keyPointApproval : null;
-  const rewrites = review.rewriteApproval?.current ? review.rewriteApproval : null;
-  if (points && rewrites) {
-    const same =
-      points.approvedByName === rewrites.approvedByName &&
-      onDay(points.approvedAt) === onDay(rewrites.approvedAt);
-    return same
-      ? [signoffLine(points)]
-      : [signoffLine(points, "Key points"), signoffLine(rewrites, "Rewrites")];
-  }
-  const only = points ?? rewrites;
-  return only ? [signoffLine(only)] : [];
+  // The checks step signs the checks, or only their guiding questions where
+  // every check came with its answer; either is that step's record.
+  const parts = (
+    [
+      ["Key points", review.keyPointApproval],
+      ["Checks", review.checksApproval?.current ? review.checksApproval : review.guidedStepsApproval],
+      ["Rewrites", review.rewriteApproval],
+    ] as const
+  ).flatMap(([what, record]) => (record?.current ? [{ what, record }] : []));
+  if (parts.length === 0) return [];
+  const first = parts[0].record;
+  const same = parts.every(
+    ({ record }) =>
+      record.approvedByName === first.approvedByName &&
+      onDay(record.approvedAt) === onDay(first.approvedAt),
+  );
+  return same || parts.length === 1
+    ? [signoffLine(first)]
+    : parts.map(({ what, record }) => signoffLine(record, what));
 }
 
 export const plural = (n: number, one: string, many: string) =>
@@ -261,4 +273,151 @@ export function mediaView(review: LessonReview, segments: LessonSegment[]): Medi
     sectionsWithoutPictures: Math.max(0, segments.length - covered("image")),
     sectionsWithoutNarration: Math.max(0, segments.length - covered("audio")),
   };
+}
+
+/* ----------------------------------------------------------------- checks */
+
+/**
+ * The answer a check is marked against, as a teacher reads it: the option's
+ * label for a choice, the words or number otherwise, several joined. Null
+ * for a check with no key.
+ */
+export function answerText(
+  type: string,
+  options: CheckOption[] | undefined,
+  key: CheckAnswerKey | undefined,
+): string | null {
+  if (key === null || key === undefined) return null;
+  const keys = Array.isArray(key) ? key : [key];
+  if (keys.length === 0) return null;
+  const word = (k: string | number | boolean) => {
+    const option = options?.find((o) => o.value === k);
+    if (option) return option.label;
+    if (k === true || k === "true") return "True";
+    if (k === false || k === "false") return "False";
+    return String(k);
+  };
+  return keys.map(word).join(type === "text" ? " or " : ", ");
+}
+
+export interface CheckRow {
+  /** `${segmentId}:${questionId}`, the pair the server keys a check by. */
+  key: string;
+  segmentId: string;
+  /** The section it sits in. */
+  label: string;
+  prompt: string;
+  type: string;
+  options: CheckOption[];
+  /** The key as the server sends it, which names choices by value. */
+  answerKey: CheckAnswerKey;
+  answer: string | null;
+  /** The guiding questions that lead to it, when Nevo wrote any. */
+  guided: GuidedStepsReviewItem | null;
+  order: number;
+}
+
+export interface ChecksView {
+  /** Any check or guiding question at all: the step has something to show. */
+  exists: boolean;
+  /** Checks Nevo wrote the answer to, not yet reviewed: what the press signs. */
+  toSign: CheckRow[];
+  /** Checks whose answer came with the lesson, or that are already signed. */
+  reviewed: CheckRow[];
+  /** No prompt or no answer: shown, never signed, and never holding a child. */
+  unmarkable: CheckRow[];
+  /** Guiding questions behind a check that has no row of its own. */
+  guidedOnly: CheckRow[];
+  /** Guiding questions whose explanation may say the answer, for a look. */
+  leaks: { key: string; row: CheckRow; step: GuidedCheckStep }[];
+  /** The server needs the checks sign-off. */
+  checksPending: boolean;
+  /** The server needs the guiding questions' sign-off. */
+  guidedPending: boolean;
+  /** This step's current sign-off, for the footer and the live step. */
+  signoff: ReviewSignoff | null;
+}
+
+/**
+ * Step 3, the checks (SCRUM-291; Lydia, 26 Oct: "Build it on the key points
+ * step's pattern").
+ *
+ * EVERY ANSWER HERE IS THE SERVER'S. A check needs signing when the server
+ * says it is markable and not `teacherReviewed`: Teslim's 294584b marks a
+ * check whose answer was written in the lesson as reviewed at upload, so it
+ * is listed, never signed (Lydia, 26 Oct: "A check that came out of the
+ * lesson carrying its own authored answer was not generated by anything, so
+ * there is nothing to review"). The guiding questions need signing while
+ * their own sign-off is not current. Nothing here assumes every check needs
+ * a teacher.
+ */
+export function checksView(review: LessonReview, segments: LessonSegment[]): ChecksView {
+  const place = new Map(segments.map((s, i) => [s.id, i]));
+  const labelOf = (segmentId: string, title: string | null) => {
+    const i = place.get(segmentId) ?? 0;
+    return title?.trim() || segmentLabel(segments[i], i);
+  };
+  const guidedBy = new Map(
+    (review.guidedSteps ?? []).map((g) => [`${g.segmentId}:${g.questionId}`, g]),
+  );
+  const rows = (review.checks ?? []).map((c, i): CheckRow & { check: CheckReviewItem } => ({
+    key: `${c.segmentId}:${c.questionId}`,
+    segmentId: c.segmentId,
+    label: labelOf(c.segmentId, c.segmentTitle),
+    prompt: c.questionPrompt,
+    type: c.questionAnswerType,
+    options: c.questionOptions ?? [],
+    answerKey: c.questionAnswerKey,
+    answer: answerText(c.questionAnswerType, c.questionOptions, c.questionAnswerKey),
+    guided: guidedBy.get(`${c.segmentId}:${c.questionId}`) ?? null,
+    order: (place.get(c.segmentId) ?? segments.length) * 1000 + i,
+    check: c,
+  }));
+  const seen = new Set(rows.map((r) => r.key));
+  const guidedOnly = (review.guidedSteps ?? [])
+    .filter((g) => !seen.has(`${g.segmentId}:${g.questionId}`))
+    .map((g, i): CheckRow => ({
+      key: `${g.segmentId}:${g.questionId}`,
+      segmentId: g.segmentId,
+      label: labelOf(g.segmentId, g.segmentTitle),
+      prompt: g.questionPrompt,
+      type: "",
+      options: [],
+      answerKey: null,
+      answer: null,
+      guided: g,
+      order: (place.get(g.segmentId) ?? segments.length) * 1000 + 500 + i,
+    }));
+  const sorted = [...rows].sort((a, b) => a.order - b.order);
+  const leaks = [...sorted, ...guidedOnly].flatMap((row) =>
+    (row.guided?.steps ?? [])
+      .filter((step) => row.guided?.answerLeakageStepIds?.includes(step.id))
+      .map((step) => ({ key: `${row.key}:${step.id}`, row, step })),
+  );
+  const checksPending = rows.some((r) => r.check.markable && !r.check.teacherReviewed);
+  const guidedPending =
+    (review.guidedSteps ?? []).length > 0 && review.guidedStepsApproval?.current !== true;
+  const signoff = review.checksApproval?.current
+    ? review.checksApproval
+    : review.guidedStepsApproval?.current
+      ? review.guidedStepsApproval
+      : null;
+  return {
+    exists: rows.length > 0 || guidedOnly.length > 0,
+    toSign: sorted.filter((r) => r.check.markable && !r.check.teacherReviewed),
+    reviewed: sorted.filter((r) => r.check.markable && r.check.teacherReviewed),
+    unmarkable: sorted.filter((r) => !r.check.markable),
+    guidedOnly,
+    leaks,
+    checksPending,
+    guidedPending,
+    signoff,
+  };
+}
+
+/** "a", "a and b", "a, b and c". */
+export function listed(parts: string[]): string {
+  return parts.length <= 1
+    ? (parts[0] ?? "")
+    : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }

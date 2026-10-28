@@ -31,6 +31,7 @@ import { getToken } from "@/lib/auth/session";
 
 export type ReviewWork =
   | "keyPoints"
+  | "checks"
   | "rewrites"
   | `point:${string}`
   | `missing:${string}`
@@ -47,11 +48,20 @@ export interface LessonReviewFlowState {
   failed: boolean;
   /** The write in flight, so its own control can say so. */
   working: ReviewWork | null;
-  /** The write that did not land, and the server's reason when it gave one. */
-  refused: { work: ReviewWork; message: string | null } | null;
+  /**
+   * The write that did not land, and the server's reason when it gave one:
+   * its sentence, and its code for a refusal that came without one.
+   */
+  refused: { work: ReviewWork; message: string | null; code?: string | null } | null;
   /** The lesson changed under an approval, and what is shown is the new one. */
   changed: boolean;
   approveKeyPoints: () => Promise<boolean>;
+  /**
+   * SCRUM-291's one press: the checks' sign-off, then the guiding questions',
+   * each only where the server says it is needed (`parts`, read off the
+   * review), and each with the hash of the review the teacher was shown.
+   */
+  approveChecks: (parts: { checks: boolean; guided: boolean }) => Promise<boolean>;
   approveRewrites: () => Promise<boolean>;
   amendPoint: (keyPointId: string, text: string) => Promise<boolean>;
   resolveMissing: (segmentId: string, write: MissingKeyPointWrite) => Promise<boolean>;
@@ -104,6 +114,25 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
     };
   }, [lessonId]);
 
+  /**
+   * A refusal, said where it happened. A moved lesson is re-read and said so;
+   * anything else keeps the server's sentence, or its code when it sent none.
+   */
+  const fail = useCallback(
+    async (work: ReviewWork, err: unknown) => {
+      const detail = err instanceof ApiError ? err.detail : undefined;
+      if (apiErrorCode(detail) === "review_content_changed") {
+        await Promise.all([lessonsApi.review(lessonId).then(setReview), readLesson()]).catch(
+          () => {},
+        );
+        setChanged(true);
+      } else {
+        setRefused({ work, message: apiErrorMessage(detail), code: apiErrorCode(detail) });
+      }
+    },
+    [lessonId, readLesson],
+  );
+
   const act = useCallback(
     async (
       work: ReviewWork,
@@ -120,21 +149,13 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
         if (after) await after().catch(() => {});
         return true;
       } catch (err: unknown) {
-        const detail = err instanceof ApiError ? err.detail : undefined;
-        if (apiErrorCode(detail) === "review_content_changed") {
-          await Promise.all([lessonsApi.review(lessonId).then(setReview), readLesson()]).catch(
-            () => {},
-          );
-          setChanged(true);
-        } else {
-          setRefused({ work, message: apiErrorMessage(detail) });
-        }
+        await fail(work, err);
         return false;
       } finally {
         setWorking(null);
       }
     },
-    [working, lessonId, readLesson],
+    [working, fail],
   );
 
   const approveKeyPoints = useCallback(
@@ -143,6 +164,36 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
         lessonsApi.approveAllKeyPoints(lessonId, review?.keyPointsContentHash ?? ""),
       ),
     [act, lessonId, review?.keyPointsContentHash],
+  );
+
+  /*
+   * TWO SIGN-OFFS, ONE PRESS, IN THE SERVER'S ORDER. The checks first - the
+   * server refuses them until the key points are signed, and the step sits
+   * after those - then the guiding questions. Both hashes are taken from the
+   * review on screen before either call, so neither signs anything newer
+   * than what was read. If the first lands and the second is refused, the
+   * review it returned is kept: what is on screen is what is true.
+   */
+  const approveChecks = useCallback(
+    async (parts: { checks: boolean; guided: boolean }) => {
+      if (working || !review) return false;
+      const checksHash = review.checksContentHash ?? "";
+      const guidedHash = review.guidedStepsContentHash ?? "";
+      setWorking("checks");
+      setRefused(null);
+      try {
+        if (parts.checks) setReview(await lessonsApi.approveAllChecks(lessonId, checksHash));
+        if (parts.guided) setReview(await lessonsApi.approveAllGuidedSteps(lessonId, guidedHash));
+        setChanged(false);
+        return true;
+      } catch (err: unknown) {
+        await fail("checks", err);
+        return false;
+      } finally {
+        setWorking(null);
+      }
+    },
+    [working, review, lessonId, fail],
   );
 
   const approveRewrites = useCallback(
@@ -245,6 +296,7 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
     refused,
     changed,
     approveKeyPoints,
+    approveChecks,
     approveRewrites,
     amendPoint,
     resolveMissing,

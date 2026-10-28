@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 import { StepMedia } from "./StepMedia";
 import {
   approvalLines,
+  checksView,
   keyPointRows,
+  listed,
   mediaView,
   plural,
   rewriteRows,
@@ -16,12 +18,15 @@ import {
   signoffLine,
   WHY_FLAGGED,
   type AttentionRow,
+  type ChecksView,
   type RewriteKind,
   type RewriteRow,
 } from "./reviewModel";
+import { StepChecks } from "./StepChecks";
 
 /**
- * C07k, "Send a lesson in four calm steps" (Lydia, 19 Oct; design 534ba31).
+ * C07k, "Send a lesson in four calm steps" (Lydia, 19 Oct; design 534ba31), five
+ * since SCRUM-291.
  *
  * FOUR SCREENS, NOT ONE PAGE WITH SECTIONS. Her words: "the whole fix is that
  * a teacher knows what they are being asked for and when each part is
@@ -40,10 +45,15 @@ import {
  * "counts only on the accept buttons and the needs-a-look line"). That rule
  * is followed over two counts the frame draws, in step 2's title and step 1's
  * identity line.
+ *
+ * FIVE SINCE SCRUM-291. The checks have their own step after the key points
+ * and before the rewrites (Lydia, 25 Oct: "A teacher reads what the lesson
+ * says, then what it asks, then the variants"), built on the key-points
+ * step's pattern because no frame is coming (Lydia, 26 Oct).
  */
 
-const STEPS = ["What I made", "Key points", "Rewrites", "Live"] as const;
-type Step = 1 | 2 | 3 | 4;
+const STEPS = ["What I made", "Key points", "Checks", "Rewrites", "Live"] as const;
+type Step = 1 | 2 | 3 | 4 | 5;
 
 const EYEBROW =
   "block font-mono text-[11px] font-bold tracking-[0.1em] text-nevo-violet uppercase";
@@ -71,6 +81,21 @@ const TEXTAREA =
 
 /** How many of a long list are drawn before "+ N more". C07k draws five. */
 const SHOWN = 5;
+
+/**
+ * Ours, for refusals the server sends a code for and no sentence (listed for
+ * Lydia's copy pass). The checks step needs two by name: the server refuses
+ * the checks before the key points, and once refused a lesson whose check had
+ * no answer to mark against.
+ */
+const REFUSED_WITHOUT_WORDS: Record<string, string> = {
+  key_points_approval_required: "Accept the key points first, then the checks.",
+  unmarkable_check:
+    "One of these checks has no answer Nevo can mark it against, so the checks can’t be accepted yet.",
+  no_checks_to_approve: "There’s nothing here to accept any more.",
+  lesson_not_ready_for_review:
+    "This lesson is still being prepared, so its checks can’t be accepted yet.",
+};
 
 function Check({ size = 13 }: { size?: number }) {
   return (
@@ -124,11 +149,13 @@ export function LessonReviewFlow({
    */
   const mediaWaiting = media.awaiting.length > 0;
   const [step, setStep] = useState<Step>(
-    initialStep ?? (complete && !mediaWaiting ? 4 : 1),
+    initialStep ?? (complete && !mediaWaiting ? 5 : 1),
   );
   const [flaggedMedia, setFlaggedMedia] = useState<Set<string>>(() => new Set());
   const [confirmed, setConfirmed] = useState<Set<string>>(() => new Set());
   const [edited, setEdited] = useState<Set<string>>(() => new Set());
+  /** Guiding questions flagged for a look that the teacher has read. */
+  const [readLeaks, setReadLeaks] = useState<Set<string>>(() => new Set());
 
   const points = keyPointRows(review, segments, confirmed, edited);
   const flagsLeft = points.attention.filter((r) => r.kind === "flag" && !rowResolved(r)).length;
@@ -138,6 +165,9 @@ export function LessonReviewFlow({
   const pointsSigned = review.keyPointApproval?.current === true;
   const rewritesSigned = review.rewriteApproval?.current === true;
   const noRewrites = (review.rewriteCount ?? rewrites.length) === 0;
+  const checks = checksView(review, segments);
+  /** The server still wants this step's sign-off, of the checks or their guiding questions. */
+  const checksNeeded = checks.checksPending || checks.guidedPending;
 
   const done = (n: Step) =>
     n === 1
@@ -145,13 +175,17 @@ export function LessonReviewFlow({
       : n === 2
         ? pointsSigned
         : n === 3
-          ? rewritesSigned || (noRewrites && step > 3)
-          : complete && step === 4;
+          ? !checksNeeded && (checks.signoff !== null || step > 3)
+          : n === 4
+            ? rewritesSigned || (noRewrites && step > 4)
+            : complete && step === 5;
 
   const back = () => setStep((s) => Math.max(1, s - 1) as Step);
   const refusedHere = (work: string) =>
     flow.refused?.work === work
-      ? (flow.refused.message ?? "That didn’t go through, and nothing has changed. Try again in a moment.")
+      ? (flow.refused.message ??
+        REFUSED_WITHOUT_WORDS[flow.refused.code ?? ""] ??
+        "That didn’t go through, and nothing has changed. Try again in a moment.")
       : null;
 
   let footer: {
@@ -266,6 +300,64 @@ export function LessonReviewFlow({
       ),
     };
   } else if (step === 3) {
+    /*
+     * SCRUM-291's press. Held until the key points are signed, because the
+     * server refuses the checks before them (409 `key_points_approval_required`)
+     * and the step comes after them. A guiding question flagged for a look
+     * does not hold it - "handle or accept, your call", as for a flagged key
+     * point.
+     */
+    const refusal = refusedHere("checks");
+    const leaksLeft = checks.leaks.filter((l) => !readLeaks.has(l.key)).length;
+    const toSign = checks.toSign.length;
+    footer = {
+      back: (
+        <button type="button" onClick={back} className={GHOST}>
+          Back
+        </button>
+      ),
+      note:
+        refusal ??
+        (!checksNeeded
+          ? checks.signoff
+            ? signoffLine(checks.signoff)
+            : "Nothing to accept here."
+          : !pointsSigned
+            ? "Accept the key points in step 2 first, then the checks."
+            : leaksLeft > 0
+              ? `${leaksLeft} flagged above - check or accept, your call.`
+              : checks.checksPending && checks.guidedPending
+                ? "One press keeps every check and its guiding questions."
+                : checks.checksPending
+                  ? "One press keeps every check."
+                  : "One press keeps every guiding question."),
+      alert: Boolean(refusal),
+      primary: !checksNeeded ? (
+        <button type="button" onClick={() => setStep(4)} className={PRIMARY}>
+          Continue
+        </button>
+      ) : (
+        <button
+          type="button"
+          disabled={!pointsSigned || flow.working !== null}
+          onClick={() => {
+            void flow
+              .approveChecks({ checks: checks.checksPending, guided: checks.guidedPending })
+              .then((ok) => ok && setStep(4));
+          }}
+          className={PRIMARY}
+        >
+          {flow.working === "checks"
+            ? "Accepting…"
+            : !checks.checksPending
+              ? "Accept the guiding questions"
+              : toSign === 1
+                ? "Accept the check"
+                : `Accept all ${toSign} checks`}
+        </button>
+      ),
+    };
+  } else if (step === 4) {
     const refusal = refusedHere("rewrites");
     footer = {
       back: (
@@ -283,7 +375,7 @@ export function LessonReviewFlow({
       alert: Boolean(refusal),
       primary:
         noRewrites || rewritesSigned ? (
-          <button type="button" onClick={() => setStep(4)} className={PRIMARY}>
+          <button type="button" onClick={() => setStep(5)} className={PRIMARY}>
             {noRewrites ? "Continue" : "Finish"}
           </button>
         ) : (
@@ -291,7 +383,7 @@ export function LessonReviewFlow({
             type="button"
             disabled={flow.working !== null}
             onClick={() => {
-              void flow.approveRewrites().then((ok) => ok && setStep(4));
+              void flow.approveRewrites().then((ok) => ok && setStep(5));
             }}
             className={PRIMARY}
           >
@@ -343,7 +435,7 @@ export function LessonReviewFlow({
                     {isDone && <span className="sr-only"> (done)</span>}
                   </span>
                 </button>
-                {n < 4 && (
+                {n < STEPS.length && (
                   <span aria-hidden className="h-[1.5px] w-3 shrink-0 bg-nevo-near-black/16 xl:w-[26px]" />
                 )}
               </li>
@@ -355,7 +447,7 @@ export function LessonReviewFlow({
       <div
         className={cn(
           "min-h-0 flex-1 overflow-y-auto px-7 py-6 xl:px-10 xl:py-8",
-          step === 4 && "flex flex-col justify-center",
+          step === 5 && "flex flex-col justify-center",
         )}
       >
         <div className="mx-auto w-full max-w-[640px] xl:max-w-[760px]">
@@ -422,14 +514,24 @@ export function LessonReviewFlow({
           )}
 
           {step === 3 && (
-            <StepRewrites lessonId={lesson.id} flow={flow} rows={rewrites} refusedHere={refusedHere} />
+            <StepChecks
+              view={checks}
+              signed={!checksNeeded}
+              readLeaks={readLeaks}
+              onReadLeak={(key) => setReadLeaks((s) => new Set(s).add(key))}
+            />
           )}
 
           {step === 4 && (
+            <StepRewrites lessonId={lesson.id} flow={flow} rows={rewrites} refusedHere={refusedHere} />
+          )}
+
+          {step === 5 && (
             <StepLive
               lessonId={lesson.id}
               review={review}
               pointsSigned={pointsSigned}
+              checks={checks}
               rewritesSigned={rewritesSigned || noRewrites}
               onGo={setStep}
             />
@@ -493,7 +595,7 @@ function StepMade({
         }));
   return (
     <div>
-      <span className={EYEBROW}>Step 1 of 4 · what Nevo made of it</span>
+      <span className={EYEBROW}>Step 1 of 5 · what Nevo made of it</span>
       {/* THE header: one plain status line, and the only one on the step. */}
       <h2 className="mt-3 text-[22px] leading-[1.2] font-semibold tracking-[-0.014em] text-pretty text-nevo-near-black xl:text-[26px]">
         {mediaLine ??
@@ -567,7 +669,7 @@ function StepKeyPoints({
   const shown = all ? rest : rest.slice(0, SHOWN);
   return (
     <div>
-      <span className={EYEBROW}>Step 2 of 4 · the key points</span>
+      <span className={EYEBROW}>Step 2 of 5 · the key points</span>
       <h2 className={H2}>The key points, pulled from what you uploaded</h2>
       <p className={cn(SUB, "mt-2")}>
         Read any you like. You don&rsquo;t have to open them - Accept keeps them all.
@@ -858,7 +960,7 @@ function StepRewrites({
   const shown = all ? rows : rows.slice(0, SHOWN);
   return (
     <div>
-      <span className={EYEBROW}>Step 3 of 4 · the rewrites</span>
+      <span className={EYEBROW}>Step 4 of 5 · the rewrites</span>
       <h2 className={H2}>A simpler and a longer version of each part</h2>
       <p className={cn(SUB, "mt-2")}>
         {rows.length > 0
@@ -1038,33 +1140,49 @@ function StepLive({
   lessonId,
   review,
   pointsSigned,
+  checks,
   rewritesSigned,
   onGo,
 }: {
   lessonId: string;
   review: LessonReview;
   pointsSigned: boolean;
+  checks: ChecksView;
   rewritesSigned: boolean;
   onGo: (step: Step) => void;
 }) {
   if (review.reviewComplete !== true) {
+    /*
+     * WHAT IS STILL WAITING, IN STEP ORDER, from the server's own sign-offs.
+     * This said "Accept the rewrites" to a lesson whose rewrites were signed
+     * and whose checks were not, and sent the teacher back to the rewrites.
+     */
+    const waiting = [
+      !pointsSigned && { step: 2 as Step, words: "the key points", go: "Go to the key points" },
+      (checks.checksPending || checks.guidedPending) && {
+        step: 3 as Step,
+        words: "the checks",
+        go: "Go to the checks",
+      },
+      !rewritesSigned && { step: 4 as Step, words: "the rewrites", go: "Go to the rewrites" },
+    ].filter((w): w is { step: Step; words: string; go: string } => Boolean(w));
     return (
       <div className="flex flex-col items-center pt-2.5 text-center">
         <h2 className="text-[21px] font-semibold tracking-[-0.012em] text-nevo-near-black xl:text-[24px]">
           Not live yet
         </h2>
         <p className={cn(SUB, "mt-[11px] max-w-[460px] text-nevo-near-black/66")}>
-          {!pointsSigned && !rewritesSigned
-            ? "Accept the key points and the rewrites, and it goes into your library ready to assign."
-            : !pointsSigned
-              ? "Accept the key points, and it goes into your library ready to assign."
-              : "Accept the rewrites, and it goes into your library ready to assign."}
+          {waiting.length > 0
+            ? `Accept ${listed(waiting.map((w) => w.words))}, and it goes into your library ready to assign.`
+            : "It isn’t ready to assign yet."}
         </p>
-        <div className="mt-[26px] flex flex-wrap justify-center gap-3">
-          <button type="button" onClick={() => onGo(pointsSigned ? 3 : 2)} className={PRIMARY}>
-            {pointsSigned ? "Go to the rewrites" : "Go to the key points"}
-          </button>
-        </div>
+        {waiting.length > 0 && (
+          <div className="mt-[26px] flex flex-wrap justify-center gap-3">
+            <button type="button" onClick={() => onGo(waiting[0].step)} className={PRIMARY}>
+              {waiting[0].go}
+            </button>
+          </div>
+        )}
       </div>
     );
   }
