@@ -58,7 +58,7 @@ describe("MasteryDualTrack - what the numbers say", () => {
    * drawn as one a child had mostly understood - and this test asserted it.
    * Absence is an instruction: no bar at all.
    */
-  it("draws nothing for a value that is not a number", () => {
+  it("draws no rail for a value that is not a number", () => {
     render(
       <MasteryDualTrack
         concept="Fractions"
@@ -67,14 +67,40 @@ describe("MasteryDualTrack - what the numbers say", () => {
       />,
     );
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
-    expect(screen.queryByText("Fractions")).not.toBeInTheDocument();
+  });
+});
+
+/*
+ * SCRUM-200 (Lydia, 28 Oct): "the empty bar reads as zero, which is a claim we
+ * have not earned." A null reached the bar as 0 and drew an empty rail. Her
+ * sentence stands where the rail would be.
+ */
+describe("MasteryDualTrack - a concept with no estimate", () => {
+  it("says not enough yet, once, and draws no rail, when neither is measured", () => {
+    render(<MasteryDualTrack concept="Fractions" understanding={null} reading={null} />);
+
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Not enough yet to show this.")).toHaveLength(1);
+    expect(screen.getByText("Fractions")).toBeInTheDocument();
   });
 
-  it("draws nothing when only one of the two is missing", () => {
-    render(
-      <MasteryDualTrack concept="Fractions" understanding={60} reading={Number.NaN} />,
-    );
-    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  it("draws the rail that was measured, and says not enough yet for the other", () => {
+    render(<MasteryDualTrack concept="Fractions" understanding={60} reading={null} />);
+
+    expect(
+      screen.getByRole("progressbar", { name: "Fractions - understanding" }),
+    ).toHaveAttribute("aria-valuenow", "60");
+    expect(
+      screen.queryByRole("progressbar", { name: "Fractions - reading level" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Not enough yet to show this.")).toBeInTheDocument();
+  });
+
+  it("still draws a real zero as a rail - a zero that arrived is not missing", () => {
+    render(<MasteryDualTrack concept="Fractions" understanding={0} reading={0} />);
+
+    expect(screen.getAllByRole("progressbar")).toHaveLength(2);
+    expect(screen.queryByText("Not enough yet to show this.")).not.toBeInTheDocument();
   });
 });
 

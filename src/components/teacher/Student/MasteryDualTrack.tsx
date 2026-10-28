@@ -38,6 +38,12 @@
 /** Frame clamps to 0-100. Only ever called with a finite value - see below. */
 const clamp = (v: number) => Math.max(0, Math.min(100, v));
 
+/** Lydia's words (SCRUM-200, 28 Oct), in place of a rail with nothing behind it. */
+export const NOT_ENOUGH_YET = "Not enough yet to show this.";
+
+const measured = (v: number | null | undefined): v is number =>
+  typeof v === "number" && Number.isFinite(v);
+
 export function MasteryDualTrack({
   concept,
   understanding,
@@ -46,18 +52,25 @@ export function MasteryDualTrack({
   flag,
 }: {
   concept: string;
-  understanding: number;
-  reading: number;
+  /** Null when the engine has no estimate (`MasteryStateResponse` allows it). */
+  understanding: number | null;
+  reading: number | null;
   flag?: string;
 }) {
   /*
-   * NO VALUE IS NOT 72%. A non-number fell back to the frame's own example
-   * figures - 72 and 48 - so a concept with no measurement was drawn as one
-   * a student had mostly understood. Absence is an instruction: no bar.
+   * NO VALUE IS NOT 72%, AND IT IS NOT 0% EITHER.
+   *
+   * A non-number fell back to the frame's own example figures - 72 and 48 -
+   * so a concept with no measurement was drawn as one a student had mostly
+   * understood. Then a null reached here as 0, drawn as an empty rail: "the
+   * empty bar reads as zero, which is a claim we have not earned" (Lydia,
+   * SCRUM-200, 28 Oct). Absence is an instruction: no rail, and her sentence
+   * where it would be. A value that did arrive still draws.
    */
-  if (!Number.isFinite(understanding) || !Number.isFinite(reading)) return null;
-  const u = clamp(understanding);
-  const r = clamp(reading);
+  const hasU = measured(understanding);
+  const hasR = measured(reading);
+  const u = hasU ? clamp(understanding) : null;
+  const r = hasR ? clamp(reading) : null;
   // No fallback. Nothing computes a label here; "none" is kept as an explicit
   // suppression so a caller can say "not on this row" as well as say nothing.
   const label = !flag || flag === "none" ? "" : flag;
@@ -76,11 +89,22 @@ export function MasteryDualTrack({
           )}
         </div>
       )}
+      {/* Neither measured: one sentence, not two rails' worth of the same. */}
+      {u === null && r === null ? (
+        <p className="text-[13px] leading-[1.5] text-nevo-near-black/60">
+          {NOT_ENOUGH_YET}
+        </p>
+      ) : (
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-3">
           <span className="w-[92px] shrink-0 text-xs text-nevo-near-black/70">
             Understanding
           </span>
+          {u === null ? (
+            <span className="flex-1 text-xs text-nevo-near-black/60">
+              {NOT_ENOUGH_YET}
+            </span>
+          ) : (
           <div
             role="progressbar"
             aria-label={concept ? `${concept} - understanding` : "Understanding"}
@@ -94,11 +118,17 @@ export function MasteryDualTrack({
               style={{ width: `${u}%` }}
             />
           </div>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <span className="w-[92px] shrink-0 text-xs text-nevo-near-black/70">
             Reading level
           </span>
+          {r === null ? (
+            <span className="flex-1 text-xs text-nevo-near-black/60">
+              {NOT_ENOUGH_YET}
+            </span>
+          ) : (
           <div
             role="progressbar"
             aria-label={concept ? `${concept} - reading level` : "Reading level"}
@@ -112,8 +142,10 @@ export function MasteryDualTrack({
               style={{ width: `${r}%` }}
             />
           </div>
+          )}
         </div>
       </div>
+      )}
     </div>
   );
 }
