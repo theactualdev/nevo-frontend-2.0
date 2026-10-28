@@ -72,10 +72,12 @@ export type ReviewRecord =
   | { state: "failed" }
   | { state: "recorded"; response: RecordReviewResponse };
 
-/** Design's signed-off lines (D40, 1 Oct), verbatim. */
+/**
+ * The review's lines, verbatim: design's D40 (1 Oct), with its heading now
+ * Lydia's (26 Oct #8, confirmed 27 Oct).
+ */
 export const REVIEW_COPY = {
-  firmer: "You've got this one more firmly now.",
-  again: "You've been through this one again.",
+  seen: "You have seen this one before.",
   later: "We'll bring it back later.",
 } as const;
 
@@ -83,39 +85,34 @@ export const REVIEW_COPY = {
  * What the review's completion screen may claim (D40).
  *
  * "You strengthened this concept" showed whatever happened - including when
- * nothing was recorded at all. Design's ruling splits it:
+ * nothing was recorded at all. Design split it into a firmer line, where the
+ * server confirmed recall, and a plain one; ONE LINE NOW (Lydia, 26 Oct #8):
  *
- *   - THE FIRMER LINE ONLY WHERE THE BACKEND CONFIRMS MOVEMENT. The field that
- *     confirms it is `RecordReviewResponse.recallSuccessful`: the server's own
- *     verdict on the outcome sent, which it alone decides. Nothing the client
- *     counted reaches this line. Backend confirmed on 5 Oct (B50) that a true
- *     is only ever an unaided first attempt and always strictly lengthens the
- *     interval, with both pinned in their tests - so no other field is needed.
- *   - Otherwise "You've been through this one again", which is true of every
- *     child who reached this screen: nothing sent, a failed write, or a review
- *     the server did not count as recall.
+ *   - "You have seen this one before", for every child who reached this
+ *     screen, which is true of all of them. The firmer line waited on
+ *     `RecordReviewResponse.recallSuccessful`, which a student's write has
+ *     answered `null` since d461b60, so it could no longer show.
+ *     Nothing on this screen tells one child apart from another.
  *   - "We'll bring it back later" only when the write came back with a
  *     `nextReviewDue`. It is a promise about scheduling, so it needs the
  *     schedule behind it. The date is checked for being one, never compared to
  *     now - when it falls is the scheduler's business.
  *
- * HELD WHILE THE WRITE IS IN FLIGHT. Showing the plain line and then swapping
- * in the firmer one a moment later turns a report into a reveal, which is a
- * reward mechanic by another route (rule 8). The heading keeps its place and
- * lands once, when there is something true to say.
+ * HELD WHILE THE WRITE IS IN FLIGHT, so the screen lands once: the heading and
+ * whatever the scheduler said back together, never the return line arriving
+ * under it a moment later as a reveal (rule 8).
  */
 export function reviewCompletionCopy(record: ReviewRecord): {
   heading: string;
   held: boolean;
   bringBack: boolean;
 } {
-  const response = record.state === "recorded" ? record.response : null;
-  const due = response?.schedule?.nextReviewDue;
+  const due =
+    record.state === "recorded"
+      ? record.response.schedule?.nextReviewDue
+      : undefined;
   return {
-    heading:
-      response?.recallSuccessful === true
-        ? REVIEW_COPY.firmer
-        : REVIEW_COPY.again,
+    heading: REVIEW_COPY.seen,
     held: record.state === "pending",
     bringBack: typeof due === "string" && !Number.isNaN(Date.parse(due)),
   };
