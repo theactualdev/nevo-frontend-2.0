@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { escalationsApi } from "@/lib/api/escalations";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
+import { useKeptDraft } from "@/hooks/useKeptDraft";
+import { KeptDraftNotice } from "@/components/shared/KeptDraftNotice";
 
 /**
  * C.8b Share with Learning Support, for a real student.
@@ -57,6 +59,9 @@ export function LiveShareSheet({
   const [error, setError] = useState<string | null>(null);
   // A safeguarding note, of all things, should not vanish on a refresh.
   useUnsavedGuard(note.trim().length > 0);
+  // A note about a child survives the session lapsing (SCRUM-246), kept for
+  // this child and offered back when the sheet is next opened.
+  const keptNote = useKeptDraft(`share:${studentId}`, note, note.trim().length > 0);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -154,6 +159,13 @@ export function LiveShareSheet({
         <p className="mt-[9px] text-[14.5px] leading-[1.55] text-nevo-near-black/68 xl:mt-2.5 xl:text-[15px]">
           {`A note goes to your SENCo along with ${firstName}${"’"}s recent picture. They${"’"}ll take it from here.`}
         </p>
+        {keptNote.kept && (
+          <KeptDraftNotice
+            className="mt-5"
+            onRestore={() => setNote(keptNote.restore() ?? "")}
+            onDiscard={keptNote.discard}
+          />
+        )}
         <label className="mt-5 block text-[13px] font-semibold text-nevo-near-black/70 xl:mt-[22px] xl:text-[13.5px]">
           What are you noticing?
           <textarea

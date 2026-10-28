@@ -4,6 +4,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 const { create } = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock("@/lib/api/escalations", () => ({ escalationsApi: { create } }));
 
+import { clearSession, setSession } from "@/lib/auth/session";
+import { writeKeptDraft, readKeptDraft } from "@/lib/drafts/keptDraft";
 import { LiveShareSheet } from "./LiveShareSheet";
 
 /**
@@ -243,5 +245,46 @@ describe("a note not yet sent", () => {
 
     type("She has gone very quiet.");
     expect(leavingAsks()).toBe(true);
+  });
+});
+
+/**
+ * SCRUM-246, part 2: a note being written survives the session lapsing, and
+ * comes back as the teacher's own unsaved work, to put back or let go.
+ */
+describe("a note from before the session lapsed", () => {
+  beforeEach(() => {
+    clearSession();
+    window.localStorage.clear();
+    setSession({
+      token: "tok",
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      userId: "t-1",
+      role: "teacher",
+    });
+    writeKeptDraft("share:s-1", "Quieter than usual since Monday.");
+  });
+
+  it("is offered, not laid over the empty box", () => {
+    show();
+
+    expect(screen.getByText(/You were signed out before this was saved/)).toBeInTheDocument();
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("goes back in the box when the teacher puts it back", () => {
+    show();
+    fireEvent.click(screen.getByRole("button", { name: "Put it back" }));
+
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("Quieter than usual since Monday.");
+    expect(screen.queryByText(/You were signed out before this was saved/)).not.toBeInTheDocument();
+  });
+
+  it("is gone when the teacher discards it", () => {
+    show();
+    fireEvent.click(screen.getByRole("button", { name: "Discard it" }));
+
+    expect(readKeptDraft("share:s-1")).toBeNull();
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
   });
 });

@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
+import { useKeptDraft } from "@/hooks/useKeptDraft";
+import { KeptDraftNotice } from "@/components/shared/KeptDraftNotice";
 import { ApiError } from "@/lib/api/client";
 import { feedbackApi } from "@/lib/api/feedback";
 import { cn } from "@/lib/utils";
@@ -59,6 +61,8 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState("");
   const [sent, setSent] = useState(false);
   useUnsavedGuard(text.trim().length > 0 && !sent);
+  // Feedback being written survives the session lapsing (SCRUM-246).
+  const keptText = useKeptDraft("feedback", text, text.trim().length > 0 && !sent);
   const [sending, setSending] = useState(false);
   /**
    * Which KIND of failure, not just that there was one.
@@ -238,6 +242,13 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
+          {keptText.kept && (
+            <KeptDraftNotice
+              className="mb-3"
+              onRestore={() => setText(keptText.restore() ?? "")}
+              onDiscard={keptText.discard}
+            />
+          )}
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useId } from "react";
+import { unsavedGuardsReleased } from "@/lib/auth/unsavedRelease";
 
 /**
  * Ask before the browser throws away work nobody has sent yet.
@@ -18,8 +19,10 @@ import { createContext, useContext, useEffect, useId } from "react";
  * goes (`Shell/UnsavedChanges.tsx`). Outside the shell there is no registry
  * and only the browser's prompt applies.
  *
- * Still not covered: the session lapsing, which navigates on the console's
- * behalf. Raised with design rather than invented here.
+ * THE SESSION LAPSING (SCRUM-246, part 2: "no dialog, keep the work") is the
+ * console navigating on the teacher's behalf, so the prompt stands down
+ * (`releaseUnsavedGuards`) and the work is kept on the device for when they
+ * sign back in (`useKeptDraft`).
  */
 
 /**
@@ -52,6 +55,7 @@ export function useUnsavedGuard(
   useEffect(() => {
     if (!unsaved) return;
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (unsavedGuardsReleased()) return;
       e.preventDefault();
       // Older engines read the legacy field instead, and only prompt when it
       // is set to something truthy - an empty string asks nothing (MDN).
