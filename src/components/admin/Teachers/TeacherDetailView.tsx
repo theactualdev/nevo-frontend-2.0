@@ -318,9 +318,9 @@ export function TeacherDetailView({
         <SectionHeading>Classes</SectionHeading>
         {/* SCRUM-40's second door onto D5c. This was a link back to Classes,
             leaving the admin to find the class and start again from there. */}
-        {/* Not for an invited teacher: the server assigns only a teacher who
-            has joined, and refused this with "teacher not found". */}
-        {canAssign && !invited ? (
+        {/* An invited teacher too (L11, 26 Oct): the assignment waits for
+            them to join. */}
+        {canAssign ? (
           <button
             type="button"
             onClick={() => setAssigning(true)}
@@ -332,14 +332,14 @@ export function TeacherDetailView({
           </button>
         ) : null}
       </div>
-      {canAssign && !invited ? <PausedNote className="mt-2" /> : null}
+      {canAssign ? <PausedNote className="mt-2" /> : null}
 
       <div className={cn(CARD, "mt-3.5")}>
         {held.length === 0 ? (
           <div className="px-[22px] py-6">
             <p className="m-0 text-sm text-nevo-near-black/62">
               {teacher.name} doesn&rsquo;t hold any classes yet.
-              {invited ? " They can be given classes once they\u2019ve joined." : null}
+              {invited ? " Classes you assign take effect when they join." : null}
             </p>
           </div>
         ) : (

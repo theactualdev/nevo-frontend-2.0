@@ -660,7 +660,8 @@ export function InvitationsView() {
                           </p>
                           <p className="m-0 mt-1 text-[13.5px] leading-[1.5] text-nevo-navy/85">
                             {invite.name ?? invite.email ?? "This person"}&rsquo;s
-                            link will stop working immediately.
+                            link will stop working immediately, and any classes
+                            assigned to them come off too.
                           </p>
                           <div className="mt-3 flex gap-2.5">
                             <button
