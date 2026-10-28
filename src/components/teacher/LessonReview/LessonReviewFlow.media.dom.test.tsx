@@ -301,3 +301,56 @@ describe("the key-point press, which also signs media", () => {
     expect(within(screen.getByRole("navigation", { name: "Lesson review steps" })).getByRole("button", { name: /What I made/ })).toHaveAttribute("aria-current", "step");
   });
 });
+
+/**
+ * Design 11 (Lydia, 26 Oct): "show remade as remade". "A teacher who flagged
+ * something and sees an identical picture will either flag it again or assume
+ * we ignored them." The server keeps the item's id through a remake, so the
+ * mark is this visit's own record of what the teacher sent back.
+ */
+describe("a flagged picture or recording that comes back remade", () => {
+  it("is marked Remade when it is waiting for a look again", async () => {
+    api.review
+      .mockResolvedValueOnce(reviewWith([picture("p1", "s-1"), picture("p2", "s-2"), recording("n1", "s-1")]))
+      // After the press: p1 and n1 approved, p2 remade and waiting again.
+      .mockResolvedValue(
+        reviewWith([picture("p1", "s-1", "approved"), picture("p2", "s-2"), recording("n1", "s-1", "approved")]),
+      );
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "Flag the picture for Part 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve pictures and narration" }));
+
+    expect(await screen.findByText("Remade")).toBeInTheDocument();
+    expect(screen.getByText("Remade as you asked - have a look before you approve.")).toBeInTheDocument();
+  });
+
+  it("marks a remade recording the same way", async () => {
+    api.review
+      .mockResolvedValueOnce(reviewWith([recording("n1", "s-1"), recording("n2", "s-2")]))
+      .mockResolvedValue(reviewWith([recording("n1", "s-1"), recording("n2", "s-2", "approved")]));
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "Flag the narration for Part 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve the narration" }));
+
+    expect(await screen.findByText("Remade")).toBeInTheDocument();
+  });
+
+  it("marks nothing the teacher did not send back", async () => {
+    await open();
+
+    expect(screen.queryByText("Remade")).not.toBeInTheDocument();
+  });
+
+  it("marks nothing while the remake is still being made", async () => {
+    api.review
+      .mockResolvedValueOnce(reviewWith([picture("p1", "s-1"), picture("p2", "s-2")]))
+      .mockResolvedValue(reviewWith([picture("p1", "s-1", "approved"), picture("p2", "s-2", "processing")]));
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "Flag the picture for Part 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve the pictures" }));
+
+    await waitFor(() => expect(media.retry).toHaveBeenCalledWith("l-1", "p2"));
+    expect(await screen.findByText(/Nevo is still making 1 picture/)).toBeInTheDocument();
+    expect(screen.queryByText("Remade")).not.toBeInTheDocument();
+  });
+});

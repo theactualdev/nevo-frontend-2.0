@@ -198,6 +198,7 @@ export function LessonReviewFlow({
     const refusal = refusedHere("media");
     const approving = flow.working === "media";
     const remake = media.awaiting.filter((m) => flaggedMedia.has(m.id)).map((m) => m.id);
+    const remadeWaiting = media.awaiting.some((m) => flow.remade?.has(m.id));
     const approve = media.awaiting.filter((m) => !flaggedMedia.has(m.id)).map((m) => m.id);
     const kinds = new Set(media.awaiting.map((m) => m.kind));
     const shown = media.pictures.length + media.recordings.length;
@@ -218,7 +219,9 @@ export function LessonReviewFlow({
           : mediaWaiting
             ? remake.length > 0
               ? `${remake.length} flagged - Nevo will remake ${remake.length === 1 ? "it" : "those"}; the rest go as they are.`
-              : "One press approves everything here."
+              : remadeWaiting
+                ? "Remade as you asked - have a look before you approve."
+                : "One press approves everything here."
             : !media.exists
               ? next
                 ? `Text only. ${next}`
@@ -474,6 +477,7 @@ export function LessonReviewFlow({
               media={
                 <StepMedia
                   media={media}
+                  remade={flow.remade}
                   flagged={flaggedMedia}
                   onFlag={(id) =>
                     setFlaggedMedia((f) => {
