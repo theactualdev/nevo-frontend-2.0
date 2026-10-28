@@ -552,11 +552,14 @@ describe("where a match goes", () => {
     expect(document.body.textContent).not.toMatch(/soon|consent|parent/i);
     expect(push).not.toHaveBeenCalled();
     expect(getOnboardingDraft()).toEqual({});
-    // Lydia, 17 Oct: Back, same as 00d, and nothing else to press - so the
-    // tablet is not held for everyone else. Nobody is signed in to sign out.
+    // Lydia, 17 Oct: Back, same as 00d - and since design's 28 Oct frame the
+    // hand-off to the next child - and nothing else, so the tablet is not held
+    // for everyone else. Nobody is signed in to sign out.
     expect(
-      screen.getAllByRole("button").map((b) => b.getAttribute("aria-label")),
-    ).toEqual(["Back"]);
+      screen
+        .getAllByRole("button")
+        .map((b) => b.getAttribute("aria-label") ?? b.textContent),
+    ).toEqual(["Back", "Someone else using this device?"]);
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(signOut).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();

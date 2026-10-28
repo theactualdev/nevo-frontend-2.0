@@ -92,6 +92,19 @@ export function WaitingOnConsent({
 }
 
 /**
+ * Off a hold to the device picker, for whoever is next: a signed-in child is
+ * signed out first, by a hard navigation - see `WaitingOnConsent`. Back on
+ * every hold, and 00e's "Someone else using this device?".
+ */
+export function useLeaveForThePicker() {
+  const { signOut } = useAuth();
+  return () => {
+    if (getSession()) signOut();
+    window.location.assign(WAITING_WAY_BACK);
+  };
+}
+
+/**
  * The holds' top row: the age-check hold's Back (D189), then the same cropped
  * wordmark as the PIN beat and the picker, so the doors do not drift apart.
  *
@@ -105,11 +118,7 @@ export function WaitingOnConsent({
  * Entry has no session to end, so nobody is signed out.
  */
 export function HoldWayBack() {
-  const { signOut } = useAuth();
-  const back = () => {
-    if (getSession()) signOut();
-    window.location.assign(WAITING_WAY_BACK);
-  };
+  const back = useLeaveForThePicker();
 
   return (
     <div className="flex h-[60px] shrink-0 items-center px-4">
