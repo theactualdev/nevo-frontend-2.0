@@ -589,36 +589,52 @@ export function CalculationSolver({
             >
               {step.prompt}
             </p>
-            {engineHint && (
-              <HintPill
-                text={engineHint}
-                reading={reading}
-                onClose={
-                  onEngineHintClosed &&
-                  (() => {
-                    // Closed, the same words do not come back as the level's.
-                    if (engineSaysStepHint) setLevelHintClosed(true);
-                    onEngineHintClosed();
-                  })
-                }
-              />
-            )}
-            {hintOpen && step.hint && !engineSaysStepHint && (
-              <HintPill text={step.hint} reading={reading} />
-            )}
             {/*
-              A STRONG LEVEL'S HINT CARRIES CLOSE, as the engine's does: it
-              is support the child did not ask for, and "support a child
-              cannot dismiss becomes an obstruction" (D29). Closed, their own
-              "Need a hint?" is back.
+              THE HINT'S SLOT, UNDER THE QUESTION AND HELD FROM THE START
+              (design 5bb9ee2, 28 Oct, S5: "hint + Check each hold their own
+              reserved slot; opening the hint swaps link<->pill in place, so
+              nothing below moves under the child"). "Need a hint?" sat at
+              the foot of the step until then, under Check.
             */}
-            {!hintOpen && levelHint && (
-              <HintPill
-                text={step.hint}
-                reading={reading}
-                onClose={() => setLevelHintClosed(true)}
-              />
-            )}
+            <div
+              data-reveal="slot"
+              className="mt-4 flex min-h-16 flex-col items-center justify-center gap-2"
+            >
+              {engineHint && (
+                <HintPill
+                  text={engineHint}
+                  reading={reading}
+                  onClose={
+                    onEngineHintClosed &&
+                    (() => {
+                      // Closed, the same words do not come back as the level's.
+                      if (engineSaysStepHint) setLevelHintClosed(true);
+                      onEngineHintClosed();
+                    })
+                  }
+                />
+              )}
+              {hintOpen && step.hint && !engineSaysStepHint && (
+                <HintPill text={step.hint} reading={reading} />
+              )}
+              {/*
+                A STRONG LEVEL'S HINT CARRIES CLOSE, as the engine's does: it
+                is support the child did not ask for, and "support a child
+                cannot dismiss becomes an obstruction" (D29). Closed, their
+                own "Need a hint?" is back.
+              */}
+              {!hintOpen && levelHint && (
+                <HintPill
+                  text={step.hint}
+                  reading={reading}
+                  onClose={() => setLevelHintClosed(true)}
+                />
+              )}
+              {/* 17a: no "Need a hint?" while a hint is showing. */}
+              {!hintOpen && !levelHint && !engineHint && step.hint && (
+                <HintLink onClick={openHint} />
+              )}
+            </div>
 
             {step.input === "choice" && (
               <>
@@ -645,21 +661,24 @@ export function CalculationSolver({
                     </button>
                   ))}
                 </Nudged>
-                {chosen != null && (
-                  <Button
-                    className="mt-3.5 w-full"
-                    onClick={() =>
-                      answer(
-                        isStoredAnswer(
-                          step.options[chosen]?.value ?? "",
-                          step.accepted,
-                        ),
-                      )
-                    }
-                  >
-                    Check my answer
-                  </Button>
-                )}
+                {/* Check's own slot, held under the options (S5). */}
+                <div className="mt-[18px] min-h-13">
+                  {chosen != null && (
+                    <Button
+                      className="w-full"
+                      onClick={() =>
+                        answer(
+                          isStoredAnswer(
+                            step.options[chosen]?.value ?? "",
+                            step.accepted,
+                          ),
+                        )
+                      }
+                    >
+                      Check my answer
+                    </Button>
+                  )}
+                </div>
               </>
             )}
 
@@ -746,11 +765,6 @@ export function CalculationSolver({
               </>
             )}
 
-            {/* 17a: no "Need a hint?" while a hint is showing. */}
-            {!hintOpen && !levelHint && !engineHint && step.hint && (
-              <HintLink onClick={openHint} />
-            )}
-
             {/* D150: the Nevo pad, docked at the foot of the screen, with
                 the keys the step names (B108). */}
             {step.input === "number" && pad && (
@@ -769,35 +783,29 @@ export function CalculationSolver({
 
 /**
  * What of a number step to show above the pad, most first: the first of
- * these that fits is brought into view (`revealIn`). The question with all
- * of the form under it and the hint link; then without the link; then the
- * question and the field; then the hint the step was given and the field;
- * then the field alone. Once Check is live it is in every one.
+ * these that fits is brought into view (`revealIn`). The question, the hint's
+ * slot under it, the field and Check's held place (all of the form); then
+ * without Check's place; then the hint's slot and the field; then the field
+ * alone. Once Check is live it is in every one.
  */
 const STEP_OPEN: Stretch[] = [
-  ["prompt", "hint"],
   ["prompt", "form"],
   ["prompt", "field"],
-  ["pill", "field"],
+  ["slot", "field"],
   ["field", "field"],
 ];
 const CHECK_LIVE: Stretch[] = [
-  ["prompt", "hint"],
   ["prompt", "form"],
-  ["pill", "form"],
+  ["slot", "form"],
   ["field", "form"],
   ["check", "check"],
 ];
 /**
  * What of a tap step to show as it opens, most first: the question, the
- * build, the tray and the place "That's the total" will take; then without
- * the question; then the tray and that place alone. None fitting, nothing
- * moves.
- *
- * NOT ON TO THE HINT LINK. Reaching past the held place to "Need a hint?"
- * scrolled 70px further on a 375x667 phone and took the picture the child
- * builds from off the top; the link is a scroll away, the picture is what
- * they work from.
+ * hint's slot, the build, the tray and the place "That's the total" will
+ * take; then without the question and its slot; then the tray and that
+ * place alone. None fitting, nothing moves. Nothing waits below the held
+ * place any more: the hint's slot is under the question (S5, 28 Oct).
  */
 const TAP_OPEN: Stretch[] = [
   ["prompt", "total"],
@@ -1268,12 +1276,11 @@ function NumberEntry({
 /**
  * The step's form: Enter or "Check my answer" commits what is typed.
  *
- * Check arrives with the first key, under the field, with "Need a hint?"
- * below it - 17a's order. Its place was held empty from the start for a
- * while, so the first key moved nothing; with the pad docked nothing the
- * step does can move the pad anyway, and the held place only pushed "Need a
- * hint?" down out of view on every pad step. The step is brought back into
- * view as Check goes live - see `CHECK_LIVE`.
+ * Check arrives with the first key, under the field, IN A PLACE HELD FOR IT
+ * FROM THE START (design 5bb9ee2, 28 Oct, S5: "fixed slots so the hint pill
+ * and the Check button never displace each other"). Held once before, it
+ * pushed "Need a hint?" out of view under it on every pad step; the hint's
+ * own slot is under the question now, so nothing waits below Check.
  */
 function EntryForm({
   value,
@@ -1293,11 +1300,13 @@ function EntryForm({
       }}
     >
       {children}
-      {value.trim().length > 0 && (
-        <Button type="submit" data-reveal="check" className="mt-[18px] w-full">
-          Check my answer
-        </Button>
-      )}
+      <div className="mt-[18px] min-h-13">
+        {value.trim().length > 0 && (
+          <Button type="submit" data-reveal="check" className="w-full">
+            Check my answer
+          </Button>
+        )}
+      </div>
     </form>
   );
 }
@@ -2044,10 +2053,7 @@ function HintPill({
   onClose?: () => void;
 }) {
   return (
-    <div
-      data-reveal="pill"
-      className="mx-auto mt-4 flex w-max max-w-full items-center gap-2.5 rounded-full bg-nevo-cream-elevated px-[18px] py-2.5 shadow-elevation-1 motion-safe:animate-nevo-reveal"
-    >
+    <div className="mx-auto flex w-max max-w-full items-center gap-2.5 rounded-full bg-nevo-cream-elevated px-[18px] py-2.5 shadow-elevation-1 motion-safe:animate-nevo-reveal">
       <span className="size-[7px] shrink-0 rounded-full bg-nevo-violet" />
       <span
         className={cn(
@@ -2083,15 +2089,13 @@ function HintPill({
  */
 function HintLink({ onClick }: { onClick: () => void }) {
   return (
-    <p data-reveal="hint" className="mt-4 text-center">
-      <button
-        type="button"
-        onClick={onClick}
-        className="min-h-11 cursor-pointer px-2 text-[13px] text-nevo-violet-text"
-      >
-        Need a hint?
-      </button>
-    </p>
+    <button
+      type="button"
+      onClick={onClick}
+      className="min-h-11 cursor-pointer px-2 text-[13px] whitespace-nowrap text-nevo-violet-text"
+    >
+      Need a hint?
+    </button>
   );
 }
 

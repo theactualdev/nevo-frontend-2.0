@@ -448,19 +448,41 @@ describe("entering a number (D150)", () => {
     expect(pad()?.querySelector('[aria-label="Delete"]')).toBeNull();
   });
 
-  it("puts Check under the field with the first key and Need a hint? under it, as 17a does", () => {
+  /*
+   * Design 5bb9ee2, 28 Oct, S5: "hint + Check each hold their own reserved
+   * slot; opening the hint swaps link<->pill in place, so nothing below moves
+   * under the child."
+   */
+  it("holds the hint's slot under the question and Check's under the field", () => {
     show(NEGATIVE());
+    const prompt = screen.getByText(NEGATIVE().steps[0].prompt);
     const field = screen.getByRole("textbox");
     const hint = screen.getByRole("button", { name: "Need a hint?" });
-    // Nothing held empty before a key: the hint link sits under the field.
-    expect(document.querySelector('form button[type="submit"]')).toBeNull();
-    expect(field.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const slot = document.querySelector<HTMLElement>('[data-reveal="slot"]')!;
+    expect(slot.contains(hint)).toBe(true);
+    expect(slot.className).toContain("min-h-16");
+    expect(prompt.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(hint.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Check's place is held under the field before a key, and empty.
+    const checkPlace = field.closest("form")!.lastElementChild as HTMLElement;
+    expect(checkPlace.className).toContain("min-h-13");
+    expect(checkPlace.childElementCount).toBe(0);
 
     tap("3");
 
     const check = screen.getByRole("button", { name: "Check my answer" });
+    expect(checkPlace.contains(check)).toBe(true);
     expect(field.compareDocumentPosition(check) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(check.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("swaps the link for the hint in the same slot", () => {
+    show(NEGATIVE());
+    const slot = document.querySelector<HTMLElement>('[data-reveal="slot"]')!;
+
+    tap("Need a hint?");
+
+    expect(screen.queryByRole("button", { name: "Need a hint?" })).toBeNull();
+    expect(slot.textContent).toContain(NEGATIVE().steps[0].hint);
   });
 
   it("docks the pad where the host gives it a place, not under the step", () => {
@@ -573,45 +595,46 @@ describe("bringing the step into view above the docked pad", () => {
   const NUMBER = () =>
     build({ steps: [step({ input: "number", expectedInput: "numeric", answer: "-3" })] });
 
-  it("shows the question, the field and the hint link together where they fit", () => {
-    rects = { column: [100, 400], prompt: [420, 446], form: [464, 584], field: [496, 568], hint: [600, 644] };
+  // The question, the hint's slot under it, then the form: the field and
+  // Check's held place (S5, 28 Oct).
+  it("shows the question, the hint's slot, the field and Check's place together where they fit", () => {
+    rects = { column: [100, 400], prompt: [420, 446], slot: [462, 526], form: [542, 662], field: [542, 614] };
     const onSystemScroll = inColumn(NUMBER());
     resized();
 
     // Below the column: brought up by the end, the least move that shows it.
-    expect(lastMove()).toEqual({ part: "hint", how: { block: "end" } });
+    expect(lastMove()).toEqual({ part: "form", how: { block: "end" } });
     expect(onSystemScroll).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the question and the field, and lets the hint link go, where all three do not fit", () => {
-    rects = { column: [100, 400], prompt: [420, 446], form: [464, 690], field: [496, 568], hint: [706, 750] };
+  it("keeps the question and the field, and lets Check's place go, where all of it does not fit", () => {
+    rects = { column: [100, 350], prompt: [420, 446], slot: [462, 526], form: [542, 712], field: [542, 614] };
     inColumn(NUMBER());
     resized();
 
-    expect(lastMove()).toEqual({ part: "form", how: { block: "end" } });
+    expect(lastMove()).toEqual({ part: "field", how: { block: "end" } });
   });
 
-  it("brings Check into view as it goes live, with the field above it", () => {
-    rects = { column: [100, 400], prompt: [120, 146], form: [164, 300], field: [196, 268], hint: [316, 360] };
+  it("moves nothing as Check goes live, its place already held", () => {
+    rects = { column: [100, 400], prompt: [120, 146], slot: [162, 226], form: [242, 384], field: [242, 314] };
     inColumn(NUMBER());
     resized();
-    // All of it in view: nothing moves.
     expect(scrolled).not.toHaveBeenCalled();
 
-    // The first key: Check arrives under the helper line, below the column.
-    rects = { ...rects, prompt: [120, 146], form: [164, 452], check: [400, 452], hint: [468, 512] };
+    // The first key: Check arrives in the place it was held, already in view.
+    rects = { ...rects, check: [332, 384] };
     tap("3");
     resized();
 
-    expect(lastMove()).toEqual({ part: "form", how: { block: "end" } });
+    expect(scrolled).not.toHaveBeenCalled();
   });
 
-  it("brings the engine's hint into view with the field when the question will not fit too", () => {
-    rects = { column: [100, 400], prompt: [420, 520], pill: [536, 596], form: [612, 780], field: [650, 722] };
+  it("brings the engine's hint and the field into view where the question will not fit too", () => {
+    rects = { column: [100, 400], prompt: [420, 520], slot: [536, 600], form: [616, 792], field: [650, 722] };
     inColumn(NUMBER(), { engineHint: "Count down from 2." });
     resized();
 
-    // Question to field is 302px, the column 300: the hint and the field.
+    // Question to field is 302px, the column 300: the hint's slot and the field.
     expect(lastMove()).toEqual({ part: "field", how: { block: "end" } });
   });
 
@@ -638,9 +661,8 @@ describe("bringing the step into view above the docked pad", () => {
     });
 
   it("brings a build into view as it opens, with the place That's the total will take", () => {
-    // Too short for all of it to the hint link; the question, the build,
-    // the tray and the held place fit.
-    rects = { column: [100, 340], prompt: [300, 326], build: [344, 400], tray: [416, 460], total: [478, 530], hint: [546, 590] };
+    // The question, the hint's slot, the build, the tray and the held place.
+    rects = { column: [100, 340], prompt: [236, 262], slot: [278, 342], build: [358, 414], tray: [430, 474], total: [492, 544] };
     const onSystemScroll = inColumn(BUILD_STEP());
     resized();
 
@@ -648,10 +670,8 @@ describe("bringing the step into view above the docked pad", () => {
     expect(onSystemScroll).toHaveBeenCalledTimes(1);
   });
 
-  it("stops at the held place rather than reaching on to the hint link", () => {
-    // Room for all of it to the hint link: still only as far as the held
-    // place, so the picture above stays in view.
-    rects = { column: [100, 500], prompt: [300, 326], build: [344, 400], tray: [416, 460], total: [478, 530], hint: [546, 590] };
+  it("keeps the build, the tray and the held place where the question will not fit with them", () => {
+    rects = { column: [100, 340], prompt: [300, 326], slot: [342, 406], build: [422, 478], tray: [494, 538], total: [556, 608] };
     inColumn(BUILD_STEP());
     resized();
 
@@ -659,7 +679,7 @@ describe("bringing the step into view above the docked pad", () => {
   });
 
   it("moves nothing at the last tap, or on a resize while the child builds", () => {
-    rects = { column: [100, 400], prompt: [120, 146], build: [160, 300], tray: [316, 360], total: [378, 430], hint: [446, 490] };
+    rects = { column: [100, 400], prompt: [120, 146], build: [160, 300], tray: [316, 360], total: [378, 430] };
     const onSystemScroll = inColumn(BUILD_STEP());
     resized();
     scrolled.mockReset();
@@ -676,7 +696,7 @@ describe("bringing the step into view above the docked pad", () => {
 
   it("leaves the held place below the fold where the tray and it do not fit together", () => {
     // 100px of column: the tray and the place below it take 114.
-    rects = { column: [100, 200], prompt: [120, 146], build: [160, 300], tray: [316, 360], total: [378, 430], hint: [446, 490] };
+    rects = { column: [100, 200], prompt: [120, 146], build: [160, 300], tray: [316, 360], total: [378, 430] };
     const onSystemScroll = inColumn(BUILD_STEP());
     resized();
     for (let i = 0; i < 2; i++) placeOne();
