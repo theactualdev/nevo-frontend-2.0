@@ -777,13 +777,15 @@ describe("the flanker, by band (D81)", () => {
     });
   });
 
-  it("draws the senior band's flankers violet, as its Stroop-like flanker does", async () => {
+  it("draws the senior band's flankers grey too, as its 2B now does (Lydia, 27 Oct)", async () => {
+    // "SS pupils lose the violet flankers in 2B, since that is the condition
+    // 2C replaces" - and the warm-up draws each band's round as its 2B does.
     roster.value = { band: "ss", settled: true };
     render(<WarmUpRun dimension="attention" />);
 
     const flankers = arrows().filter((_, i) => i !== 2);
     expect(arrows()).toHaveLength(5);
-    expect(flankers.every((a) => a.getAttribute("class")!.includes("text-nevo-violet"))).toBe(true);
+    expect(flankers.some((a) => a.getAttribute("class")!.includes("text-nevo-violet"))).toBe(false);
 
     fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await wait(1000);
