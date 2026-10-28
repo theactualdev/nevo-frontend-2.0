@@ -53,10 +53,10 @@ export function SafeguardingRecord({
 
   const recorded = longDay(latest.createdAt);
   const seenOn = longDay(latest.acknowledgedAt);
+  // The server's name for whoever recorded it as seen (fc058d4).
   const by =
-    latest.acknowledgedBy === me
-      ? "You"
-      : holders?.holders.find((h) => h.userId === latest.acknowledgedBy)?.name?.trim() || null;
+    latest.acknowledgedByName?.trim() ||
+    (latest.acknowledgedBy && latest.acknowledgedBy === me ? "You" : null);
 
   return (
     <>

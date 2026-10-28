@@ -4,10 +4,9 @@ import { ApiError } from "@/lib/api/client";
 import type { SafetyEvent } from "@/lib/api/safety";
 import type { LearningSupportHolders } from "@/lib/api/learningSupport";
 
-const { events, acknowledge, listStudents, holders } = vi.hoisted(() => ({
+const { events, acknowledge, holders } = vi.hoisted(() => ({
   events: vi.fn(),
   acknowledge: vi.fn(),
-  listStudents: vi.fn(),
   holders: vi.fn(),
 }));
 
@@ -15,7 +14,6 @@ vi.mock("@/lib/api/safety", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/safety")>();
   return { ...actual, safetyApi: { events, acknowledge } };
 });
-vi.mock("@/lib/api/students", () => ({ studentsApi: { list: listStudents } }));
 vi.mock("@/lib/api/learningSupport", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/learningSupport")>();
   return { ...actual, learningSupportApi: { holders } };
@@ -53,16 +51,14 @@ const event = (over: Partial<SafetyEvent>): SafetyEvent => ({
   createdAt: "2026-10-18T13:14:00Z",
   acknowledgedAt: null,
   acknowledgedBy: null,
+  studentName: "Adaeze Okonkwo",
+  acknowledgedByName: null,
   ...over,
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
   holders.mockResolvedValue(HOLDS);
-  listStudents.mockResolvedValue([
-    { id: "s-ada", name: "Adaeze Okonkwo" },
-    { id: "s-sam", name: "Samuel Idahosa" },
-  ]);
   events.mockResolvedValue([]);
 });
 
@@ -96,9 +92,8 @@ describe("entries", () => {
     expect(await screen.findByRole("heading", { name: "Nothing has been flagged" })).toBeInTheDocument();
   });
 
-  it("says 'A student' rather than guessing when the roster can't name the child", async () => {
-    listStudents.mockRejectedValue(new Error("down"));
-    events.mockResolvedValue([event({})]);
+  it("says 'A student' rather than guessing when the server sends no name", async () => {
+    events.mockResolvedValue([event({ studentName: null })]);
     render(<SafeguardingView />);
     expect(await screen.findByText("A student")).toBeInTheDocument();
   });
@@ -118,9 +113,9 @@ describe("entries", () => {
     expect(screen.queryByRole("button", { name: /resolve|close/i })).toBeNull();
   });
 
-  it("names who saw it from the holders the school has", async () => {
+  it("names who saw it, as the server sends it", async () => {
     events.mockResolvedValue([
-      event({ acknowledgedAt: "2026-10-12T09:00:00Z", acknowledgedBy: "u-grace" }),
+      event({ acknowledgedAt: "2026-10-12T09:00:00Z", acknowledgedBy: "u-grace", acknowledgedByName: "Grace Eze" }),
     ]);
     render(<SafeguardingView />);
     expect(await screen.findByText("Seen by Grace Eze · 12 October 2026")).toBeInTheDocument();

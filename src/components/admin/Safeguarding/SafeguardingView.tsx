@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { aboutAChild, categoryLabel, safetyApi, type SafetyEvent } from "@/lib/api/safety";
-import { studentsApi } from "@/lib/api/students";
 import { getSession } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 import { useLearningSupport } from "../LearningSupport/useLearningSupport";
@@ -57,8 +56,6 @@ export function SafeguardingView() {
   /** More entries may sit behind the last one read. */
   const [more, setMore] = useState(false);
   const [paging, setPaging] = useState(false);
-  /** Each child's name, by id - from the roster read the console already makes. */
-  const [names, setNames] = useState<Map<string, string>>(() => new Map());
   const [acking, setAcking] = useState<string | null>(null);
   const [ackFailed, setAckFailed] = useState<string | null>(null);
   const [me] = useState(() => getSession()?.userId ?? null);
@@ -72,12 +69,6 @@ export function SafeguardingView() {
         setPhase("ready");
       })
       .catch((err: unknown) => setPhase(failureKind(err)));
-    // Names are a nicety on top of the record, not a condition for it: an
-    // unread roster leaves the entries standing, each saying "A student".
-    studentsApi
-      .list({ includeInactive: true })
-      .then((rows) => setNames(new Map(rows.map((r) => [r.id, r.name]))))
-      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -114,12 +105,9 @@ export function SafeguardingView() {
       .finally(() => setAcking(null));
   };
 
-  /** Who saw it, in words the reader recognises; nothing when nobody can say. */
-  const seenBy = (id: string | null): string | null => {
-    if (!id) return null;
-    if (id === me) return "you";
-    return ls?.holders.find((h) => h.userId === id)?.name?.trim() || null;
-  };
+  /** Who saw it: the server's name for them, "you" if it was the viewer and no name came, else nothing. */
+  const seenBy = (e: SafetyEvent): string | null =>
+    e.acknowledgedByName?.trim() || (e.acknowledgedBy && e.acknowledgedBy === me ? "you" : null);
 
   const entries = useMemo(() => events.filter(aboutAChild), [events]);
 
@@ -194,8 +182,8 @@ export function SafeguardingView() {
           <ul className="m-0 mt-6 flex list-none flex-col gap-3.5 p-0">
             {entries.map((e) => {
               const seen = Boolean(e.acknowledgedAt);
-              const name = names.get(e.studentId)?.trim() || "A student";
-              const by = seenBy(e.acknowledgedBy);
+              const name = e.studentName?.trim() || "A student";
+              const by = seenBy(e);
               const on = longDay(e.acknowledgedAt);
               const profile = withBack(`/admin/senco/${e.studentId}`, {
                 href: "/admin/safeguarding",

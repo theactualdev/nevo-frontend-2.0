@@ -33,6 +33,8 @@ const event = (over: Partial<SafetyEvent>): SafetyEvent => ({
   createdAt: "2026-10-18T13:14:00Z",
   acknowledgedAt: "2026-10-18T15:00:00Z",
   acknowledgedBy: "u-grace",
+  acknowledgedByName: "Grace Eze",
+  studentName: "Amara Okafor",
   ...over,
 });
 

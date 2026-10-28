@@ -9,14 +9,13 @@ import { api } from "./client";
  * server never sends the words, and nothing here has a field, a link or a
  * space for them.
  *
- * WHO CAN READ IT. The product rule is Learning Support holders, school-wide.
- * The server gates both routes on the `senco_admin` role instead, so a holder
- * with another admin role is refused and is shown the refusal as it stands -
- * raised with the backend (20 Oct), not worked around here.
+ * WHO CAN READ IT: Learning Support holders, school-wide. The server gates
+ * both routes on the role itself since fc058d4 (21 Oct), and a refusal is
+ * shown as it stands.
  *
- * NAMES ARE NOT ON THE RESPONSE. `studentId` and `acknowledgedBy` are ids;
- * the list looks each one up in reads the console already makes, exactly, and
- * says nothing about a person it cannot find. Names were asked of the backend.
+ * THE NAMES ARE THE SERVER'S (fc058d4): `studentName`, and `acknowledgedByName`
+ * once someone has recorded it as seen. The list used to look both up in other
+ * reads; it reads them off the entry now (Olayinka, via the Hub, 28 Oct).
  */
 
 export interface SafetyEvent {
@@ -32,6 +31,10 @@ export interface SafetyEvent {
   createdAt: string;
   acknowledgedAt: string | null;
   acknowledgedBy: string | null;
+  /** The child's name, as the school has it. */
+  studentName?: string | null;
+  /** Who recorded it as seen. Null until someone has. */
+  acknowledgedByName?: string | null;
 }
 
 export const safetyApi = {
