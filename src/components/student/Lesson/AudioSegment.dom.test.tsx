@@ -304,6 +304,45 @@ describe("AudioSegment - when playback does not simply start", () => {
     fireEvent.click(screen.getByRole("button", { name: "Play" }));
     expect(screen.getByText(NO_SOUND)).toBeTruthy();
   });
+
+  /*
+   * Lydia, 26 Oct (design D7): "If a recording fails, say it failed and let
+   * them try again, and the format stays in the group."
+   */
+  it("offers Try again beside the line that says it failed, and loads it afresh", () => {
+    const { container } = render(<AudioSegment content={CONTENT} />);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    fireEvent.error(audioEl(container));
+    expect(container.querySelector("audio")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(audioEl(container)).not.toBeNull();
+    expect(audioEl(container).getAttribute("src")).toBe(CONTENT.src);
+    expect(screen.queryByText(/didn.t load/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("asks for a fresh link again on Try again, as it did the first time", async () => {
+    mediaUrl.mockResolvedValue({ url: "https://cdn.example/fresh.mp3" });
+    const { container } = render(
+      <AudioSegment content={{ ...CONTENT, storagePath: "audio/a.mp3" }} />,
+    );
+    fireEvent.error(audioEl(container));
+    await waitFor(() => expect(mediaUrl).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(audioEl(container).getAttribute("src")).toBe(
+        "https://cdn.example/fresh.mp3",
+      ),
+    );
+    fireEvent.error(audioEl(container));
+    expect(screen.getByText(/didn.t load/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    fireEvent.error(audioEl(container));
+
+    await waitFor(() => expect(mediaUrl).toHaveBeenCalledTimes(2));
+  });
 });
 
 /**
