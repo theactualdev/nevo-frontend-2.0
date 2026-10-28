@@ -73,7 +73,9 @@ export interface StudentFlags {
 
 export function useStudentFlags(studentId: string): StudentFlags {
   const run = useCallback(
-    () => intelligenceApi.getFlags({ studentId }),
+    // Only open flags: one whose evidence stopped holding has closed
+    // (Teslim 9c35c95), and is not something Nevo is noticing now.
+    () => intelligenceApi.getFlags({ studentId, openOnly: true }),
     [studentId],
   );
   const { data, failed, loading } = useLiveQuery<AttentionFlag[]>(run, [

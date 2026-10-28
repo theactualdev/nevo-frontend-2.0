@@ -287,6 +287,28 @@ describe("WarmUpRun — a task the engine named and this screen cannot give (B11
     expect(holdBaseline).not.toHaveBeenCalled();
   });
 
+  it("tells the engine a motor-speed day was skipped, with the nothing-state (7c98014)", async () => {
+    signIn();
+    engine.prompt = { state: "none", cannotPresent: "motor_speed" };
+    render(<WarmUpRun />);
+    await settle();
+
+    expect(screen.queryAllByRole("button")).toHaveLength(1);
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(trials()).toEqual([
+      {
+        dimension: "motor_speed",
+        condition: null,
+        response: null,
+        correct: null,
+        responseTimeMs: null,
+        probeItemId: null,
+        skipped: true,
+      },
+    ]);
+    expect(deviceTaskDone).not.toHaveBeenCalled();
+  });
+
   it("waits for consent to answer before it says anything", async () => {
     signIn();
     consent.known = false;

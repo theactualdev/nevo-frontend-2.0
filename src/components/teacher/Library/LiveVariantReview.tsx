@@ -459,7 +459,7 @@ export function LiveVariantReview({
       {/* No cap of its own at tablet - it conforms to its host (C16d, 8 Oct). */}
       <div className="mx-auto xl:max-w-[820px]">
         <Link
-          href={`/teacher/lessons/${lessonId}/review?step=3`}
+          href={`/teacher/lessons/${lessonId}/review?step=4`}
           className="inline-flex cursor-pointer items-center gap-[7px] text-[13px] text-nevo-near-black/55 transition-transform active:scale-[0.99] xl:text-[13.5px]"
         >
           <svg

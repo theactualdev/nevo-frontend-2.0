@@ -208,6 +208,26 @@ describe("assigning from the finish screen", () => {
     expect(screen.queryByText(/still to check/)).not.toBeInTheDocument();
   });
 
+  // Lydia, 25 Oct: Assign waits for the lesson-wide sign-off, here as on the
+  // lesson page. `readyToAssign` alone let an unreviewed lesson go.
+  it("waits for the lesson-wide sign-off, and says the review is what waits", async () => {
+    review.mockResolvedValue({
+      lessonId: "l-1",
+      keyPoints: [],
+      outstandingCount: 0,
+      readyToAssign: true,
+      reviewComplete: false,
+    });
+    const settled = {
+      ...LESSON,
+      segments: LESSON.segments.map((s) => ({ ...s, needsReview: false })),
+    } as LessonDetailResponse;
+    render(<UploadResult lesson={settled} fileName="fractions.pdf" onUploadAnother={vi.fn()} />);
+
+    expect(await screen.findByText("Review this lesson to assign it.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Assign to a class" })).not.toBeInTheDocument();
+  });
+
   it("says nothing while the verdict is still on its way", () => {
     review.mockReturnValue(new Promise(() => {}));
     render(<UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} />);

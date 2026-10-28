@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   useWarmUpPrompt,
+  type UnpresentableTask,
   type WarmUpItem,
   type WarmUpPrompt,
 } from "@/hooks/useWarmUpDimension";
@@ -262,7 +263,7 @@ export function WarmUpRun({
    * The task the engine named that this screen cannot give: the heard round
    * above, or the question task with no question to ask (`cannotPresent`).
    */
-  const cannotPresent: BaselineDimension | null = unheard
+  const cannotPresent: BaselineDimension | UnpresentableTask | null = unheard
     ? "reading"
     : prompt.state === "none"
       ? (prompt.cannotPresent ?? null)
@@ -1114,7 +1115,7 @@ function WarmUpTask({
         />
       );
     case "attention": {
-      const { trial, alone, violet, arrow } = warmUpFlanker(sized);
+      const { trial, alone, arrow } = warmUpFlanker(sized);
       const turns = flankerTurns(trial);
       // The flanker's condition there; P1-3's lone arrow has none.
       const congruency = trial.congruency
@@ -1138,10 +1139,7 @@ function WarmUpTask({
                   className={cn(
                     i === 2
                       ? cn("text-nevo-navy", arrow)
-                      : cn(
-                          "size-[28px] sm:size-[34px]",
-                          violet ? "text-nevo-violet" : "text-nevo-near-black/40",
-                        ),
+                      : "size-[28px] text-nevo-near-black/40 sm:size-[34px]",
                   )}
                   style={{
                     transform: `rotate(${i === 2 ? turns.target : turns.flank}deg)`,

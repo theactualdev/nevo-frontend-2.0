@@ -42,6 +42,18 @@ export interface AttentionFlag {
   evidenceSeries?: number[];
   /** Where an admin can act. Absent means the flag is informational. */
   actionTargets?: string[];
+  /**
+   * THIS viewer has read it (SCRUM-252; Lydia, 13 Oct): a teacher's own tap,
+   * which clears the card from their Home and from nobody else's. Not the
+   * acknowledgement, which is Learning Support's.
+   */
+  seenByMe?: boolean;
+  seenAt?: string | null;
+  /**
+   * When the evidence stopped holding, and the flag closed (Teslim 9c35c95).
+   * `openOnly` reads leave these out.
+   */
+  resolvedAt?: string | null;
 }
 /**
  * One segment as the adaptation engine needs to see it (`ContentSegmentRequest`).
@@ -463,6 +475,10 @@ export const intelligenceApi = {
     studentId?: string;
     limit?: number;
     offset?: number;
+    /** Only flags whose evidence still holds (Teslim 9c35c95). */
+    openOnly?: boolean;
+    /** Only flags this viewer has not read (SCRUM-252). */
+    unseenOnly?: boolean;
   }) => api.get<AttentionFlag[]>("/api/intelligence/flags", { params }),
 
   /**
@@ -485,12 +501,13 @@ export const intelligenceApi = {
    */
   allFlags: async (
     maxPages = 10,
+    filter: { openOnly?: boolean } = {},
   ): Promise<{ flags: AttentionFlag[]; complete: boolean }> => {
     const PAGE = 200;
     const flags: AttentionFlag[] = [];
     for (let page = 0; page < maxPages; page += 1) {
       const batch = await api.get<AttentionFlag[]>("/api/intelligence/flags", {
-        params: { limit: PAGE, offset: page * PAGE },
+        params: { ...filter, limit: PAGE, offset: page * PAGE },
       });
       if (!Array.isArray(batch)) return { flags, complete: false };
       flags.push(...batch);
@@ -510,6 +527,14 @@ export const intelligenceApi = {
    */
   acknowledgeFlag: (flagId: string) =>
     api.post<AttentionFlag>(`/api/intelligence/flags/${flagId}/acknowledge`),
+
+  /**
+   * "I have read this" - one viewer's own read (SCRUM-252; Lydia, 13 Oct). It
+   * clears the flag from that teacher's Home only, and never stands in for
+   * Learning Support's acknowledgement.
+   */
+  markFlagSeen: (flagId: string) =>
+    api.post<AttentionFlag>(`/api/intelligence/flags/${flagId}/seen`),
   getRecommendations: (studentId: string) =>
     api.get(`/api/intelligence/recommendations/${studentId}`),
 

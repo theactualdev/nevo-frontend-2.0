@@ -634,7 +634,7 @@ describe("which sitting the review names (Teslim, 19 Oct)", () => {
 
     expect(recordReview).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("heading", { name: "You've been through this one again." }),
+      screen.getByRole("heading", { name: "You have seen this one before." }),
     ).toBeTruthy();
     expect(screen.queryByText(/bring it back/i)).toBeNull();
   });
@@ -648,7 +648,7 @@ describe("which sitting the review names (Teslim, 19 Oct)", () => {
 
     expect(recordReview).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("heading", { name: "You've been through this one again." }),
+      screen.getByRole("heading", { name: "You have seen this one before." }),
     ).toBeTruthy();
   });
 
@@ -659,7 +659,7 @@ describe("which sitting the review names (Teslim, 19 Oct)", () => {
 
     expect(recordReview).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("heading", { name: "You've been through this one again." }),
+      screen.getByRole("heading", { name: "You have seen this one before." }),
     ).toBeTruthy();
   });
 });
@@ -701,62 +701,63 @@ describe("what the review's completion may claim (D40)", () => {
     next();
   };
 
-  it("says the firmer line, and the return, when the scheduler confirms both", async () => {
+  it("says the one line, and the return, when the scheduler confirms both (Lydia, 26 Oct #8)", async () => {
     recordReview.mockResolvedValue({ recallSuccessful: true, schedule });
     await finish();
 
     expect(
       await screen.findByRole("heading", {
-        name: "You've got this one more firmly now.",
+        name: "You have seen this one before.",
       }),
     ).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/firmly/i);
     expect(screen.getByText("We'll bring it back later.")).toBeTruthy();
   });
 
-  it("says the plain line, and the return, when the verdict is withheld", async () => {
+  it("says the one line, and the return, when the verdict is withheld", async () => {
     // What a student's write answers since d461b60: no verdict, never a "no".
     recordReview.mockResolvedValue({ recallSuccessful: null, outcome: null, schedule });
     await finish();
 
     expect(
       await screen.findByRole("heading", {
-        name: "You've been through this one again.",
+        name: "You have seen this one before.",
       }),
     ).toBeTruthy();
     expect(screen.getByText("We'll bring it back later.")).toBeTruthy();
   });
 
-  it("says the plain line when the scheduler did not count it", async () => {
+  it("says the one line when the scheduler did not count it", async () => {
     recordReview.mockResolvedValue({ recallSuccessful: false, schedule });
     await finish();
 
     expect(
       await screen.findByRole("heading", {
-        name: "You've been through this one again.",
+        name: "You have seen this one before.",
       }),
     ).toBeTruthy();
   });
 
-  it("says the plain line, and no return, when nothing was recorded", async () => {
+  it("says the one line, and no return, when nothing was recorded", async () => {
     // No concept on the URL: nothing to tell the scheduler, so nothing is.
     await finish(null);
 
     expect(recordReview).not.toHaveBeenCalled();
     expect(
       screen.getByRole("heading", {
-        name: "You've been through this one again.",
+        name: "You have seen this one before.",
       }),
     ).toBeTruthy();
     expect(screen.queryByText(/bring it back/i)).toBeNull();
   });
 
-  it("says the plain line, and no return, when the write failed", async () => {
+  it("says the one line, and no return, when the write failed", async () => {
     recordReview.mockRejectedValue(new Error("offline"));
     await finish();
 
     expect(
       await screen.findByRole("heading", {
-        name: "You've been through this one again.",
+        name: "You have seen this one before.",
       }),
     ).toBeTruthy();
     expect(screen.queryByText(/bring it back/i)).toBeNull();
@@ -766,8 +767,8 @@ describe("what the review's completion may claim (D40)", () => {
     recordReview.mockReturnValue(new Promise(() => {}));
     await finish();
 
-    // Kept in place but hidden, so the plain line is not swapped for the
-    // firmer one in front of the child a moment later.
+    // Kept in place but hidden, so the screen lands once, with whatever the
+    // scheduler said back.
     expect(screen.queryByRole("heading")).toBeNull();
     expect(document.querySelector("h2")?.className).toContain("invisible");
   });
@@ -776,11 +777,11 @@ describe("what the review's completion may claim (D40)", () => {
     recordReview.mockResolvedValue({ recallSuccessful: true, schedule });
     await finish();
     await screen.findByRole("heading", {
-      name: "You've got this one more firmly now.",
+      name: "You have seen this one before.",
     });
 
     expect(document.body.textContent).not.toMatch(
-      /strengthened|settling in|fully sticks|nicely paced/i,
+      /strengthened|settling in|fully sticks|nicely paced|firmly|been through/i,
     );
   });
 });

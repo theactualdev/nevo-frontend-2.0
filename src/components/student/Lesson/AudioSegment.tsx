@@ -45,6 +45,11 @@ function clock(sec: number): string {
  * A clip that will not load says so and points at the transcript, which is
  * required on `AudioContent` and carries the same words. That is the honest
  * fallback: silence with a moving progress bar is not.
+ *
+ * AND OFFERS TO TRY AGAIN (Lydia, 26 Oct, design D7): "A child listening to a
+ * recording should not watch the option vanish. If a recording fails, say it
+ * failed and let them try again, and the format stays in the group." Try again
+ * loads it afresh (`useMediaSource`'s `retry`); nothing leaves the group.
  */
 export function AudioSegment({
   content,
@@ -338,12 +343,21 @@ export function AudioSegment({
       </div>
 
       {failed && (
-        <p
-          role="status"
-          className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/70"
-        >
-          The recording didn&apos;t load. You can read the same words below.
-        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-x-3">
+          <p
+            role="status"
+            className="text-[14px] leading-[1.55] text-nevo-near-black/70"
+          >
+            The recording didn&apos;t load. You can read the same words below.
+          </p>
+          <button
+            type="button"
+            onClick={media.retry}
+            className="-mx-2 flex h-11 cursor-pointer items-center rounded-[10px] px-2 text-sm font-medium text-nevo-navy hover:bg-nevo-navy/6"
+          >
+            Try again
+          </button>
+        </div>
       )}
 
       {/* Transcript disclosure */}
