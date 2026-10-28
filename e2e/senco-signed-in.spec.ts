@@ -1,3 +1,4 @@
+import { appendFileSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 /**
@@ -18,10 +19,20 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
  * invented one did, and no count is pinned - the seed is Teslim's to change.
  * A different account from the admin's, so signing in here kills no other
  * suite's session; the one-worker rule in the config still holds.
+ *
+ * THE SUITE SETS UP THE GRANT IT TESTS (Lydia, 28 Oct). On its first run the
+ * account had lost Learning Support, with nobody meaning to remove it, and a
+ * suite that depends on an account anyone can edit by hand breaks again the
+ * next time someone touches it. So `beforeAll` gives the grant back when it
+ * is missing, as the E2E admin (any admin may grant it to someone else, never
+ * to themselves), and says so on the run's summary page - a removal is shown,
+ * not silently repaired.
  */
 
 const EMAIL = process.env.E2E_SENCO_EMAIL;
 const PASSWORD = process.env.E2E_SENCO_PASSWORD;
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
 const API = process.env.E2E_API_BASE ?? "https://api.nevolearning.com";
 
 /** Mirrors `lib/auth/session.ts`. Changing either without the other breaks this. */
@@ -41,16 +52,68 @@ test.describe.configure({ mode: "serial" });
 /** The signed-in holder's bearer token, for reading the API directly. */
 let sencoToken = "";
 
-async function signInAsSenco(page: Page, request: APIRequestContext) {
+/** A sign-in through the API alone, returning the session body. */
+async function signIn(
+  request: APIRequestContext,
+  email: string,
+  password: string,
+  who: string,
+) {
   const res = await request.post(`${API}/api/v1/auth/login/password`, {
-    data: { email: EMAIL, password: PASSWORD },
+    data: { email, password },
   });
   expect(
     res.ok(),
-    `Could not sign the E2E SENCo in (${res.status()}). Check the credentials in CI secrets.`,
+    `Could not sign the E2E ${who} in (${res.status()}). Check the credentials in CI secrets.`,
   ).toBeTruthy();
+  return (await res.json()) as {
+    accessToken: string;
+    expiresAt: string;
+    userId: string;
+    role: string;
+  };
+}
 
-  const body = await res.json();
+test.beforeAll(async ({ playwright }) => {
+  if (!EMAIL || !PASSWORD) return;
+  const request = await playwright.request.newContext();
+  try {
+    const senco = await signIn(request, EMAIL, PASSWORD, "SENCo");
+    const holders = await request.get(`${API}/api/v1/learning-support/holders`, {
+      headers: { Authorization: `Bearer ${senco.accessToken}` },
+    });
+    expect(
+      holders.ok(),
+      `GET /api/v1/learning-support/holders answered ${holders.status()}`,
+    ).toBeTruthy();
+    if (((await holders.json()) as { viewerHoldsIt: boolean }).viewerHoldsIt) return;
+
+    expect(
+      ADMIN_EMAIL && ADMIN_PASSWORD,
+      "The E2E SENCo account has lost Learning Support, and giving it back needs E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD.",
+    ).toBeTruthy();
+    const admin = await signIn(request, ADMIN_EMAIL as string, ADMIN_PASSWORD as string, "admin");
+    const grant = await request.post(`${API}/api/v1/learning-support/holders`, {
+      headers: { Authorization: `Bearer ${admin.accessToken}` },
+      data: { userId: senco.userId },
+    });
+    expect(
+      grant.ok(),
+      `Giving Learning Support back to the E2E SENCo answered ${grant.status()}: ${(await grant.text()).slice(0, 300)}`,
+    ).toBeTruthy();
+
+    const note =
+      "The E2E SENCo account had lost Learning Support, so the suite gave it back as the E2E admin. Something revoked it: its grant's revoked_by_user_id says what.";
+    console.warn(`::warning title=Learning Support restored::${note}`);
+    const summary = process.env.GITHUB_STEP_SUMMARY;
+    if (summary) appendFileSync(summary, `\n> **Learning Support restored.** ${note}\n`);
+  } finally {
+    await request.dispose();
+  }
+});
+
+async function signInAsSenco(page: Page, request: APIRequestContext) {
+  const body = await signIn(request, EMAIL as string, PASSWORD as string, "SENCo");
   // The same two admin roles the admin suite accepts. Learning Support is
   // checked separately below, because no role carries it.
   expect(
@@ -117,7 +180,7 @@ test("the account holds Learning Support, so this suite is testing a holder", as
   const body = (await res.json()) as { viewerHoldsIt: boolean };
   expect(
     body.viewerHoldsIt,
-    "The E2E SENCo account no longer holds Learning Support, so every check below would be testing the refusal the admin suite already covers. Ask backend to grant it again.",
+    "The E2E SENCo account still lacks Learning Support after the suite's own setup, so every check below would be testing the refusal the admin suite already covers.",
   ).toBe(true);
 });
 
