@@ -133,7 +133,7 @@ export function dimensionForToday(now = new Date()): BaselineDimension {
 /**
  * Daily warm-up run (`Nevo Warm-Up Run Frame`, SCRUM-104): one round of the
  * day's baseline task, stripped of the onboarding quest map - a quiet
- * "DAILY WARM-UP" header with a small ring, the activity, and the gentle
+ * "DAILY WARM-UP" header (no ring, SCRUM-200), the activity, and the gentle
  * one-shot done state. Never reads as an assessment; nothing is marked
  * right or wrong.
  *
@@ -154,8 +154,8 @@ export function dimensionForToday(now = new Date()): BaselineDimension {
  * engine (`WarmUpLoading`), and when the engine names nothing the screen shows
  * the nothing-state: no task, and the way back to Home (see `WarmUpNothing`).
  *
- * THE HEADER IS THE RUNNING STATE'S. The frame draws "DAILY WARM-UP" and its
- * ring above a task only: the done state (12), the save-failed state (D126)
+ * THE HEADER IS THE RUNNING STATE'S. The frame draws "DAILY WARM-UP" above a
+ * task only: the done state (12), the save-failed state (D126)
  * and the loading state (D169) have none, and the nothing-state, which no
  * frame draws, has none either. The first three kept it.
  * The rotation is for the signed-out walkthrough only.
@@ -675,44 +675,22 @@ export function WarmUpRun({
 }
 
 /**
- * The running state's quiet header (`runHead`): the label and a small ring,
- * 30px on a phone and 34px from tablet up, its padding the frame's 22px by
- * 24px there and 28px by 30px above. The ring stands at the frame's one
- * offset.
+ * The running state's quiet header (`runHead`): the label alone, at the
+ * frame's 24px in on a phone and 30px from tablet up.
+ *
+ * NO RING (SCRUM-200; Lydia, 28 Oct: "Remove the warm-up ring. A fabricated
+ * figure shown to a child is the worst thing on that list."). The frame drew
+ * a ring stood at one fixed offset, a little over half full whatever the
+ * child had done, so it read as progress the warm-up had not measured. The
+ * header keeps the height the ring gave it - 74px on a phone, 90px up - so
+ * the task under it sits where the frame puts it.
  */
 function WarmUpHeader() {
   return (
-    <div className="flex shrink-0 items-center justify-between px-6 py-[22px] sm:px-[30px] sm:py-7">
+    <div className="flex h-[74px] shrink-0 items-center px-6 sm:h-[90px] sm:px-[30px]">
       <span className="font-mono text-[11px] font-bold tracking-[0.14em] text-nevo-violet">
         DAILY WARM-UP
       </span>
-      <svg
-        viewBox="0 0 34 34"
-        aria-hidden
-        data-testid="warmup-ring"
-        className="size-[30px] sm:size-[34px]"
-      >
-        <circle
-          cx="17"
-          cy="17"
-          r="15"
-          fill="none"
-          stroke="rgba(154,156,203,0.25)"
-          strokeWidth="3"
-        />
-        <circle
-          cx="17"
-          cy="17"
-          r="15"
-          fill="none"
-          stroke="#9a9ccb"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeDasharray="94"
-          strokeDashoffset="40"
-          transform="rotate(-90 17 17)"
-        />
-      </svg>
     </div>
   );
 }
