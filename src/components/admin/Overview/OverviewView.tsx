@@ -28,7 +28,7 @@ import {
   type ClassActivity,
   type SchoolRosterCounts,
 } from "@/lib/api/school";
-import { glanceRows } from "./overviewGlance";
+import { earlyGlanceRows, glanceRows, holdsNeedSchool } from "./overviewGlance";
 import { setUpAgo, type SetUpAgo } from "./setUpAgo";
 import { boardPackText } from "./boardPack";
 import {
@@ -420,7 +420,10 @@ export function OverviewView() {
    * flatly untrue of a school in its third term.
    */
   const early = adaptationTotal === 0;
-  const glance = early ? [] : glanceRows(roster, flags, classActivity, holds);
+  // Early, the one row that can't wait for the school to go live (D04, 27 Oct).
+  const glance = early
+    ? earlyGlanceRows(roster, holds)
+    : glanceRows(roster, flags, classActivity, holds);
   /*
    * THE SCHOOL RECORD'S NAME FIRST. This took the name from the compliance
    * audit alone, so when that one read failed the title - and the board pack
@@ -437,6 +440,61 @@ export function OverviewView() {
     labels: audit ? audit.diagnosticLabelsStored : null,
     adaptations: adaptationTotal,
   });
+
+  /*
+   * NO ROWS, NO SECTION. "Worth a glance" only ever holds rows this school's
+   * own reads produced; with none, a heading over empty space would read as a
+   * list that failed to load, and a line saying nothing needs a look would be
+   * a claim - a read that failed also yields no rows.
+   */
+  const glanceSection =
+    glance.length > 0 ? (
+      <>
+        <h3 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
+          Worth a glance
+        </h3>
+        <div className={cn(CARD, "mt-3 overflow-hidden")}>
+          {glance.map((g, i) => {
+            const body = (
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-[15px] font-semibold text-nevo-near-black">
+                  {g.title}
+                </span>
+                <span className="mt-0.5 text-[13px] text-nevo-near-black/58">
+                  {g.sub}
+                </span>
+              </span>
+            );
+            const rowClass = cn(
+              "flex items-center gap-4 px-[22px] py-[18px]",
+              i < glance.length - 1 && "border-b border-nevo-near-black/7",
+            );
+            /*
+             * NO LINK TO A REFUSAL. "Open Learning Support" went to a
+             * screen that refuses every admin without SENCo - the
+             * founding admin among them. The row still
+             * states what the school's own read found.
+             */
+            return mayOpen(g.href) ? (
+              <Link
+                key={g.key}
+                href={g.href}
+                className={cn(rowClass, "transition-[filter] hover:brightness-[0.985]")}
+              >
+                {body}
+                <span className="shrink-0 text-[13.5px] font-semibold text-nevo-navy">
+                  {g.action} &rarr;
+                </span>
+              </Link>
+            ) : (
+              <div key={g.key} className={rowClass}>
+                {body}
+              </div>
+            );
+          })}
+        </div>
+      </>
+    ) : null;
 
   const tiles = snapshotTiles({
     studentsProfiled: audit ? audit.studentsProfiled : null,
@@ -507,6 +565,9 @@ export function OverviewView() {
                     plain-language account of how your students are getting on,
                     written so you could read it aloud in a governors&rsquo;
                     meeting without changing a word.
+                    {holdsNeedSchool(holds)
+                      ? " One thing does need you already, though - it’s noted just below."
+                      : null}
                   </p>
                 </>
               ) : (
@@ -594,6 +655,9 @@ export function OverviewView() {
                 </>
               )}
             </div>
+
+            {/* Early, a held child sits right under the welcome (D04, 27 Oct). */}
+            {early ? glanceSection : null}
 
             {/* The compliance card is fully real, and is the point of the
                 page. Its copy comes from `ndpaClaims.ts` because D22 states
@@ -726,20 +790,16 @@ export function OverviewView() {
               </div>
             )}
 
-            {/*
-              * NO ROWS, NO SECTION. "Worth a glance" only ever holds rows this
-              * school's own reads produced; with none, a heading over empty
-              * space would read as a list that failed to load, and a line
-              * saying nothing needs a look would be a claim - a read that
-              * failed also yields no rows.
-              */}
-            {(early || glance.length > 0) && (
+            {/* Live, the roll-up follows the snapshot. */}
+            {early ? null : glanceSection}
+
+            {early && (
               <h3 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
-                {early ? "Getting started" : "Worth a glance"}
+                Getting started
               </h3>
             )}
 
-            {early ? (
+            {early && (
               <div className={cn(CARD, "mt-3 overflow-hidden")}>
                 {gettingStartedSteps(school).map((k, i) => {
                   // A tick is a claim about this school, so it is only ever set
@@ -839,49 +899,6 @@ export function OverviewView() {
                   );
                 })}
               </div>
-            ) : (
-            glance.length > 0 && (
-              <div className={cn(CARD, "mt-3 overflow-hidden")}>
-                {glance.map((g, i) => {
-                  const body = (
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="text-[15px] font-semibold text-nevo-near-black">
-                        {g.title}
-                      </span>
-                      <span className="mt-0.5 text-[13px] text-nevo-near-black/58">
-                        {g.sub}
-                      </span>
-                    </span>
-                  );
-                  const rowClass = cn(
-                    "flex items-center gap-4 px-[22px] py-[18px]",
-                    i < glance.length - 1 && "border-b border-nevo-near-black/7",
-                  );
-                  /*
-                   * NO LINK TO A REFUSAL. "Open Learning Support" went to a
-                   * screen that refuses every admin without SENCo - the
-                   * founding admin among them. The row still
-                   * states what the school's own read found.
-                   */
-                  return mayOpen(g.href) ? (
-                    <Link
-                      key={g.key}
-                      href={g.href}
-                      className={cn(rowClass, "transition-[filter] hover:brightness-[0.985]")}
-                    >
-                      {body}
-                      <span className="shrink-0 text-[13.5px] font-semibold text-nevo-navy">
-                        {g.action} &rarr;
-                      </span>
-                    </Link>
-                  ) : (
-                    <div key={g.key} className={rowClass}>
-                      {body}
-                    </div>
-                  );
-                })}
-              </div>
-            )
             )}
           </>
         )}
