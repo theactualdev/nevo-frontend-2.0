@@ -20,10 +20,41 @@ import { CalmRefusal } from "../LearningSupport/LearningSupportLine";
  * - THE LAST SENIOR. Returning the school's only senior to standard is refused
  *   (409 `last_senior_admin`) and met with D03b's calm dialog.
  *
- * NOT DRAWN: D03b's "Made senior by Mrs. F. Adebayo · 13 October". The team
- * read carries no promoted-by or promoted-at, so the line has no sub until it
- * does - asked of the backend, never invented.
+ * "MADE SENIOR BY MRS. F. ADEBAYO · 13 OCTOBER" (D03b), on someone else's
+ * senior record, now that the team read carries who and when (6b2b961, 27
+ * Oct). The same shape as Learning Support's "Granted by": a promoter with no
+ * name is left out, and a founder - senior from the start - has no line.
  */
+
+/** "13 October", with the year only when it isn't this one. */
+function promotedDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+}
+
+export interface SeniorProvenance {
+  by?: string | null;
+  byName?: string | null;
+  at?: string | null;
+}
+
+/** D03b's "Made senior by Mrs. F. Adebayo · 13 October", or null when nothing was recorded. */
+export function madeSeniorLine(p: SeniorProvenance | null | undefined, me: string | null): string | null {
+  if (!p) return null;
+  const by = p.byName?.trim() || (p.by && p.by === me ? "you" : null);
+  const on = promotedDate(p.at);
+  if (by && on) return `Made senior by ${by} · ${on}`;
+  if (on) return `Made senior ${on}`;
+  if (by) return `Made senior by ${by}`;
+  return null;
+}
 
 const FAILED = "That didn't go through, and nothing has changed. Try again in a moment.";
 const NOT_SENIOR = "Only a senior administrator can change this.";
@@ -35,9 +66,15 @@ export function AdminLevelLine({
   canChange,
   onChange,
   className,
+  promoted = null,
+  me = null,
 }: {
   person: { userId: string; name: string };
   level: AdminAccessLevel;
+  /** Who made them senior, and when, as the team read has it. */
+  promoted?: SeniorProvenance | null;
+  /** The viewer, so their own promotion reads "you". */
+  me?: string | null;
   /** The viewer's own record: status only, nothing to press. */
   you: boolean;
   /** A senior viewer, an active person, writes not paused. */
@@ -51,13 +88,16 @@ export function AdminLevelLine({
   const [working, setWorking] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [lastSenior, setLastSenior] = useState(false);
+  const [provenance, setProvenance] = useState<SeniorProvenance | null>(promoted);
 
   const senior = now === "senior";
   const sub = you
     ? senior
       ? "Another senior administrator manages this."
       : "A senior administrator can make you senior."
-    : null;
+    : senior
+      ? madeSeniorLine(provenance, me)
+      : null;
 
   const change = () => {
     if (working || !canChange || you) return;
@@ -66,6 +106,12 @@ export function AdminLevelLine({
     (senior ? teamApi.demoteStandard : teamApi.promoteSenior)(person.userId)
       .then((next) => {
         if (next?.accessLevel) setNow(next.accessLevel);
+        // Who and when, as the server recorded this change.
+        setProvenance({
+          by: next?.seniorPromotedBy ?? null,
+          byName: next?.seniorPromotedByName ?? null,
+          at: next?.seniorPromotedAt ?? null,
+        });
         onChange(next);
       })
       .catch((err: unknown) => {

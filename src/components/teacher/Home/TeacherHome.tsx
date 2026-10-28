@@ -96,7 +96,9 @@ export function TeacherHome() {
   // Fixtures back the designed screens and the failure fallback only.
   const showFixtureHome = !homeLive && (!signedIn || homeFailed);
   const showFixtureFlags = !flagsLive && (!signedIn || flagsFailed);
-  const flags = noClasses ? [] : liveFlags;
+  // A card this teacher has already opened is read, and leaves THEIR Home
+  // (SCRUM-252; Lydia, 13 Oct: "clears the card from their own view only").
+  const flags = noClasses ? [] : liveFlags.filter((f) => !f.seenByMe);
   const fixtureFlags = noClasses || !showFixtureFlags ? [] : HOME_FLAGS;
   const flagCount = flags.length + fixtureFlags.length;
   const hasFlags = flagCount > 0;

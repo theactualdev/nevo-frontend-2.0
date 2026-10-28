@@ -345,3 +345,45 @@ describe("the date line", () => {
     }
   });
 });
+
+/**
+ * SCRUM-252 (Lydia, 13 Oct): a teacher's tap means "I have read this" and
+ * clears the card from their own Home. A flag they have read is still open,
+ * so the class page goes on counting it; only Home leaves it out.
+ */
+describe("a flag this teacher has read", () => {
+  it("leaves their Home", () => {
+    useTeacherFlags.mockReturnValue({
+      flags: [
+        {
+          id: "f-1",
+          studentId: "s-1",
+          name: "Amara Okafor",
+          context: "JSS 2A",
+          note: "Taking longer on written segments.",
+          generatedAt: "2026-09-14T08:00:00Z",
+          isSudden: false,
+          seenByMe: true,
+        },
+        {
+          id: "f-2",
+          studentId: "s-2",
+          name: "Chidi Nwosu",
+          context: "JSS 2A",
+          note: "Re-reading the opening section.",
+          generatedAt: "2026-09-14T08:00:00Z",
+          isSudden: false,
+          seenByMe: false,
+        },
+      ],
+      live: true,
+      failed: false,
+      complete: true,
+    });
+    useTeacherHome.mockReturnValue({ pulse: [], activity: [], live: true, failed: false });
+    const { queryByText, getByText } = render(<TeacherHome />);
+
+    expect(queryByText("Taking longer on written segments.")).not.toBeInTheDocument();
+    expect(getByText("Re-reading the opening section.")).toBeInTheDocument();
+  });
+});
