@@ -1,7 +1,12 @@
 "use client";
 
+import { useRef } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
+import { Button } from "@/components/shared";
 import { useAuth } from "@/hooks";
+import { WAITING_ROUTE } from "@/lib/auth/consentHold";
+import { studentDestination, UNCHECKED_ROUTE } from "@/lib/auth/entryGate";
 import { getSession } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
@@ -14,20 +19,24 @@ export const WAITING_WAY_BACK = "/auth/login";
 /**
  * Frame 00d / SE-01 - Waiting on Consent.
  *
- * **WHAT THIS SCREEN DELIBERATELY DOES NOT DO**, because the frame spends more
- * words on that than on what it shows: *"Says Nevo isn't ready, says it will be
- * soon, nothing more. No progress, no countdown, no refresh, no door held shut.
- * When consent arrives, opening the link again goes straight to the assessment
- * - no action needed."*
+ * IT NEVER SAYS "SOON", AND IT IS NOT A DEAD END (design 5bb9ee2, 28 Oct):
+ * "Says Nevo is waiting for the school to confirm, never that it will be ready
+ * soon (a promise we cannot keep, since consent may be slow or may never
+ * come). It carries a calm way forward instead of ending at the browser: Check
+ * again re-checks (if consent has arrived it goes straight to the
+ * assessment) ... No countdown, no door held shut, never a dead end." It said
+ * "It will be soon." until then.
  *
- * It replaced a gate that POLLED. So there is no interval here, no retry
- * button, no "checking..." and no live region - and their absence is the
- * feature. A child is not kept at a spinner for a decision an adult makes on
- * another day; they close the link and come back. Anything that re-checks on a
- * timer re-creates the screen this replaces.
+ * CHECK AGAIN IS THE CHILD'S, NEVER A TIMER. It replaced a gate that POLLED,
+ * so there is still no interval here, no "checking..." and no live region:
+ * one read when the child presses, through the caller (`onCheckAgain`), which
+ * knows whether this child is signed in (`WaitingOnConsentPage`) or held in
+ * place on 05 Entry. Still waiting is the same screen, unchanged. Where the
+ * caller has nothing to re-check with, there is no Check again.
  *
- * There is no way ONWARD from here on purpose: the only thing that changes
- * this state is an adult, elsewhere.
+ * The frame's "Ask your teacher" is not drawn yet: the frame draws a button
+ * and says only that it "points to the person who can help", so what a tap
+ * does is asked. The line still says it.
  *
  * BUT THERE IS A WAY BACK (D189, 13 Oct). Lydia: "Waiting on consent is a
  * genuine dead end and gets fixed ... Yes, give it Back, same as the age-check
@@ -65,7 +74,7 @@ export const WAITING_COPY: Record<
 > = {
   consent: {
     heading: "Nevo isn't quite ready for you yet",
-    line: "It will be soon.",
+    line: "We are waiting for your school to confirm. You can check again, or ask your teacher.",
   },
   "age-check": {
     heading: "Nevo is sorting something out with your school",
@@ -75,19 +84,64 @@ export const WAITING_COPY: Record<
 
 export function WaitingOnConsent({
   hold = "consent",
+  onCheckAgain,
 }: {
   /** What holds the child. Changes the words only, never the screen. */
   hold?: WaitingHold;
+  /**
+   * Read the child's consent again, and go on if it has come. 00d's alone:
+   * the age check's hold has nothing a child can do (D121).
+   */
+  onCheckAgain?: () => Promise<unknown>;
 } = {}) {
+  const checking = useRef(false);
+  const checkAgain = () => {
+    // One read at a time: a second press while one is out does nothing.
+    if (!onCheckAgain || checking.current) return;
+    checking.current = true;
+    void onCheckAgain()
+      .catch(() => {})
+      .finally(() => {
+        checking.current = false;
+      });
+  };
+
   return (
     <div className="flex min-h-dvh flex-col bg-nevo-cream">
       <HoldWayBack />
 
-      <HoldMessage
-        hold={hold}
-        className="min-h-0 flex-1 justify-center px-10"
-      />
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-10">
+        <HoldMessage hold={hold} />
+        {hold === "consent" && onCheckAgain && (
+          <div className="mt-[30px] w-full max-w-[360px] sm:mt-9">
+            <Button className="w-full text-base" onClick={checkAgain}>
+              Check again
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
+  );
+}
+
+/**
+ * 00d for a child SIGNED IN and sent here from a door (`/student/waiting`).
+ * Check again asks the consent gate again, as the doors do
+ * (`studentDestination`), and goes where it says: on, or to 00e if consent
+ * has gone. Still waiting, or a read that did not answer, stays here as it
+ * was.
+ */
+export function WaitingOnConsentPage() {
+  const router = useRouter();
+  return (
+    <WaitingOnConsent
+      onCheckAgain={async () => {
+        const to = await studentDestination();
+        const path = to.split(/[?#]/)[0];
+        if (path === WAITING_ROUTE || path === UNCHECKED_ROUTE) return;
+        router.replace(to);
+      }}
+    />
   );
 }
 

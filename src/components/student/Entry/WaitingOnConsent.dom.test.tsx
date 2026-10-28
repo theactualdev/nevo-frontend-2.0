@@ -1,40 +1,59 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { WAITING_WAY_BACK, WaitingOnConsent } from "./WaitingOnConsent";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  WAITING_WAY_BACK,
+  WaitingOnConsent,
+  WaitingOnConsentPage,
+} from "./WaitingOnConsent";
 import { clearSession, setSession } from "@/lib/auth/session";
 
-const signOut = vi.hoisted(() => vi.fn());
+const { signOut, replace, studentDestination } = vi.hoisted(() => ({
+  signOut: vi.fn(),
+  replace: vi.fn(),
+  studentDestination: vi.fn(),
+}));
 vi.mock("@/hooks", () => ({ useAuth: () => ({ signOut }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace, push: vi.fn() }),
+}));
+vi.mock("@/lib/auth/entryGate", () => ({
+  studentDestination,
+  UNCHECKED_ROUTE: "/student/unchecked",
+}));
 
 /**
- * THE ASSERTIONS THAT MATTER HERE ARE ABSENCES.
+ * MOST OF WHAT MATTERS HERE IS STILL ABSENCES.
  *
- * This screen replaced a consent gate that polled, and frame 00d spends more
- * words on what it must not do than on what it shows: *"no progress, no
- * countdown, no refresh, no door held shut."* A later reader adding a "check
- * again" button or a status line would be making a reasonable-looking local
- * improvement that re-creates the exact screen this one exists to replace - so
- * the absences are pinned rather than left to good intentions.
+ * This screen replaced a consent gate that polled: "no countdown, no door
+ * held shut." Design's 28 Oct frame (5bb9ee2) gives it one way forward - a
+ * Check again the CHILD presses - and takes away "It will be soon", a promise
+ * nobody can keep. A timer, a status line or a polling re-check would still
+ * re-create the screen it replaced, so those absences stay pinned.
  */
+
+const LINE =
+  "We are waiting for your school to confirm. You can check again, or ask your teacher.";
 
 afterEach(() => {
   cleanup();
   clearSession();
   signOut.mockReset();
+  replace.mockReset();
+  studentDestination.mockReset();
 });
 
 describe("what it says", () => {
-  it("says Nevo is not ready, and that it will be", () => {
+  it("says Nevo is waiting for the school, and never that it will be soon", () => {
     render(<WaitingOnConsent />);
 
     expect(
       screen.getByRole("heading", { name: /isn't quite ready for you yet/i }),
     ).toBeTruthy();
-    expect(document.body.textContent).toMatch(/It will be soon\./);
+    expect(screen.getByText(LINE)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/soon/i);
   });
 
   it("says nothing else at all", () => {
-    // "Nothing more" is the instruction, and two sentences is the whole screen.
     // The wordmark is an image with alt text, so it is counted deliberately.
     render(<WaitingOnConsent />);
 
@@ -42,7 +61,7 @@ describe("what it says", () => {
 
     // No space between the two: `textContent` concatenates block elements
     // without one, so this is the heading and the line and nothing besides.
-    expect(text).toBe("Nevo isn't quite ready for you yetIt will be soon.");
+    expect(text).toBe(`Nevo isn't quite ready for you yet${LINE}`);
   });
 });
 
@@ -53,7 +72,7 @@ describe("what it says", () => {
  * until the app is restarted. Back goes to the device picker."
  */
 describe("its way back", () => {
-  it("is the age-check hold's Back, and the only thing to press", () => {
+  it("is the age-check hold's Back", () => {
     render(<WaitingOnConsent />);
 
     expect(screen.getAllByRole("button")).toHaveLength(1);
@@ -90,28 +109,116 @@ describe("its way back", () => {
   });
 });
 
-describe("what it deliberately does not do", () => {
-  it("offers no way onward - Back leaves, and nothing else is there to press", () => {
-    // The only thing that changes this state is an adult, elsewhere.
+/*
+ * Design 5bb9ee2, 28 Oct: "Check again re-checks (if consent has arrived it
+ * goes straight to the assessment) ... never a dead end."
+ */
+describe("Check again", () => {
+  it("is the one way forward, under the line, where the caller can re-check", () => {
+    render(
+      <WaitingOnConsent onCheckAgain={vi.fn().mockResolvedValue(undefined)} />,
+    );
+
+    const check = screen.getByRole("button", { name: "Check again" });
+    expect(check.className).toContain("bg-nevo-navy");
+    expect(
+      screen
+        .getAllByRole("button")
+        .map((b) => b.getAttribute("aria-label") ?? b.textContent),
+    ).toEqual(["Back", "Check again"]);
+  });
+
+  it("re-checks once per press, and not again while one is out", async () => {
+    let settle: () => void = () => {};
+    const onCheckAgain = vi.fn(
+      () => new Promise<void>((resolve) => (settle = resolve)),
+    );
+    render(<WaitingOnConsent onCheckAgain={onCheckAgain} />);
+    const check = screen.getByRole("button", { name: "Check again" });
+
+    fireEvent.click(check);
+    fireEvent.click(check);
+    expect(onCheckAgain).toHaveBeenCalledTimes(1);
+
+    await act(async () => settle());
+    fireEvent.click(check);
+    expect(onCheckAgain).toHaveBeenCalledTimes(2);
+  });
+
+  it("is not there where the caller has nothing to re-check with", () => {
     render(<WaitingOnConsent />);
 
+    expect(screen.queryByRole("button", { name: "Check again" })).toBeNull();
+  });
+
+  it("is never on the age check's hold, where nothing a child does moves it (D121)", () => {
+    render(<WaitingOnConsent hold="age-check" onCheckAgain={vi.fn()} />);
+
+    expect(screen.queryByRole("button", { name: "Check again" })).toBeNull();
+  });
+});
+
+describe("Check again, for a child signed in and sent here from a door", () => {
+  it("goes where the consent gate now says, once consent has come", async () => {
+    studentDestination.mockResolvedValue("/student/dashboard");
+    render(<WaitingOnConsentPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await act(async () => {});
+
+    expect(studentDestination).toHaveBeenCalledTimes(1);
+    expect(replace).toHaveBeenCalledWith("/student/dashboard");
+  });
+
+  it("goes to 00e if consent has gone", async () => {
+    studentDestination.mockResolvedValue("/student/unavailable");
+    render(<WaitingOnConsentPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await act(async () => {});
+
+    expect(replace).toHaveBeenCalledWith("/student/unavailable");
+  });
+
+  it.each([
+    ["still waiting", "/student/waiting"],
+    [
+      "the read did not answer",
+      "/student/unchecked?next=%2Fstudent%2Fdashboard",
+    ],
+  ])("stays here as it was when %s", async (_, to) => {
+    studentDestination.mockResolvedValue(to);
+    render(<WaitingOnConsentPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await act(async () => {});
+
+    expect(replace).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Check again" })).toBeTruthy();
+  });
+});
+
+describe("what it deliberately does not do", () => {
+  it("offers nothing onward but Check again - no link, no start, no continue", () => {
+    render(<WaitingOnConsent onCheckAgain={vi.fn()} />);
+
     expect(
-      screen.queryByRole("button", { name: /continue|try|check|start/i }),
+      screen.queryByRole("button", { name: /continue|try|start/i }),
     ).toBeNull();
     expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 
   it("shows no progress, countdown or status", () => {
-    render(<WaitingOnConsent />);
+    render(<WaitingOnConsent onCheckAgain={vi.fn()} />);
 
     expect(screen.queryByRole("progressbar")).toBeNull();
     expect(screen.queryByRole("status")).toBeNull();
     expect(document.body.textContent).not.toMatch(
-      /check|refresh|wait|loading|soon as|progress|%/i,
+      /refresh|loading|soon|progress|checking|%/i,
     );
   });
 
-  it("sets no timer, because the gate it replaced polled", () => {
+  it("sets no timer and re-checks nothing until the child presses, because the gate it replaced polled", () => {
     /*
      * The decisive one. A re-check on an interval is the single change that
      * would turn this back into the screen design removed, and it would look
@@ -119,23 +226,25 @@ describe("what it deliberately does not do", () => {
      */
     const setInterval = vi.spyOn(globalThis, "setInterval");
     const setTimeout = vi.spyOn(globalThis, "setTimeout");
+    const onCheckAgain = vi.fn();
 
-    render(<WaitingOnConsent />);
+    render(<WaitingOnConsent onCheckAgain={onCheckAgain} />);
 
     expect(setInterval).not.toHaveBeenCalled();
     expect(setTimeout).not.toHaveBeenCalled();
+    expect(onCheckAgain).not.toHaveBeenCalled();
 
     setInterval.mockRestore();
     setTimeout.mockRestore();
   });
 
-  it("fetches nothing - it renders a decision already made", () => {
-    // The resolve happens once, at the entry point. This screen is what that
-    // answer looks like, not a thing that asks its own question.
+  it("fetches nothing on its own - it renders a decision already made", () => {
+    // The resolve happens at the entry point; Check again is the child's.
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
-    render(<WaitingOnConsent />);
+    render(<WaitingOnConsentPage />);
 
+    expect(studentDestination).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });

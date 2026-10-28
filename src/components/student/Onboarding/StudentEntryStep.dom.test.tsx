@@ -534,6 +534,61 @@ describe("where a match goes", () => {
     expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
   });
 
+  /*
+   * 00d's Check again (design 5bb9ee2, 28 Oct): "re-checks (if consent has
+   * arrived it goes straight to the assessment)".
+   */
+  it("goes straight on into the run when Check again finds consent has come", async () => {
+    lookup
+      .mockResolvedValueOnce(matched({ consentState: "pending" }))
+      .mockResolvedValueOnce(matched());
+    render(<StudentEntryStep framing="school" />);
+    await enterAndSubmit();
+    await afterTheBeat();
+
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await act(async () => {});
+
+    expect(lookup).toHaveBeenCalledTimes(2);
+    expect(lookup).toHaveBeenLastCalledWith({
+      schoolCode: "K7DQ",
+      admissionNumber: "BGA/2031",
+    });
+    expect(push).toHaveBeenCalledWith("/student/onboarding/sequence");
+    expect(getOnboardingDraft().name).toBe("Amara");
+  });
+
+  it("stays on 00d, as it was, when Check again finds consent still waiting", async () => {
+    lookup.mockResolvedValue(matched({ consentState: "pending" }));
+    render(<StudentEntryStep framing="school" />);
+    await enterAndSubmit();
+    await afterTheBeat();
+
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await act(async () => {});
+
+    expect(lookup).toHaveBeenCalledTimes(2);
+    expect(push).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("heading", { name: "Nevo isn't quite ready for you yet" }),
+    ).toBeInTheDocument();
+  });
+
+  it("stays on 00d when the lookup behind Check again does not answer", async () => {
+    lookup
+      .mockResolvedValueOnce(matched({ consentState: "pending" }))
+      .mockRejectedValueOnce(new ApiError(503, "cold start"));
+    render(<StudentEntryStep framing="school" />);
+    await enterAndSubmit();
+    await afterTheBeat();
+
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await act(async () => {});
+
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Check again" })).toBeInTheDocument();
+  });
+
   it("holds a child whose consent was withdrawn on 00e, in place, never 00d (D117)", async () => {
     // 00e: "it was there and is gone, so 'soon' would be a lie".
     lookup.mockResolvedValue(

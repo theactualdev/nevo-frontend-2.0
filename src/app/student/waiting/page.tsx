@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { WaitingOnConsent } from "@/components/student/Entry/WaitingOnConsent";
+import { WaitingOnConsentPage } from "@/components/student/Entry/WaitingOnConsent";
 
 export const metadata: Metadata = {
   title: "Welcome - Nevo",
@@ -16,5 +16,5 @@ export const metadata: Metadata = {
  * A URL is something a child can read.
  */
 export default function StudentWaitingPage() {
-  return <WaitingOnConsent />;
+  return <WaitingOnConsentPage />;
 }

@@ -9,13 +9,15 @@ import { api } from "./client";
  * a lesson, not the baseline. The gate is at the ENTRY POINT, not mid-flow.
  *
  * The screen exists and is `student/00d Waiting on Consent` (SE-01), which
- * replaced `student/14 Consent Gate` in the 20 Sep drop. Its whole content:
+ * replaced `student/14 Consent Gate` in the 20 Sep drop. Its content since
+ * design's 28 Oct frame (5bb9ee2):
  *
- *   "Nevo isn't quite ready for you yet" / "It will be soon."
+ *   "Nevo isn't quite ready for you yet" / "We are waiting for your school
+ *   to confirm. You can check again, or ask your teacher." / Check again
  *
- * And its rules, which are as much the design as the words: **no progress, no
- * countdown, no refresh, no door held shut.** When consent arrives, opening the
- * same link goes straight to the assessment with no action from the child.
+ * And its rules, which are as much the design as the words: **no countdown,
+ * no door held shut, never a dead end** - and never "soon". Check again, which
+ * the child presses, reads the gate again; nothing re-checks on a timer.
  * Primary case is a shared classroom tablet at 768x1024.
  *
  * ROUTING IS THE STUDENT LANE'S. This file owns the READ - `accessBlocked`
