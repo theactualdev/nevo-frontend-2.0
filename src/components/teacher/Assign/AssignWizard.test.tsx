@@ -13,6 +13,14 @@ const { create, useTeacherClasses, useLessonLibrary, useStudentDirectory, useHas
   }));
 
 vi.mock("@/lib/api/assignments", () => ({ assignmentsApi: { create } }));
+// Confirm asks each picked lesson's review for the sign-off (Lydia, 25 Oct).
+// Signed off unless a test says otherwise.
+const { review } = vi.hoisted(() => ({
+  review: vi.fn(async (_id: string): Promise<{ reviewComplete?: boolean }> => ({
+    reviewComplete: true,
+  })),
+}));
+vi.mock("@/lib/api/lessons", () => ({ lessonsApi: { review } }));
 vi.mock("@/hooks/useTeacherClasses", () => ({ useTeacherClasses }));
 vi.mock("@/hooks/useLessonLibrary", () => ({ useLessonLibrary }));
 vi.mock("@/hooks/useStudentDirectory", () => ({ useStudentDirectory }));
@@ -97,6 +105,8 @@ beforeEach(() => {
   });
   useStudentDirectory.mockReturnValue(directory());
   useHasSession.mockReturnValue(true);
+  review.mockReset();
+  review.mockResolvedValue({ reviewComplete: true });
 });
 
 /**
@@ -1168,5 +1178,100 @@ describe("choosing several lessons", () => {
 
     expect(screen.getByText("1 lesson will open for JSS 2A now.")).toBeInTheDocument();
     expect(screen.getByRole("listitem")).toHaveTextContent("Fractions 3");
+  });
+});
+
+/**
+ * ASSIGN WAITS FOR THE LESSON-WIDE SIGN-OFF (Lydia, 25 Oct): "Assigning a
+ * lesson whose media and checks have not been approved puts unreviewed content
+ * in front of children."
+ *
+ * The lesson page holds its Assign until the server's `reviewComplete`, but
+ * step 1 offers the whole library, and the library list carries no sign-off.
+ * So Confirm asks about the picked lessons at the moment of sending.
+ */
+describe("a lesson nobody has signed off", () => {
+  const TWO = [
+    ...LESSONS,
+    { id: "l-2", title: "Osmosis", meta: "Biology", kind: "normal" },
+    { id: "l-3", title: "Diffusion", meta: "Biology", kind: "normal" },
+  ];
+
+  beforeEach(() => {
+    useLessonLibrary.mockReturnValue({
+      cards: TWO,
+      live: true,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    review.mockImplementation(async (id: string) => ({ reviewComplete: id === "l-1" }));
+  });
+
+  /** Step 1 to Confirm with the default class and "Available now". */
+  const toConfirm = () => {
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
+  };
+
+  it("sends nothing, and goes back to step 1 naming it, with the way to its review", async () => {
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: /Osmosis/ }));
+    toConfirm();
+
+    const link = await screen.findByRole("link", { name: "Osmosis" });
+    expect(link).toHaveAttribute("href", "/teacher/lessons/l-2/review");
+    expect(link.closest("p")).toHaveTextContent(
+      "Osmosis isn’t reviewed yet, so it can’t be assigned. Review it first, or untick it.",
+    );
+    expect(screen.getByRole("heading", { name: "Choose lessons" })).toBeInTheDocument();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("names several in one sentence", async () => {
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: /Osmosis/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Diffusion/ }));
+    toConfirm();
+
+    const link = await screen.findByRole("link", { name: "Osmosis" });
+    expect(link.closest("p")).toHaveTextContent(
+      "Osmosis and Diffusion aren’t reviewed yet, so they can’t be assigned. Review them first, or untick them.",
+    );
+  });
+
+  it("sends the rest once it is unticked", async () => {
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: /Osmosis/ }));
+    toConfirm();
+    await screen.findByRole("link", { name: "Osmosis" });
+
+    fireEvent.click(screen.getByRole("button", { name: /Osmosis/ }));
+    // Unticked, so no longer named.
+    expect(screen.queryByRole("link", { name: "Osmosis" })).not.toBeInTheDocument();
+    toConfirm();
+
+    await vi.waitFor(() => expect(create).toHaveBeenCalled());
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ lessonIds: ["l-1"] }));
+  });
+
+  it("asks only about the lessons being sent", async () => {
+    render(<AssignWizard preselect="l-1" />);
+    toConfirm();
+
+    await vi.waitFor(() => expect(create).toHaveBeenCalled());
+    expect(review.mock.calls.map((c) => c[0])).toEqual(["l-1"]);
+  });
+
+  it("is not held over a review that could not be read", async () => {
+    // Refusing a teacher over our own outage is worse than the server refusing
+    // with a reason - the lesson page's rule.
+    review.mockRejectedValue(new Error("offline"));
+    render(<AssignWizard preselect="l-2" />);
+    toConfirm();
+
+    await vi.waitFor(() => expect(create).toHaveBeenCalled());
   });
 });

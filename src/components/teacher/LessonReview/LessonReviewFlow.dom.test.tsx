@@ -118,7 +118,7 @@ const reviewOf = (over: Partial<LessonReview> = {}): LessonReview => ({
 
 const SEGMENTS = [seg(1), seg(2), seg(3), seg(4)];
 
-const open = async (step?: 1 | 2 | 3 | 4) => {
+const open = async (step?: 1 | 2 | 3 | 4 | 5) => {
   render(<LessonReviewRoute lessonId="l-1" step={step} />);
   await screen.findByRole("navigation", { name: "Lesson review steps" });
 };
@@ -148,15 +148,15 @@ beforeEach(() => {
 });
 
 describe("four screens, not one page", () => {
-  it("names the four steps, and opens on what Nevo made of it", async () => {
+  it("names the five steps, and opens on what Nevo made of it", async () => {
     await open();
 
     const steps = within(screen.getByRole("navigation", { name: "Lesson review steps" }));
-    for (const label of ["What I made", "Key points", "Rewrites", "Live"]) {
+    for (const label of ["What I made", "Key points", "Checks", "Rewrites", "Live"]) {
       expect(steps.getByRole("button", { name: new RegExp(label) })).toBeInTheDocument();
     }
-    expect(screen.getByText(/Step 1 of 4/)).toBeInTheDocument();
-    expect(screen.queryByText(/Step 2 of 4/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Step 1 of 5/)).toBeInTheDocument();
+    expect(screen.queryByText(/Step 2 of 5/)).not.toBeInTheDocument();
   });
 
   it("leads with one plain status line, counting what will stop the teacher", async () => {
@@ -183,7 +183,7 @@ describe("four screens, not one page", () => {
     await open();
     fireEvent.click(screen.getByRole("button", { name: "Continue to key points" }));
 
-    expect(screen.getByText(/Step 2 of 4/)).toBeInTheDocument();
+    expect(screen.getByText(/Step 2 of 5/)).toBeInTheDocument();
   });
 
   it("shows the structure only when asked", async () => {
@@ -317,7 +317,7 @@ describe("the key points", () => {
     fireEvent.click(screen.getByRole("button", { name: "Accept all 3 key points" }));
 
     await waitFor(() => expect(api.approveAllKeyPoints).toHaveBeenCalledWith("l-1", HASH_K));
-    expect(await screen.findByText(/Step 3 of 4/)).toBeInTheDocument();
+    expect(await screen.findByText(/Step 3 of 5/)).toBeInTheDocument();
     expect(api.acceptKeyPoint).not.toHaveBeenCalled();
   });
 
@@ -334,7 +334,7 @@ describe("the key points", () => {
     expect(await screen.findByText(/The lesson changed while you had it open/)).toBeInTheDocument();
     expect(api.review).toHaveBeenCalledTimes(2);
     expect(api.approveAllKeyPoints).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/Step 2 of 4/)).toBeInTheDocument();
+    expect(screen.getByText(/Step 2 of 5/)).toBeInTheDocument();
   });
 
   it("shows the server's reason when an approval is refused", async () => {
@@ -355,16 +355,16 @@ describe("the key points", () => {
 
 describe("the rewrites", () => {
   it("lists each part with a simpler and a longer version, and no Flag", async () => {
-    await open(3);
+    await open(4);
 
-    expect(screen.getByText(/Step 3 of 4/)).toBeInTheDocument();
+    expect(screen.getByText(/Step 4 of 5/)).toBeInTheDocument();
     expect(screen.getAllByText("Simpler")).toHaveLength(4);
     expect(screen.queryByRole("button", { name: /Flag/ })).not.toBeInTheDocument();
   });
 
   it("opens a part to both versions, each editable", async () => {
     api.editRewrite.mockResolvedValue(reviewOf());
-    await open(3);
+    await open(4);
     fireEvent.click(screen.getByRole("button", { name: "Open the rewrites of Part 1" }));
 
     expect(screen.getByText("Simpler part 1.")).toBeInTheDocument();
@@ -395,7 +395,7 @@ describe("the rewrites", () => {
         reviewComplete: true,
       }),
     );
-    await open(3);
+    await open(4);
     fireEvent.click(screen.getByRole("button", { name: "Accept all rewrites" }));
 
     await waitFor(() => expect(api.approveAllRewrites).toHaveBeenCalledWith("l-1", HASH_R));
@@ -405,7 +405,7 @@ describe("the rewrites", () => {
   it("asks nothing of a lesson with no rewrites", async () => {
     api.detail.mockResolvedValue(lesson(SEGMENTS.map((s) => ({ ...s, depthVariants: null }))));
     api.review.mockResolvedValue(reviewOf({ rewriteCount: 0, pendingRewriteCount: 0 }));
-    await open(3);
+    await open(4);
 
     expect(screen.queryByRole("button", { name: "Accept all rewrites" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
@@ -451,7 +451,7 @@ describe("live", () => {
   });
 
   it("is not live before the sign-off, and says what is left", async () => {
-    await open(4);
+    await open(5);
 
     expect(screen.getByRole("heading", { name: "Not live yet" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Go to the key points" })).toBeInTheDocument();

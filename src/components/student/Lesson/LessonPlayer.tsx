@@ -1870,12 +1870,19 @@ export function LessonPlayer({
    * condition that draws it below - and not again as the child opens it,
    * which is theirs. Once per segment, like a hint: a return visit or a
    * re-render is not the engine applying it again.
+   *
+   * NEVER ON A CALCULATION (Lydia, 26 Oct #1): "The calculation is already
+   * guided steps, so opening the panel inside it is a second scaffold on top
+   * of the one the child is already in." A missed step gets more support
+   * inside the step, fewer steps or a slower pace - the solver's own - so an
+   * engine panel sent for a calculation is drawn nowhere, and not counted.
    */
-  const panelOnScreen =
-    segmentShowing &&
+  const enginePanel =
     contentHere &&
     action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
-    guidedPrompts.length > 0;
+    guidedPrompts.length > 0 &&
+    !isCalculation(segment);
+  const panelOnScreen = segmentShowing && enginePanel;
   const countedPanels = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!panelOnScreen || countedPanels.current.has(segment.id)) return;
@@ -2165,10 +2172,16 @@ export function LessonPlayer({
    * exists. False means there is no handoff." So a reply without it is no
    * hand-off at all, whatever else it carries: no panel, and the check stays
    * the way on. There is no panel that ends nowhere.
+   *
+   * AND NONE ON A CALCULATION (Lydia, 26 Oct #1), whatever the server sends:
+   * Teslim's 4c5706a stopped the three-miss hand-off there, and one still
+   * arriving is passed over - the check stays, as with no hand-off at all.
    */
   const openHandoff = (segmentId: string, stored: LessonQuestionAttempt) => {
     if (stored.handoffTo !== "socratic_panel") return;
     if (stored.advanceAfterHandoff !== true) return;
+    const on = lesson.segments.find((s) => s.id === segmentId);
+    if (on && isCalculation(asEntered(on))) return;
     if (answeredRight.current.has(stored.questionId ?? segmentId)) return;
     const prompts = (stored.guidedPrompts ?? []).flatMap((p) =>
       p?.id && p.prompt?.trim() ? [{ id: p.id, prompt: p.prompt }] : [],
@@ -3612,10 +3625,7 @@ export function LessonPlayer({
               onTake={takeWay}
               reading={readingOn}
             />
-            {(handoffHere ||
-              (contentHere &&
-                action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
-                guidedPrompts.length > 0)) && (
+            {(handoffHere || enginePanel) && (
                 <SocraticPanel
                   key={
                     handoffHere
@@ -3790,8 +3800,9 @@ export function LessonPlayer({
                   /*
                    * EVERY STEP THE CHILD COMMITS IS WRITTEN, each wrong try its
                    * own answer, for the server to mark: the engine's error
-                   * streak - what offers a hint and opens the Socratic panel -
-                   * is read from marked answers alone, so a calculation got
+                   * streak - what offers a hint, though never the Socratic
+                   * panel here (Lydia, 26 Oct #1) - is read from marked
+                   * answers alone, so a calculation got
                    * wrong could never make support rise (Lydia, 17 Oct). In
                    * addition to the step's signal below, never in the child's
                    * way, and nothing the server says back changes the solver.

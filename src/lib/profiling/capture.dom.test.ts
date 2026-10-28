@@ -940,3 +940,23 @@ describe("BaselineCapture — held until consent allows it", () => {
     expect(c.stream).toHaveLength(0);
   });
 });
+
+/*
+ * 2C, Word Conflict (Teslim 4c5706a): "send dimension `inhibition` with
+ * condition congruent or incongruent" - and the API refuses any other
+ * condition there, which would refuse the whole run. So the eight practice
+ * trials are not sent at all until the contract has a practice marker.
+ */
+describe("Word Conflict's trials", () => {
+  it("go up as inhibition, with their condition, the word tapped and whether it matched", () => {
+    const c = new BaselineCapture("wc");
+    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 0, rtMs: 640, congruency: "incongruent", practice: true, word: "left", arrow: "right", chosenOption: "left", correct: true });
+    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 1, rtMs: 720, congruency: "incongruent", word: "left", arrow: "right", chosenOption: "right", correct: false });
+    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 1, rtMs: 510, congruency: "congruent", word: "right", arrow: "right", chosenOption: "right", correct: true });
+
+    expect(baselineTrials(c)).toEqual([
+      { dimension: "inhibition", condition: "incongruent", response: "right", correct: false, responseTimeMs: 720, probeItemId: null },
+      { dimension: "inhibition", condition: "congruent", response: "right", correct: true, responseTimeMs: 510, probeItemId: null },
+    ]);
+  });
+});

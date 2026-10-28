@@ -474,6 +474,11 @@ function wordCount(value: unknown): number | null {
  *    condition and nothing else.
  *  - Nothing else is skipped. "Not sure" is a response, not a skip (B117),
  *    and goes as `not_sure`, above.
+ *  - A WORD CONFLICT PRACTICE TRIAL (`practice: true`) is NOT SENT. The
+ *    contract has no practice marker, and `inhibition` takes only congruent
+ *    or incongruent (frontend_unblockers.py: "inhibition requires congruent
+ *    or incongruent") - one practice trial would refuse the whole run with a
+ *    422. Kept on the device in the capture; asked of Teslim.
  *
  * Not carried, because `BaselineTrial` has no field for them: coordinates
  * (B14, above) and the intervals between the taps inside a recall.
@@ -552,6 +557,7 @@ export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
         break;
       }
       case "trial_pick": {
+        if (p.practice === true) break;
         const act = String(p.act);
         const declined = p.notSure === true;
         const dimension = DIMENSION_OF_ACT[act] ?? act.slice(0, 60);
