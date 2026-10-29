@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { invitesApi, type JoinLookup } from "@/lib/api/invites";
 import { linkIsDead } from "@/lib/auth/linkAnswer";
 import { cn } from "@/lib/utils";
@@ -59,6 +60,22 @@ import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
  */
 type Phase = "loading" | "ready" | "failed" | "unreachable";
 
+/**
+ * A teacher link whose reserved account has changed since it was sent (Teslim
+ * ed123cb, 29 Oct). The lookup answers 409 `invited_teacher_conflict`, and the
+ * link can't be accepted until a school administrator reviews it - which is
+ * D19's "This invite is no longer valid. Contact your school administrator
+ * for help.", not an outage to try again. Any other 409 still isn't read as
+ * the link's answer.
+ */
+function reservedAccountChanged(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    err.status === 409 &&
+    apiErrorCode(err.detail) === "invited_teacher_conflict"
+  );
+}
+
 export function JoinLanding({ token }: { token: string }) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [lookup, setLookup] = useState<JoinLookup | null>(null);
@@ -79,7 +96,7 @@ export function JoinLanding({ token }: { token: string }) {
       // "no longer valid" panel below is what it means. Anything else is the
       // lookup failing to answer, which says nothing about the invite.
       .catch((err: unknown) => {
-        setPhase(linkIsDead(err) ? "failed" : "unreachable");
+        setPhase(linkIsDead(err) || reservedAccountChanged(err) ? "failed" : "unreachable");
       });
   }, [token, attempt]);
 
