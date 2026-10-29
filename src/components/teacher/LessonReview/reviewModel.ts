@@ -223,6 +223,22 @@ export interface MediaRow {
 }
 
 /**
+ * Back from a remake and waiting for a look (design 11; Lydia, 26 Oct: "show
+ * remade as remade").
+ *
+ * THE SERVER'S RECORD FIRST. Since 6b5d496 an item carries `remadeAt`, so the
+ * mark survives a reload and reaches every teacher reviewing the lesson; it
+ * lasted only for the visit of the teacher who flagged it (#897). `visit` is
+ * that teacher's own record still, for the moment between the remake and the
+ * re-read that would carry the date.
+ */
+export function wasRemade(item: LessonMediaItem, visit: ReadonlySet<string>): boolean {
+  return (
+    item.status === "awaiting_review" && (Boolean(item.remadeAt) || visit.has(item.id))
+  );
+}
+
+/**
  * Step 1's pictures and narration (SCRUM-286; design 82c213b).
  *
  * WHAT IS SHOWN IS WHAT THE ONE PRESS SIGNS. Pictures and recordings waiting

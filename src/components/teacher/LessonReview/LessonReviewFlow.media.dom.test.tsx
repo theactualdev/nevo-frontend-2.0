@@ -354,3 +354,46 @@ describe("a flagged picture or recording that comes back remade", () => {
     expect(screen.queryByText("Remade")).not.toBeInTheDocument();
   });
 });
+
+/**
+ * 6b5d496: the server keeps `remadeAt` and `requestedBy`, so the mark is no
+ * longer one visit's memory (#897). It survives a reload and reaches every
+ * teacher reviewing the lesson, and "as you asked" is said only to whoever did.
+ */
+describe("a remake the server has recorded", () => {
+  const remadeBy = (requestedBy: string, status = "awaiting_review"): LessonMediaItem =>
+    ({ ...picture("p2", "s-2", status), requestedBy, remadeAt: "2026-10-29T18:00:00Z" }) as LessonMediaItem;
+
+  it("is marked Remade on opening the review, with no flag pressed in this visit", async () => {
+    api.review.mockResolvedValue(reviewWith([picture("p1", "s-1"), remadeBy("t-1")]));
+    await open();
+
+    expect(await screen.findByText("Remade")).toBeInTheDocument();
+    expect(screen.getByText("Remade as you asked - have a look before you approve.")).toBeInTheDocument();
+  });
+
+  it("tells another teacher it was remade after a flag, not that they asked", async () => {
+    api.review.mockResolvedValue(reviewWith([picture("p1", "s-1"), remadeBy("t-colleague")]));
+    await open();
+
+    expect(await screen.findByText("Remade")).toBeInTheDocument();
+    expect(screen.getByText("Remade after a flag - have a look before you approve.")).toBeInTheDocument();
+    expect(screen.queryByText(/as you asked/)).not.toBeInTheDocument();
+  });
+
+  it("is not marked once it has been approved", async () => {
+    api.review.mockResolvedValue(reviewWith([picture("p1", "s-1"), remadeBy("t-1", "approved")]));
+    await open();
+
+    expect(screen.queryByText("Remade")).not.toBeInTheDocument();
+  });
+
+  it("marks nothing the server never remade", async () => {
+    api.review.mockResolvedValue(
+      reviewWith([{ ...picture("p1", "s-1"), requestedBy: "t-1", remadeAt: null } as LessonMediaItem]),
+    );
+    await open();
+
+    expect(screen.queryByText("Remade")).not.toBeInTheDocument();
+  });
+});

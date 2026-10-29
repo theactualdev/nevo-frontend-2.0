@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { MediaTile, PlayButton, duration, useNarrationSampler } from "@/components/teacher/Media/MediaPieces";
 import { cn } from "@/lib/utils";
-import { plural, type MediaRow, type MediaView } from "./reviewModel";
+import { plural, wasRemade, type MediaRow, type MediaView } from "./reviewModel";
 
 /**
  * C07k step 1's pictures and narration (SCRUM-286; design 82c213b, 23 Oct).
@@ -61,10 +61,11 @@ export function StepMedia({
 }: {
   media: MediaView;
   /**
-   * Items this teacher flagged and sent back in this visit. One that is
-   * waiting again is the remake, and says so (design 11; Lydia, 26 Oct: "A
-   * teacher who flagged something and sees an identical picture will either
-   * flag it again or assume we ignored them").
+   * Items this teacher flagged and sent back in this visit, beside the
+   * server's own `remadeAt` (see `wasRemade`). One that is waiting again is
+   * the remake, and says so (design 11; Lydia, 26 Oct: "A teacher who flagged
+   * something and sees an identical picture will either flag it again or
+   * assume we ignored them").
    */
   remade?: ReadonlySet<string>;
   flagged: ReadonlySet<string>;
@@ -110,9 +111,8 @@ export function StepMedia({
   const shownRecordings = allRecordings ? recordings : recordings.slice(0, RECORDINGS_SHOWN);
   const flaggedPictures = pictures.filter((p) => flagged.has(p.item.id)).length;
   const flaggedRecordings = recordings.filter((r) => flagged.has(r.item.id)).length;
-  /** Back from a remake this teacher asked for, and waiting for a look. */
-  const isRemade = (row: MediaRow) =>
-    remade.has(row.item.id) && row.item.status === "awaiting_review";
+  /** Back from a remake, and waiting for a look - whoever asked for it. */
+  const isRemade = (row: MediaRow) => wasRemade(row.item, remade);
 
   // Once approved, a flag has nothing left to act on.
   const canFlag = (row: MediaRow) => !approved && row.item.status === "awaiting_review" && !working;

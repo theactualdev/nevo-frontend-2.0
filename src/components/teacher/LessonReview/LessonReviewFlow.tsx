@@ -16,6 +16,7 @@ import {
   rewriteRows,
   rowResolved,
   signoffLine,
+  wasRemade,
   WHY_FLAGGED,
   type AttentionRow,
   type ChecksView,
@@ -23,6 +24,7 @@ import {
   type RewriteRow,
 } from "./reviewModel";
 import { StepChecks } from "./StepChecks";
+import { getSession } from "@/lib/auth/session";
 
 /**
  * C07k, "Send a lesson in four calm steps" (Lydia, 19 Oct; design 534ba31), five
@@ -198,7 +200,15 @@ export function LessonReviewFlow({
     const refusal = refusedHere("media");
     const approving = flow.working === "media";
     const remake = media.awaiting.filter((m) => flaggedMedia.has(m.id)).map((m) => m.id);
-    const remadeWaiting = media.awaiting.some((m) => flow.remade?.has(m.id));
+    const visit = flow.remade ?? new Set<string>();
+    const remadeNow = media.awaiting.filter((m) => wasRemade(m, visit));
+    const remadeWaiting = remadeNow.length > 0;
+    // "As you asked" only to whoever asked: since 6b5d496 the mark reaches
+    // every teacher reviewing this lesson, and `requestedBy` says whose it was.
+    const me = getSession()?.userId;
+    const remadeForMe = remadeNow.some(
+      (m) => visit.has(m.id) || (m.requestedBy !== undefined && m.requestedBy === me),
+    );
     const approve = media.awaiting.filter((m) => !flaggedMedia.has(m.id)).map((m) => m.id);
     const kinds = new Set(media.awaiting.map((m) => m.kind));
     const shown = media.pictures.length + media.recordings.length;
@@ -220,7 +230,9 @@ export function LessonReviewFlow({
             ? remake.length > 0
               ? `${remake.length} flagged - Nevo will remake ${remake.length === 1 ? "it" : "those"}; the rest go as they are.`
               : remadeWaiting
-                ? "Remade as you asked - have a look before you approve."
+                ? remadeForMe
+                  ? "Remade as you asked - have a look before you approve."
+                  : "Remade after a flag - have a look before you approve."
                 : "One press approves everything here."
             : !media.exists
               ? next
