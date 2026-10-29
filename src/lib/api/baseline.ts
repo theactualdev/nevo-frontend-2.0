@@ -83,6 +83,20 @@ export interface BaselineTrial {
    * to derive words per minute; the device never does (rule 3).
    */
   readingWordCount?: number;
+  /**
+   * What a Word Conflict trial's word said, and so the response it asks for
+   * (Teslim, ed123cb): LEFT or RIGHT, required on every `inhibition` trial.
+   * The server marks the trial itself against it - "marks responses itself
+   * rather than trusting correct from the device". Absent on every other
+   * dimension.
+   */
+  target?: "LEFT" | "RIGHT";
+  /**
+   * One of Word Conflict's eight practice trials (ed123cb: "Practice feedback
+   * only; excluded from baseline scoring"). Sent only where the trial was
+   * one; absent is the contract's false.
+   */
+  practice?: boolean;
 }
 
 /**

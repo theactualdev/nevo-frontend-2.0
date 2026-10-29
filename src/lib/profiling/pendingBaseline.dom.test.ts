@@ -560,3 +560,46 @@ describe("two flushes for the same child at once", () => {
     await amaras;
   });
 });
+
+/*
+ * ed123cb (Teslim, 29 Oct) refuses a whole run whose Word Conflict is not all
+ * forty trials - eight practice, thirty-two scored, each with its target. A
+ * senior-band run parked before it holds the thirty-two with neither, and the
+ * practice was never kept, so retried as it was it would be refused on every
+ * flush for the week it is kept, and the rest of the child's baseline with it.
+ */
+describe("a senior-band run parked before ed123cb", () => {
+  const conflict = Array.from({ length: 32 }, (_, i) => ({
+    dimension: "inhibition",
+    condition: i % 2 ? "congruent" : "incongruent",
+    response: i % 4 < 2 ? "left" : "right",
+    correct: true,
+    responseTimeMs: 600,
+    probeItemId: null,
+  }));
+
+  it("resends, without the Word Conflict the server can no longer take", async () => {
+    const submit = vi.spyOn(baselineApi, "submitTrials").mockResolvedValue(true);
+    holdBaseline("sess-ss", [...TRIALS, ...conflict], null, { ageBand: "senior_secondary" });
+    signInAs("child-ss");
+
+    await expect(flushPendingBaseline("child-ss", "sess-ss")).resolves.toBe(true);
+
+    expect(submit).toHaveBeenCalledWith("sess-ss", TRIALS, { ageBand: "senior_secondary" });
+    expect(readPendingBaseline()).toBeNull();
+  });
+
+  it("sends a run built since whole, all forty with it", async () => {
+    const submit = vi.spyOn(baselineApi, "submitTrials").mockResolvedValue(true);
+    const forty = [
+      ...conflict.slice(0, 8).map((t) => ({ ...t, practice: true, target: t.response === "left" ? "LEFT" : "RIGHT" })),
+      ...conflict.map((t) => ({ ...t, target: t.response === "left" ? "LEFT" : "RIGHT" })),
+    ] as typeof conflict;
+    holdBaseline("sess-ss2", [...TRIALS, ...forty], null, { ageBand: "senior_secondary" });
+    signInAs("child-ss2");
+
+    await expect(flushPendingBaseline("child-ss2", "sess-ss2")).resolves.toBe(true);
+
+    expect(submit).toHaveBeenCalledWith("sess-ss2", [...TRIALS, ...forty], { ageBand: "senior_secondary" });
+  });
+});
