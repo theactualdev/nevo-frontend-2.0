@@ -51,9 +51,13 @@ import type { Back } from "../back";
  * ships without its button - no route sets a date of birth - so the card
  * says what to do instead: agree one date with the parent, then send it to
  * support. Without that, it would be the dead end it replaced.
- * "We've let {parent} know the dates still don't match" waits for the notice
- * Teslim is asked for: today the server tells the parent nothing after their
- * own second check, and Lydia wants that notice rather than the line alone.
+ * "We've let {parent} know the dates still don't match" is true since
+ * Teslim's ed123cb (29 Oct): when the parent's second check leaves the hold
+ * standing, the server tells the school and every linked parent. It stamps no
+ * `parentNotifiedAt` for that notice, so the line rests on the stage itself -
+ * this card exists only after the parent's own second check - and on the
+ * server's `differs`: dates that agree but still hold (outside the enrolled
+ * age band) don't "still not match", so the line isn't said of them.
  */
 
 const SUPPORT = "support@nevolearning.com";
@@ -491,10 +495,15 @@ function BothCheckedCard({ check, person }: { check: AgeCheck; person: Person })
         </p>
       </div>
 
-      {removal ? (
+      {check.differs || removal ? (
         <p className="m-0 mt-4 border-t border-nevo-near-black/8 pt-3.5 text-[13.5px] leading-[1.55] text-nevo-near-black/66">
-          If it isn&rsquo;t settled, {person.first}&rsquo;s record is removed on{" "}
-          <strong className="font-semibold text-nevo-near-black">{removal}</strong>.
+          {check.differs ? `We’ve let ${parent} know the dates still don’t match. ` : null}
+          {removal ? (
+            <>
+              If it isn&rsquo;t settled, {person.first}&rsquo;s record is removed on{" "}
+              <strong className="font-semibold text-nevo-near-black">{removal}</strong>.
+            </>
+          ) : null}
         </p>
       ) : null}
     </li>

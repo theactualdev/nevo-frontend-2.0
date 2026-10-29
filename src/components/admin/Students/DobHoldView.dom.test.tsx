@@ -184,12 +184,22 @@ describe("both checks done and it still holds (S5, design cb527bf)", () => {
     expect(said).toMatch(
       /You and Mrs\. Adeyemi together\. Agree Tunde’s real date between you, then send it to us at support@nevolearning\.com\./,
     );
-    expect(said).toMatch(/Tunde’s record is removed on 19 November 2026\./);
+    // Since ed123cb the server tells the parent when their second check leaves it held.
+    expect(said).toMatch(
+      /We’ve let Mrs\. Adeyemi know the dates still don’t match\. If it isn’t settled, Tunde’s record is removed on 19 November 2026\./,
+    );
     // Held from the frame: no roster route sets the date, and no day count is ours to give.
     expect(screen.queryByRole("link", { name: /Set the agreed date/ })).toBeNull();
     expect(said).not.toMatch(/days from today/);
-    // The server tells the parent nothing after their own second check.
+  });
+
+  it("doesn't say the dates still don't match when the server says they agree", async () => {
+    // Agreeing dates can still hold - outside the enrolled age band.
+    held.mockResolvedValue([both({ differs: false })]);
+    render(<DobHoldView />);
+    const said = (await card()).textContent ?? "";
     expect(said).not.toMatch(/We’ve let/);
+    expect(said).toMatch(/Tunde’s record is removed on 19 November 2026\./);
   });
 
   it("says where the agreed date goes - support, by email, with the child named", async () => {
