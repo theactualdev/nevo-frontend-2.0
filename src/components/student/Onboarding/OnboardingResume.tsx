@@ -8,6 +8,7 @@ import { useLiveQuery } from "@/hooks/useLiveQuery";
 import {
   DOMAIN_PROBE,
   moduleCompleted,
+  moduleUnavailable,
   ONBOARDING_MODULES,
   probeApi,
   type LearningReadiness,
@@ -28,18 +29,24 @@ import {
   type DomainProbeOutcome,
 } from "@/components/student/Profiling/DomainProbeModule";
 import { ProfilingFlow } from "@/components/student/Profiling/ProfilingFlow";
+import { ProbeEndState } from "@/components/student/Profiling/ProbeEndState";
 import { QuestSegments } from "@/components/student/Profiling/QuestMap";
-import { HomeButton } from "@/components/student/Profiling/WarmUpRun";
 import { Letterbox } from "@/components/student/Shell/Letterbox";
 
 const HOME = "/student/dashboard";
+/** Where the nothing-state's "Go to my lessons" goes. */
+const LESSONS = "/student/lessons";
 /** The child's door, as `proxy.ts` sends a signed-out visitor to it. */
 const SIGN_IN = "/auth/login";
 
 /** The baseline's three, which the profiling run presents. */
 const BASELINE_MODULES = ONBOARDING_MODULES.filter((m) => m !== DOMAIN_PROBE);
 
-type Step = "baseline" | "probe" | "nothing";
+/**
+ * `done` is Module 4 already held by the server, said before the child goes
+ * on; `nothing` is the nothing-state (`ProbeEndState`).
+ */
+type Step = "baseline" | "probe" | "nothing" | "done";
 
 /** Any of the first three is still to do, as the server holds them. */
 function baselineLeft(readiness: LearningReadiness): boolean {
@@ -47,23 +54,30 @@ function baselineLeft(readiness: LearningReadiness): boolean {
 }
 
 /**
- * Where the server's answers start a child, on (`returnTo`, else Home) when
- * nothing is left, or null while they are still being read - and for a
- * Module 4 with no question bank, which is not a place to start but a move
- * on (`moveOn`). Nothing to ask while readiness still holds Module 4 owed
- * (`nothingToAsk`) is the nothing-state, as a failed read is: only the
- * server's `unavailable` moves a child on (Teslim, 21 Oct).
+ * Where the server's answers start a child: "already done" when nothing is
+ * left, or null while they are still being read - and for a Module 4 with no
+ * question bank, which is not a place to start but a move on (`moveOn`).
+ * Nothing to ask while readiness still holds Module 4 owed (`nothingToAsk`)
+ * is the nothing-state, as a failed read is: only the server's `unavailable`
+ * moves a child on (Teslim, 21 Oct).
  */
 function firstStep(
   readiness: LearningReadiness,
   plan: ProbePlan | null,
 ): Step | "home" | null {
-  if (readiness.complete) return "home";
+  /*
+   * Not "already done" when Module 4 is in only as `unavailable` - no bank,
+   * sent `completed: true` (Teslim, 19 Oct): it was never sat, so the child
+   * moves on unshown, as no bank always does.
+   */
+  if (readiness.complete) {
+    return moduleUnavailable(readiness, DOMAIN_PROBE) ? "home" : "done";
+  }
   if (!plan) return null;
   if (baselineLeft(readiness)) return "baseline";
   switch (plan.kind) {
     case "held":
-      return "home";
+      return "done";
     case "ask":
       return "probe";
     case "failed":
@@ -105,11 +119,22 @@ function afterModuleFour(outcome: DomainProbeOutcome): "home" | "nothing" {
  * THE SERVER SAYS WHAT IS LEFT; THIS DEVICE NEVER INFERS IT. Readiness
  * (`GET /api/v1/students/me/onboarding`), and then whether Module 4 has
  * anything to ask (`planProbe`), decide - both before anything is drawn:
- *   - all four in: on.
+ *   - all four in: "You've already done this part", then on - or straight
+ *     on when Module 4 is in only as no bank.
  *   - only Module 4 left: straight into it, then on.
  *   - any of the first three left: the profiling run, its trials sent for
- *     this child, then Module 4, then on. Its quest map has a stop for
- *     Module 4 only if Module 4 will run.
+ *     this child, then Module 4 - or "already done" if the server holds it -
+ *     then on. Its quest map has a stop for Module 4 only if Module 4 will
+ *     run.
+ *
+ * ALREADY DONE IS SAID, NOT SKIPPED (design 5bb9ee2, 28 Oct, BP-M4-AFTER-PIN:
+ * "a returning sign-in can land here; neither state is a dead end"). When the
+ * server holds Module 4 done - all four in on arrival, or the probe `held` -
+ * the child sees the frame's "already done" (`ProbeEndState`), and "Continue
+ * to Nevo" is the way on below. The frame calls it "the backend's 409"; there
+ * is no such 409 (the probe's two are `probe_subject_mismatch` and
+ * `probe_item_stale`), so it is shown on readiness `completed`, the server's
+ * own answer (Hub, 28 Oct). A run that has just sat Module 4 goes straight on.
  *
  * ON IS BACK TO THE PAGE THAT WAS REFUSED, else Home. On the 20 Oct
  * production run a child who tapped Start on a lesson finished the probe and
@@ -117,9 +142,9 @@ function afterModuleFour(outcome: DomainProbeOutcome): "home" | "nothing" {
  * `returnTo`, checked twice (`returnPathOf`, as it is sent and as it is
  * read), and every way out that means "onboarding is done" takes it: all
  * four in on arrival, Module 4 sat, Module 4 already held, and the one-time
- * move on for a Module 4 with no bank. Not the nothing-state's Home
- * button: that is the way out of a state that may be refused again, and it
- * goes Home. And once per tab per page (`claimReturn`, the 21 Oct on-screen
+ * move on for a Module 4 with no bank. Not the nothing-state's "Go to my
+ * lessons": that is the way out of a state that may be refused again, and it
+ * goes to the lessons. And once per tab per page (`claimReturn`, the 21 Oct on-screen
  * check): a page that still refuses after readiness says done sends the
  * child Home the second time, as before the way back, not round again.
  *
@@ -153,11 +178,11 @@ function afterModuleFour(outcome: DomainProbeOutcome): "home" | "nothing" {
  * the child gets the nothing-state - not a move on, and not the one-time
  * claim spent on it: Olayinka's order on those answers.
  *
- * A READ THAT FAILS IS NOT "NO BANK": it is the nothing-state, as it was - no
- * words (none is designed, and none is true for every cause) and the one way
- * out, Home, offered rather than taken - so a broken read is never passed off
- * as a probe with nothing in it. Not "you're done" either, which this device
- * cannot know.
+ * A READ THAT FAILS IS NOT "NO BANK": it is the nothing-state - the frame's
+ * "Nothing to do here right now" (5bb9ee2), which says no more than that
+ * nothing can be done here now, with its one way out, "Go to my lessons",
+ * offered rather than taken - so a broken read is never passed off as a move
+ * on. Not "already done" either, which this device cannot know.
  *
  * NO NOTICE, PIN OR YOU'RE IN. Those make an account, and this child has one.
  */
@@ -251,12 +276,24 @@ export function OnboardingResume({
     return null;
   }
 
-  if (step === "nothing") {
+  if (step === "nothing" || step === "done") {
     return (
       <Letterbox>
-        <div className="flex min-h-[100dvh] items-center justify-center bg-nevo-cream px-5 pb-10 sm:px-7">
-          <HomeButton onClick={() => router.replace(HOME)} />
-        </div>
+        {/* Module 4's own map, as on its question: three stops before it. */}
+        <QuestSegments.Provider
+          value={
+            plan?.kind === "unavailable"
+              ? BASELINE_MODULES.length
+              : ONBOARDING_MODULES.length
+          }
+        >
+          <ProbeEndState
+            end={step}
+            onGo={() =>
+              step === "done" ? setMoved("home") : router.replace(LESSONS)
+            }
+          />
+        </QuestSegments.Provider>
       </Letterbox>
     );
   }
@@ -312,11 +349,12 @@ export function OnboardingResume({
               return;
             }
             /*
-             * Nothing of Module 4 to present: on, once the baseline has gone,
-             * so that its `baseline_submitted` leaves on this stream rather
-             * than being dropped with it.
+             * Nothing of Module 4 to present: "already done" when the server
+             * holds it, else on - once the baseline has gone, so that its
+             * `baseline_submitted` leaves on this stream rather than being
+             * dropped with it.
              */
-            const to = plan?.kind === "held" ? "home" : moveOn();
+            const to = plan?.kind === "held" ? "done" : moveOn();
             void delivered.then(() => {
               if (!alive.current) return;
               profiling.flush();
