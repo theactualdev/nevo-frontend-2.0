@@ -1,7 +1,5 @@
 import type { BaselineRunContext, BaselineTrial } from "@/lib/api/baseline";
-import { reportClientError } from "@/lib/api/clientErrors";
 import { contractAgeBand, type BaselineDimension } from "./bands";
-import { PRACTICE_TRIALS, SCORED_TRIALS } from "./wordConflict";
 
 /**
  * Micro-behavioural capture for baseline profiling (SCRUM-104 frontend
@@ -484,6 +482,9 @@ function wordCount(value: unknown): number | null {
  *    refuses the whole run unless all forty are there: eight practice, eight
  *    scored of each condition and target, no target four times running. They
  *    used to be held back, when the contract had no practice marker (#887).
+ *    With NO `correct` (null): the device does not mark the tap (Lydia, 29
+ *    Oct: "send the raw responses and do not compute correctness on your
+ *    side"), and the module records none to pass on.
  *
  * Not carried, because `BaselineTrial` has no field for them: coordinates
  * (B14, above) and the intervals between the taps inside a recall.
@@ -653,41 +654,6 @@ export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
     }
   }
   return trials;
-}
-
-/** A run's Word Conflict trials as ed123cb takes them: all forty, each with its target. */
-function wordConflictComplete(conflict: readonly BaselineTrial[]): boolean {
-  const practice = conflict.filter((t) => t.practice === true).length;
-  return (
-    practice === PRACTICE_TRIALS &&
-    conflict.length - practice === SCORED_TRIALS &&
-    conflict.every((t) => t.target === "LEFT" || t.target === "RIGHT")
-  );
-}
-
-/**
- * A parked run's trials, as they can be sent.
- *
- * A RUN PARKED BEFORE ed123cb CANNOT SEND ITS WORD CONFLICT. Its eight
- * practice trials were held back on the device and never kept, and its
- * thirty-two carry no target - and ed123cb refuses a whole run whose Word
- * Conflict is not all forty, each with its target. Retried as it was, such a
- * run would be refused on every flush for the week it is kept, and the
- * child's grid, pattern, reading and dots would go with it. Nothing can be
- * put back for the missing practice, so those `inhibition` trials stay on the
- * device and the rest of the run is sent; that it happened is reported, so
- * it is not silent. A run built since has all forty and goes whole.
- */
-export function sendableTrials(trials: BaselineTrial[]): BaselineTrial[] {
-  const conflict = trials.filter((t) => t.dimension === "inhibition");
-  if (conflict.length === 0 || wordConflictComplete(conflict)) return trials;
-  reportClientError(
-    new Error(
-      `Word Conflict held back from a parked baseline: ${conflict.length} trials in the shape before ed123cb`,
-    ),
-    "student",
-  );
-  return trials.filter((t) => t.dimension !== "inhibition");
 }
 
 /**
