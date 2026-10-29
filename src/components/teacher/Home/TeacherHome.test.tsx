@@ -156,16 +156,71 @@ describe("a signed-in teacher whose reads FAILED", () => {
     });
   });
 
-  it("marks every fixture region, so the signed-in e2e can see them", () => {
-    // Before this, the count here was 0 while the screen was full of another
-    // school's week - which is exactly what the e2e walk was written to catch.
+  /*
+   * SCRUM-200 (Lydia, 28 Oct): "Teacher screens must never show sample data
+   * when a read fails, because that is invented data presented as real." These
+   * used to assert the samples were MARKED; now there are none to mark.
+   */
+  it("shows no sample at all", () => {
+    const { container } = render(<TeacherHome />);
+
+    expect(container.querySelectorAll("[data-nevo-sample]")).toHaveLength(0);
+    expect(container.textContent).not.toMatch(/is a sample|are samples/);
+  });
+
+  it("says each read failed, with a way to try again", () => {
+    const { getByRole, getAllByRole } = render(<TeacherHome />);
+
+    expect(
+      getByRole("heading", { name: "We couldn’t load your class activity just now" }),
+    ).toBeInTheDocument();
+    expect(
+      getByRole("heading", { name: "We couldn’t load what needs your attention just now" }),
+    ).toBeInTheDocument();
+    expect(getAllByRole("button", { name: "Try again" })).toHaveLength(2);
+  });
+
+  it("does not call a failed flags read a calm morning", () => {
+    const { queryByText } = render(<TeacherHome />);
+
+    expect(queryByText("Nothing needs you right now")).toBeNull();
+  });
+
+  it("keeps a read that answered when the other failed", () => {
+    useTeacherHome.mockReturnValue({
+      pulse: [],
+      activity: [{ id: "a-1", title: "Fractions 3", detail: "E2E Probe Class", when: "Today", href: null }],
+      live: true,
+      failed: false,
+    });
+    const { getByText, queryByRole, container } = render(<TeacherHome />);
+
+    expect(getByText("Fractions 3")).toBeInTheDocument();
+    expect(queryByRole("heading", { name: /class activity just now/ })).toBeNull();
+    expect(container.querySelectorAll("[data-nevo-sample]")).toHaveLength(0);
+  });
+});
+
+describe("a signed-out visitor", () => {
+  beforeEach(() => {
+    useHasSession.mockReturnValue(false);
+    useTeacherFlags.mockReturnValue({ flags: [], live: false, failed: false });
+    useTeacherHome.mockReturnValue({
+      pulse: [],
+      activity: [],
+      live: false,
+      failed: false,
+    });
+  });
+
+  it("still sees the designed screen, and it is still marked", () => {
+    // The walkthrough is the fixtures' legitimate home. Marking them costs it
+    // nothing and keeps one rule rather than two.
     const { container } = render(<TeacherHome />);
 
     const marks = [...container.querySelectorAll("[data-nevo-sample]")].map((n) =>
       n.getAttribute("data-nevo-sample"),
     );
-
-    expect(marks.length).toBeGreaterThan(0);
     expect(marks).toContain("teacher:home-pulse");
     expect(marks).toContain("teacher:home-flags");
     expect(marks).toContain("teacher:home-activity");
@@ -187,26 +242,11 @@ describe("a signed-in teacher whose reads FAILED", () => {
       expect((node as HTMLElement).style.display).toBe("contents");
     }
   });
-});
 
-describe("a signed-out visitor", () => {
-  it("still sees the designed screen, and it is still marked", () => {
-    // The walkthrough is the fixtures' legitimate home. Marking them costs it
-    // nothing and keeps one rule rather than two.
-    useHasSession.mockReturnValue(false);
-    useTeacherFlags.mockReturnValue({ flags: [], live: false, failed: false });
-    useTeacherHome.mockReturnValue({
-      pulse: [],
-      activity: [],
-      live: false,
-      failed: false,
-    });
+  it("offers no Try again: nothing failed", () => {
+    const { queryByRole } = render(<TeacherHome />);
 
-    const { container } = render(<TeacherHome />);
-
-    expect(
-      container.querySelectorAll("[data-nevo-sample]").length,
-    ).toBeGreaterThan(0);
+    expect(queryByRole("button", { name: "Try again" })).toBeNull();
   });
 });
 

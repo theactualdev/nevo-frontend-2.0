@@ -82,10 +82,17 @@ describe("HomeClasses - when the read failed", () => {
     render(<HomeClasses />);
 
     expect(
-      screen.getByText(/couldn’t reach your school just now/i),
+      screen.getByRole("heading", { name: "We couldn’t load your classes just now" }),
     ).toBeInTheDocument();
     // Not "you have no classes", and emphatically not somebody else's.
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("offers a way to try again (SCRUM-200)", () => {
+    useTeacherClasses.mockReturnValue(state({ sample: true }));
+    render(<HomeClasses />);
+
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
   it("reassures rather than alarming", () => {

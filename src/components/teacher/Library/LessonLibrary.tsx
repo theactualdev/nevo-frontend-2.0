@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import { LIBRARY_CEILING } from "@/hooks/useLessonLibrary";
 import { MaybeSample } from "@/components/shared/SampleRegion";
+import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * Lesson Library (C06 / `Nevo Teacher Library` frame). Upload sits level with
@@ -168,6 +169,28 @@ export function LessonLibrary() {
     );
   }
 
+  /*
+   * THE READ FAILED. Signed in, this put eight sample lessons on the shelf
+   * under a line saying so - "invented data presented as real" (Lydia,
+   * SCRUM-200, 28 Oct). Before the empty shelf, which would claim there are
+   * none.
+   */
+  if (sample) {
+    return (
+      <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
+        <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+          Lesson Library
+        </h1>
+        <ReadFailed
+          as="h2"
+          title="We couldn’t load your lessons just now"
+          body="They haven’t gone anywhere. Try again in a moment."
+          className="mt-6"
+        />
+      </div>
+    );
+  }
+
   // Empty shelf - real for a live teacher with nothing uploaded yet.
   if (lessons.length === 0) {
     return (
@@ -198,11 +221,6 @@ export function LessonLibrary() {
       <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
         Lesson Library
       </h1>
-      {sample && (
-        <p className="mt-2 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/55 italic">
-          We couldn&rsquo;t reach your lessons just now, so these are samples.
-        </p>
-      )}
       {/* The read came back full: there may be lessons it could not return,
           and a library that drops them without saying so is the bug. */}
       {capped && (

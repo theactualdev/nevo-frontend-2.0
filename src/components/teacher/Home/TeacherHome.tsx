@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { useTeacherFlags } from "@/hooks/useTeacherFlags";
 import { useTeacherHome } from "@/hooks/useTeacherHome";
 import { SampleRegion } from "@/components/shared/SampleRegion";
+import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
 import { LiveClassPulse } from "./LiveClassPulse";
 import { LiveFlagCard } from "./LiveFlagCard";
 import { HomeClasses } from "./HomeClasses";
@@ -93,9 +94,13 @@ export function TeacherHome() {
     live: homeLive,
     failed: homeFailed,
   } = useTeacherHome();
-  // Fixtures back the designed screens and the failure fallback only.
-  const showFixtureHome = !homeLive && (!signedIn || homeFailed);
-  const showFixtureFlags = !flagsLive && (!signedIn || flagsFailed);
+  // Fixtures back the signed-out walkthrough ONLY. Signed in, a failed read
+  // says it failed (Lydia, SCRUM-200, 28 Oct): a sample standing in for a
+  // teacher's own morning "is invented data presented as real".
+  const showFixtureHome = !homeLive && !signedIn;
+  const showFixtureFlags = !flagsLive && !signedIn;
+  const homeUnread = signedIn && homeFailed && !homeLive;
+  const flagsUnread = signedIn && flagsFailed && !flagsLive;
   // A card this teacher has already opened is read, and leaves THEIR Home
   // (SCRUM-252; Lydia, 13 Oct: "clears the card from their own view only").
   const flags = noClasses ? [] : liveFlags.filter((f) => !f.seenByMe);
@@ -145,27 +150,11 @@ export function TeacherHome() {
           </>
         )}
 
-        {noClasses ? (
+        {noClasses && (
           <p className="mt-2.5 max-w-[560px] text-[15.5px] leading-[1.55] text-nevo-near-black/62">
             You don&rsquo;t have any classes yet. When your school adds you to
             one, your students&rsquo; week will show up here.
           </p>
-        ) : (
-          signedIn &&
-          (showFixtureHome || showFixtureFlags) && (
-            <p className="mt-2 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/55 italic">
-              {/* Names the sections that are ACTUALLY fixture. The two reads
-                  fail independently, and this line used to be gated on the
-                  home read alone - so when only the flags call failed, three
-                  invented children appeared under "Worth your attention" with
-                  nothing anywhere saying they were not real. */}
-              {showFixtureHome && showFixtureFlags
-                ? "We couldn’t read your class activity just now, so what’s below is a sample."
-                : showFixtureHome
-                  ? "We couldn’t read your class activity just now, so the pulse and recent activity are samples."
-                  : "We couldn’t read what needs your attention just now, so the flagged students below are a sample."}
-            </p>
-          )
         )}
 
         {/* C16a: the pulse leads - class weather first, specifics below.
@@ -175,6 +164,16 @@ export function TeacherHome() {
         {!noClasses &&
           (homeLive
             ? pulse.map((p) => <LiveClassPulse key={p.classId} pulse={p} />)
+            : homeUnread
+              ? (
+                  // One card for both: the pulse and the activity list are
+                  // one read, so they fail together.
+                  <ReadFailed
+                    title="We couldn’t load your class activity just now"
+                    body="The class pulse and recent activity show here. Nothing has changed for your students. Try again in a moment."
+                    className="mt-[22px] xl:mt-[26px]"
+                  />
+                )
             : showFixtureHome && (
                 /*
                  * MARKED, so the signed-in e2e walk, which asserts zero
@@ -214,6 +213,16 @@ export function TeacherHome() {
                   ))}
                 </div>
               </div>
+            ) : flagsUnread && !hasFlags ? (
+              /*
+               * NOT THE CALM CARD. "Nothing needs you right now" over a read
+               * that never answered is the claim C03 exists to make only
+               * when it is true - and not the sample children either.
+               */
+              <ReadFailed
+                title="We couldn’t load what needs your attention just now"
+                className="mt-[22px] xl:mt-[26px]"
+              />
             ) : hasFlags ? (
               <>
                 <div className="mt-[26px] flex items-center gap-2.5 xl:mt-8">
