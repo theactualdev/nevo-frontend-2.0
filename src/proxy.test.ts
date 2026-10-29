@@ -161,12 +161,20 @@ describe("the teacher console's guard", () => {
     expect(to.searchParams.get("next")).toBe("/teacher/lessons/l-1/review?section=3");
   });
 
-  it("does not take a child's or an admin's cookie as a teacher's", () => {
+  it("does not take a child's or a parent's cookie as a teacher's", () => {
     expect(destination("/teacher/dashboard", USER_ROLES.STUDENT)).toBe("/auth/teacher");
-    // There is no plain "admin": these are the two the backend sends.
-    expect(destination("/teacher/dashboard", USER_ROLES.SENCO_ADMIN)).toBe("/auth/teacher");
-    expect(destination("/teacher/dashboard", USER_ROLES.OTHER_ADMIN)).toBe("/auth/teacher");
     expect(destination("/teacher/dashboard", USER_ROLES.PARENT_GUARDIAN)).toBe("/auth/teacher");
+  });
+
+  /*
+   * T2/L9 (6b5d496): an admin may hold the Teacher permission, and the cookie
+   * cannot say which. Both admin roles reach the console's shell, which asks
+   * the server and sends the rest back (`useTeacherConsoleAccess`).
+   */
+  it("lets an admin's cookie through, for the shell to check the Teacher permission", () => {
+    // There is no plain "admin": these are the two the backend sends.
+    expect(destination("/teacher/dashboard", USER_ROLES.SENCO_ADMIN)).toBeNull();
+    expect(destination("/teacher/dashboard", USER_ROLES.OTHER_ADMIN)).toBeNull();
   });
 
   it("leaves help open to a teacher who cannot sign in", () => {

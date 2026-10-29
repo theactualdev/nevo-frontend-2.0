@@ -98,7 +98,10 @@ export function proxy(request: NextRequest) {
     if (PRE_AUTH_TEACHER_ROUTES.some((p) => pathname.startsWith(p))) {
       return NextResponse.next();
     }
-    if (!isTeacher) {
+    // An admin may hold the Teacher permission (T2/L9; backend 6b5d496). The
+    // cookie cannot say which do, so the console's shell asks the server and
+    // sends the rest back (`useTeacherConsoleAccess`).
+    if (!isTeacher && !isAdmin) {
       const url = new URL(SIGN_IN, request.url);
       // So the door can send them back where they were headed - query and all
       // (T217): a class's tab or a lesson's section lives there.

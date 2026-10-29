@@ -10,6 +10,8 @@ import { UnsavedChangesProvider } from "./UnsavedChanges";
 import { TeacherSidebar } from "./TeacherSidebar";
 import { BiggerScreen, PhoneBarProvider, PhoneShell } from "./PhoneShell";
 import { hasPhoneLayout } from "./phoneLayouts";
+import { useTeacherConsoleAccess } from "@/hooks/useTeacherConsoleAccess";
+import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * Teacher Console chrome: the nav rail plus the floating Ask Nevo drawer on
@@ -49,6 +51,8 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
   useSessionRefresh();
   // And leave when another tab signs this teacher out (C02).
   useSessionElsewhere();
+  // T2/L9: an admin is let in only with the Teacher permission.
+  const access = useTeacherConsoleAccess();
 
   // Bare, but still the teacher console's - its canvas is cream (globals.css).
   if (pathname.startsWith("/teacher/onboarding")) {
@@ -82,6 +86,35 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
    * markup is already right and nothing jumps when the page hydrates.
    */
   const phoneReady = hasPhoneLayout(pathname);
+
+  /*
+   * Nothing of the console until an admin is known to hold the Teacher
+   * permission: no rail, no Ask Nevo, and no page firing reads the server
+   * would refuse. A teacher never reaches this.
+   */
+  if (access !== "allowed") {
+    return (
+      <div
+        data-nevo-console="teacher"
+        className="flex h-dvh items-center justify-center bg-nevo-cream px-6 text-nevo-near-black"
+      >
+        {access === "failed" ? (
+          <ReadFailed
+            as="h1"
+            title="We couldn’t check your access just now"
+            body="Nothing has changed on your account. Try again in a moment."
+            className="w-full"
+          />
+        ) : (
+          <span
+            role="status"
+            aria-label="Checking your access"
+            className="size-6 rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]"
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     /* SCRUM-152's bar is console-wide by construction: it rides above the

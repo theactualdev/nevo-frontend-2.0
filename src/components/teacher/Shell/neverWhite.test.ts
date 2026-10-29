@@ -24,7 +24,9 @@ describe("the teacher console's canvas", () => {
 
   it("is marked on the shell, the bare onboarding route and the sign-in pages", () => {
     const shell = read("src", "components", "teacher", "Shell", "TeacherShell.tsx");
-    expect(shell.match(/data-nevo-console="teacher"/g)?.length).toBe(2);
+    // The console, the bare onboarding route, and the screen an admin waits
+    // on while the Teacher permission is checked (T2/L9).
+    expect(shell.match(/data-nevo-console="teacher"/g)?.length).toBe(3);
     expect(read("src", "app", "auth", "teacher", "layout.tsx")).toContain('data-nevo-console="teacher"');
   });
 });
