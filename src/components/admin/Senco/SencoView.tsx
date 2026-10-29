@@ -239,11 +239,16 @@ export function SencoView() {
      * dropped acknowledged rows on the client - so at a school with fifty
      * seen flags ahead of the open ones, the open ones never arrived, and
      * the card below said "Nothing needs your attention right now" to a
-     * SENCo with children waiting. The route has no open-only filter, so
-     * `allFlags` pages to a short page and says whether it got there.
+     * SENCo with children waiting. `allFlags` pages to a short page and says
+     * whether it got there.
+     *
+     * OPEN FLAGS ONLY (Teslim 9c35c95, 27 Oct). A flag whose evidence stopped
+     * holding closes, and a fresh one replaces it if the evidence changes -
+     * so reading closed ones listed the same child twice, and kept a closed
+     * flag "to look at" that the server's own count no longer has.
      */
     Promise.all([
-      intelligenceApi.allFlags(),
+      intelligenceApi.allFlags(10, { openOnly: true }),
       studentsApi.list(),
       classesApi.list(),
     ])

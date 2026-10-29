@@ -73,10 +73,12 @@ vi.mock("@/lib/api/students", () => ({
   studentsApi: { list: () => Promise.resolve([]) },
 }));
 /** One learner with a flag nobody has seen: D04's "Worth a glance" row. */
+const allFlagsCalls = vi.hoisted(() => [] as unknown[][]);
 vi.mock("@/lib/api/intelligence", () => ({
   intelligenceApi: {
-    allFlags: () =>
-      Promise.resolve({
+    allFlags: (...args: unknown[]) => {
+      allFlagsCalls.push(args);
+      return Promise.resolve({
         complete: true,
         flags: [
           {
@@ -88,7 +90,8 @@ vi.mock("@/lib/api/intelligence", () => ({
             acknowledged: false,
           },
         ],
-      }),
+      });
+    },
   },
 }));
 
@@ -125,6 +128,15 @@ describe("an admin without General Oversight", () => {
       expect(visibleText(container)).toMatch(/1 student has a flag nobody has marked as seen/),
     );
     expect(screen.queryByRole("link", { name: /Open Learning Support/ })).toBeNull();
+  });
+
+  it("counts open flags only - a closed one is out of the server's own count too (9c35c95)", async () => {
+    allFlagsCalls.length = 0;
+    const { container } = render(<OverviewView />);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/1 student has a flag nobody has marked as seen/),
+    );
+    expect(allFlagsCalls).toEqual([[10, { openOnly: true }]]);
   });
 
   it("keeps that link for an admin who can open Learning Support", async () => {

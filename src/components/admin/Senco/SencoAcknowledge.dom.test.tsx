@@ -16,6 +16,7 @@ import { SencoView } from "./SencoView";
 
 const acknowledgeFlag = vi.fn();
 const getFlags = vi.fn();
+const allFlagsArgs = vi.fn();
 /** Whether the paged read got to the end. Most tests: yes. */
 const complete = { value: true };
 
@@ -25,7 +26,10 @@ vi.mock("@/lib/api/intelligence", async (importOriginal) => {
     ...actual,
     intelligenceApi: {
       ...actual.intelligenceApi,
-      allFlags: async () => ({ flags: await getFlags(), complete: complete.value }),
+      allFlags: async (...args: unknown[]) => {
+        allFlagsArgs(...args);
+        return { flags: await getFlags(), complete: complete.value };
+      },
       acknowledgeFlag: (id: string) => acknowledgeFlag(id),
     },
   };
@@ -149,6 +153,14 @@ describe("SencoView reads every flag", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/Something worth a look \(late\)/));
     expect(visibleText(container)).toMatch(/\b1 to look at/);
     expect(visibleText(container)).not.toMatch(new RegExp(EMPTY));
+  });
+
+  it("reads open flags only - a closed flag is replaced, not still to look at (9c35c95)", async () => {
+    complete.value = true;
+    getFlags.mockResolvedValue([flag("now")]);
+    const { container } = render(<SencoView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/\b1 to look at/));
+    expect(allFlagsArgs).toHaveBeenCalledWith(10, { openOnly: true });
   });
 
   it("will not say nothing needs attention when it could not read every flag", async () => {
