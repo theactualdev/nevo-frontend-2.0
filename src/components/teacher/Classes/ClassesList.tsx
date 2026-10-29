@@ -5,6 +5,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { useTeacherHome } from "@/hooks/useTeacherHome";
 import { SampleRegion } from "@/components/shared/SampleRegion";
+import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
 import { SCHOOL_LINE } from "@/lib/mocks/teacherClasses";
 import { cn } from "@/lib/utils";
 
@@ -97,7 +98,7 @@ export function ClassesList() {
             before their school replaced it. That is the exact flash
             `useTeacherClasses.loading` was added for, and this was the one
             consumer still reading `live` alone. */}
-        {(identity?.school ?? (!live && !loading && SCHOOL_LINE)) && (
+        {(identity?.school ?? (!live && !loading && !sample && SCHOOL_LINE)) && (
           <p className="mt-[7px] text-sm text-nevo-near-black/60 xl:mt-2 xl:text-[15px]">
             {identity?.school ?? SCHOOL_LINE}
           </p>
@@ -116,27 +117,20 @@ export function ClassesList() {
           </div>
         )}
 
-        {/* Sample data must never pass for a roster: if the live list didn't
-            arrive, say so plainly rather than letting fixtures stand in
-            silently. */}
+        {/* Sample data must never pass for a roster, and signed in it is not
+            shown at all now - not even labelled (Lydia, SCRUM-200, 28 Oct). */}
         {sample && (
-          <div className="mt-3.5 flex max-w-[560px] items-start gap-2.5 rounded-[10px] bg-nevo-violet/14 px-[14px] py-3">
-            <span className="mt-px shrink-0 text-nevo-navy">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 8h.01M11 12h1v4h1" />
-              </svg>
-            </span>
-            <span className="text-[13.5px] leading-[1.5] text-nevo-near-black/78">
-              We couldn&rsquo;t reach your school just now, so these are sample
-              classes.
-            </span>
-          </div>
+          <ReadFailed
+            as="h2"
+            title="We couldn’t load your classes just now"
+            body="They haven’t gone anywhere. Try again in a moment."
+            className="mt-6"
+          />
         )}
 
         {/* Desktop grid */}
         <div className="mt-6 hidden grid-cols-3 gap-4 xl:grid">
-          {!loading && classes.length > 0 && (
+          {!loading && !sample && classes.length > 0 && (
             <SampleRegion kind="teacher:classes-list">
               {classes.map((c) => (
                 <Link
@@ -183,7 +177,7 @@ export function ClassesList() {
 
         {/* Tablet: stacked horizontal cards */}
         <div className="mt-5 flex flex-col gap-3 xl:hidden">
-          {!loading && classes.length > 0 && (
+          {!loading && !sample && classes.length > 0 && (
             <SampleRegion kind="teacher:classes-list">
               {classes.map((c) => (
                 <Link

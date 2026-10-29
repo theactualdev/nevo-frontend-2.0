@@ -106,29 +106,32 @@ describe("the class selector", () => {
   });
 });
 
+/*
+ * SCRUM-200 (Lydia, 28 Oct): "Teacher screens must never show sample data when
+ * a read fails, because that is invented data presented as real." This used to
+ * offer the fixture three and their invented insights under a notice.
+ */
 describe("when the class read has failed", () => {
-  it("says the insights are samples, not the teacher's week", () => {
+  it("offers no fixture class and shows nothing marked as a sample", () => {
     useTeacherClasses.mockReturnValue(state({ sample: true }));
 
-    // `visibleText` rather than `getByText`: the notice carries `&rsquo;` and
-    // `&ndash;`, which React splits into separate text nodes, so a plain
-    // matcher misses a sentence that is plainly on screen.
     const { container } = render(<InsightsView />);
 
-    expect(visibleText(container)).toMatch(
-      /these are sample classes and sample insights/i,
-    );
+    expect(screen.queryByRole("button", { name: FIXTURE_CLASS })).not.toBeInTheDocument();
+    expect(container.querySelector("[data-nevo-sample]")).toBeNull();
+    expect(visibleText(container)).not.toMatch(/sample/i);
   });
 
-  it("marks the invented insights so the signed-in e2e can see them", () => {
-    // `SampleRegion` renders `display: contents`, so this changes nothing on
-    // screen and everything for the one assertion that guards against it.
+  it("says the classes couldn't be loaded, with a way to try again", () => {
     useTeacherClasses.mockReturnValue(state({ sample: true }));
 
-    const { container } = render(<InsightsView />);
-    fireEvent.click(screen.getByRole("button", { name: FIXTURE_CLASS }));
+    render(<InsightsView />);
 
-    expect(container.querySelector("[data-nevo-sample]")).not.toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "We couldn’t load your classes just now" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText(/Pick one of your classes above/)).not.toBeInTheDocument();
   });
 });
 
@@ -162,7 +165,8 @@ describe("the class pills on the landing", () => {
     );
 
   it("are marked when they are the fixture three", () => {
-    useTeacherClasses.mockReturnValue(state({ sample: true }));
+    // The signed-out walkthrough, the one place the fixture three are offered.
+    useTeacherClasses.mockReturnValue(state());
     render(<InsightsView />);
 
     expect(screen.getByRole("button", { name: FIXTURE_CLASS })).toBeInTheDocument();

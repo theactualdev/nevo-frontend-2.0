@@ -52,10 +52,14 @@ export function ClassRoute({
   // roster for a second or two before their own class replaced it. Signed
   // out, `useLiveQuery` reports `loading: false` immediately, so the designed
   // walkthrough is untouched by this guard.
-  if (!live && !loading && fixture)
+  //
+  // SIGNED OUT ONLY. Signed in, a failed list read stood the fixture's
+  // invented roster in for a teacher's own class, marked as a sample - "that
+  // is invented data presented as real" (Lydia, SCRUM-200, 28 Oct). It falls
+  // through to the failed-read card below instead.
+  if (!live && !loading && fixture && !getToken())
     return (
       <SampleRegion kind="teacher:class-detail">
-        {/* Signed in, this is a failed read standing in - never a code. */}
         <ClassDetail klass={fixture} />
       </SampleRegion>
     );
