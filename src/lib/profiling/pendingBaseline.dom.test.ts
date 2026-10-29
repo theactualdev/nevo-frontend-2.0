@@ -580,12 +580,12 @@ describe("a senior-band run parked before ed123cb", () => {
 
   it("resends, without the Word Conflict the server can no longer take", async () => {
     const submit = vi.spyOn(baselineApi, "submitTrials").mockResolvedValue(true);
-    holdBaseline("sess-ss", [...TRIALS, ...conflict], null, { ageBand: "ss" });
+    holdBaseline("sess-ss", [...TRIALS, ...conflict], null, { ageBand: "senior_secondary" });
     signInAs("child-ss");
 
     await expect(flushPendingBaseline("child-ss", "sess-ss")).resolves.toBe(true);
 
-    expect(submit).toHaveBeenCalledWith("sess-ss", TRIALS, { ageBand: "ss" });
+    expect(submit).toHaveBeenCalledWith("sess-ss", TRIALS, { ageBand: "senior_secondary" });
     expect(readPendingBaseline()).toBeNull();
   });
 
@@ -595,11 +595,11 @@ describe("a senior-band run parked before ed123cb", () => {
       ...conflict.slice(0, 8).map((t) => ({ ...t, practice: true, target: t.response === "left" ? "LEFT" : "RIGHT" })),
       ...conflict.map((t) => ({ ...t, target: t.response === "left" ? "LEFT" : "RIGHT" })),
     ] as typeof conflict;
-    holdBaseline("sess-ss2", [...TRIALS, ...forty], null, { ageBand: "ss" });
+    holdBaseline("sess-ss2", [...TRIALS, ...forty], null, { ageBand: "senior_secondary" });
     signInAs("child-ss2");
 
     await expect(flushPendingBaseline("child-ss2", "sess-ss2")).resolves.toBe(true);
 
-    expect(submit).toHaveBeenCalledWith("sess-ss2", [...TRIALS, ...forty], { ageBand: "ss" });
+    expect(submit).toHaveBeenCalledWith("sess-ss2", [...TRIALS, ...forty], { ageBand: "senior_secondary" });
   });
 });

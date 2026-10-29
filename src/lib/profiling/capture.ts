@@ -591,7 +591,7 @@ export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
          * tap against. Only on an `inhibition` trial whose word is known.
          */
         const target =
-          dimension === "inhibition" && (p.word === "left" || p.word === "right")
+          act === "inhibition" && (p.word === "left" || p.word === "right")
             ? (p.word.toUpperCase() as "LEFT" | "RIGHT")
             : null;
         trials.push({
