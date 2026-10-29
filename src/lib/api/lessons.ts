@@ -516,6 +516,26 @@ export interface LessonReview {
   guidedStepsContentHash?: string;
   guidedStepsApproval?: ReviewSignoff | null;
   pendingGuidedStepCount?: number;
+  /**
+   * A calculation step's reveal parts (Teslim 8c4ccef): the pieces a child is
+   * given one at a time when the step is slowed down. Parts copied word for
+   * word from the upload are authored and never listed; the rest wait here
+   * for one press, and a child gets none of them until then. They do NOT
+   * hold back Assign - `readyToAssign` and `reviewComplete` ignore them.
+   */
+  calculationParts?: CalculationPartsReviewItem[];
+  calculationPartsContentHash?: string;
+  calculationPartsApproval?: ReviewSignoff | null;
+}
+
+/** One calculation step's reveal parts, in order (8c4ccef). */
+export interface CalculationPartsReviewItem {
+  segmentId: string;
+  segmentTitle: string | null;
+  stepId: string;
+  prompt: string;
+  parts: string[];
+  reviewStatus: "pending_review" | "approved";
 }
 
 /** A choice's value, which the key names, and its label, which a child reads. */
@@ -577,7 +597,7 @@ export interface GuidedStepsReviewItem {
  */
 export interface ReviewSignoff {
   id: string;
-  kind: "key_points" | "rewrites" | "guided_steps" | "checks";
+  kind: "key_points" | "rewrites" | "guided_steps" | "checks" | "calculation_parts";
   approvedBy: string | null;
   approvedByName: string;
   approvedAt: string;
@@ -1230,6 +1250,17 @@ export const lessonsApi = {
   approveAllGuidedSteps: (lessonId: string, expectedContentHash: string) =>
     api.post<LessonReview>(
       `/api/v1/lessons/${lessonId}/guided-steps/approve-all`,
+      { expectedContentHash },
+    ),
+
+  /**
+   * Every waiting calculation reveal part, in one press (8c4ccef). There is no
+   * per-step route: a teacher accepts them all or none. 409
+   * `no_calculation_parts_to_approve` once nothing waits.
+   */
+  approveAllCalculationParts: (lessonId: string, expectedContentHash: string) =>
+    api.post<LessonReview>(
+      `/api/v1/lessons/${lessonId}/calculation-parts/approve-all`,
       { expectedContentHash },
     ),
 
