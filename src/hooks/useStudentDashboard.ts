@@ -5,6 +5,7 @@ import type { Assignment } from "@/lib/api/assignments";
 import {
   studentsApi,
   type DashboardProgressRow,
+  type LearningWork,
   type StudentIdentity,
 } from "@/lib/api/students";
 import { useLiveQuery } from "./useLiveQuery";
@@ -21,6 +22,11 @@ export interface StudentDashboard {
   student: StudentIdentity;
   assignments: Assignment[];
   recentProgress: DashboardProgressRow[];
+  /**
+   * The engine's next work, a due review before new work; null until
+   * onboarding is in. Home reads its review (SCRUM-75). See `LearningWork`.
+   */
+  nextWork?: LearningWork | null;
 }
 
 export function useStudentDashboard() {
