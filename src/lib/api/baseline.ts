@@ -49,7 +49,27 @@ export interface RecalibratePrompt {
    */
   doneToday?: boolean;
   answeredAt?: string | null;
+  /**
+   * The motor-speed day's task (Teslim, ed123cb): "the read returns motorTask:
+   * {sampleCount: 8, practiceCount: 2}". Present only on a motor-speed day,
+   * and only from a deployment that takes the timings (`motorTaskDone`).
+   */
+  motorTask?: { sampleCount: number; practiceCount: number } | null;
 }
+
+/**
+ * What a motor-speed warm-up day sends to the prompt's own endpoint
+ * (`BaselinePromptAnswer`, ed123cb): the step's timings, in order, with the
+ * device - "Send the eight timings as motorSamplesMs with formFactor to the
+ * warm-up response route; the server stores the median of the six scored
+ * taps" - or that the task was skipped, which the route also takes.
+ */
+export type MotorTaskAnswer =
+  | {
+      motorSamplesMs: number[];
+      formFactor: NonNullable<BaselineRunContext["formFactor"]>;
+    }
+  | { motorStepSkipped: true };
 
 /**
  * One trial, as it happened (`BaselineTrial`, B9). Not marked by the server's
@@ -209,6 +229,21 @@ export const baselineApi = {
   deviceTaskDone: (studentId: string) =>
     withRetry(() =>
       api.post(`/api/baseline/recalibrate-prompt/${studentId}/response`, {}),
+    ),
+
+  /**
+   * A motor-speed day, done or skipped (ed123cb): the timings to the same
+   * endpoint, which is both the measurement and the account's word that the
+   * day happened. Nothing goes to `/trials` for it - the route takes
+   * `motorSamplesMs`, "not scored trials, for a motor-speed warm-up". It
+   * replaces the skipped trial a motor day sent before (#882).
+   */
+  motorTaskDone: (studentId: string, answer: MotorTaskAnswer) =>
+    withRetry(() =>
+      api.post(
+        `/api/baseline/recalibrate-prompt/${studentId}/response`,
+        answer,
+      ),
     ),
 
   /**
