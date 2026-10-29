@@ -50,6 +50,27 @@ describe("JoinLanding when the lookup fails", () => {
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 
+  it("reads a teacher link whose reserved account changed as no longer valid (ed123cb)", async () => {
+    // Can't be accepted until an administrator reviews it: D19's invalid
+    // state, which sends them to their school - not "try again".
+    lookupJoin.mockRejectedValueOnce(
+      new ApiError(409, "conflict", { detail: { code: "invited_teacher_conflict" } }),
+    );
+    const { container } = render(<JoinLanding token="tok" />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/no longer valid/));
+    expect(visibleText(container)).toMatch(/Contact your school administrator/);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("doesn't read any other 409 as the link's answer", async () => {
+    lookupJoin.mockRejectedValueOnce(new ApiError(409, "conflict", { detail: { code: "something_else" } }));
+    const { container } = render(<JoinLanding token="tok" />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/couldn.t check/));
+    expect(visibleText(container)).not.toMatch(/no longer valid/);
+  });
+
   it("reads the contract's own refusal as a dead link, not an outage", async () => {
     // 422 is the only error `GET /join/{token}` declares.
     lookupJoin.mockRejectedValueOnce(new ApiError(422, "unreadable"));
