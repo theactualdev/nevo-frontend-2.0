@@ -1,4 +1,4 @@
-import type { AgeCheck } from "@/lib/api/ageChecks";
+import { holdStage, type AgeCheck } from "@/lib/api/ageChecks";
 import type { AttentionFlag } from "@/lib/api/intelligence";
 import type { ClassActivity } from "@/lib/api/school";
 import type { AdminStudentRow } from "@/lib/api/students";
@@ -81,6 +81,11 @@ export function nameClasses(names: string[]): string {
   );
 }
 
+/** "1 student is on hold for a date of birth check" - one wording, early and live. */
+function holdTitle(n: number): string {
+  return `${n} ${n === 1 ? "student is" : "students are"} on hold for a date of birth check`;
+}
+
 export function glanceRows(
   students: AdminStudentRow[] | null,
   flags: AttentionFlag[] | null,
@@ -113,7 +118,7 @@ export function glanceRows(
     if (n > 0) {
       rows.push({
         key: "dob",
-        title: `${n} ${n === 1 ? "student is" : "students are"} on hold for a date of birth check`,
+        title: holdTitle(n),
         sub: "Their accounts can’t start until the date is confirmed or corrected.",
         action: "Open date of birth checks",
         href: "/admin/students/date-of-birth",
@@ -154,4 +159,50 @@ export function glanceRows(
   }
 
   return rows;
+}
+
+/**
+ * Whether a held child is waiting on the SCHOOL: not re-checked yet, or both
+ * checks done and the dates still differ, which the school and the parent
+ * settle together (D30 S5). A hold waiting only on the parent asks nothing
+ * of the school, and "it needs you" would be untrue of it.
+ */
+export function holdsNeedSchool(holds: AgeCheck[] | null): boolean {
+  return !!holds && holds.some((h) => holdStage(h) !== "parent");
+}
+
+/**
+ * The early Overview's one "Worth a glance" row (D04, cb527bf, 27 Oct). A
+ * child held in week one surfaces from day one, not once the school is live:
+ * a deletion nobody can see coming is what must not happen. Only this row -
+ * the live rows have nothing to say to a school that hasn't started.
+ *
+ * One child is named, from the roster this page already reads (the server's
+ * first name if the roster can't). More than one keep the live row's words;
+ * the frame draws only the one.
+ */
+export function earlyGlanceRows(
+  students: AdminStudentRow[] | null,
+  holds: AgeCheck[] | null,
+): GlanceRow[] {
+  if (!holds || holds.length === 0) return [];
+  const one = holds.length === 1 ? holds[0] : null;
+  const name = one
+    ? students?.find((s) => s.id === one.studentId)?.name?.trim() ||
+      one.studentFirstName?.trim() ||
+      null
+    : null;
+  return [
+    {
+      key: "dob",
+      title: holdTitle(holds.length),
+      sub: name
+        ? `${name} can’t start until the date is confirmed or corrected.${
+            holdsNeedSchool(holds) ? " It’s waiting on you, even this early." : ""
+          }`
+        : "Their accounts can’t start until the date is confirmed or corrected.",
+      action: "Open date of birth checks",
+      href: "/admin/students/date-of-birth",
+    },
+  ];
 }
