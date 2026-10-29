@@ -1275,3 +1275,44 @@ describe("a lesson nobody has signed off", () => {
     await vi.waitFor(() => expect(create).toHaveBeenCalled());
   });
 });
+
+/**
+ * The library says which lessons are signed off (Teslim 294584b), so step 1
+ * leaves the others off, as it does a lesson still being read.
+ */
+describe("the library's own sign-off", () => {
+  it("leaves a lesson nobody has signed off off the list, and says so", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: [
+        ...LESSONS,
+        { id: "l-2", title: "Osmosis", meta: "Biology", kind: "normal", reviewComplete: false },
+      ],
+      live: true,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    render(<AssignWizard />);
+
+    expect(screen.getByRole("button", { name: /Fractions 3/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Osmosis/ })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Lessons you haven’t finished reviewing aren’t listed here. Review them from your library first.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind when every lesson is signed off", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: [{ ...LESSONS[0], reviewComplete: true }],
+      live: true,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    render(<AssignWizard />);
+
+    expect(screen.queryByText(/aren’t listed here/)).not.toBeInTheDocument();
+  });
+});
