@@ -6,7 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { authApi, teamApi } from "@/lib/api";
 import { invitesApi } from "@/lib/api/invites";
-import { ApiError, apiErrorCode } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/client";
+import { INVITE_CONFLICT_COPY, isInviteConflict } from "@/lib/auth/linkAnswer";
 import {
   DOOR_HREF,
   DOOR_LABEL,
@@ -213,7 +214,14 @@ export function SetPasswordForm({
       .then((found) => {
         if (current) setJoinSchool(found.schoolName ?? null);
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        // Since ed123cb the lookup says so too: show it before the teacher
+        // fills in a password the accept would refuse. Anything else stays
+        // quiet here, as before - the accept is where it is answered.
+        if (current && isInviteConflict(err)) {
+          setPhase((p) => (p === "form" ? "mismatch" : p));
+        }
+      });
     return () => {
       current = false;
     };
@@ -326,15 +334,12 @@ export function SetPasswordForm({
        * has since moved school, changed role or address, or stopped being
        * "invited", the accept answers 409 `invited_teacher_conflict` - and
        * nothing is written, so this same link answers the same way every
-       * time. A resend keeps the invitation's id, so it does too. The form
-       * with its button would invite a retry that cannot succeed; this says
-       * so and names the one thing that can, a new invite.
+       * time. Since ed123cb Resend refuses it and the invite shows as
+       * conflicted to the school's admins, who can revoke and reissue it.
+       * The form with its button would invite a retry that cannot succeed;
+       * this says so and names the one person who can sort it out.
        */
-      if (
-        err instanceof ApiError &&
-        err.status === 409 &&
-        apiErrorCode(err.detail) === "invited_teacher_conflict"
-      ) {
+      if (isInviteConflict(err)) {
         setPhase("mismatch");
         return;
       }
@@ -457,12 +462,10 @@ export function SetPasswordForm({
           </span>
         )}
         <h1 className="mt-3.5 text-[30px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black max-md:text-[26px]">
-          This invite no longer matches your account
+          {INVITE_CONFLICT_COPY.title}
         </h1>
         <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
-          The account set up for you has changed since this invite was sent,
-          so this link can’t finish it. Ask your school administrator to send
-          you a new invite – sending this one again won’t work.
+          {INVITE_CONFLICT_COPY.body}
         </p>
       </div>
     );
