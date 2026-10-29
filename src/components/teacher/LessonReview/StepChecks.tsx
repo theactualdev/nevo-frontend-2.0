@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { CheckAnswerKey, CheckOption, GuidedCheckStep } from "@/lib/api/lessons";
+import type {
+  CalculationPartsReviewItem,
+  CheckAnswerKey,
+  CheckOption,
+  GuidedCheckStep,
+} from "@/lib/api/lessons";
 import { cn } from "@/lib/utils";
 import { answerText, type CheckRow, type ChecksView } from "./reviewModel";
 
@@ -72,17 +77,39 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
+/**
+ * PLACEHOLDER WORDS for the calculation reveal parts (8c4ccef), proposed to
+ * Lydia as question 16 (29 Oct) and held until she answers. One place, so
+ * her words replace these and nothing else.
+ */
+export const PARTS_COPY = {
+  label: "When a child slows down, these steps arrive in pieces",
+  waiting: "A child gets these pieces only once you accept them. Until then, each step arrives whole.",
+  accepted: "Accepted. A child who slows down gets these pieces in this order.",
+  press: "Accept the pieces",
+  pressing: "Accepting…",
+} as const;
+
 export function StepChecks({
   view,
   signed,
   readLeaks,
   onReadLeak,
+  parts = [],
+  onAcceptParts,
+  acceptingParts = false,
+  partsRefusal = null,
 }: {
   view: ChecksView;
   /** Nothing in this step waits for a sign-off any more. */
   signed: boolean;
   readLeaks: ReadonlySet<string>;
   onReadLeak: (key: string) => void;
+  /** A calculation step's reveal parts, waiting or accepted (8c4ccef). */
+  parts?: CalculationPartsReviewItem[];
+  onAcceptParts?: () => void;
+  acceptingParts?: boolean;
+  partsRefusal?: string | null;
 }) {
   const hasGuided = [...view.toSign, ...view.reviewed, ...view.guidedOnly].some((r) => r.guided);
   const sub = !view.exists
@@ -152,6 +179,74 @@ export function StepChecks({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {parts.length > 0 && (
+        <RevealParts
+          items={parts}
+          onAccept={onAcceptParts}
+          accepting={acceptingParts}
+          refusal={partsRefusal}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * A calculation step's reveal parts (8c4ccef), with their own press.
+ *
+ * ITS OWN PRESS, not the checks': the parts never hold back Assign, so the
+ * step's footer and the last step say nothing of them. ALL OR NONE, because
+ * the server has no per-step route - a teacher who disagrees with one step
+ * cannot accept the rest (raised with Lydia, 29 Oct).
+ */
+function RevealParts({
+  items,
+  onAccept,
+  accepting,
+  refusal,
+}: {
+  items: CalculationPartsReviewItem[];
+  onAccept?: () => void;
+  accepting: boolean;
+  refusal: string | null;
+}) {
+  const waiting = items.some((item) => item.reviewStatus === "pending_review");
+  return (
+    <div className="mt-6">
+      <span className={SECTION_LABEL}>{PARTS_COPY.label}</span>
+      <p className={cn(SUB, "mt-1.5")}>{waiting ? PARTS_COPY.waiting : PARTS_COPY.accepted}</p>
+      <div className="mt-3 flex flex-col gap-2.5">
+        {items.map((item) => (
+          <div key={`${item.segmentId}:${item.stepId}`} className={cn(CARD, "px-[17px] py-[15px]")}>
+            {item.segmentTitle && (
+              <span className="block text-[12px] text-nevo-near-black/50">{item.segmentTitle}</span>
+            )}
+            <p className={cn(ROW_TEXT, "mt-0.5")}>{item.prompt}</p>
+            <ol className="mt-2.5 flex list-none flex-col gap-1.5 p-0">
+              {item.parts.map((part, i) => (
+                <li key={i} className={cn(DETAIL, "flex gap-2.5")}>
+                  <span className="w-4 shrink-0 text-right font-semibold text-nevo-navy">{i + 1}</span>
+                  <span className="min-w-0">{part}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+      {waiting && onAccept && (
+        <div className="mt-3.5 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={onAccept}
+            disabled={accepting}
+            className={cn(MINI_PRIMARY, accepting ? "cursor-wait opacity-70" : "cursor-pointer")}
+          >
+            {accepting ? PARTS_COPY.pressing : PARTS_COPY.press}
+          </button>
+          {refusal && <span className="text-[13px] leading-[1.5] text-nevo-violet-text">{refusal}</span>}
         </div>
       )}
     </div>

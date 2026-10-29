@@ -93,6 +93,7 @@ const REFUSED_WITHOUT_WORDS: Record<string, string> = {
   unmarkable_check:
     "One of these checks has no answer Nevo can mark it against, so the checks can’t be accepted yet.",
   no_checks_to_approve: "There’s nothing here to accept any more.",
+  no_calculation_parts_to_approve: "There’s nothing here to accept any more.",
   lesson_not_ready_for_review:
     "This lesson is still being prepared, so its checks can’t be accepted yet.",
 };
@@ -524,6 +525,10 @@ export function LessonReviewFlow({
               signed={!checksNeeded}
               readLeaks={readLeaks}
               onReadLeak={(key) => setReadLeaks((s) => new Set(s).add(key))}
+              parts={flow.review?.calculationParts ?? []}
+              onAcceptParts={() => void flow.approveParts()}
+              acceptingParts={flow.working === "parts"}
+              partsRefusal={refusedHere("parts")}
             />
           )}
 

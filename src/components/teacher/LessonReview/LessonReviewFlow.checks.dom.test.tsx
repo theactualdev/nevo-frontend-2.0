@@ -14,6 +14,7 @@ const api = vi.hoisted(() => ({
   approveAllKeyPoints: vi.fn(),
   approveAllChecks: vi.fn(),
   approveAllGuidedSteps: vi.fn(),
+  approveAllCalculationParts: vi.fn(),
   approveAllRewrites: vi.fn(),
   amendKeyPoint: vi.fn(),
   resolveMissingKeyPoint: vi.fn(),
@@ -406,5 +407,74 @@ describe("live, with checks", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Go to the key points" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * 8c4ccef: a calculation step's reveal parts wait for a teacher, in one press
+ * of their own. They never hold back Assign. Words are placeholders (Lydia,
+ * question 16).
+ */
+describe("a calculation step's reveal parts", () => {
+  const HASH_P = "p".repeat(64);
+  const item = (reviewStatus: "pending_review" | "approved") => ({
+    segmentId: "s-1",
+    segmentTitle: "Part 1",
+    stepId: "st-1",
+    prompt: "Work out 3/4 of 24.",
+    parts: ["Find one quarter of 24.", "Then take three of those quarters."],
+    reviewStatus,
+  });
+
+  it("lists each step's pieces in order under the checks, with their own press", async () => {
+    api.review.mockResolvedValue(
+      reviewOf({ calculationParts: [item("pending_review")], calculationPartsContentHash: HASH_P }),
+    );
+    await open(3);
+
+    expect(screen.getByText("When a child slows down, these steps arrive in pieces")).toBeInTheDocument();
+    expect(screen.getByText("Work out 3/4 of 24.")).toBeInTheDocument();
+    const pieces = screen.getAllByRole("listitem").map((li) => li.textContent);
+    expect(pieces).toContain("1Find one quarter of 24.");
+    expect(pieces).toContain("2Then take three of those quarters.");
+    expect(screen.getByRole("button", { name: "Accept the pieces" })).toBeInTheDocument();
+  });
+
+  it("accepts them all with the hash on screen, and says so after", async () => {
+    api.review.mockResolvedValue(
+      reviewOf({ calculationParts: [item("pending_review")], calculationPartsContentHash: HASH_P }),
+    );
+    api.approveAllCalculationParts.mockResolvedValue(
+      reviewOf({ calculationParts: [item("approved")], calculationPartsContentHash: HASH_P }),
+    );
+    await open(3);
+    fireEvent.click(screen.getByRole("button", { name: "Accept the pieces" }));
+
+    await waitFor(() => expect(api.approveAllCalculationParts).toHaveBeenCalledWith("l-1", HASH_P));
+    expect(
+      await screen.findByText("Accepted. A child who slows down gets these pieces in this order."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Accept the pieces" })).toBeNull();
+    // The checks' own press is untouched by it.
+    expect(api.approveAllChecks).not.toHaveBeenCalled();
+  });
+
+  it("says why when the server has nothing left to accept", async () => {
+    api.review.mockResolvedValue(
+      reviewOf({ calculationParts: [item("pending_review")], calculationPartsContentHash: HASH_P }),
+    );
+    api.approveAllCalculationParts.mockRejectedValue(
+      new ApiError(409, "none", { detail: { code: "no_calculation_parts_to_approve" } }),
+    );
+    await open(3);
+    fireEvent.click(screen.getByRole("button", { name: "Accept the pieces" }));
+
+    expect(await screen.findByText("There’s nothing here to accept any more.")).toBeInTheDocument();
+  });
+
+  it("is not there for a lesson with none", async () => {
+    await open(3);
+
+    expect(screen.queryByText(/arrive in pieces/)).toBeNull();
   });
 });
