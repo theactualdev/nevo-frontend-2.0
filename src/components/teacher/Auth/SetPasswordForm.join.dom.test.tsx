@@ -143,7 +143,7 @@ describe("an invite that no longer matches the account", () => {
   const conflict = () =>
     new ApiError(409, "conflict", { detail: { code: "invited_teacher_conflict" } });
 
-  it("says so, names a new invite as the way on, and offers no retry", async () => {
+  it("says so, names the school administrator as the way on, and offers no retry", async () => {
     acceptJoin.mockRejectedValue(conflict());
     render(<SetPasswordForm mode="activation" />);
     activate();
@@ -151,7 +151,7 @@ describe("an invite that no longer matches the account", () => {
     expect(
       await screen.findByRole("heading", { name: "This invite no longer matches your account" }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/send you a new invite/)).toBeInTheDocument();
+    expect(screen.getByText(/Ask your school administrator to review your invite/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Activate my account/ })).toBeNull();
     expect(screen.queryByLabelText("Password")).toBeNull();
   });
@@ -201,5 +201,49 @@ describe("an invite that no longer matches the account", () => {
 
     expect(await screen.findByText(/couldn’t reach Nevo just now/)).toBeInTheDocument();
     expect(screen.queryByText(/may have expired/)).toBeNull();
+  });
+});
+
+/**
+ * ed123cb: the LOOKUP answers the same 409, so the screen says so before the
+ * teacher has chosen a password the accept would only refuse.
+ */
+describe("an invite the lookup already says no longer matches", () => {
+  const conflict = () =>
+    new ApiError(409, "conflict", {
+      detail: {
+        code: "invited_teacher_conflict",
+        message:
+          "This teacher invitation needs a school administrator's review before it can be accepted.",
+        invitationId: "inv-1",
+      },
+    });
+
+  it("shows the state without the form ever being filled", async () => {
+    lookupJoin.mockRejectedValue(conflict());
+    render(<SetPasswordForm mode="activation" />);
+
+    expect(
+      await screen.findByRole("heading", { name: "This invite no longer matches your account" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Password")).toBeNull();
+    expect(acceptJoin).not.toHaveBeenCalled();
+  });
+
+  it("uses our words for the teacher, not the server's to an administrator", async () => {
+    lookupJoin.mockRejectedValue(conflict());
+    render(<SetPasswordForm mode="activation" />);
+
+    await screen.findByRole("heading", { name: "This invite no longer matches your account" });
+    expect(screen.queryByText(/needs a school administrator's review/)).toBeNull();
+  });
+
+  it("leaves the form alone on any other lookup failure", async () => {
+    lookupJoin.mockRejectedValue(new ApiError(503, "down"));
+    render(<SetPasswordForm mode="activation" />);
+
+    await waitFor(() => expect(lookupJoin).toHaveBeenCalled());
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /no longer matches/ })).toBeNull();
   });
 });

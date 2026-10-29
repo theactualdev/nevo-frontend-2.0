@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "@/lib/api/client";
-import { linkIsDead } from "./linkAnswer";
+import { isInviteConflict, linkIsDead } from "./linkAnswer";
 
 /**
  * "This link is not working any more" is a door closed for good, so it may
@@ -26,5 +26,25 @@ describe("linkIsDead", () => {
   it("is never a failure that is not the API's at all", () => {
     expect(linkIsDead(new Error("network"))).toBe(false);
     expect(linkIsDead(undefined)).toBe(false);
+  });
+});
+
+describe("isInviteConflict", () => {
+  const conflict = { detail: { code: "invited_teacher_conflict", message: "…" } };
+
+  it("is the 409 for an invite whose reserved account changed", () => {
+    expect(isInviteConflict(new ApiError(409, "conflict", conflict))).toBe(true);
+  });
+
+  it("is not any other 409, nor that code on another status", () => {
+    expect(
+      isInviteConflict(new ApiError(409, "used", { detail: { code: "join_link_used" } })),
+    ).toBe(false);
+    expect(isInviteConflict(new ApiError(400, "conflict", conflict))).toBe(false);
+  });
+
+  it("is not a link the server called dead, nor a failure to answer", () => {
+    expect(isInviteConflict(new ApiError(404, "not found"))).toBe(false);
+    expect(isInviteConflict(new Error("network"))).toBe(false);
   });
 });
