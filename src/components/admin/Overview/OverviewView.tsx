@@ -332,7 +332,9 @@ export function OverviewView() {
       .catch(() => setHolds(null));
 
     intelligenceApi
-      .allFlags()
+      // Open flags only: one whose evidence stopped holding has closed
+      // (Teslim 9c35c95), and the server's own count leaves it out too.
+      .allFlags(10, { openOnly: true })
       // `complete: false` means we could not read them all, and a count off a
       // partial read is a floor. Report nothing rather than a floor.
       .then((r) => setFlags(r.complete ? r.flags : null))
