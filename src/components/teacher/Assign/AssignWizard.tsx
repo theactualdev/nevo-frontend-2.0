@@ -18,6 +18,7 @@ import {
   awaitingSignOff,
   notReviewedTail,
   reviewHrefFor,
+  UNREVIEWED_LEFT_OFF,
 } from "@/lib/lessons/signOff";
 
 /**
@@ -364,13 +365,23 @@ export function AssignWizard({
    * chosen for them. The walkthrough keeps them; a real teacher is told the
    * read failed, in the sentence step 4 already used for it.
    */
+  /*
+   * AND NOT ONE NOBODY HAS SIGNED OFF (Lydia, 25 Oct: "Assign waits for the
+   * lesson-wide sign-off"). The library says which since Teslim's 294584b,
+   * so they are left off like a lesson still being read, and a line says so.
+   * Confirm still asks each picked lesson's review: a sign-off can lapse
+   * after the list was read, when new pictures or guiding questions arrive.
+   */
   const lessons = live
     ? cards
-        .filter((c) => c.kind === "normal")
+        .filter((c) => c.kind === "normal" && c.reviewComplete !== false)
         .map((c) => ({ id: c.id, title: c.title, meta: c.meta }))
     : !signedIn
       ? LESSONS
       : [];
+  const heldBack = live
+    ? cards.filter((c) => c.kind === "normal" && c.reviewComplete === false).length
+    : 0;
 
   /*
    * ONLY WHAT IS OFFERED IS CHOSEN (T106). `?lesson=` seeds the choice before
@@ -934,6 +945,11 @@ export function AssignWizard({
                   />
                 ))}
                 </MaybeSample>
+                {heldBack > 0 && (
+                  <p className="text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+                    {UNREVIEWED_LEFT_OFF}
+                  </p>
+                )}
                 {heldPicks.length > 0 && (
                   <p
                     role="status"
