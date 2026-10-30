@@ -8,21 +8,18 @@ import {
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import { calculationFromVariant } from "@/lib/lessons/fromContent";
-import { clearSession, setSession } from "@/lib/auth/session";
+import { clearSession } from "@/lib/auth/session";
 import type { CalculationVariant } from "@/lib/api/variants";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
 
 /**
- * A calculation's answers, written for the server to mark (Lydia, 17 Oct:
- * "Answer two things wrong deliberately, let the support rise on its own").
- *
- * The engine takes the error streak that offers a hint and opens the Socratic
- * panel from the answers the server has marked, and overwrites any count the
- * app sends. No calculation step was ever written, so a child getting
- * calculation steps wrong could never make support rise. Each committed step
- * is written now, each wrong try its own answer, timed as it was measured
- * (rule 4), with the solved calculation after them - and nothing for the
- * signed-out walkthrough.
+ * What the server says back about a calculation step it marked wrong (Teslim
+ * 6b5d496): support inside that step, `calculation_scaffold` at
+ * `scaffoldLevel: strong`, which it applies itself. The player puts that step
+ * at the strong level in the solver - with no card and no words while Lydia
+ * decides whether there is a card at all (Hub, 29 Oct) - and nothing else
+ * the reply could say changes the solver. The answers themselves, and how
+ * they are written, are `LessonPlayer.calcattempts`'s.
  */
 
 const SESSION = "4f1c2a9e-8b7d-4c3a-9e2f-1a2b3c4d5e6f";
@@ -117,22 +114,6 @@ const NUMBER = (over: Record<string, unknown> = {}) =>
     ...over,
   });
 
-const BUILD = (over: Record<string, unknown> = {}) =>
-  step({
-    stepId: "b1",
-    prompt: "Build the total.",
-    expectedInput: "drag",
-    input: "tap",
-    options: [
-      { value: "1/4", label: "1/4" },
-      { value: "2/4", label: "2/4" },
-    ],
-    answer: 2,
-    tapCount: 2,
-    hint: "",
-    ...over,
-  });
-
 const lessonWith = (steps: ReturnType<typeof step>[]): Lesson =>
   ({
     id: "l-1",
@@ -174,27 +155,6 @@ const pick = (label: string) => {
   tap(label);
   tap("Check my answer");
 };
-const enter = (value: string) => {
-  fireEvent.change(screen.getByRole("textbox"), { target: { value } });
-  tap("Check my answer");
-};
-const placePiece = () =>
-  fireEvent.click(screen.getAllByRole("button", { name: "+ 1/4" })[0]);
-
-/** Every body written for one problem, in the order written. */
-const written = (problemId: string) =>
-  saveAttempt.mock.calls
-    .filter(([, body]) => (body as { problemId: string }).problemId === problemId)
-    .map(([, body]) => body as Record<string, unknown>);
-
-/** What this device holds of stu-1's answers - see `pendingProgress`. */
-const heldAnswers = () =>
-  Object.values(
-    JSON.parse(
-      window.localStorage.getItem("nevo.lesson.pendingAnswers.stu-1") ?? "{}",
-    ),
-  ) as { sessionId: string | null; body: Record<string, unknown> }[];
-
 const clock = { now: 1_000 };
 let now: { mockRestore: () => void } | undefined;
 
