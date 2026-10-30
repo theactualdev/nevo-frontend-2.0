@@ -1,4 +1,5 @@
 import { expect, test, type Page, type APIRequestContext } from "@playwright/test";
+import { serverFailure } from "./serverFailure";
 
 /**
  * The teacher console, SIGNED IN.
@@ -101,7 +102,7 @@ async function signInAsTeacher(
   });
   expect(
     res.ok(),
-    `Could not sign the E2E teacher in (${res.status()}). Check the credentials in CI secrets.`,
+    `Could not sign the E2E teacher in (${res.status()}).${(await serverFailure(res)) || " Check the credentials in CI secrets."}`,
   ).toBeTruthy();
 
   const body = await res.json();
