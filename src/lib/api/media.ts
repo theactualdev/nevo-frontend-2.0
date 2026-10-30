@@ -52,6 +52,13 @@ export interface LessonMediaItem {
   approvedAt: string | null;
   approvedBy: string | null;
   approvedByName: string | null;
+  /**
+   * Who asked for it last: the uploader, or the teacher who sent it back for a
+   * remake (Teslim 6b5d496). Optional here only for a deployment before it.
+   */
+  requestedBy?: string;
+  /** When a teacher last sent it back to be remade; null if never (6b5d496). */
+  remadeAt?: string | null;
   withdrawnAt?: string | null;
   withdrawnBy?: string | null;
   withdrawnByName?: string | null;

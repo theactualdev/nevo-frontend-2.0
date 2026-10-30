@@ -5,7 +5,6 @@ import {
 } from "@/lib/api/baseline";
 import { consentsApi, processingWithdrawn } from "@/lib/api/consents";
 import { getSession } from "@/lib/auth/session";
-import { sendableTrials } from "./capture";
 
 /**
  * The baseline a child has already sat, waiting for the account it belongs to.
@@ -343,11 +342,15 @@ async function flushOnce(
       write(pending);
       key = keyFor(pending);
     }
-    // A run parked before ed123cb sends without its Word Conflict, which the
-    // server would refuse with everything else in it (`sendableTrials`).
+    /*
+     * As parked, Word Conflict and all. A run parked before ed123cb holds the
+     * thirty-two with no target and no practice, which the server takes again
+     * since 3888e72 ("accepts the app's current 32 scored Word Conflict
+     * trials without targets"), so that child keeps their Word Conflict.
+     */
     const ok = await baselineApi.submitTrials(
       pending.sessionId,
-      sendableTrials(pending.trials),
+      pending.trials,
       pending.context,
     );
     if (!ok) {

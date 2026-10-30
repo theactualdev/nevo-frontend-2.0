@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { invitesApi, type JoinLookup } from "@/lib/api/invites";
-import { linkIsDead } from "@/lib/auth/linkAnswer";
+import { INVITE_CONFLICT_COPY, isInviteConflict, linkIsDead } from "@/lib/auth/linkAnswer";
 import { cn } from "@/lib/utils";
 import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
 
@@ -27,13 +27,21 @@ import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
  * can do from here. It is not styled as an error - a link that ran out of time
  * is not the reader's mistake.
  *
- * D19 DRAWS "EXPIRED" AND "INVALID / REVOKED" APART, AND THE CONTRACT CANNOT.
+ * D19 DRAWS "EXPIRED" AND "INVALID / REVOKED" APART, AND NOW SO DOES THE WIRE.
  * `JoinInspectionResponse.status` is the constant "valid", so a 200 is a good
- * link, and every dead one is the same 404 - *"Join link is invalid or
- * expired"*, live, 1 Oct. The expired panel used to be reached by comparing
- * `expiresAt` with this device's clock, which the server had already done: on
- * a tablet whose clock ran fast it turned a good invite away. Shipped reduced
- * to the one dead panel, whose words fit both, until the wire tells them apart.
+ * link. A dead one used to be the same 404 every time (1 Oct), so this page
+ * shipped reduced to one dead panel. The lookup now answers 410
+ * `join_link_expired` apart from 410 `join_link_revoked` and 404
+ * `join_link_invalid` (backend `_join_record`, read 29 Oct), so the expired
+ * panel is back - on the SERVER'S word. It was once reached by comparing
+ * `expiresAt` with this device's clock, which turned a good invite away on a
+ * tablet whose clock ran fast; it never will be again.
+ *
+ * A CONFLICTED LINK IS NOT A DEAD ONE (ed123cb). A teacher's invite whose
+ * reserved account changed answers 409 `invited_teacher_conflict`: the link
+ * is fine, the account behind it isn't, and only a school administrator can
+ * sort that out. It gets the teacher lane's words (`INVITE_CONFLICT_COPY`),
+ * the same ones the activation form shows, and no retry.
  *
  * D19'S "Welcome, Amara". `GET /api/v1/join/{token}` carries the invitee's
  * name since 1 Oct; an invite without one keeps the plain "Welcome" rather
@@ -53,26 +61,20 @@ import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
 
 /**
  * `failed` is the lookup ANSWERING that the link is dead - see `linkIsDead`.
- * `unreachable` is the lookup not answering at all - a network blip or a 5xx.
- * They used to be one state, so a brief outage told a teacher or a child that
- * their invite was "no longer valid" - on the one public page they reach from
- * a message, with no way to try again.
+ * `expired` and `conflict` are two answers it names. `unreachable` is the
+ * lookup not answering at all - a network blip or a 5xx. They used to be one
+ * state, so a brief outage told a teacher or a child that their invite was
+ * "no longer valid" - on the one public page they reach from a message, with
+ * no way to try again.
  */
-type Phase = "loading" | "ready" | "failed" | "unreachable";
+type Phase = "loading" | "ready" | "failed" | "expired" | "conflict" | "unreachable";
 
-/**
- * A teacher link whose reserved account has changed since it was sent (Teslim
- * ed123cb, 29 Oct). The lookup answers 409 `invited_teacher_conflict`, and the
- * link can't be accepted until a school administrator reviews it - which is
- * D19's "This invite is no longer valid. Contact your school administrator
- * for help.", not an outage to try again. Any other 409 still isn't read as
- * the link's answer.
- */
-function reservedAccountChanged(err: unknown): boolean {
+/** The lookup's own word that the link ran out of time (410 `join_link_expired`). */
+function linkExpired(err: unknown): boolean {
   return (
     err instanceof ApiError &&
-    err.status === 409 &&
-    apiErrorCode(err.detail) === "invited_teacher_conflict"
+    err.status === 410 &&
+    apiErrorCode(err.detail) === "join_link_expired"
   );
 }
 
@@ -96,7 +98,15 @@ export function JoinLanding({ token }: { token: string }) {
       // "no longer valid" panel below is what it means. Anything else is the
       // lookup failing to answer, which says nothing about the invite.
       .catch((err: unknown) => {
-        setPhase(linkIsDead(err) || reservedAccountChanged(err) ? "failed" : "unreachable");
+        setPhase(
+          isInviteConflict(err)
+            ? "conflict"
+            : linkExpired(err)
+              ? "expired"
+              : linkIsDead(err)
+                ? "failed"
+                : "unreachable",
+        );
       });
   }, [token, attempt]);
 
@@ -172,6 +182,28 @@ export function JoinLanding({ token }: { token: string }) {
             </h1>
             <p className="m-0 mt-3 text-[15px] leading-[1.6] text-nevo-near-black/62">
               Contact your school administrator for help.
+            </p>
+          </>
+        ) : null}
+
+        {phase === "expired" ? (
+          <>
+            <h1 className="m-0 text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black">
+              This invite has expired
+            </h1>
+            <p className="m-0 mt-3 text-[15px] leading-[1.6] text-nevo-near-black/62">
+              Contact your school administrator to request a new invite.
+            </p>
+          </>
+        ) : null}
+
+        {phase === "conflict" ? (
+          <>
+            <h1 className="m-0 text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black">
+              {INVITE_CONFLICT_COPY.title}
+            </h1>
+            <p className="m-0 mt-3 text-[15px] leading-[1.6] text-nevo-near-black/62">
+              {INVITE_CONFLICT_COPY.body}
             </p>
           </>
         ) : null}

@@ -78,9 +78,9 @@ export interface LessonReviewFlowState {
   approveMedia: (approve: string[], remake: string[]) => Promise<boolean>;
   /**
    * The pictures and recordings this teacher flagged and sent back in this
-   * visit (design 11; Lydia, 26 Oct: "show remade as remade"). The server
-   * keeps an item's id through a remake and says nothing of it, so this is
-   * the one record there is, and it lasts as long as the visit.
+   * visit (design 11; Lydia, 26 Oct: "show remade as remade"). Since 6b5d496
+   * the server's `remadeAt` is the record (`wasRemade`); this covers only the
+   * moment before the re-read that carries it.
    */
   remade: ReadonlySet<string>;
   /** Try a failed picture or recording again. */
