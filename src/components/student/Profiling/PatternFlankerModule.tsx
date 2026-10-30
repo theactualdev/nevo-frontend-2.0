@@ -299,13 +299,17 @@ export function PatternFlankerModule({
                    * goes up marked so with the thirty-two; the word goes as
                    * its target, which the server marks against (ed123cb; see
                    * `baselineTrials`).
+                   *
+                   * NO `correct`: the device does not mark the tap (Lydia,
+                   * 29 Oct: "send the raw responses and do not compute
+                   * correctness on your side"). The server compares the
+                   * response with the target itself.
                    */
                   congruency: t.condition,
                   ...(t.practice ? { practice: true } : {}),
                   word: t.word,
                   arrow: t.arrow,
                   chosenOption: i === 0 ? "left" : "right",
-                  correct: t.word === (i === 0 ? "left" : "right"),
                 },
                 e,
               )

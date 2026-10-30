@@ -6,7 +6,6 @@ import {
   baselineRunContext,
   baselineTrials,
   purgeStoredCaptures,
-  sendableTrials,
   sweepStoredCaptures,
   tapPoint,
   wordsShown,
@@ -961,7 +960,6 @@ describe("Word Conflict's trials", () => {
     word: t.word,
     arrow: t.arrow,
     chosenOption: chosen,
-    correct: t.word === chosen,
   });
 
   /** ed123cb's `word_conflict_sequence` and per-trial check, as the server runs them. */
@@ -987,23 +985,28 @@ describe("Word Conflict's trials", () => {
     return true;
   };
 
-  it("go up as inhibition, with their condition, the word tapped and the word as the target", () => {
+  /*
+   * RAW, UNMARKED (Lydia, 29 Oct: "send the raw responses and do not compute
+   * correctness on your side"). The module records the word tapped and the
+   * word shown, and nothing about whether they match; `correct` goes null.
+   */
+  it("go up as inhibition, with their condition, the word tapped, the word as the target, and no mark", () => {
     const c = new BaselineCapture("wc");
-    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 1, rtMs: 720, congruency: "incongruent", word: "left", arrow: "right", chosenOption: "right", correct: false });
-    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 1, rtMs: 510, congruency: "congruent", word: "right", arrow: "right", chosenOption: "right", correct: true });
+    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 1, rtMs: 720, congruency: "incongruent", word: "left", arrow: "right", chosenOption: "right" });
+    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 1, rtMs: 510, congruency: "congruent", word: "right", arrow: "right", chosenOption: "right" });
 
     expect(baselineTrials(c)).toEqual([
-      { dimension: "inhibition", condition: "incongruent", response: "right", correct: false, responseTimeMs: 720, probeItemId: null, target: "LEFT" },
-      { dimension: "inhibition", condition: "congruent", response: "right", correct: true, responseTimeMs: 510, probeItemId: null, target: "RIGHT" },
+      { dimension: "inhibition", condition: "incongruent", response: "right", correct: null, responseTimeMs: 720, probeItemId: null, target: "LEFT" },
+      { dimension: "inhibition", condition: "congruent", response: "right", correct: null, responseTimeMs: 510, probeItemId: null, target: "RIGHT" },
     ]);
   });
 
   it("send a practice trial too, marked practice, with its own condition and target", () => {
     const c = new BaselineCapture("wc");
-    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 0, rtMs: 640, congruency: "incongruent", practice: true, word: "left", arrow: "right", chosenOption: "left", correct: true });
+    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 0, rtMs: 640, congruency: "incongruent", practice: true, word: "left", arrow: "right", chosenOption: "left" });
 
     expect(baselineTrials(c)).toEqual([
-      { dimension: "inhibition", condition: "incongruent", response: "left", correct: true, responseTimeMs: 640, probeItemId: null, target: "LEFT", practice: true },
+      { dimension: "inhibition", condition: "incongruent", response: "left", correct: null, responseTimeMs: 640, probeItemId: null, target: "LEFT", practice: true },
     ]);
   });
 
@@ -1018,7 +1021,8 @@ describe("Word Conflict's trials", () => {
     expect(trials.slice(0, 8).every((t) => t.practice === true)).toBe(true);
     expect(trials.slice(8).some((t) => t.practice)).toBe(false);
     expect(serverTakes(trials)).toBe(true);
-    expect(sendableTrials(trials)).toBe(trials);
+    // Every one unmarked: the server marks the response against the target.
+    expect(trials.every((t) => t.correct === null)).toBe(true);
   });
 
   it("put no target on any other dimension", () => {
@@ -1030,41 +1034,3 @@ describe("Word Conflict's trials", () => {
   });
 });
 
-/*
- * A run parked before ed123cb holds the thirty-two with no target and no
- * practice - the practice was never kept - and the server now refuses a run
- * like that whole. It sends without its Word Conflict, and says so.
- */
-describe("a parked run's trials, as they can be sent", () => {
-  const grid: BaselineTrial = { dimension: "wmc", condition: "length_3", response: "1,2,3", correct: true, responseTimeMs: 900, probeItemId: null };
-  const legacy: BaselineTrial[] = Array.from({ length: 32 }, (_, i) => ({
-    dimension: "inhibition",
-    condition: i % 2 ? "congruent" : "incongruent",
-    response: i % 4 < 2 ? "left" : "right",
-    correct: true,
-    responseTimeMs: 600,
-    probeItemId: null,
-  }));
-
-  it("leaves a run with no Word Conflict as it is", () => {
-    const trials = [grid];
-    expect(sendableTrials(trials)).toBe(trials);
-  });
-
-  it("sends a pre-ed123cb run without its Word Conflict, keeping everything else", () => {
-    expect(sendableTrials([grid, ...legacy])).toEqual([grid]);
-  });
-
-  it("does the same for Word Conflict missing a target, or short of its forty", () => {
-    const whole = (() => {
-      const c = new BaselineCapture("wc");
-      for (const t of wordConflictTrials()) {
-        c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 0, rtMs: 600, congruency: t.condition, ...(t.practice ? { practice: true } : {}), word: t.word, arrow: t.arrow, chosenOption: t.word, correct: true });
-      }
-      return baselineTrials(c);
-    })();
-    const noTarget = whole.map((t, i) => (i === 20 ? { ...t, target: undefined } : t));
-    expect(sendableTrials([grid, ...noTarget])).toEqual([grid]);
-    expect(sendableTrials([grid, ...whole.slice(1)])).toEqual([grid]);
-  });
-});
