@@ -1,5 +1,6 @@
 import { appendFileSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { serverFailure } from "./serverFailure";
 
 /**
  * Learning Support, signed in as an administrator who holds it.
@@ -21,12 +22,18 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
  * suite's session; the one-worker rule in the config still holds.
  *
  * THE SUITE SETS UP THE GRANT IT TESTS (Lydia, 28 Oct). On its first run the
- * account had lost Learning Support, with nobody meaning to remove it, and a
- * suite that depends on an account anyone can edit by hand breaks again the
- * next time someone touches it. So `beforeAll` gives the grant back when it
- * is missing, as the E2E admin (any admin may grant it to someone else, never
- * to themselves), and says so on the run's summary page - a removal is shown,
- * not silently repaired.
+ * account held no Learning Support, and a suite that depends on an account
+ * anyone can edit by hand breaks again the next time someone touches it. So
+ * `beforeAll` grants it when it is missing, as the E2E admin (any admin may
+ * grant it to someone else, never to themselves), and says so on the run's
+ * summary page - a missing grant is shown, not silently repaired.
+ *
+ * NOTHING HAD REVOKED IT (Teslim, 30 Oct). The E2E school holds two SENCo test
+ * accounts. The one backend made for this suite on 14 Oct kept its grant
+ * throughout. The only grant the other one ever got was this suite's own, on
+ * 28 Oct, so that is the account the secret named: it had simply never held
+ * Learning Support. When this setup grants, check which account
+ * E2E_SENCO_EMAIL names before suspecting the permission check.
  */
 
 const EMAIL = process.env.E2E_SENCO_EMAIL;
@@ -64,7 +71,7 @@ async function signIn(
   });
   expect(
     res.ok(),
-    `Could not sign the E2E ${who} in (${res.status()}). Check the credentials in CI secrets.`,
+    `Could not sign the E2E ${who} in (${res.status()}).${(await serverFailure(res)) || " Check the credentials in CI secrets."}`,
   ).toBeTruthy();
   return (await res.json()) as {
     accessToken: string;
@@ -90,7 +97,7 @@ test.beforeAll(async ({ playwright }) => {
 
     expect(
       ADMIN_EMAIL && ADMIN_PASSWORD,
-      "The E2E SENCo account has lost Learning Support, and giving it back needs E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD.",
+      "The E2E SENCo account holds no Learning Support, and granting it needs E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD.",
     ).toBeTruthy();
     const admin = await signIn(request, ADMIN_EMAIL as string, ADMIN_PASSWORD as string, "admin");
     const grant = await request.post(`${API}/api/v1/learning-support/holders`, {
@@ -99,14 +106,14 @@ test.beforeAll(async ({ playwright }) => {
     });
     expect(
       grant.ok(),
-      `Giving Learning Support back to the E2E SENCo answered ${grant.status()}: ${(await grant.text()).slice(0, 300)}`,
+      `Granting Learning Support to the E2E SENCo answered ${grant.status()}: ${(await grant.text()).slice(0, 300)}`,
     ).toBeTruthy();
 
     const note =
-      "The E2E SENCo account had lost Learning Support, so the suite gave it back as the E2E admin. Something revoked it: its grant's revoked_by_user_id says what.";
-    console.warn(`::warning title=Learning Support restored::${note}`);
+      "The E2E SENCo account held no Learning Support, so the suite granted it as the E2E admin. Check which account E2E_SENCO_EMAIL names: one that never had a grant reads the same as one whose grant was revoked (revoked_by_user_id tells them apart).";
+    console.warn(`::warning title=Learning Support granted::${note}`);
     const summary = process.env.GITHUB_STEP_SUMMARY;
-    if (summary) appendFileSync(summary, `\n> **Learning Support restored.** ${note}\n`);
+    if (summary) appendFileSync(summary, `\n> **Learning Support granted.** ${note}\n`);
   } finally {
     await request.dispose();
   }

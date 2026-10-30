@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { serverFailure } from "./serverFailure";
 
 /**
  * The admin console against the seeded E2E tenant.
@@ -49,7 +50,7 @@ async function signInAsAdmin(page: Page, request: APIRequestContext) {
   });
   expect(
     res.ok(),
-    `Could not sign the E2E admin in (${res.status()}). Check the credentials in CI secrets.`,
+    `Could not sign the E2E admin in (${res.status()}).${(await serverFailure(res)) || " Check the credentials in CI secrets."}`,
   ).toBeTruthy();
 
   const body = await res.json();
