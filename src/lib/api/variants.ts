@@ -291,6 +291,14 @@ export interface CalculationStep {
   hint: string;
   confirmationText: string;
   /**
+   * The step in its own ordered pieces, for Slower (Teslim, 8c4ccef): "Ordered,
+   * teacher-approved pieces revealed while this step is asked. Empty means pace
+   * the whole step." A child's read carries them only once a teacher approved
+   * them or they came word for word from the upload; pending ones are kept
+   * back on the server. At most eight.
+   */
+  parts?: string[];
+  /**
    * WHAT THIS STEP'S ANSWER IS - landed 16 Sep, and it is per STEP.
    *
    * The variant carries an answer too, and mapping that one onto every step is

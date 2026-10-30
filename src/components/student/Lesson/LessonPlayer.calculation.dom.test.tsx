@@ -353,9 +353,13 @@ describe("a calculation's signals", () => {
     expect(document.querySelector(".overflow-y-auto")).toHaveClass("min-h-0", "flex-1");
   });
 
-  it("offers no pacing chips over the solver, so a tap can send no slower_trigger", () => {
-    // The segment's text could be chunked, but the solver is what is on
-    // screen, and 17a draws no density pill there.
+  /*
+   * LYDIA, 29 OCT: "Do not remove it. A gap on the backend should not cost a
+   * child a control on their screen." The solver's own row carries the
+   * child's Slower - the lesson's pace, the text chip's switch - and the
+   * header still draws no density pills over the solver.
+   */
+  it("offers the child's Slower in the solver's own row, never the header's pacing chips", () => {
     const lesson = lessonWith([step()]);
     lesson.segments[0].text = {
       heading: "Adding",
@@ -368,10 +372,25 @@ describe("a calculation's signals", () => {
     render(<LessonPlayer lesson={lesson} plan={PLAN} />);
 
     expect(screen.getByText("What are the denominators?")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Slower" })).toBeNull();
-    expect(sent("slower_trigger")).toEqual([]);
-    // Nor a held row: 17a draws none on the solver, and it needs the room.
+    const slower = screen.getByRole("button", { name: "Slower" });
+    expect(slower.closest("header")).toBeNull();
+    expect(slower).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("button", { name: "Simplify" })).toBeNull();
+    // Nor a held row in the header: 17a draws none on the solver.
     expect(document.querySelector("header .invisible")).toBeNull();
+    expect(sent("slower_trigger")).toEqual([]);
+
+    fireEvent.click(slower);
+
+    // The child asking, as the text chip's press is.
+    expect(sent("slower_trigger")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Slower" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(
+      screen.getByText("No rush. Let's take this one a step at a time."),
+    ).toBeInTheDocument();
   });
 
   it("shows the engine's hint in the step's hint place, with no second offer beside it", () => {
