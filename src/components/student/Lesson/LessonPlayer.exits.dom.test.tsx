@@ -447,6 +447,8 @@ describe("a review session's outcome", () => {
           correctNote: "Yes.",
           recoveryNote: "Not quite.",
           conceptId: "concept-1",
+          // Reviewed: wrong then right is a check that holds.
+          holds: true,
         },
       }),
       segment("seg-2", "Denominators"),

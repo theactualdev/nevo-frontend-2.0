@@ -60,6 +60,8 @@ const LESSON = {
         correctId: "co2",
         correctNote: "That's it.",
         recoveryNote: "Not quite. Let's look again.",
+        // Reviewed: asked again on Next is a check that holds.
+        holds: true,
       },
     },
     {

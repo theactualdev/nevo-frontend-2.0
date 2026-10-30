@@ -55,6 +55,13 @@ export interface ComprehensionCheckpoint {
   format?: "text" | "spoken";
   /** The spoken prompt's recording. Only meaningful when `format` is spoken. */
   promptAudioUrl?: string | null;
+  /**
+   * Whether a person stands behind its answer key (c268404,
+   * `checkpoint_payloads`): true where the key was written at upload
+   * (`authoredBy: "person"`, 294584b) or the lesson's checks sign-off is
+   * current. On every student read. Absent is not reviewed.
+   */
+  teacherReviewed?: boolean;
 }
 
 /**
@@ -184,6 +191,9 @@ export function toQuickCheck(
       checkpoint.explanation?.trim() ||
       "That's it - you've got this one.",
     recoveryNote: "Not quite. Let's look again.",
+    // Only the server's word that a person stands behind the key holds a
+    // child (Lydia, 26 Oct); absent or false holds nothing.
+    holds: checkpoint.teacherReviewed === true,
     ...(promptAudio ? { promptAudio } : {}),
   };
 }
