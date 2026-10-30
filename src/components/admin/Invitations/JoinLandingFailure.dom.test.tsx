@@ -50,17 +50,40 @@ describe("JoinLanding when the lookup fails", () => {
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 
-  it("reads a teacher link whose reserved account changed as no longer valid (ed123cb)", async () => {
-    // Can't be accepted until an administrator reviews it: D19's invalid
-    // state, which sends them to their school - not "try again".
+  it("says a teacher link whose reserved account changed needs the administrator, in the activation form's words (ed123cb)", async () => {
+    // Not dead, and not an outage: only a school administrator can sort it
+    // out. One wording on both pages a teacher can meet it (#915).
     lookupJoin.mockRejectedValueOnce(
       new ApiError(409, "conflict", { detail: { code: "invited_teacher_conflict" } }),
     );
     const { container } = render(<JoinLanding token="tok" />);
 
-    await waitFor(() => expect(visibleText(container)).toMatch(/no longer valid/));
-    expect(visibleText(container)).toMatch(/Contact your school administrator/);
+    await waitFor(() => expect(visibleText(container)).toMatch(/This invite no longer matches your account/));
+    expect(visibleText(container)).toMatch(/Ask your school administrator to review your invite\./);
+    expect(visibleText(container)).not.toMatch(/no longer valid/);
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("says an expired link has expired, on the server's word, as D19 draws it", async () => {
+    lookupJoin.mockRejectedValueOnce(
+      new ApiError(410, "gone", { detail: { code: "join_link_expired" } }),
+    );
+    const { container } = render(<JoinLanding token="tok" />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/This invite has expired/));
+    expect(visibleText(container)).toMatch(/Contact your school administrator to request a new invite\./);
+    expect(visibleText(container)).not.toMatch(/no longer valid/);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("keeps a revoked link on 'no longer valid' - only the expired code says expired", async () => {
+    lookupJoin.mockRejectedValueOnce(
+      new ApiError(410, "gone", { detail: { code: "join_link_revoked" } }),
+    );
+    const { container } = render(<JoinLanding token="tok" />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/no longer valid/));
+    expect(visibleText(container)).not.toMatch(/has expired/);
   });
 
   it("doesn't read any other 409 as the link's answer", async () => {
