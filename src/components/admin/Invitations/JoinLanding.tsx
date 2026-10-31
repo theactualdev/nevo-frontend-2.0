@@ -67,7 +67,27 @@ import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
  * "no longer valid" - on the one public page they reach from a message, with
  * no way to try again.
  */
-type Phase = "loading" | "ready" | "failed" | "expired" | "conflict" | "unreachable";
+type Phase =
+  | "loading"
+  | "ready"
+  | "failed"
+  | "expired"
+  | "conflict"
+  | "used"
+  | "unreachable";
+
+/**
+ * The link was already used - its teacher has joined (409 `join_link_used`).
+ * Nothing is wrong, so it says so and points at sign-in (Lydia, 31 Oct, Q11d:
+ * the old panel "tells someone something is wrong when nothing is").
+ */
+function linkUsed(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    err.status === 409 &&
+    apiErrorCode(err.detail) === "join_link_used"
+  );
+}
 
 /** The lookup's own word that the link ran out of time (410 `join_link_expired`). */
 function linkExpired(err: unknown): boolean {
@@ -101,11 +121,13 @@ export function JoinLanding({ token }: { token: string }) {
         setPhase(
           isInviteConflict(err)
             ? "conflict"
-            : linkExpired(err)
-              ? "expired"
-              : linkIsDead(err)
-                ? "failed"
-                : "unreachable",
+            : linkUsed(err)
+              ? "used"
+              : linkExpired(err)
+                ? "expired"
+                : linkIsDead(err)
+                  ? "failed"
+                  : "unreachable",
         );
       });
   }, [token, attempt]);
@@ -194,6 +216,17 @@ export function JoinLanding({ token }: { token: string }) {
             <p className="m-0 mt-3 text-[15px] leading-[1.6] text-nevo-near-black/62">
               Contact your school administrator to request a new invite.
             </p>
+          </>
+        ) : null}
+
+        {phase === "used" ? (
+          <>
+            <h1 className="m-0 text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black">
+              You have already joined
+            </h1>
+            <Link href="/auth/teacher" className={cn(PRIMARY_BTN, "mt-8 w-full justify-center")}>
+              Sign in instead
+            </Link>
           </>
         ) : null}
 

@@ -12,9 +12,12 @@ import { cn } from "@/lib/utils";
  * "accepted" reads as D19's "Joined". Anything else still falls through to a
  * neutral pill showing the backend's own word rather than being forced into
  * one of ours.
+ *
+ * "conflicted" (ed123cb) is a teacher invite whose reserved account changed;
+ * it reads "Account changed" (Lydia, 31 Oct, Q11c).
  */
 
-export type InviteStatus = "pending" | "joined" | "expired" | "revoked";
+export type InviteStatus = "pending" | "joined" | "expired" | "revoked" | "conflicted";
 
 /**
  * `now` is passed in rather than read here. React's purity rule forbids
@@ -31,6 +34,7 @@ export function normaliseStatus(
   if (s === "accepted" || s === "joined") return "joined";
   if (s === "revoked" || s === "cancelled") return "revoked";
   if (s === "expired") return "expired";
+  if (s === "conflicted") return "conflicted";
   if (s === "pending" || s === "sent" || s === "") {
     // A pending invite past its date is expired in fact, whatever the row says.
     return Date.parse(expiresAt) < now ? "expired" : "pending";
@@ -43,6 +47,7 @@ const LABELS: Record<InviteStatus, string> = {
   joined: "Joined",
   expired: "Expired",
   revoked: "Revoked",
+  conflicted: "Account changed",
 };
 
 const TONES: Record<InviteStatus, string> = {
@@ -50,6 +55,7 @@ const TONES: Record<InviteStatus, string> = {
   joined: "bg-nevo-navy/12 text-nevo-navy",
   expired: "bg-nevo-near-black/[0.07] text-nevo-near-black/60",
   revoked: "bg-nevo-near-black/[0.07] text-nevo-near-black/60",
+  conflicted: "bg-nevo-near-black/[0.07] text-nevo-near-black/60",
 };
 
 export function InviteStatusPill({ status }: { status: InviteStatus | string }) {

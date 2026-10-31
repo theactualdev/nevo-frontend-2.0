@@ -35,7 +35,11 @@ export interface Invitation {
   role: string | null;
   email: string | null;
   name: string | null;
-  /** "pending" | "accepted" | "revoked" | "expired" - see `normaliseStatus`. */
+  /**
+   * "pending" | "accepted" | "joined" | "revoked" | "expired" | "conflicted" -
+   * see `normaliseStatus`. "conflicted" (ed123cb) is a pending teacher invite
+   * whose reserved account has changed; it is stored as pending.
+   */
   status: string | null;
   /** The class it was sent for (9 Oct) - D19's Class column and filter. */
   classId?: string | null;
@@ -123,6 +127,11 @@ export interface JoinAccepted {
   } | null;
 }
 
+/** A pending invitation already exists for that teacher (409, on create; ed123cb). */
+export const INVITATION_ALREADY_PENDING = "invitation_already_pending";
+/** The reserved teacher account changed since the revoke (409, on reissue). */
+export const RESERVED_TEACHER_STATE_CHANGED = "reserved_teacher_state_changed";
+
 export const invitesApi = {
   /** Every invitation, newest handling first. `status` narrows server-side. */
   list: (status?: string) =>
@@ -159,6 +168,16 @@ export const invitesApi = {
     api.patch<Invitation>(`/api/v1/invites/${invitationId}/resend`),
 
   /** Revoke: the link stops working immediately. */
+  /**
+   * Reissue a REVOKED teacher invitation (ed123cb): a fresh link, keeping its
+   * reserved account and class assignments where nothing conflicts. Returns
+   * the refreshed row, token and delivery included. 409s:
+   * `reserved_teacher_state_changed`, `teacher_email_in_use`,
+   * `teacher_assignment_conflict`, `invitation_not_reissuable`.
+   */
+  reissue: (invitationId: string) =>
+    api.post<Invitation>(`/api/v1/invites/${encodeURIComponent(invitationId)}/reissue`),
+
   revoke: (invitationId: string) =>
     api.del<void>(`/api/v1/invites/${invitationId}`),
 
