@@ -20,9 +20,15 @@ const media = vi.hoisted(() => ({
   withdraw: vi.fn(),
   withdrawLive: vi.fn(),
   restore: vi.fn(),
+  captions: vi.fn(),
+  approveCaptions: vi.fn(),
+  editCaption: vi.fn(),
 }));
 vi.mock("@/lib/api/lessons", () => ({ lessonsApi: api }));
-vi.mock("@/lib/api/media", () => ({ mediaApi: media }));
+vi.mock("@/lib/api/media", async (actual) => ({
+  ...(await actual<typeof import("@/lib/api/media")>()),
+  mediaApi: media,
+}));
 vi.mock("@/hooks/useHydrated", () => ({ useHydrated: () => true }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -158,6 +164,9 @@ beforeEach(() => {
   );
   media.approve.mockResolvedValue([]);
   media.retry.mockResolvedValue({});
+  media.captions.mockResolvedValue([]);
+  media.approveCaptions.mockResolvedValue({ approvedCount: 0 });
+  media.editCaption.mockResolvedValue({ approvedCount: 1 });
 });
 
 describe("pictures and narration in step 1", () => {
@@ -395,5 +404,132 @@ describe("a remake the server has recorded", () => {
     await open();
 
     expect(screen.queryByText("Remade")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Caption approval (Lydia, 31 Oct, Q10: "Yes, build it"). A picture checked
+ * again under a newer safety policy gets a new caption, and it waits in step
+ * 1 beside the pictures. The step's one press approves the pictures and their
+ * captions together; a flagged caption is held back; writing your own
+ * approves it at once.
+ */
+describe("new captions in step 1", () => {
+  const caption = (segmentId: string, text: string) => ({
+    segmentId,
+    segmentTitle: segmentId === "s-1" ? "Part 1" : "Part 2",
+    caption: text,
+    imageUrl: `https://cdn.test/live-${segmentId}.png`,
+    safetyReviewedAt: "2026-10-30T09:00:00Z",
+  });
+  const TWO = [
+    caption("s-1", "A leaf in sunlight, with arrows showing light going in."),
+    caption("s-2", "A cut-away leaf showing the green parts inside."),
+  ];
+
+  it("shows each caption beside its picture, under the pictures", async () => {
+    media.captions.mockResolvedValue(TWO);
+    await open();
+
+    expect(await screen.findByText("New captions · 2 waiting")).toBeInTheDocument();
+    expect(screen.getByText("A leaf in sunlight, with arrows showing light going in.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Write your own" })).toHaveLength(2);
+  });
+
+  it("approves the pictures and their captions with the one press", async () => {
+    media.captions.mockResolvedValueOnce(TWO).mockResolvedValue([]);
+    await open();
+    await screen.findByText("New captions · 2 waiting");
+    fireEvent.click(screen.getByRole("button", { name: "Approve pictures and narration" }));
+
+    await waitFor(() => expect(media.approveCaptions).toHaveBeenCalledWith("l-1", ["s-1", "s-2"]));
+    expect(media.approve).toHaveBeenCalledWith("l-1", expect.arrayContaining(["p1", "p2", "n1"]));
+  });
+
+  it("holds a flagged caption back from the press, and says so", async () => {
+    media.captions.mockResolvedValue(TWO);
+    await open();
+    await screen.findByText("New captions · 2 waiting");
+    fireEvent.click(screen.getByRole("button", { name: "Flag the caption for Part 2" }));
+
+    expect(screen.getByText("1 caption flagged - it keeps waiting; the rest go as they are.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve pictures and narration" }));
+    await waitFor(() => expect(media.approveCaptions).toHaveBeenCalledWith("l-1", ["s-1"]));
+  });
+
+  it("offers the press for captions alone once the pictures are approved", async () => {
+    api.review.mockResolvedValue(
+      reviewWith([picture("p1", "s-1", "approved"), recording("n1", "s-1", "approved")]),
+    );
+    media.captions.mockResolvedValue(TWO);
+    await open();
+    await screen.findByText("New captions · 2 waiting");
+
+    expect(screen.getByText("One press approves the new captions.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve the captions" }));
+    await waitFor(() => expect(media.approveCaptions).toHaveBeenCalledWith("l-1", ["s-1", "s-2"]));
+    expect(media.approve).not.toHaveBeenCalled();
+  });
+
+  it("saves a caption a teacher writes, which approves it", async () => {
+    media.captions.mockResolvedValueOnce(TWO).mockResolvedValue([TWO[1]]);
+    await open();
+    await screen.findByText("New captions · 2 waiting");
+    fireEvent.click(screen.getAllByRole("button", { name: "Write your own" })[0]);
+    fireEvent.change(screen.getByLabelText("Your caption for Part 1"), {
+      target: { value: "A green leaf in bright sunlight." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save caption" }));
+
+    await waitFor(() =>
+      expect(media.editCaption).toHaveBeenCalledWith("l-1", "s-1", "A green leaf in bright sunlight."),
+    );
+    expect(await screen.findByText("New captions · 1 waiting")).toBeInTheDocument();
+  });
+
+  it("will not save a caption shorter than the server takes", async () => {
+    media.captions.mockResolvedValue(TWO);
+    await open();
+    await screen.findByText("New captions · 2 waiting");
+    fireEvent.click(screen.getAllByRole("button", { name: "Write your own" })[0]);
+    fireEvent.change(screen.getByLabelText("Your caption for Part 1"), { target: { value: "A leaf." } });
+
+    expect(screen.getByText("At least 12 characters.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save caption" })).toBeDisabled();
+  });
+
+  it("says a picture changed when the server refuses the press", async () => {
+    media.captions.mockResolvedValue(TWO);
+    media.approveCaptions.mockRejectedValue(
+      new ApiError(409, "changed", { detail: { code: "visual_caption_review_changed" } }),
+    );
+    await open();
+    await screen.findByText("New captions · 2 waiting");
+    fireEvent.click(screen.getByRole("button", { name: "Approve pictures and narration" }));
+
+    expect(
+      await screen.findByText("A picture changed while you had it open, so its caption needs another look."),
+    ).toBeInTheDocument();
+  });
+
+  it("says it couldn't check the captions, rather than saying nothing", async () => {
+    media.captions.mockRejectedValue(new Error("network"));
+    await open();
+
+    expect(
+      await screen.findByText("We couldn’t check this lesson’s picture captions just now."),
+    ).toBeInTheDocument();
+  });
+
+  it("points a ready lesson's last step back to captions still waiting", async () => {
+    api.review.mockResolvedValue(
+      reviewWith([picture("p1", "s-1", "approved")], { reviewComplete: true }),
+    );
+    media.captions.mockResolvedValue([TWO[0]]);
+    await open(5);
+
+    expect(await screen.findByText(/A picture has a new caption waiting in step 1/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Look at it" }));
+    expect(await screen.findByText("New captions · 1 waiting")).toBeInTheDocument();
   });
 });
