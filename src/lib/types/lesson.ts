@@ -323,6 +323,11 @@ interface CalcStepBase {
   /** What this step's answer does to the drawing. Empty means nothing. */
   highlights: CalcHighlight[];
   narration?: CalcNarration;
+  /**
+   * The step's approved pieces (8c4ccef), which Slower shows one at a time.
+   * Absent where the step has none: Slower then paces the step itself.
+   */
+  parts?: string[];
 }
 
 /**

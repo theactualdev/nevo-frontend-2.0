@@ -342,6 +342,36 @@ describe("a calculation from the payload", () => {
     expect(calc).toBeUndefined();
   });
 
+  /*
+   * 8c4ccef: a step's approved `parts`, which Slower shows one at a time. As
+   * sent and in order - the server keeps back any a teacher has not approved -
+   * trimmed, blanks dropped, eight at most; absent where there are none.
+   */
+  it("keeps a step's approved parts, in order, and none where it has none", () => {
+    const calc = calculationFromVariant(
+      algebra({
+        steps: [
+          step({ parts: ["  Take 2x away.  ", "", "From both sides.", 7] }),
+          step({ stepId: "st-2", stepNumber: 2, prompt: "Add 4.", answer: "3x" }),
+        ],
+      }),
+    );
+
+    expect(calc?.steps[0].parts).toEqual(["Take 2x away.", "From both sides."]);
+    expect(calc?.steps[1]).not.toHaveProperty("parts");
+  });
+
+  it("keeps eight parts at most", () => {
+    const calc = calculationFromVariant(
+      algebra({
+        steps: [step({ parts: Array.from({ length: 10 }, (_, i) => `Part ${i + 1}.`) })],
+      }),
+    );
+
+    expect(calc?.steps[0].parts).toHaveLength(8);
+    expect(calc?.steps[0].parts?.[7]).toBe("Part 8.");
+  });
+
   it("builds the signed-out walkthrough's calculation through this same path", () => {
     const calc = ADDING_FRACTIONS.segments.find((s) => s.calculation)?.calculation;
 

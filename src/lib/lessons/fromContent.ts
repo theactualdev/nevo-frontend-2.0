@@ -865,6 +865,13 @@ function calcStepFor(
   });
   const narration = narrationFor(step);
   const tokens = tokensFor(step);
+  // As sent, in order: the server keeps back any a teacher has not approved.
+  const parts = Array.isArray(step.parts)
+    ? step.parts
+        .filter((p): p is string => typeof p === "string" && p.trim() !== "")
+        .map((p) => p.trim())
+        .slice(0, 8)
+    : [];
   const base = {
     stepId: step.stepId,
     prompt: step.prompt,
@@ -874,6 +881,7 @@ function calcStepFor(
     ...(tokens ? { tokens } : {}),
     highlights: highlightsFor(step),
     ...(narration ? { narration } : {}),
+    ...(parts.length > 0 ? { parts } : {}),
   };
 
   if (step.input === "choice") {

@@ -2802,6 +2802,30 @@ export function LessonPlayer({
       // Unread is nothing to offer yet: the next miss's reply brings it.
       .catch(() => {});
   }, [gateSitting, lesson.id]);
+  /*
+   * A CALCULATION MISS'S RE-TEACHING IS SUPPORT IN THE STEP (6b5d496): the
+   * server's one calculation route, "Show more support in this step", which
+   * it applies itself (`requiresChoice: false`) at `scaffoldLevel: strong`.
+   * That step goes to the strong level in the solver, as sent - no card and
+   * no words while Lydia decides whether there is a card at all (Hub, 29
+   * Oct). Kept for the step it named (`questionId`, the step's id); any
+   * other route, level or section is not this, and changes nothing.
+   */
+  const [calcSupport, setCalcSupport] = useState<{
+    segmentId: string;
+    stepId: string;
+  } | null>(null);
+  const noteCalcSupport = (segmentId: string, stored: LessonQuestionAttempt) => {
+    if (stored.correct !== false) return;
+    const given = stored.reteaching ?? stored.comprehensionGate?.reteaching;
+    if (
+      given?.segmentId === segmentId &&
+      given.recommendedRoute?.action === "calculation_scaffold" &&
+      given.presentation?.scaffoldLevel === "strong"
+    ) {
+      setCalcSupport({ segmentId, stepId: given.questionId });
+    }
+  };
   /** A miss's re-teaching, from its reply, for the section it answered. */
   const noteReteaching = (segmentId: string, stored: LessonQuestionAttempt) => {
     if (stored.correct !== false) return;
@@ -3767,6 +3791,15 @@ export function LessonPlayer({
                 modality={modality}
                 padDock={padDock}
                 supportLevel={supportLevel}
+                // The child's own Slower, the lesson's pace - never the
+                // engine's standing density, which this screen does not draw.
+                calcSlower={manualDensity === DENSITY.SLOWER}
+                onCalcSlower={() => pickDensity(DENSITY.SLOWER)}
+                calcSupportStep={
+                  calcSupport?.segmentId === segment.id
+                    ? calcSupport.stepId
+                    : null
+                }
                 onSystemScroll={systemScrolled}
                 engineHint={
                   hintHere && hintText && !hintInSheet ? hintText : undefined
@@ -3838,7 +3871,8 @@ export function LessonPlayer({
                    * answers alone, so a calculation got
                    * wrong could never make support rise (Lydia, 17 Oct). In
                    * addition to the step's signal below, never in the child's
-                   * way, and nothing the server says back changes the solver.
+                   * way. What the server says back about a miss is support in
+                   * that step, and only that (`noteCalcSupport`).
                    */
                   saveAttempt(
                     calculationAttemptFor({
@@ -3848,6 +3882,7 @@ export function LessonPlayer({
                       responseTimeMs: given.responseTimeMs,
                       hinted: given.hinted,
                     }),
+                    (stored) => noteCalcSupport(segment.id, stored),
                   )
                 }
                 onCalcStep={(stepId, correct) => {
@@ -4134,6 +4169,9 @@ function SegmentBody({
   modality,
   padDock,
   supportLevel,
+  calcSlower,
+  onCalcSlower,
+  calcSupportStep,
   engineHint,
   onEngineHintClosed,
   onSystemScroll,
@@ -4162,6 +4200,12 @@ function SegmentBody({
   padDock: HTMLElement | null;
   /** The level the support dots show, which the solver draws to (B116). */
   supportLevel: ScaffoldLevel | null;
+  /** The lesson's pace is the child's Slower - see `CalculationSolver`. */
+  calcSlower: boolean;
+  /** The child pressed Slower in the solver's row. */
+  onCalcSlower: () => void;
+  /** The step the server's re-teaching put at the strong level after a miss. */
+  calcSupportStep: string | null;
   /** The engine's `offer_hint` text, which the solver shows as its own. */
   engineHint?: string;
   onEngineHintClosed: () => void;
@@ -4238,6 +4282,9 @@ function SegmentBody({
             calculation={segment.calculation}
             padDock={padDock}
             level={supportLevel}
+            slower={calcSlower}
+            onSlower={onCalcSlower}
+            engineSupportStep={calcSupportStep}
             engineHint={engineHint}
             onEngineHintClosed={onEngineHintClosed}
             onSystemScroll={onSystemScroll}
