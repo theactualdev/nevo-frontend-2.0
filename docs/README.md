@@ -31,6 +31,12 @@ to the repo, so the whole team (and CI) works from the same reference.
   needs design. Replaces the old `blocked-items-handoff.md`, whose contracts
   had all since shipped.
 
+### Releases
+
+- **[deploy-order.md](./deploy-order.md)** — a stricter backend check never
+  goes live before the client sends the format it demands (Lydia, 31 Oct 2026),
+  and the order that keeps it true.
+
 ### Planning
 
 - **[student-daily-experience-epic.md](./student-daily-experience-epic.md)** —
