@@ -95,6 +95,8 @@ const REFUSED_WITHOUT_WORDS: Record<string, string> = {
   unmarkable_check:
     "One of these checks has no answer Nevo can mark it against, so the checks can’t be accepted yet.",
   no_checks_to_approve: "There’s nothing here to accept any more.",
+  visual_caption_review_changed:
+    "A picture changed while you had it open, so its caption needs another look.",
   lesson_not_ready_for_review:
     "This lesson is still being prepared, so its checks can’t be accepted yet.",
 };
@@ -154,6 +156,15 @@ export function LessonReviewFlow({
     initialStep ?? (complete && !mediaWaiting ? 5 : 1),
   );
   const [flaggedMedia, setFlaggedMedia] = useState<Set<string>>(() => new Set());
+  /*
+   * NEW CAPTIONS (Lydia, 31 Oct, Q10): approved with the pictures, by step 1's
+   * one press. They hold back nothing else - not the key points, not Assign.
+   * A flagged one is left out of the press and keeps waiting.
+   */
+  const [heldCaptions, setHeldCaptions] = useState<Set<string>>(() => new Set());
+  const captionIds = flow.captions
+    .filter((c) => !heldCaptions.has(c.segmentId))
+    .map((c) => c.segmentId);
   const [confirmed, setConfirmed] = useState<Set<string>>(() => new Set());
   const [edited, setEdited] = useState<Set<string>>(() => new Set());
   /** Guiding questions flagged for a look that the teacher has read. */
@@ -211,6 +222,8 @@ export function LessonReviewFlow({
     );
     const approve = media.awaiting.filter((m) => !flaggedMedia.has(m.id)).map((m) => m.id);
     const kinds = new Set(media.awaiting.map((m) => m.kind));
+    const heldCount = flow.captions.length - captionIds.length;
+    const pressable = mediaWaiting || captionIds.length > 0;
     const shown = media.pictures.length + media.recordings.length;
     const next =
       needLook > 0
@@ -229,11 +242,17 @@ export function LessonReviewFlow({
           : mediaWaiting
             ? remake.length > 0
               ? `${remake.length} flagged - Nevo will remake ${remake.length === 1 ? "it" : "those"}; the rest go as they are.`
-              : remadeWaiting
-                ? remadeForMe
-                  ? "Remade as you asked - have a look before you approve."
-                  : "Remade after a flag - have a look before you approve."
-                : "One press approves everything here."
+              : heldCount > 0
+                ? `${plural(heldCount, "caption", "captions")} flagged - ${heldCount === 1 ? "it keeps" : "they keep"} waiting; the rest go as they are.`
+                : remadeWaiting
+                  ? remadeForMe
+                    ? "Remade as you asked - have a look before you approve."
+                    : "Remade after a flag - have a look before you approve."
+                  : "One press approves everything here."
+            : flow.captions.length > 0
+              ? heldCount > 0
+                ? `${plural(heldCount, "caption", "captions")} flagged - ${heldCount === 1 ? "it keeps" : "they keep"} waiting; the rest go as they are.`
+                : "One press approves the new captions."
             : !media.exists
               ? next
                 ? `Text only. ${next}`
@@ -249,22 +268,24 @@ export function LessonReviewFlow({
           <span aria-hidden className={SPINNER} />
           Approving
         </span>
-      ) : mediaWaiting ? (
+      ) : pressable ? (
         <button
           type="button"
           disabled={flow.working !== null}
           onClick={() => {
-            void flow.approveMedia(approve, remake).then((ok) => {
+            void flow.approveMedia(approve, remake, captionIds).then((ok) => {
               if (ok) setFlaggedMedia(new Set());
             });
           }}
           className={PRIMARY}
         >
-          {kinds.size > 1
-            ? "Approve pictures and narration"
-            : kinds.has("image")
-              ? "Approve the pictures"
-              : "Approve the narration"}
+          {!mediaWaiting
+            ? "Approve the captions"
+            : kinds.size > 1
+              ? "Approve pictures and narration"
+              : kinds.has("image")
+                ? "Approve the pictures"
+                : "Approve the narration"}
         </button>
       ) : (
         <button type="button" onClick={() => setStep(2)} className={PRIMARY}>
@@ -505,6 +526,22 @@ export function LessonReviewFlow({
                   onRetry={(id) => void flow.retryMedia(id)}
                   retrying={flow.working?.startsWith("retry:") ? flow.working.slice(6) : null}
                   retryRefusal={(id) => refusedHere(`retry:${id}`)}
+                  captions={{
+                    items: flow.captions,
+                    failed: flow.captionsFailed,
+                    held: heldCaptions,
+                    onHold: (id) =>
+                      setHeldCaptions((h) => {
+                        const next = new Set(h);
+                        if (next.has(id)) next.delete(id);
+                        else next.add(id);
+                        return next;
+                      }),
+                    onSave: (id, text) => flow.editCaption(id, text),
+                    saving: flow.working?.startsWith("caption:") ? flow.working.slice(8) : null,
+                    locked: flow.working === "media",
+                    refusal: (id) => refusedHere(`caption:${id}`),
+                  }}
                 />
               }
               modules={modules}
@@ -550,6 +587,7 @@ export function LessonReviewFlow({
               pointsSigned={pointsSigned}
               checks={checks}
               rewritesSigned={rewritesSigned || noRewrites}
+              captionsWaiting={flow.captions.length}
               onGo={setStep}
             />
           )}
@@ -1171,6 +1209,7 @@ function StepLive({
   pointsSigned,
   checks,
   rewritesSigned,
+  captionsWaiting,
   onGo,
 }: {
   lessonId: string;
@@ -1178,6 +1217,11 @@ function StepLive({
   pointsSigned: boolean;
   checks: ChecksView;
   rewritesSigned: boolean;
+  /**
+   * New captions still waiting in step 1. They hold back nothing, so a ready
+   * lesson opens here - and they would never be seen without this line.
+   */
+  captionsWaiting: number;
   onGo: (step: Step) => void;
 }) {
   if (review.reviewComplete !== true) {
@@ -1244,6 +1288,18 @@ function StepLive({
             </div>
           ))}
         </div>
+      )}
+      {captionsWaiting > 0 && (
+        <p className={cn(SUB, "mt-5 max-w-[460px] text-nevo-near-black/66")}>
+          {`${captionsWaiting === 1 ? "A picture has a new caption" : `${captionsWaiting} pictures have new captions`} waiting in step 1. `}
+          <button
+            type="button"
+            onClick={() => onGo(1)}
+            className="cursor-pointer border-none bg-transparent p-0 font-semibold text-nevo-navy underline underline-offset-[3px]"
+          >
+            {captionsWaiting === 1 ? "Look at it" : "Look at them"}
+          </button>
+        </p>
       )}
       <div className="mt-[26px] flex flex-wrap justify-center gap-3">
         <Link href={`/teacher/lessons/assign?lesson=${lessonId}`} className={PRIMARY}>

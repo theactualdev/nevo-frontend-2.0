@@ -9,7 +9,7 @@ import {
   type LessonReview,
   type MissingKeyPointWrite,
 } from "@/lib/api/lessons";
-import { mediaApi } from "@/lib/api/media";
+import { mediaApi, type VisualCaptionReview } from "@/lib/api/media";
 import { getToken } from "@/lib/auth/session";
 
 /**
@@ -37,7 +37,8 @@ export type ReviewWork =
   | `missing:${string}`
   | `rewrite:${string}:${string}`
   | "media"
-  | `retry:${string}`;
+  | `retry:${string}`
+  | `caption:${string}`;
 
 export interface LessonReviewFlowState {
   lesson: LessonDetailResponse | null;
@@ -75,7 +76,17 @@ export interface LessonReviewFlowState {
    * then everything else shown is approved. Remakes go first and a refused one
    * stops the press, so a teacher's flag is never overridden by the approval.
    */
-  approveMedia: (approve: string[], remake: string[]) => Promise<boolean>;
+  approveMedia: (approve: string[], remake: string[], captions?: string[]) => Promise<boolean>;
+  /**
+   * New captions waiting for a teacher, for pictures re-checked under a newer
+   * safety policy (66be3b8, 229e9a8). Step 1's press approves them with the
+   * pictures (Lydia, 31 Oct, Q10). Empty while unread; see `captionsFailed`.
+   */
+  captions: VisualCaptionReview[];
+  /** The captions could not be read, which is not the same as there being none. */
+  captionsFailed: boolean;
+  /** Save a teacher's own caption for one section. Saving it approves it. */
+  editCaption: (segmentId: string, caption: string) => Promise<boolean>;
   /**
    * The pictures and recordings this teacher flagged and sent back in this
    * visit (design 11; Lydia, 26 Oct: "show remade as remade"). Since 6b5d496
@@ -96,11 +107,32 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
   const [refused, setRefused] = useState<LessonReviewFlowState["refused"]>(null);
   const [changed, setChanged] = useState(false);
   const [remade, setRemade] = useState<ReadonlySet<string>>(() => new Set());
+  const [captions, setCaptions] = useState<VisualCaptionReview[]>([]);
+  const [captionsFailed, setCaptionsFailed] = useState(false);
 
   const readLesson = useCallback(
     () => lessonsApi.detail(lessonId).then(setLesson),
     [lessonId],
   );
+
+  const readCaptions = useCallback(
+    () =>
+      mediaApi
+        .captions(lessonId)
+        .then((rows) => {
+          setCaptions(rows);
+          setCaptionsFailed(false);
+        })
+        .catch(() => setCaptionsFailed(true)),
+    [lessonId],
+  );
+
+  // Apart from the review's own read: a caption read that fails must not
+  // take the whole review down with it.
+  useEffect(() => {
+    if (!getToken()) return;
+    void readCaptions();
+  }, [readCaptions]);
 
   useEffect(() => {
     if (!getToken()) return;
@@ -251,7 +283,7 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
   );
 
   const approveMedia = useCallback(
-    async (approve: string[], remake: string[]) => {
+    async (approve: string[], remake: string[], captionIds: string[] = []) => {
       if (working) return false;
       setWorking("media");
       setRefused(null);
@@ -261,19 +293,46 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
           setRemade((s) => new Set(s).add(id));
         }
         if (approve.length > 0) await mediaApi.approve(lessonId, approve);
-        await rereadAll().catch(() => {});
+        // The pictures and their captions in one press (Lydia, 31 Oct, Q10).
+        if (captionIds.length > 0) await mediaApi.approveCaptions(lessonId, captionIds);
+        await Promise.all([rereadAll(), readCaptions()]).catch(() => {});
         return true;
       } catch (err: unknown) {
         const detail = err instanceof ApiError ? err.detail : undefined;
-        setRefused({ work: "media", message: apiErrorMessage(detail) });
+        setRefused({ work: "media", message: apiErrorMessage(detail), code: apiErrorCode(detail) });
         // Something may have landed before the refusal; show what is true now.
-        await rereadAll().catch(() => {});
+        await Promise.all([rereadAll(), readCaptions()]).catch(() => {});
         return false;
       } finally {
         setWorking(null);
       }
     },
-    [working, lessonId, rereadAll],
+    [working, lessonId, rereadAll, readCaptions],
+  );
+
+  const editCaption = useCallback(
+    async (segmentId: string, caption: string) => {
+      if (working) return false;
+      setWorking(`caption:${segmentId}`);
+      setRefused(null);
+      try {
+        await mediaApi.editCaption(lessonId, segmentId, caption);
+        await readCaptions();
+        return true;
+      } catch (err: unknown) {
+        const detail = err instanceof ApiError ? err.detail : undefined;
+        setRefused({
+          work: `caption:${segmentId}`,
+          message: apiErrorMessage(detail),
+          code: apiErrorCode(detail),
+        });
+        if (apiErrorCode(detail) === "visual_caption_review_changed") await readCaptions();
+        return false;
+      } finally {
+        setWorking(null);
+      }
+    },
+    [working, lessonId, readCaptions],
   );
 
   const retryMedia = useCallback(
@@ -313,6 +372,9 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
     resolveMissing,
     editRewrite,
     approveMedia,
+    captions,
+    captionsFailed,
+    editCaption,
     remade,
     retryMedia,
   };

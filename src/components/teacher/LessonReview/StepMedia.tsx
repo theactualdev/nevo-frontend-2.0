@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { MediaTile, PlayButton, duration, useNarrationSampler } from "@/components/teacher/Media/MediaPieces";
 import { cn } from "@/lib/utils";
+import { CAPTION_MAX, CAPTION_MIN, type VisualCaptionReview } from "@/lib/api/media";
 import { plural, wasRemade, type MediaRow, type MediaView } from "./reviewModel";
 
 /**
@@ -58,6 +59,7 @@ export function StepMedia({
   onRetry,
   retrying,
   retryRefusal,
+  captions,
 }: {
   media: MediaView;
   /**
@@ -76,13 +78,26 @@ export function StepMedia({
   onRetry: (mediaId: string) => void;
   retrying: string | null;
   retryRefusal: (mediaId: string) => string | null;
+  /** New captions waiting for a teacher (Lydia, 31 Oct, Q10). */
+  captions?: CaptionsProps;
 }) {
   const [allPictures, setAllPictures] = useState(false);
   const [allRecordings, setAllRecordings] = useState(false);
   const sampler = useNarrationSampler();
 
+  const captionsBlock = captions && <Captions {...captions} />;
+  /*
+   * A caption belongs to a live picture, which may predate the media list -
+   * so a lesson with nothing in that list can still have captions waiting,
+   * and is then not "text only".
+   */
+  if (!media.exists && captions && captions.items.length > 0) {
+    return <div>{captionsBlock}</div>;
+  }
+
   if (!media.exists) {
     return (
+      <>
       <div className="mt-[26px] flex items-center gap-[15px] rounded-[12px] bg-nevo-cream-elevated p-[22px] shadow-elevation-1">
         <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-nevo-violet/20 text-nevo-navy">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -99,6 +114,10 @@ export function StepMedia({
           </p>
         </div>
       </div>
+      {/* Only ever the "couldn't check" line here: with any caption, the
+          branch above shows them instead. */}
+      {captionsBlock}
+      </>
     );
   }
 
@@ -195,6 +214,8 @@ export function StepMedia({
           </p>
         )
       )}
+
+      {captionsBlock}
 
       {recordings.length > 0 ? (
         <div className="mt-[26px]">
@@ -324,6 +345,184 @@ export function StepMedia({
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+export interface CaptionsProps {
+  items: VisualCaptionReview[];
+  /** The captions could not be read: say so, never "none". */
+  failed: boolean;
+  /** Held back from the step's press, as a flagged picture is (by section id). */
+  held: ReadonlySet<string>;
+  onHold: (segmentId: string) => void;
+  /** Save a teacher's own caption; saving it approves it. */
+  onSave: (segmentId: string, caption: string) => Promise<boolean>;
+  /** The section whose caption is being saved, if any. */
+  saving: string | null;
+  /** The step's press is running. */
+  locked: boolean;
+  refusal: (segmentId: string) => string | null;
+}
+
+/**
+ * A picture's new caption, beside the pictures (Lydia, 31 Oct, Q10: "Yes,
+ * build it"; the 28 Oct proposal she approved).
+ *
+ * Each caption sits under its own picture - the one the server says it was
+ * written for - with the picture's own Flag and a way to write your own. The
+ * step's one press approves the pictures and these captions together; a
+ * flagged caption is held back from it and keeps waiting. Saving your own
+ * approves it at once, as the server does.
+ *
+ * Not offered: retrying a check that could not run (`retry-unavailable`). No
+ * read says which pictures that would be, so a button for it would act blind.
+ */
+function Captions({ items, failed, held, onHold, onSave, saving, locked, refusal }: CaptionsProps) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+
+  if (items.length === 0) {
+    return failed ? (
+      <p className={cn(NOTE, "mt-[22px]")}>
+        We couldn&rsquo;t check this lesson&rsquo;s picture captions just now.
+      </p>
+    ) : null;
+  }
+
+  const heldCount = items.filter((c) => held.has(c.segmentId)).length;
+  const length = draft.trim().replace(/\s+/g, " ").length;
+
+  return (
+    <div className="mt-[26px]">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <span className={SECTION_LABEL}>{`New captions · ${items.length} waiting`}</span>
+        {heldCount > 0 && <span className={NOTE}>{`${heldCount} flagged`}</span>}
+      </div>
+      <p className={GUIDE}>
+        These pictures were checked again, and Nevo wrote each one a new
+        caption. Flag any you&rsquo;d rather not use yet, or write your own.
+      </p>
+      <div className="mt-3.5 flex flex-col gap-3">
+        {items.map((item) => {
+          const label = item.segmentTitle || "this section";
+          const isHeld = held.has(item.segmentId);
+          const isEditing = editing === item.segmentId;
+          const isSaving = saving === item.segmentId;
+          const said = refusal(item.segmentId);
+          return (
+            <div
+              key={item.segmentId}
+              className="group flex gap-3.5 rounded-[12px] bg-nevo-cream-elevated p-3 shadow-elevation-1 max-md:flex-col"
+            >
+              <div className="w-[150px] shrink-0 max-md:w-full">
+                {item.imageUrl ? (
+                  <MediaTile
+                    image={{ imageUrl: item.imageUrl }}
+                    alt={item.caption}
+                    className={cn(
+                      "border-[1.5px] border-solid",
+                      isHeld ? "border-nevo-violet" : "border-transparent",
+                    )}
+                  >
+                    {!isEditing && !locked && (
+                      <button
+                        type="button"
+                        onClick={() => onHold(item.segmentId)}
+                        aria-pressed={isHeld}
+                        aria-label={isHeld ? `Unflag the caption for ${label}` : `Flag the caption for ${label}`}
+                        className={cn(
+                          "absolute top-[7px] right-[7px] inline-flex size-[27px] cursor-pointer items-center justify-center rounded-full border-none shadow-[0_1px_4px_rgba(0,0,0,0.2)] transition-opacity duration-150 focus-visible:opacity-100 motion-reduce:opacity-100 [@media(hover:none)]:opacity-100",
+                          isHeld
+                            ? "bg-nevo-violet text-nevo-cream opacity-100"
+                            : "bg-nevo-cream text-nevo-navy opacity-0 group-hover:opacity-100",
+                        )}
+                      >
+                        <FlagIcon />
+                      </button>
+                    )}
+                    {isHeld && (
+                      <span className="absolute bottom-[7px] left-[7px] rounded-full bg-nevo-violet/32 px-[9px] py-0.5 text-[10px] font-semibold text-nevo-navy">
+                        Flagged
+                      </span>
+                    )}
+                  </MediaTile>
+                ) : (
+                  <div className="flex aspect-[4/3] items-center justify-center rounded-[10px] bg-nevo-cream-inset px-3 text-center text-[12px] leading-[1.4] text-nevo-near-black/55">
+                    No preview of this picture.
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="block text-[12px] text-nevo-near-black/60">{label}</span>
+                {isEditing ? (
+                  <>
+                    <label htmlFor={`caption-${item.segmentId}`} className="sr-only">
+                      {`Your caption for ${label}`}
+                    </label>
+                    <textarea
+                      id={`caption-${item.segmentId}`}
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      maxLength={CAPTION_MAX}
+                      rows={3}
+                      className="mt-1.5 w-full resize-y rounded-[8px] border-[1.5px] border-nevo-near-black/14 bg-nevo-cream px-3 py-2 text-[14px] leading-[1.5] text-nevo-near-black outline-none focus:border-nevo-navy"
+                    />
+                    <span className={cn(NOTE, "mt-1 block")}>
+                      {length < CAPTION_MIN
+                        ? `At least ${CAPTION_MIN} characters.`
+                        : `${length} of ${CAPTION_MAX} characters.`}
+                    </span>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        disabled={length < CAPTION_MIN || isSaving || locked}
+                        onClick={() => {
+                          void onSave(item.segmentId, draft).then((ok) => {
+                            if (ok) setEditing(null);
+                          });
+                        }}
+                        className="h-9 cursor-pointer rounded-[8px] border-none bg-nevo-navy px-3.5 text-[13px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-55"
+                      >
+                        {isSaving ? "Saving…" : "Save caption"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => setEditing(null)}
+                        className="cursor-pointer border-none bg-transparent p-0 text-[13px] font-semibold text-nevo-near-black/60 hover:text-nevo-navy disabled:cursor-default"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-1 text-[14px] leading-[1.5] text-nevo-near-black">{item.caption}</p>
+                    {!locked && saving === null && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditing(item.segmentId);
+                          setDraft(item.caption);
+                        }}
+                        className="mt-2 cursor-pointer border-none bg-transparent p-0 text-[12.5px] font-semibold text-nevo-navy underline underline-offset-[3px]"
+                      >
+                        Write your own
+                      </button>
+                    )}
+                  </>
+                )}
+                {said && (
+                  <span role="alert" className="mt-2 block text-[12.5px] font-medium text-nevo-navy">
+                    {said}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
