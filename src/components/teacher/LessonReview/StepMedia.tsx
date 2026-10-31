@@ -466,7 +466,7 @@ function Captions({ items, failed, held, onHold, onSave, saving, locked, refusal
                       onChange={(e) => setDraft(e.target.value)}
                       maxLength={CAPTION_MAX}
                       rows={3}
-                      className="mt-1.5 w-full resize-y rounded-[8px] border-[1.5px] border-nevo-near-black/14 bg-nevo-cream px-3 py-2 text-[14px] leading-[1.5] text-nevo-near-black outline-none focus:border-nevo-navy"
+                      className="mt-1.5 w-full resize-y rounded-[10px] border-[1.5px] border-nevo-near-black/14 bg-nevo-cream px-3 py-2 text-[14px] leading-[1.5] text-nevo-near-black outline-none focus:border-nevo-navy"
                     />
                     <span className={cn(NOTE, "mt-1 block")}>
                       {length < CAPTION_MIN
@@ -482,7 +482,7 @@ function Captions({ items, failed, held, onHold, onSave, saving, locked, refusal
                             if (ok) setEditing(null);
                           });
                         }}
-                        className="h-9 cursor-pointer rounded-[8px] border-none bg-nevo-navy px-3.5 text-[13px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-55"
+                        className="h-9 cursor-pointer rounded-[10px] border-none bg-nevo-navy px-3.5 text-[13px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-55"
                       >
                         {isSaving ? "Saving…" : "Save caption"}
                       </button>
