@@ -64,9 +64,11 @@ describe("nothing to do", () => {
     );
     expect(
       screen.getByText(
-        "There's no warm-up waiting at the moment. You can go on to Nevo and come back any time.",
+        "You can go on to Nevo and come back any time.",
       ),
     ).toBeInTheDocument();
+    // Lydia, 31 Oct: it names no warm-up, which lives somewhere else.
+    expect(document.body.textContent).not.toMatch(/warm-up/i);
   });
 
   it("has one way on, Go to my lessons", () => {
