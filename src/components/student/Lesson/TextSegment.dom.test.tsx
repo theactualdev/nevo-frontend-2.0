@@ -355,23 +355,22 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
     expect(screen.getByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toBeInTheDocument();
   });
 
-  it("keeps the equations under Simplify, beside IN SHORT, and no key-term chips", () => {
+  it("keeps the key terms and equations under Simplify, beside IN SHORT", () => {
     // Lydia, 17 Oct: "A rewrite must not be able to lose an equation.
     // Simplify loses no content, which is the whole rule." The frame's
-    // Simplify view drew neither, and this followed it. Lydia, 31 Oct, of the
-    // chips: "If the key terms are in the text, the chips repeat them."
+    // Simplify view drew neither, and this followed it.
     render(<TextSegment content={boxes} density={DENSITY.SIMPLIFY} />);
 
     expect(screen.getByText("Plants feed themselves on light.")).toBeInTheDocument();
     expect(screen.getByText("IN SHORT")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "chlorophyll" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "glucose" })).toBeNull();
+    expect(screen.getByRole("button", { name: "chlorophyll" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "glucose" })).toBeInTheDocument();
     expect(screen.getByText("Word equation")).toBeInTheDocument();
     expect(screen.getByText("Carbon dioxide + Water → Glucose + Oxygen")).toBeInTheDocument();
     expect(screen.getByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toBeInTheDocument();
   });
 
-  it("keeps the equations under Slower's authored step cards, once and not per step", () => {
+  it("keeps them under Slower's authored step cards, once and not per step", () => {
     // Checklist 15, Slower: "Failure: Content is cut to make it shorter."
     // An authored Slower has its own lead line in the body's place.
     const stepped = {
@@ -382,14 +381,14 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
     render(<TextSegment content={stepped} density={DENSITY.SLOWER} />);
 
     expect(screen.getByText("It makes sugar.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "chlorophyll" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "chlorophyll" })).toHaveLength(1);
     expect(screen.getAllByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toHaveLength(1);
     expect(screen.getAllByText("Word equation")).toHaveLength(1);
     // After the last step, where the standard view puts them after the body.
     const lastStep = screen.getByText("It makes sugar.");
+    const chip = screen.getByRole("button", { name: "chlorophyll" });
     expect(
-      lastStep.compareDocumentPosition(screen.getByText("Word equation")) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      lastStep.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     // IN SHORT with them, once, after the steps (Lydia, 26 Oct #2).
     expect(screen.getAllByText("IN SHORT")).toHaveLength(1);
@@ -399,27 +398,21 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
     ).toBeTruthy();
   });
 
-  it("keeps the equations under every view, and the chips under all but Simplify and Slower, each drawn once", () => {
+  it("keeps them under every view, each drawn once", () => {
     const stepped = {
       ...boxes,
       body: { ...boxes.body, [DENSITY.SLOWER]: "One small step at a time." },
       slowerSteps: ["A leaf catches light.", "It makes sugar."],
     };
     const views = [
-      { name: "standard", content: boxes, density: null, chips: 1 },
-      { name: "Simplify", content: boxes, density: DENSITY.SIMPLIFY, chips: 0 },
-      { name: "Expand", content: boxes, density: DENSITY.EXPAND, chips: 1 },
-      {
-        name: "Slower, authored steps",
-        content: stepped,
-        density: DENSITY.SLOWER,
-        chips: 0,
-      },
+      { name: "standard", content: boxes, density: null },
+      { name: "Simplify", content: boxes, density: DENSITY.SIMPLIFY },
+      { name: "Expand", content: boxes, density: DENSITY.EXPAND },
+      { name: "Slower, authored steps", content: stepped, density: DENSITY.SLOWER },
       {
         name: "Slower, the server's chunks",
         content: { ...boxes, readingChunks: CHUNKS },
         density: DENSITY.SLOWER,
-        chips: 0,
       },
     ] as const;
     for (const view of views) {
@@ -428,9 +421,7 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
       );
 
       for (const term of ["chlorophyll", "glucose"])
-        expect(screen.queryAllByRole("button", { name: term }), view.name).toHaveLength(
-          view.chips,
-        );
+        expect(screen.getAllByRole("button", { name: term }), view.name).toHaveLength(1);
       for (const equation of [
         "Carbon dioxide + Water → Glucose + Oxygen",
         "6CO2 + 6H2O → C6H12O6 + 6O2",
@@ -440,7 +431,7 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
     }
   });
 
-  it("keeps the equations once while Slower takes the server's chunks a part at a time", () => {
+  it("keeps them once while Slower takes the server's chunks a part at a time", () => {
     render(
       <TextSegment
         content={{ ...boxes, readingChunks: CHUNKS }}
@@ -450,7 +441,7 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
     expect(screen.getByRole("button", { name: "Tap to continue" })).toBeInTheDocument();
     expect(screen.queryByText(CHUNKS[1].text)).toBeNull();
 
-    expect(screen.queryByRole("button", { name: "chlorophyll" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "chlorophyll" })).toHaveLength(1);
     expect(screen.getAllByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toHaveLength(1);
     expect(screen.getAllByText("IN SHORT")).toHaveLength(1);
   });
@@ -472,14 +463,14 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
     expect(visibleText(unlabelled)).toBe("6CO2 + 6H2O → C6H12O6 + 6O2");
   });
 
-  it("draws the key points under Slower too, with the equations (Lydia, 26 Oct #2)", () => {
+  it("draws the key points under Slower too, with the terms and equations (Lydia, 26 Oct #2)", () => {
     // "Pace and content are separate, and a child who needs more time should
     // not get less support."
     render(<TextSegment content={boxes} density={DENSITY.SLOWER} />);
 
     const box = screen.getByText("IN SHORT").parentElement!;
     expect(visibleText(box)).toBe("IN SHORT Plants feed themselves. Light is the fuel.");
-    expect(screen.queryByText("chlorophyll")).toBeNull();
+    expect(screen.getByText("chlorophyll")).toBeInTheDocument();
     expect(screen.getByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toBeInTheDocument();
   });
 
@@ -774,7 +765,7 @@ describe("reading support in the boxes (frame 17, UDL · reading)", () => {
   });
 });
 
-describe("under Simplify, the terms are in the text (Lydia, 31 Oct)", () => {
+describe("a key term under Simplify still behaves as it does beside the standard text", () => {
   const simpler = content({
     body: { default: BODY, [DENSITY.SIMPLIFY]: "Plants feed themselves on light." },
     keyTerms: [
@@ -783,19 +774,29 @@ describe("under Simplify, the terms are in the text (Lydia, 31 Oct)", () => {
     ],
     equations: [{ equation: "Carbon dioxide + Water → Glucose + Oxygen" }],
   });
+  const chip = (name: string) => screen.getByRole("button", { name });
 
-  it("draws no key-term chip and no definition to open", () => {
-    // "If the key terms are in the text, the chips repeat them."
+  it("opens one definition at a time, and closes it on a second tap", () => {
     render(<TextSegment content={simpler} density={DENSITY.SIMPLIFY} />);
 
-    expect(screen.queryByRole("button", { name: "chlorophyll" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "glucose" })).toBeNull();
+    fireEvent.click(chip("chlorophyll"));
+    expect(screen.getByText("The green colour in a leaf.")).toBeInTheDocument();
+    fireEvent.click(chip("glucose"));
     expect(screen.queryByText("The green colour in a leaf.")).toBeNull();
+    expect(screen.getByText("The sugar a plant makes.")).toBeInTheDocument();
+    expect(chip("chlorophyll")).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(chip("glucose"));
+    expect(screen.queryByText("The sugar a plant makes.")).toBeNull();
   });
 
-  it("still gives the equation reading support", () => {
+  it("takes reading support in the definition and the equation", () => {
     render(<TextSegment content={simpler} density={DENSITY.SIMPLIFY} reading />);
 
+    fireEvent.click(chip("glucose"));
+
+    const definition = screen.getByText("The sugar a plant makes.").className;
+    expect(definition).toMatch(/(^|\s)text-\[18px\]/);
+    expect(definition).toMatch(/(^|\s)leading-\[2\]/);
     const equation = screen.getByText("Carbon dioxide + Water → Glucose + Oxygen").className;
     expect(equation).toMatch(/(^|\s)text-\[18px\]/);
     expect(equation).toMatch(/tracking-\[0\.02em\]/);

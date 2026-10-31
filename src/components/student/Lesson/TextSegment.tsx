@@ -35,10 +35,8 @@ const PAUSE_REVEAL_MS = 4_000;
  * with the active reading density — the SAME segment, not new content. Simplify
  * strips to the fewest words (+ "IN SHORT" callout); Expand adds depth and its
  * own callout; Slower breaks the idea into small numbered step cards under a
- * lead line. The equation boxes stay under every one of them: a rewrite loses
- * no content (Lydia, 17 Oct). The key-term chips stay under all but Simplify
- * and Slower, whose text carries the terms itself (Lydia, 31 Oct - see
- * `keyTerms` below).
+ * lead line. The key-term chips and the equation boxes stay under every one of
+ * them: a rewrite loses no content (Lydia, 17 Oct - see `keyTerms` below).
  *
  * UDL accommodations (37c) adjust delivery, never diagnose:
  * - `reading`: the body sits on a softer card, larger and airier (18px,
@@ -110,10 +108,9 @@ export function TextSegment({
    * KEY TERMS AND EQUATIONS ARE PART OF THE SEGMENT, "rather than a form of
    * support" (design, 9 Oct), so they sit beside the text under EVERY view:
    * the standard text in one block or in parts, Simplify, Expand, Slower's
-   * step cards or its parts, and a lower-depth session's simpler text - the
-   * key terms all but Simplify and Slower (below). Drawn once, after the body
-   * and any steps, where the standard view and Expand put them - never once
-   * per step or part.
+   * step cards or its parts, and a lower-depth session's simpler text. Drawn
+   * once, after the body and any steps, where the standard view and Expand
+   * put them - never once per step or part.
    *
    * A REWRITE LOSES NO CONTENT (Lydia, 17 Oct, order of work item 8): "A
    * rewrite must not be able to lose an equation. Simplify loses no content,
@@ -132,20 +129,9 @@ export function TextSegment({
    * rewritten text, and they stay beside it. AND UNDER SLOWER (Lydia, 26 Oct
    * #2): "Pace and content are separate, and a child who needs more time
    * should not get less support." They sit after the body there too, the
-   * parts and the step cards alike, as the equations do.
-   *
-   * NO KEY-TERM CHIPS UNDER SIMPLIFY OR SLOWER (Lydia, 31 Oct): "If the key
-   * terms are in the text, the chips repeat them." The server's simplified
-   * text keeps them inline (the frame's S2), and the Lesson Player frame
-   * draws no chips under either view. Every form of Slower alike - its step
-   * cards and the server's parts. The equations stay: a rewrite still must
-   * not lose one. A lower-depth session's simpler text is not the child's
-   * Simplify, and keeps them.
+   * parts and the step cards alike, as the terms and equations do.
    */
-  const keyTerms =
-    density === DENSITY.SIMPLIFY || density === DENSITY.SLOWER
-      ? undefined
-      : content.keyTerms;
+  const keyTerms = content.keyTerms;
   const equations = content.equations;
   const keyPoints = !expand ? content.keyPoints : undefined;
   /*

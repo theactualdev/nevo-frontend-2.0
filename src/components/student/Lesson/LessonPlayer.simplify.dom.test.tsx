@@ -351,10 +351,6 @@ describe("Simplify loses no content (Lydia, 17 Oct)", () => {
    * the path a child presses Simplify on: the key terms and the equation
    * arrive on `textVariant`, the simpler text on `depthVariants`, and the body
    * may not repeat the equation (backend, 9 Oct).
-   *
-   * The key-term chips are the exception (Lydia, 31 Oct): "If the key terms
-   * are in the text, the chips repeat them." None under Simplify, whoever
-   * asked for it.
    */
   const dense = lessonFromContent({
     id: "photo-4",
@@ -389,7 +385,7 @@ describe("Simplify loses no content (Lydia, 17 Oct)", () => {
     ],
   } as never);
 
-  it("keeps the equation, and draws no key-term chip, when the child presses Simplify", () => {
+  it("keeps the key terms and the equation when the child presses Simplify", () => {
     if (!dense) throw new Error("fixture produced no openable lesson");
     render(<LessonPlayer lesson={dense} plan={planWith(null)} live />);
     expect(body()).toContain(FULL);
@@ -398,19 +394,19 @@ describe("Simplify loses no content (Lydia, 17 Oct)", () => {
 
     expect(body()).toContain(SHORT);
     expect(body()).not.toContain(FULL);
-    expect(screen.queryByRole("button", { name: "chlorophyll" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "chlorophyll" })).toHaveLength(1);
     expect(
       screen.getAllByText("Carbon dioxide + Water → Glucose + Oxygen"),
     ).toHaveLength(1);
     expect(screen.getByText("Light becomes food.")).toBeTruthy();
   });
 
-  it("does the same when the engine asks for Simplify", () => {
+  it("keeps them when the engine asks for Simplify too", () => {
     if (!dense) throw new Error("fixture produced no openable lesson");
     render(<LessonPlayer lesson={dense} plan={planWith("simplify")} live />);
 
     expect(body()).toContain(SHORT);
-    expect(screen.queryByRole("button", { name: "chlorophyll" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "chlorophyll" })).toHaveLength(1);
     expect(
       screen.getAllByText("Carbon dioxide + Water → Glucose + Oxygen"),
     ).toHaveLength(1);
