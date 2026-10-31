@@ -193,12 +193,19 @@ describe("both checks done and it still holds (S5, design cb527bf)", () => {
     expect(said).not.toMatch(/days from today/);
   });
 
-  it("doesn't say the dates still don't match when the server says they agree", async () => {
+  it("says what's true when the dates agree but fall outside the year group (Lydia, 31 Oct, Q12)", async () => {
     // Agreeing dates can still hold - outside the enrolled age band.
     held.mockResolvedValue([both({ differs: false })]);
     render(<DobHoldView />);
     const said = (await card()).textContent ?? "";
-    expect(said).not.toMatch(/We’ve let/);
+    expect(said).toMatch(
+      /The dates now agree, but the date of birth does not match the year group Tunde is enrolled in, and the school needs to check the enrolment rather than the date\./,
+    );
+    // Nothing that says the dates differ, and nothing about agreeing one.
+    expect(said).not.toMatch(/still differ|doesn’t match it|We’ve let/);
+    expect(said).not.toMatch(/What it’s waiting on|Who can move it/);
+    // Still a way to support, and still the removal date.
+    expect(within(await card()).getByRole("link", { name: "This doesn’t look right to me" })).toBeInTheDocument();
     expect(said).toMatch(/Tunde’s record is removed on 19 November 2026\./);
   });
 
