@@ -174,6 +174,8 @@ export const ADDING_FRACTIONS: Lesson = {
         correctId: "top",
         correctNote: "That's it - add the top numbers and keep the bottom the same.",
         recoveryNote: "Not quite. Let's look again.",
+        // Written by people for the walkthrough: it holds, as an authored key does.
+        holds: true,
       },
     },
     {

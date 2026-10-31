@@ -74,6 +74,7 @@ const CHECK: QuickCheck = {
   correctId: "co2",
   correctNote: "That's it.",
   recoveryNote: "Not quite. Let's look again.",
+  holds: true,
 };
 
 const mount = () =>

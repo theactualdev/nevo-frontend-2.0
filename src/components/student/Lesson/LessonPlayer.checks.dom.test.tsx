@@ -112,6 +112,8 @@ const QUICK_CHECK = {
   correctNote: "Yes.",
   recoveryNote: "Not quite.",
   conceptId: "concept-1",
+  // Reviewed: this file is about a check that holds (23 Oct).
+  holds: true,
 };
 
 const question = (n: number) => ({

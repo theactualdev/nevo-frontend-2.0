@@ -20,9 +20,10 @@ import type { Lesson } from "@/lib/types";
  *
  * Lydia, 23 Oct: a missed check no longer moves the child on; the section is
  * offered another way, in place, and they move on once they have got it.
- * The player holds every check (Olayinka, 25 Oct; Lydia, 26 Oct). The server
- * says which ways in the section has (`reteaching`), on the miss's own reply
- * since Teslim's cdba131 - gate on or off.
+ * The player holds a check a person stands behind (Lydia, 26 Oct; Olayinka's
+ * go, 30 Oct - see `LessonPlayer.reviewedhold`). The server says which ways in
+ * the section has (`reteaching`), on the miss's own reply since Teslim's
+ * cdba131 - gate on or off.
  */
 
 const SESSION = "4f1c2a9e-8b7d-4c3a-9e2f-1a2b3c4d5e6f";
@@ -91,6 +92,8 @@ const QUICK_CHECK = {
   correctNote: "Yes.",
   recoveryNote: "Not quite.",
   conceptId: "concept-1",
+  // Reviewed: the gate is on a check that holds (Lydia, 26 Oct).
+  holds: true,
 };
 
 const LESSON = {
