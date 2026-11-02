@@ -714,6 +714,14 @@ html[data-reduced-motion="true"] .nevo-arrive-late {
   animation: none !important;
 }
 
+/* A child's first screen on a tablet that holds none of their settings waits,
+ * unseen, for their account's (SCRUM-228, rule 6). `AccessibilityProvider`
+ * sets this, and lifts it when the account answers, when the read fails, or
+ * once `ACCOUNT_WAIT_MS` has passed. Only a signed-in student's page is held. */
+html[data-a11y-pending] body {
+  visibility: hidden;
+}
+
 /* Text Size — the content zoom that scales the app's fixed-px type. Keyed off
  * the root attribute rather than set inline from React state, so the boot
  * script in <head> can apply it before the first paint (rule 6). The numbers
