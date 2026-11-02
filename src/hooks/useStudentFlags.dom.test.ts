@@ -66,7 +66,7 @@ describe("scope", () => {
     renderHook(() => useStudentFlags("s-1"));
 
     await waitFor(() => expect(getFlags).toHaveBeenCalled());
-    expect(getFlags).toHaveBeenCalledWith({ studentId: "s-1" });
+    expect(getFlags).toHaveBeenCalledWith({ studentId: "s-1", openOnly: true });
   });
 
   it("re-asks when the profile changes to another child", async () => {
@@ -80,7 +80,7 @@ describe("scope", () => {
     rerender({ id: "s-2" });
 
     await waitFor(() => expect(getFlags).toHaveBeenCalledTimes(2));
-    expect(getFlags).toHaveBeenLastCalledWith({ studentId: "s-2" });
+    expect(getFlags).toHaveBeenLastCalledWith({ studentId: "s-2", openOnly: true });
   });
 });
 

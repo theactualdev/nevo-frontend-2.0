@@ -11,6 +11,8 @@ import {
 import { ArrowRight, Check } from "lucide-react";
 import { cn, randomId } from "@/lib/utils";
 import { baselineApi } from "@/lib/api";
+import type { MotorTaskAnswer } from "@/lib/api/baseline";
+import { MotorStep, motorStepRuns } from "./MotorStep";
 import { holdBaseline } from "@/lib/profiling/pendingBaseline";
 import { markWarmUpDone, warmUpDoneFor } from "@/lib/profiling/warmUpDone";
 import { getSession } from "@/lib/auth/session";
@@ -133,7 +135,7 @@ export function dimensionForToday(now = new Date()): BaselineDimension {
 /**
  * Daily warm-up run (`Nevo Warm-Up Run Frame`, SCRUM-104): one round of the
  * day's baseline task, stripped of the onboarding quest map - a quiet
- * "DAILY WARM-UP" header with a small ring, the activity, and the gentle
+ * "DAILY WARM-UP" header (no ring, SCRUM-200), the activity, and the gentle
  * one-shot done state. Never reads as an assessment; nothing is marked
  * right or wrong.
  *
@@ -154,8 +156,8 @@ export function dimensionForToday(now = new Date()): BaselineDimension {
  * engine (`WarmUpLoading`), and when the engine names nothing the screen shows
  * the nothing-state: no task, and the way back to Home (see `WarmUpNothing`).
  *
- * THE HEADER IS THE RUNNING STATE'S. The frame draws "DAILY WARM-UP" and its
- * ring above a task only: the done state (12), the save-failed state (D126)
+ * THE HEADER IS THE RUNNING STATE'S. The frame draws "DAILY WARM-UP" above a
+ * task only: the done state (12), the save-failed state (D126)
  * and the loading state (D169) have none, and the nothing-state, which no
  * frame draws, has none either. The first three kept it.
  * The rotation is for the signed-out walkthrough only.
@@ -188,6 +190,22 @@ export function WarmUpRun({
   /** The account's answer, once the prompt has given one. */
   const doneToday = prompt.state === "waiting" ? undefined : prompt.doneToday;
   const hydrated = useHydrated();
+  /*
+   * THE MOTOR-SPEED DAY IS ONBOARDING'S MOTOR STEP (ed123cb; Hub, 29 Oct,
+   * PROVISIONAL pending Lydia). No warm-up frame draws a motor task, so it is
+   * 08a's step as onboarding runs it: full-screen, with no warm-up header,
+   * because its eight targets are placed across the whole ground and the
+   * reach between them is what is timed. Under the header the ground would
+   * be shorter and the timing no longer the one the server stores as this
+   * child's motor baseline. Then the warm-up's own done state.
+   *
+   * A cursor device does not run it, as in onboarding (08a: a click is not a
+   * reach): the route is told the day was skipped, and the child sees the
+   * nothing-state. The device is the client's to read, after hydration.
+   */
+  const motor = prompt.state === "motor" ? prompt : null;
+  const motorDevice = motor && hydrated ? formFactor() : null;
+  const motorRuns = motorDevice !== null && motorStepRuns(motorDevice);
   /*
    * The band, from the roster, for the child whose session this is. Read on
    * the client only: the session is invisible to the server. The task waits
@@ -265,9 +283,11 @@ export function WarmUpRun({
    */
   const cannotPresent: BaselineDimension | UnpresentableTask | null = unheard
     ? "reading"
-    : prompt.state === "none"
-      ? (prompt.cannotPresent ?? null)
-      : null;
+    : motorDevice !== null && !motorRuns
+      ? "motor_speed"
+      : prompt.state === "none"
+        ? (prompt.cannotPresent ?? null)
+        : null;
 
   /*
    * ONE WARM-UP A DAY, AND THE CHECK HAS TO HAPPEN BEFORE THE RUN STARTS.
@@ -297,14 +317,16 @@ export function WarmUpRun({
    * heard round the device cannot say, which never starts. Nor before
    * consent has allowed it (19 Oct): the start is the capture's first entry.
    */
+  /** The task this run starts: the engine's dimension, or the motor step where it runs. */
+  const task = dimension ?? (motorRuns ? "motor_speed" : null);
   useEffect(() => {
-    if (!dimension || !bandSettled || unheard || started.current) return;
+    if (!task || !bandSettled || unheard || started.current) return;
     if (consent !== "allowed") return;
     if (warmUpDoneFor(doneToday, getSession()?.userId)) return;
     started.current = true;
     runOwner.current = getSession()?.userId ?? null;
     capture.record("warmup_start", {
-      dimension,
+      dimension: task,
       /*
        * The band the task was sized for (B118, 13 Oct): the roster's, never
        * the Primary 4-6 default. Nor for a served question, which is the
@@ -315,7 +337,7 @@ export function WarmUpRun({
       formFactor: formFactor(),
       ...(item ? { itemId: item.itemId } : {}),
     });
-  }, [capture, dimension, item, doneToday, band, bandSettled, unheard, consent]);
+  }, [capture, task, item, doneToday, band, bandSettled, unheard, consent]);
 
   /*
    * A TASK THIS SCREEN CANNOT GIVE IS STILL REPORTED (B117, 13 Oct): "skipped
@@ -332,6 +354,10 @@ export function WarmUpRun({
    * SENT, NEVER PARKED. The parking slot holds one record, and a report that
    * nothing was presented must not displace a real run waiting to go up. The
    * send itself still retries a blip (`submitTrials`).
+   *
+   * A MOTOR DAY ON A CURSOR DEVICE goes to the prompt's own route instead,
+   * as skipped - the route that takes the motor day takes its skip too, and
+   * no trial goes to `/trials` for it (ed123cb).
    */
   useEffect(() => {
     // `hydrated`: before it, `unheard` cannot yet know the device can speak.
@@ -341,6 +367,12 @@ export function WarmUpRun({
     const owner = getSession()?.userId ?? null;
     if (!owner || warmUpDoneFor(doneToday, owner)) return;
     reported.current = true;
+    if (motor) {
+      void baselineApi
+        .motorTaskDone(owner, { motorStepSkipped: true })
+        .catch(() => false);
+      return;
+    }
     capture.record("warmup_start", {
       dimension: cannotPresent,
       ...(unheard && band ? { band } : {}),
@@ -363,6 +395,7 @@ export function WarmUpRun({
     hydrated,
     capture,
     cannotPresent,
+    motor,
     unheard,
     band,
     bandSettled,
@@ -402,7 +435,7 @@ export function WarmUpRun({
   const unconsented = consent === "unknown";
   const running =
     !showDone &&
-    !!dimension &&
+    !!task &&
     bandSettled &&
     !unheard &&
     consent !== "pending" &&
@@ -417,7 +450,8 @@ export function WarmUpRun({
    */
   const asking =
     prompt.state === "waiting" ||
-    (prompt.state === "ready" && (!bandSettled || consent === "pending"));
+    ((prompt.state === "ready" || prompt.state === "motor") &&
+      (!bandSettled || consent === "pending"));
 
   const finish = useCallback(() => {
     /*
@@ -536,6 +570,37 @@ export function WarmUpRun({
       // The run's own child, still signed in: checked at the top of `finish`.
       const owner = runOwner.current as string;
       /*
+       * A MOTOR DAY'S TIMINGS GO TO THE PROMPT'S ROUTE, AND ONLY THERE
+       * (ed123cb): "Send the eight timings as motorSamplesMs with formFactor
+       * to the warm-up response route; the server stores the median of the
+       * six scored taps." In the order taken, as onboarding sends them, the
+       * two practice taps first - the median is the server's.
+       *
+       * A STEP THAT ENDED EARLY - a target left ten seconds untapped (08a) -
+       * has fewer timings than the route takes, so the day goes as skipped,
+       * the route's own word for it (Hub, 29 Oct), and the child sees the
+       * done state all the same. Not parked: one call, retried, and the
+       * done state says whether it landed.
+       */
+      if (motor) {
+        const run = baselineRunContext(capture);
+        const samples = run.motorSamplesMs ?? [];
+        const answer: MotorTaskAnswer =
+          samples.length === motor.sampleCount && run.formFactor
+            ? { motorSamplesMs: samples, formFactor: run.formFactor }
+            : { motorStepSkipped: true };
+        setSending(true);
+        void baselineApi
+          .motorTaskDone(owner, answer)
+          .catch(() => false)
+          .then((ok) => {
+            setSaved(ok);
+            setSending(false);
+          })
+          .finally(() => void capture.purge());
+        return;
+      }
+      /*
        * THE PICK GOES TO ITS OWN ENDPOINT, UNMARKED (B8, 1 Oct).
        * `POST .../recalibrate-prompt/{id}/response` takes `{itemId, value}`
        * and marks it server-side; the key never reaches the device. It is not
@@ -584,11 +649,12 @@ export function WarmUpRun({
     // `withdrawn` belongs here: without it this closes over the value from the
     // first render, which is always false, and a withdrawal that resolved
     // mid-run would be read as consent.
-  }, [capture, withdrawn, live]);
+  }, [capture, withdrawn, live, motor]);
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
-      {running && <WarmUpHeader />}
+      {/* Not over the motor step, which keeps onboarding's whole ground. */}
+      {running && !motor && <WarmUpHeader />}
 
       {showDone ? (
         <div className={BADGE_BODY}>
@@ -650,6 +716,13 @@ export function WarmUpRun({
         </div>
       ) : asking ? (
         <WarmUpLoading onHome={() => router.push(HOME)} />
+      ) : motorRuns && motorDevice && !unconsented ? (
+        <MotorStep
+          band={band ?? FRAME_BAND}
+          formFactor={motorDevice}
+          capture={capture}
+          onComplete={finish}
+        />
       ) : !dimension || unheard || unconsented ? (
         <WarmUpNothing onHome={() => router.push(HOME)} />
       ) : (
@@ -675,44 +748,22 @@ export function WarmUpRun({
 }
 
 /**
- * The running state's quiet header (`runHead`): the label and a small ring,
- * 30px on a phone and 34px from tablet up, its padding the frame's 22px by
- * 24px there and 28px by 30px above. The ring stands at the frame's one
- * offset.
+ * The running state's quiet header (`runHead`): the label alone, at the
+ * frame's 24px in on a phone and 30px from tablet up.
+ *
+ * NO RING (SCRUM-200; Lydia, 28 Oct: "Remove the warm-up ring. A fabricated
+ * figure shown to a child is the worst thing on that list."). The frame drew
+ * a ring stood at one fixed offset, a little over half full whatever the
+ * child had done, so it read as progress the warm-up had not measured. The
+ * header keeps the height the ring gave it - 74px on a phone, 90px up - so
+ * the task under it sits where the frame puts it.
  */
 function WarmUpHeader() {
   return (
-    <div className="flex shrink-0 items-center justify-between px-6 py-[22px] sm:px-[30px] sm:py-7">
+    <div className="flex h-[74px] shrink-0 items-center px-6 sm:h-[90px] sm:px-[30px]">
       <span className="font-mono text-[11px] font-bold tracking-[0.14em] text-nevo-violet">
         DAILY WARM-UP
       </span>
-      <svg
-        viewBox="0 0 34 34"
-        aria-hidden
-        data-testid="warmup-ring"
-        className="size-[30px] sm:size-[34px]"
-      >
-        <circle
-          cx="17"
-          cy="17"
-          r="15"
-          fill="none"
-          stroke="rgba(154,156,203,0.25)"
-          strokeWidth="3"
-        />
-        <circle
-          cx="17"
-          cy="17"
-          r="15"
-          fill="none"
-          stroke="#9a9ccb"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeDasharray="94"
-          strokeDashoffset="40"
-          transform="rotate(-90 17 17)"
-        />
-      </svg>
     </div>
   );
 }
@@ -765,11 +816,8 @@ function BadgeSpinner({ testId }: { testId: string }) {
  * No frame draws a button in either; "Home" is the frames' own label for a
  * button that goes there (32 Prototype, the lesson summary's second button;
  * 30 Flow Reference, "Back to lessons" / "Home").
- *
- * Exported for the one other nothing-state of the same shape: finishing
- * onboarding when Module 4 has nothing to ask (`OnboardingResume`).
  */
-export function HomeButton({
+function HomeButton({
   label = "Home",
   onClick,
 }: {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { TeacherFlag } from "@/hooks/useTeacherFlags";
+import { intelligenceApi } from "@/lib/api/intelligence";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,11 +29,11 @@ import { cn } from "@/lib/utils";
  * the acknowledgement would refuse a class teacher, and for a holder it would
  * record "learning support is on it" from a tap that meant "I've read it".
  *
- * WHAT IS NOT BUILT: clearing the card from the tapper's own view. The flag
- * read has no per-viewer "read" state and there is no call to set one, so
- * there is nothing true to filter on. Raised with backend. Until it lands the
- * card stays until the flag is acknowledged, which is the state a class
- * teacher without the role was already in.
+ * AND THE TAP CLEARS IT FROM THE TAPPER'S OWN HOME (SCRUM-252). Opening the
+ * card, or its "Send them a message", records `POST …/seen` - this viewer's
+ * read, and nobody else's - so the next Home read leaves it out. A read that
+ * does not land costs nothing but the card staying; it is never retried in
+ * a way that holds the teacher up.
  *
  * An earlier note here said the profile could not be linked because
  * `/teacher/students/{id}` resolved against fixtures and would 404 on a real
@@ -62,6 +63,9 @@ function noticedWhen(iso: string): string {
 }
 
 export function LiveFlagCard({ flag }: { flag: TeacherFlag }) {
+  const read = () => {
+    void intelligenceApi.markFlagSeen(flag.id).catch(() => {});
+  };
   return (
     <div className="relative flex gap-3.5 rounded-[12px] bg-nevo-cream-elevated py-4 pr-[18px] pl-[22px] shadow-elevation-1 transition-shadow focus-within:shadow-elevation-2 hover:shadow-elevation-2 xl:gap-[18px] xl:py-[22px] xl:pr-6 xl:pl-7">
       {/* Navy for a sudden change, violet for a pattern - C03's own rule. */}
@@ -99,6 +103,7 @@ export function LiveFlagCard({ flag }: { flag: TeacherFlag }) {
           */}
         <Link
           href={`/teacher/students/${flag.studentId}`}
+          onClick={read}
           className="text-[13.5px] font-semibold text-nevo-navy after:absolute after:inset-0 after:rounded-[12px] after:content-[''] focus-visible:outline-none xl:text-[14.5px]"
         >
           <span className="sr-only">
@@ -112,6 +117,7 @@ export function LiveFlagCard({ flag }: { flag: TeacherFlag }) {
                list with no compose at all - the action did nothing a
                teacher could see. */
             href={`/teacher/connect?student=${flag.studentId}`}
+            onClick={read}
             className="relative z-10 text-[13.5px] font-semibold text-nevo-navy transition-transform active:scale-[0.985] xl:text-[14.5px]"
           >
             Send them a message

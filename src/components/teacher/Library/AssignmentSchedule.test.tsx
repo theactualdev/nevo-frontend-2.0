@@ -89,10 +89,9 @@ function openConfirm() {
   fireEvent.click(screen.getByRole("button", { name: /Cancel lesson/i }));
 }
 
-/** SCRUM-225: say why, then confirm. Housekeeping unless a test says. */
+/** SCRUM-229: the reason is the cancel, one tap. Housekeeping unless a test says. */
 function confirmCancel(reason = "Housekeeping") {
-  fireEvent.click(screen.getByRole("radio", { name: reason }));
-  fireEvent.click(screen.getByRole("button", { name: /Yes, cancel it/i }));
+  fireEvent.click(screen.getByRole("button", { name: reason }));
 }
 
 describe("what a teacher sees", () => {
@@ -157,13 +156,13 @@ describe("what a teacher sees", () => {
 });
 
 describe("cancelling", () => {
-  it("cannot be done in one tap", () => {
-    // It removes a lesson from real children's screens.
+  it("is not done by opening the question", () => {
+    // "Cancel lesson" asks why; the answer is what cancels.
     render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
     openConfirm();
 
     expect(cancelAssignments).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: /Yes, cancel it/i })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Why is this being cancelled?" })).toBeInTheDocument();
   });
 
   it("cancels every row in the group, with the reason given", async () => {
@@ -216,16 +215,26 @@ describe("cancelling", () => {
    * reason decides whether the child keeps their reviews of what it taught.
    * Only the teacher knows which it is, so the confirmation asks.
    */
-  it("asks why, and will not cancel until a reason is chosen", async () => {
+  /*
+   * SCRUM-229: "one question answered in one tap, not a dialog defending the
+   * system against them". The answer cancels; there is no confirm after it.
+   */
+  it("cancels in the one tap that answers why, with that reason", async () => {
     cancelAssignments.mockResolvedValue({ ok: ["a-1", "a-2", "a-3"], failed: [] });
     render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
     openConfirm();
 
-    expect(screen.getByRole("group", { name: "Why is this being cancelled?" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Yes, cancel it/i })).toBeDisabled();
-
+    expect(screen.queryByRole("button", { name: /Yes, cancel it/i })).not.toBeInTheDocument();
     confirmCancel("Wrong class");
     expect(cancelAssignments).toHaveBeenCalledWith(["a-1", "a-2", "a-3"], "wrong_class");
+  });
+
+  it("pre-selects nothing, so no answer is chosen by inertia", () => {
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    openConfirm();
+
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { pressed: true })).not.toBeInTheDocument();
   });
 
   it("offers the ticket's seven reasons, and says what each kind does to reviews", () => {
@@ -241,7 +250,7 @@ describe("cancelling", () => {
       "Wrong class",
       "Assigned in error",
     ]) {
-      expect(screen.getByRole("radio", { name: r })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: r })).toBeInTheDocument();
     }
     expect(screen.getByText("The lesson still counts")).toBeInTheDocument();
     expect(screen.getByText("Take the lesson back")).toBeInTheDocument();
@@ -249,14 +258,14 @@ describe("cancelling", () => {
     expect(screen.getByText("Their reviews of what it taught are withdrawn.")).toBeInTheDocument();
   });
 
-  it("asks afresh each time it opens", () => {
+  it("asks afresh each time it opens, having sent nothing", () => {
     render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
     openConfirm();
-    fireEvent.click(screen.getByRole("radio", { name: "Duplicate" }));
     fireEvent.click(screen.getByRole("button", { name: /Keep it/i }));
     openConfirm();
 
-    expect(screen.getByRole("button", { name: /Yes, cancel it/i })).toBeDisabled();
+    expect(cancelAssignments).not.toHaveBeenCalled();
+    expect(screen.getByRole("group", { name: "Why is this being cancelled?" })).toBeInTheDocument();
   });
 
   it("retries the rest with the same reason", async () => {
@@ -492,7 +501,7 @@ describe("a child who has already finished", () => {
     openConfirm();
 
     expect(
-      screen.getByText(/Cancel this lesson for 2 students in JSS 2A/),
+      screen.getByText(/Cancelling reaches 2 students in JSS 2A/),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/The student who has already finished it keeps it/),

@@ -327,9 +327,12 @@ describe("Word Conflict, after 2B, for SS alone", () => {
 
     const words = picks(capture, "inhibition");
     expect(words).toHaveLength(40);
-    expect(words.map((p) => p.correct)).toEqual(
-      asked.map((a) => a.word === "LEFT"),
+    // The word shown and the word tapped, raw: no mark of whether they
+    // match (Lydia, 29 Oct). The server marks it.
+    expect(words.map((p) => String(p.word).toUpperCase())).toEqual(
+      asked.map((a) => a.word),
     );
+    expect(words.some((p) => "correct" in p)).toBe(false);
     expect(words.every((p) => p.chosenOption === "left")).toBe(true);
     // Eight practice first, marked so, then the thirty-two unmarked.
     expect(words.slice(0, 8).every((p) => p.practice === true)).toBe(true);

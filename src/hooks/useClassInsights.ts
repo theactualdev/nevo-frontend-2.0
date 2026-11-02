@@ -163,8 +163,9 @@ export function useClassInsights(classId: string | null): ClassInsightsState {
       .finally(done);
     void intelligenceApi
       // The most one page holds. A class has nowhere near 200 open flags,
-      // and the default 50 was a cap nobody chose.
-      .getFlags({ classId, limit: 200 })
+      // and the default 50 was a cap nobody chose. Open ones only: a flag
+      // whose evidence stopped holding has closed (Teslim 9c35c95).
+      .getFlags({ classId, limit: 200, openOnly: true })
       .then((rows) => {
         if (!cancelled) setFlags(rows.filter((f) => !f.acknowledged));
       })

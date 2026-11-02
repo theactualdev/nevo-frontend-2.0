@@ -531,20 +531,13 @@ export function LearnerProfileView({
           mastery.slice(0, 10).map((row, i) => {
             // Bars, never numbers - see the note at the top of this file.
             /*
-             * ADMIN LANE: both are nullable since d461b60 (withheld from a
-             * student; staff reads still carry numbers), and `Math.min(1,
-             * null)` draws an empty bar. Cast to compile with the behaviour
-             * unchanged; the null guard is the admin lane's to add (student
-             * lane, 20 Oct contract catch-up).
+             * A NULL IS NO ESTIMATE, NEVER A ZERO (SCRUM-200; Lydia, 28 Oct).
+             * Both tracks are nullable since d461b60, and `Math.min(1, null)`
+             * drew an empty bar - which reads as zero, "a claim we have not
+             * earned". A track with no estimate says so in words instead.
              */
-            const concept = Math.max(
-              0,
-              Math.min(1, row.masteryProbabilityConcept as number),
-            );
-            const reading = Math.max(
-              0,
-              Math.min(1, row.masteryProbabilityReading as number),
-            );
+            const concept = barWidth(row.masteryProbabilityConcept);
+            const reading = barWidth(row.masteryProbabilityReading);
             /*
              * No "Reading is the barrier here". It was drawn whenever the
              * concept track led the reading track by more than 0.15 - a
@@ -681,13 +674,20 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
  * it is and the length says how far along, which is all a SENCo needs to see
  * the two diverge.
  */
+/** The server's 0-1 estimate as a bar width, or null when it sent none. */
+function barWidth(estimate: number | null): number | null {
+  if (typeof estimate !== "number" || !Number.isFinite(estimate)) return null;
+  return Math.max(0, Math.min(1, estimate));
+}
+
 function Track({
   label,
   value,
   tone,
 }: {
   label: string;
-  value: number;
+  /** Null: no estimate yet - said in words, never drawn as an empty bar. */
+  value: number | null;
   tone: "navy" | "violet";
 }) {
   return (
@@ -695,18 +695,24 @@ function Track({
       <span className="w-[150px] flex-none text-[12.5px] text-nevo-near-black/62">
         {label}
       </span>
-      <span
-        aria-hidden="true"
-        className="h-2 flex-1 overflow-hidden rounded-full bg-nevo-near-black/[0.08]"
-      >
+      {value === null ? (
+        <span className="flex-1 text-[12.5px] text-nevo-near-black/55">
+          Not enough yet to show this.
+        </span>
+      ) : (
         <span
-          className={cn(
-            "block h-full rounded-full",
-            tone === "navy" ? "bg-nevo-navy" : "bg-nevo-violet",
-          )}
-          style={{ width: `${Math.round(value * 100)}%` }}
-        />
-      </span>
+          aria-hidden="true"
+          className="h-2 flex-1 overflow-hidden rounded-full bg-nevo-near-black/[0.08]"
+        >
+          <span
+            className={cn(
+              "block h-full rounded-full",
+              tone === "navy" ? "bg-nevo-navy" : "bg-nevo-violet",
+            )}
+            style={{ width: `${Math.round(value * 100)}%` }}
+          />
+        </span>
+      )}
     </div>
   );
 }

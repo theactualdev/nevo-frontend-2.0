@@ -110,6 +110,8 @@ const LESSON = {
         correctId: "a",
         correctNote: "Yes.",
         recoveryNote: "Not quite.",
+        // Reviewed: the check stays open across misses only if it holds.
+        holds: true,
       },
     },
     {

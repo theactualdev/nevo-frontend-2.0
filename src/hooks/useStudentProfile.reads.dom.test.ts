@@ -124,6 +124,37 @@ describe("a mastery row the engine could not name", () => {
   });
 });
 
+/*
+ * SCRUM-200 (Lydia, 28 Oct). `pct(null)` was 0, so a concept with no estimate
+ * drew as an empty bar - "the empty bar reads as zero, which is a claim we
+ * have not earned".
+ */
+describe("a mastery row with no estimate", () => {
+  it("stays null rather than becoming zero", async () => {
+    api.mastery.mockResolvedValue([
+      { conceptId: "c-1", conceptName: "Fractions", masteryProbabilityConcept: null, masteryProbabilityReading: null, practiceCount: 0 },
+      { conceptId: "c-2", conceptName: "Decimals", masteryProbabilityConcept: 0.62, masteryProbabilityReading: null, practiceCount: 2 },
+    ]);
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.reads?.mastery).toBe("ready"));
+    expect(result.current.concepts.map((c) => [c.understanding, c.reading])).toEqual([
+      [null, null],
+      [62, null],
+    ]);
+  });
+
+  it("keeps a real zero as zero", async () => {
+    api.mastery.mockResolvedValue([
+      { conceptId: "c-1", conceptName: "Fractions", masteryProbabilityConcept: 0, masteryProbabilityReading: 0, practiceCount: 4 },
+    ]);
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.reads?.mastery).toBe("ready"));
+    expect(result.current.concepts[0]).toMatchObject({ understanding: 0, reading: 0 });
+  });
+});
+
 describe("a student this page cannot show", () => {
   it("is not-found for a malformed id, not a retry", async () => {
     const { ApiError } = await import("@/lib/api/client");

@@ -441,13 +441,23 @@ describe("WarmUpRun — the done state claims no save", () => {
 describe("WarmUpRun — the header is the running state's", () => {
   const header = () => screen.queryByText("DAILY WARM-UP");
 
-  it("sits over a running task, its ring the frame's 30px on a phone and 34px up", () => {
+  it("sits over a running task, the label alone at the height the frame gives it", () => {
     render(<WarmUpRun dimension="attention" />);
 
     expect(header()).toBeInTheDocument();
-    const ring = screen.getByTestId("warmup-ring").getAttribute("class")!;
-    expect(ring).toContain("size-[30px]");
-    expect(ring).toContain("sm:size-[34px]");
+    const row = header()!.parentElement!;
+    expect(row.className).toContain("h-[74px]");
+    expect(row.className).toContain("sm:h-[90px]");
+    expect(row.children).toHaveLength(1);
+  });
+
+  it("draws no ring: nothing that reads as progress the warm-up has not measured (SCRUM-200)", () => {
+    render(<WarmUpRun dimension="attention" />);
+
+    expect(screen.queryByTestId("warmup-ring")).toBeNull();
+    expect(document.querySelector("circle")).toBeNull();
+    expect(document.querySelector("[stroke-dasharray], [stroke-dashoffset]")).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
   it("is gone once the warm-up is done, as frame 12 draws it", async () => {

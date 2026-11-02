@@ -169,8 +169,23 @@ describe("toPrompt", () => {
     );
   });
 
-  it("says a motor-speed day was named and could not be given (7c98014)", () => {
-    // No warm-up screen is drawn for it; the motor step is onboarding's.
+  it("runs a motor-speed day as the motor step when the read carries its task (ed123cb)", () => {
+    expect(
+      toPrompt({
+        dimension: "motor_speed",
+        itemId: "device:motor_speed",
+        served: false,
+        doneToday: false,
+        motorTask: { sampleCount: 8, practiceCount: 2 },
+      }),
+    ).toEqual({ state: "motor", sampleCount: 8, doneToday: false });
+  });
+
+  it("says a motor-speed day could not be given by a deployment that sends no task (7c98014)", () => {
+    // Nothing to send the timings with: the route cannot take them.
+    expect(
+      toPrompt({ dimension: "motor_speed", served: false, motorTask: null }),
+    ).toEqual({ state: "none", cannotPresent: "motor_speed" });
     expect(
       toPrompt({
         dimension: "motor_speed",

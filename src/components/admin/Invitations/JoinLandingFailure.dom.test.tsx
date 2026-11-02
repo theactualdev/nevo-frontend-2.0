@@ -17,7 +17,9 @@ vi.mock("@/lib/api/invites", async (importOriginal) => {
   return { ...actual, invitesApi: { ...actual.invitesApi, lookupJoin: (t: string) => lookupJoin(t) } };
 });
 
-beforeEach(() => lookupJoin.mockReset());
+beforeEach(() => {
+  lookupJoin.mockReset();
+});
 
 describe("JoinLanding when the lookup fails", () => {
   it("does not call a link dead because Nevo could not be reached", async () => {
@@ -48,6 +50,62 @@ describe("JoinLanding when the lookup fails", () => {
 
     await waitFor(() => expect(visibleText(container)).toMatch(/no longer valid/));
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("says a teacher link whose reserved account changed needs the administrator, in the activation form's words (ed123cb)", async () => {
+    // Not dead, and not an outage: only a school administrator can sort it
+    // out. One wording on both pages a teacher can meet it (#915).
+    lookupJoin.mockRejectedValueOnce(
+      new ApiError(409, "conflict", { detail: { code: "invited_teacher_conflict" } }),
+    );
+    const { container } = render(<JoinLanding token="tok" />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/This invite no longer matches your account/));
+    expect(visibleText(container)).toMatch(/Ask your school administrator to review your invite\./);
+    expect(visibleText(container)).not.toMatch(/no longer valid/);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("says an expired link has expired, on the server's word, as D19 draws it", async () => {
+    lookupJoin.mockRejectedValueOnce(
+      new ApiError(410, "gone", { detail: { code: "join_link_expired" } }),
+    );
+    const { container } = render(<JoinLanding token="tok" />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/This invite has expired/));
+    expect(visibleText(container)).toMatch(/Contact your school administrator to request a new invite\./);
+    expect(visibleText(container)).not.toMatch(/no longer valid/);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("tells someone whose link was already used that they've joined, and points at sign-in (Lydia, Q11d)", async () => {
+    lookupJoin.mockRejectedValueOnce(
+      new ApiError(409, "conflict", { detail: { code: "join_link_used" } }),
+    );
+    const { container } = render(<JoinLanding token="tok" />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/You have already joined/));
+    expect(screen.getByRole("link", { name: "Sign in instead" })).toHaveAttribute("href", "/auth/teacher");
+    expect(visibleText(container)).not.toMatch(/no longer valid|couldn.t check/);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("keeps a revoked link on 'no longer valid' - only the expired code says expired", async () => {
+    lookupJoin.mockRejectedValueOnce(
+      new ApiError(410, "gone", { detail: { code: "join_link_revoked" } }),
+    );
+    const { container } = render(<JoinLanding token="tok" />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/no longer valid/));
+    expect(visibleText(container)).not.toMatch(/has expired/);
+  });
+
+  it("doesn't read any 409 it can't name as the link's answer", async () => {
+    lookupJoin.mockRejectedValueOnce(new ApiError(409, "conflict", { detail: { code: "something_else" } }));
+    const { container } = render(<JoinLanding token="tok" />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/couldn.t check/));
+    expect(visibleText(container)).not.toMatch(/no longer valid/);
   });
 
   it("reads the contract's own refusal as a dead link, not an outage", async () => {

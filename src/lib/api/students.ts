@@ -199,10 +199,13 @@ export interface StudentProgress {
  * /api/v1/students/me/next-work`). Null until the four onboarding modules are
  * in, or when nothing is deliverable.
  *
- * TYPED, NOT READ. Whether You're In, Home or a lesson's first segment follows
- * it waits on questions to Teslim, design and Lydia (20 Oct contract check),
- * so nothing here acts on it yet. Whatever does: `kind` is never a label, and
- * `segmentPosition` is a place in a lesson, never a count shown to a child.
+ * READ ON HOME FOR ITS REVIEW ONLY (SCRUM-75; Lydia, 28 Oct: "Home, with
+ * next-work, due item first"). The engine puts a due review before new work,
+ * and Home shows that review first, never sending the child to it. New work
+ * has no frame or words on Home yet; whether You're In or a lesson's first
+ * segment follows it still waits. Whatever reads it: `kind` is never a label,
+ * and `segmentPosition` is a place in a lesson, never a count shown to a
+ * child.
  */
 export interface LearningWork {
   lessonId: string;

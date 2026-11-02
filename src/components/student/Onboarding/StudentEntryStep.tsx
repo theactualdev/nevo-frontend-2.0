@@ -470,12 +470,30 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
     else if (at !== null) backspaceCell(at);
   };
 
+  /*
+   * 00d's CHECK AGAIN, FOR A CHILD HELD HERE (design 5bb9ee2, 28 Oct): the
+   * same lookup, for the pair that was matched, and the same routing
+   * (`onward`) - so consent that has come goes straight on into the run.
+   * Still waiting, or a lookup that did not answer, stays on 00d as it was.
+   */
+  const checkConsentAgain = async () => {
+    const state = await studentEntryApi.lookup({
+      schoolCode,
+      admissionNumber: id,
+    });
+    if (!alive.current || entryRoute(state) === "waiting") return;
+    setHeld(null);
+    onward(state, schoolCode, id);
+  };
+
   // On the way to finishing onboarding as the child signed in here.
   if (routesOn) return null;
   if (held === "withdrawn") return <ConsentWithdrawn />;
   // The Entry frame's own hold, with its Back (05, state 6) - not 00d's.
   if (held === "age-check") return <AgeCheckHold onBack={leaving} />;
-  if (held) return <WaitingOnConsent hold={held} />;
+  if (held) {
+    return <WaitingOnConsent hold={held} onCheckAgain={checkConsentAgain} />;
+  }
   if (clearedChild) {
     return <NewPinAfterClear entry={clearedChild} onRefused={refusedNewPin} />;
   }

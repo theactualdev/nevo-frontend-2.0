@@ -73,7 +73,7 @@ jobs:
       # the admin ones existed, so every signed-in suite skipped and the gate
       # was the signed-out suite alone. A skipped suite is not a passing one.
       #
-      # All three accounts are on the dedicated E2E school - an isolated tenant
+      # All four accounts are on the dedicated E2E school - an isolated tenant
       # holding no real children, re-seeded 4 Oct 2026 after the 1 Oct wipe. Its
       # school code is read from the admin's own record, never named here.
       - run: npm run e2e
@@ -82,6 +82,12 @@ jobs:
           E2E_TEACHER_PASSWORD: ${{ secrets.E2E_TEACHER_PASSWORD }}
           E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
           E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          # Learning Support is a recorded grant, not a scope, so the admin
+          # above is refused it. This account holds it (backend, 14 Oct): the
+          # senco suite is the only one that reads a learner's history. Its
+          # secrets were set on 14 Oct and sat unread until this line.
+          E2E_SENCO_EMAIL: ${{ secrets.E2E_SENCO_EMAIL }}
+          E2E_SENCO_PASSWORD: ${{ secrets.E2E_SENCO_PASSWORD }}
           # Not secrets: they only name the probe child. No adult can set or
           # see a child's PIN (SCRUM-216). So the student suite clears the
           # probe's PIN through the admin above, then sets a fresh random one

@@ -9,7 +9,9 @@ import { cn } from "@/lib/utils";
  * Leave Lesson dialog (Lesson Check frame) — the gentle interruption when a
  * student exits mid-lesson. It never scolds or warns about "losing" work, and
  * offers an easy way back in. Built on Radix Dialog (focus trap + Esc + scrim)
- * as a centered modal over a near-black/30 scrim (never pure black).
+ * as a centered modal over the Lesson Check frame's scrim: near-black at 55%,
+ * `rgba(43,43,47,0.55)` (SCRUM-94), the check sheet's own dim - never pure
+ * black. It was /30, which left the lesson behind it reading as live.
  *
  * IT NEVER SAYS THE LATEST PLACE IS SAVED (design D88, 6 Oct). "The dialog
  * must not claim the latest place is saved. Say what is true: they will pick
@@ -40,7 +42,7 @@ export function LeaveLessonDialog({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-nevo-near-black/30 duration-200 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-nevo-near-black/55 duration-200 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
         <DialogPrimitive.Content
           data-nevo-console="student"
           aria-describedby={undefined}

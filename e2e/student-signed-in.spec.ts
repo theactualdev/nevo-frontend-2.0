@@ -7,6 +7,7 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
+import { serverFailure } from "./serverFailure";
 
 /**
  * The student console, SIGNED IN.
@@ -484,7 +485,10 @@ test.describe("a signed-in student", () => {
     const admin = await api.post(`${API}/api/v1/auth/login/password`, {
       data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
     });
-    expect(admin.ok(), `The E2E admin could not sign in (${admin.status()}).`).toBeTruthy();
+    expect(
+      admin.ok(),
+      `The E2E admin could not sign in (${admin.status()}).${await serverFailure(admin)}`,
+    ).toBeTruthy();
     const adminBody = await admin.json();
     const auth = { Authorization: `Bearer ${adminBody.accessToken}` };
 
@@ -517,7 +521,10 @@ test.describe("a signed-in student", () => {
       const teacher = await api.post(`${API}/api/v1/auth/login/password`, {
         data: { email: TEACHER_EMAIL, password: TEACHER_PASSWORD },
       });
-      expect(teacher.ok(), `The E2E teacher could not sign in (${teacher.status()}).`).toBeTruthy();
+      expect(
+        teacher.ok(),
+        `The E2E teacher could not sign in (${teacher.status()}).${await serverFailure(teacher)}`,
+      ).toBeTruthy();
       clearer = { Authorization: `Bearer ${(await teacher.json()).accessToken}` };
       who = "The E2E teacher";
     }

@@ -144,13 +144,12 @@ describe("Learning Support on a teacher's record", () => {
     expect(screen.queryByText("Permissions")).toBeNull();
   });
 
-  it("offers no classes until they've joined, and says so (16 Oct)", async () => {
-    // The server assigns an active teacher only. The page offered "Assign to
-    // a class" anyway, and the sheet's every try came back "teacher not found".
+  it("offers classes before they've joined, saying they take effect on joining (L11, 26 Oct)", async () => {
+    // A school sets a term up before staff sign in (Lydia, L11).
     teacher.mockResolvedValue(folake({ status: "invited" }));
     render(<TeacherDetailView teacherId="t1" />);
     await screen.findByText("Folake Adeyemi");
-    expect(screen.queryByRole("button", { name: /Assign to a class/ })).toBeNull();
-    expect(await screen.findByText(/They can be given classes once they.ve joined\./)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Assign to a class/ })).toBeInTheDocument();
+    expect(await screen.findByText(/Classes you assign take effect when they join\./)).toBeInTheDocument();
   });
 });

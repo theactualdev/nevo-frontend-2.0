@@ -60,10 +60,12 @@ import {
  * to their subjects in place, confirmed first, as 7c does for a class. D05
  * draws no zero-subject teacher; this mirrors 7c and is with design.
  *
- * ONLY A TEACHER WHO HAS JOINED CAN BE ASSIGNED. The server takes an active
- * teacher only, and answered an invited one with "The requested teacher was
- * not found." Invited teachers stay in the list, greyed, so the admin
- * looking for one finds them and the reason.
+ * AN INVITED TEACHER CAN BE ASSIGNED (Lydia, L11, 26 Oct; backend 4c5706a).
+ * Schools set a term up before staff sign in, so the assignment is made now
+ * and takes effect when the teacher joins - and the sheet says so, plainly,
+ * once one is chosen. No greyed state: "greyed is disabled and we do not do
+ * disabled." The server reserves the account against the invitation, and
+ * revoking the invitation takes its assignments with it.
  *
  * MAKING SOMEBODY PRIMARY WHERE A CLASS HAS ONE. The server enforces one
  * primary per class now (409 `primary_teacher_exists`). The old primary is
@@ -460,8 +462,8 @@ export function AssignTeachingSheet({
                     // A removed teacher has no console to teach in.
                     .filter((t) => t.status !== "deactivated")
                     .map((t) => (
-                      <option key={t.id} value={t.id} disabled={t.status === "invited"}>
-                        {t.status === "invited" ? `${t.name} (invited, not yet joined)` : t.name}
+                      <option key={t.id} value={t.id}>
+                        {t.status === "invited" ? `${t.name} (invited)` : t.name}
                       </option>
                     ))
                 : null}
@@ -476,9 +478,10 @@ export function AssignTeachingSheet({
               <p className={ASSIGN_HINT}>
                 No staff to assign yet. Invite a teacher first, and they&rsquo;ll appear here.
               </p>
-            ) : teachers.value.some((t) => t.status === "invited") ? (
+            ) : teachers.value.find((t) => t.id === teacherId)?.status === "invited" ? (
               <p className={ASSIGN_HINT}>
-                A teacher you&rsquo;ve invited can be assigned once they&rsquo;ve joined.
+                {teacherName ?? "This teacher"} hasn&rsquo;t joined yet. This assignment takes
+                effect when they join.
               </p>
             ) : null}
           </>

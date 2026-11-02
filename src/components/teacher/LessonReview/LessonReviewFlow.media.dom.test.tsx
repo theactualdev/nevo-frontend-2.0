@@ -20,9 +20,15 @@ const media = vi.hoisted(() => ({
   withdraw: vi.fn(),
   withdrawLive: vi.fn(),
   restore: vi.fn(),
+  captions: vi.fn(),
+  approveCaptions: vi.fn(),
+  editCaption: vi.fn(),
 }));
 vi.mock("@/lib/api/lessons", () => ({ lessonsApi: api }));
-vi.mock("@/lib/api/media", () => ({ mediaApi: media }));
+vi.mock("@/lib/api/media", async (actual) => ({
+  ...(await actual<typeof import("@/lib/api/media")>()),
+  mediaApi: media,
+}));
 vi.mock("@/hooks/useHydrated", () => ({ useHydrated: () => true }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -158,6 +164,9 @@ beforeEach(() => {
   );
   media.approve.mockResolvedValue([]);
   media.retry.mockResolvedValue({});
+  media.captions.mockResolvedValue([]);
+  media.approveCaptions.mockResolvedValue({ approvedCount: 0 });
+  media.editCaption.mockResolvedValue({ approvedCount: 1 });
 });
 
 describe("pictures and narration in step 1", () => {
@@ -299,5 +308,228 @@ describe("the key-point press, which also signs media", () => {
 
     expect(screen.getByText(/Step 1 of 5/)).toBeInTheDocument();
     expect(within(screen.getByRole("navigation", { name: "Lesson review steps" })).getByRole("button", { name: /What I made/ })).toHaveAttribute("aria-current", "step");
+  });
+});
+
+/**
+ * Design 11 (Lydia, 26 Oct): "show remade as remade". "A teacher who flagged
+ * something and sees an identical picture will either flag it again or assume
+ * we ignored them." The server keeps the item's id through a remake, so the
+ * mark is this visit's own record of what the teacher sent back.
+ */
+describe("a flagged picture or recording that comes back remade", () => {
+  it("is marked Remade when it is waiting for a look again", async () => {
+    api.review
+      .mockResolvedValueOnce(reviewWith([picture("p1", "s-1"), picture("p2", "s-2"), recording("n1", "s-1")]))
+      // After the press: p1 and n1 approved, p2 remade and waiting again.
+      .mockResolvedValue(
+        reviewWith([picture("p1", "s-1", "approved"), picture("p2", "s-2"), recording("n1", "s-1", "approved")]),
+      );
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "Flag the picture for Part 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve pictures and narration" }));
+
+    expect(await screen.findByText("Remade")).toBeInTheDocument();
+    expect(screen.getByText("Remade as you asked - have a look before you approve.")).toBeInTheDocument();
+  });
+
+  it("marks a remade recording the same way", async () => {
+    api.review
+      .mockResolvedValueOnce(reviewWith([recording("n1", "s-1"), recording("n2", "s-2")]))
+      .mockResolvedValue(reviewWith([recording("n1", "s-1"), recording("n2", "s-2", "approved")]));
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "Flag the narration for Part 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve the narration" }));
+
+    expect(await screen.findByText("Remade")).toBeInTheDocument();
+  });
+
+  it("marks nothing the teacher did not send back", async () => {
+    await open();
+
+    expect(screen.queryByText("Remade")).not.toBeInTheDocument();
+  });
+
+  it("marks nothing while the remake is still being made", async () => {
+    api.review
+      .mockResolvedValueOnce(reviewWith([picture("p1", "s-1"), picture("p2", "s-2")]))
+      .mockResolvedValue(reviewWith([picture("p1", "s-1", "approved"), picture("p2", "s-2", "processing")]));
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "Flag the picture for Part 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve the pictures" }));
+
+    await waitFor(() => expect(media.retry).toHaveBeenCalledWith("l-1", "p2"));
+    expect(await screen.findByText(/Nevo is still making 1 picture/)).toBeInTheDocument();
+    expect(screen.queryByText("Remade")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * 6b5d496: the server keeps `remadeAt` and `requestedBy`, so the mark is no
+ * longer one visit's memory (#897). It survives a reload and reaches every
+ * teacher reviewing the lesson, and "as you asked" is said only to whoever did.
+ */
+describe("a remake the server has recorded", () => {
+  const remadeBy = (requestedBy: string, status = "awaiting_review"): LessonMediaItem =>
+    ({ ...picture("p2", "s-2", status), requestedBy, remadeAt: "2026-10-29T18:00:00Z" }) as LessonMediaItem;
+
+  it("is marked Remade on opening the review, with no flag pressed in this visit", async () => {
+    api.review.mockResolvedValue(reviewWith([picture("p1", "s-1"), remadeBy("t-1")]));
+    await open();
+
+    expect(await screen.findByText("Remade")).toBeInTheDocument();
+    expect(screen.getByText("Remade as you asked - have a look before you approve.")).toBeInTheDocument();
+  });
+
+  it("tells another teacher it was remade after a flag, not that they asked", async () => {
+    api.review.mockResolvedValue(reviewWith([picture("p1", "s-1"), remadeBy("t-colleague")]));
+    await open();
+
+    expect(await screen.findByText("Remade")).toBeInTheDocument();
+    expect(screen.getByText("Remade after a flag - have a look before you approve.")).toBeInTheDocument();
+    expect(screen.queryByText(/as you asked/)).not.toBeInTheDocument();
+  });
+
+  it("is not marked once it has been approved", async () => {
+    api.review.mockResolvedValue(reviewWith([picture("p1", "s-1"), remadeBy("t-1", "approved")]));
+    await open();
+
+    expect(screen.queryByText("Remade")).not.toBeInTheDocument();
+  });
+
+  it("marks nothing the server never remade", async () => {
+    api.review.mockResolvedValue(
+      reviewWith([{ ...picture("p1", "s-1"), requestedBy: "t-1", remadeAt: null } as LessonMediaItem]),
+    );
+    await open();
+
+    expect(screen.queryByText("Remade")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Caption approval (Lydia, 31 Oct, Q10: "Yes, build it"). A picture checked
+ * again under a newer safety policy gets a new caption, and it waits in step
+ * 1 beside the pictures. The step's one press approves the pictures and their
+ * captions together; a flagged caption is held back; writing your own
+ * approves it at once.
+ */
+describe("new captions in step 1", () => {
+  const caption = (segmentId: string, text: string) => ({
+    segmentId,
+    segmentTitle: segmentId === "s-1" ? "Part 1" : "Part 2",
+    caption: text,
+    imageUrl: `https://cdn.test/live-${segmentId}.png`,
+    safetyReviewedAt: "2026-10-30T09:00:00Z",
+  });
+  const TWO = [
+    caption("s-1", "A leaf in sunlight, with arrows showing light going in."),
+    caption("s-2", "A cut-away leaf showing the green parts inside."),
+  ];
+
+  it("shows each caption beside its picture, under the pictures", async () => {
+    media.captions.mockResolvedValue(TWO);
+    await open();
+
+    expect(await screen.findByText("New captions · 2 waiting")).toBeInTheDocument();
+    expect(screen.getByText("A leaf in sunlight, with arrows showing light going in.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Write your own" })).toHaveLength(2);
+  });
+
+  it("approves the pictures and their captions with the one press", async () => {
+    media.captions.mockResolvedValueOnce(TWO).mockResolvedValue([]);
+    await open();
+    await screen.findByText("New captions · 2 waiting");
+    fireEvent.click(screen.getByRole("button", { name: "Approve pictures and narration" }));
+
+    await waitFor(() => expect(media.approveCaptions).toHaveBeenCalledWith("l-1", ["s-1", "s-2"]));
+    expect(media.approve).toHaveBeenCalledWith("l-1", expect.arrayContaining(["p1", "p2", "n1"]));
+  });
+
+  it("holds a flagged caption back from the press, and says so", async () => {
+    media.captions.mockResolvedValue(TWO);
+    await open();
+    await screen.findByText("New captions · 2 waiting");
+    fireEvent.click(screen.getByRole("button", { name: "Flag the caption for Part 2" }));
+
+    expect(screen.getByText("1 caption flagged - it keeps waiting; the rest go as they are.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve pictures and narration" }));
+    await waitFor(() => expect(media.approveCaptions).toHaveBeenCalledWith("l-1", ["s-1"]));
+  });
+
+  it("offers the press for captions alone once the pictures are approved", async () => {
+    api.review.mockResolvedValue(
+      reviewWith([picture("p1", "s-1", "approved"), recording("n1", "s-1", "approved")]),
+    );
+    media.captions.mockResolvedValue(TWO);
+    await open();
+    await screen.findByText("New captions · 2 waiting");
+
+    expect(screen.getByText("One press approves the new captions.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve the captions" }));
+    await waitFor(() => expect(media.approveCaptions).toHaveBeenCalledWith("l-1", ["s-1", "s-2"]));
+    expect(media.approve).not.toHaveBeenCalled();
+  });
+
+  it("saves a caption a teacher writes, which approves it", async () => {
+    media.captions.mockResolvedValueOnce(TWO).mockResolvedValue([TWO[1]]);
+    await open();
+    await screen.findByText("New captions · 2 waiting");
+    fireEvent.click(screen.getAllByRole("button", { name: "Write your own" })[0]);
+    fireEvent.change(screen.getByLabelText("Your caption for Part 1"), {
+      target: { value: "A green leaf in bright sunlight." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save caption" }));
+
+    await waitFor(() =>
+      expect(media.editCaption).toHaveBeenCalledWith("l-1", "s-1", "A green leaf in bright sunlight."),
+    );
+    expect(await screen.findByText("New captions · 1 waiting")).toBeInTheDocument();
+  });
+
+  it("will not save a caption shorter than the server takes", async () => {
+    media.captions.mockResolvedValue(TWO);
+    await open();
+    await screen.findByText("New captions · 2 waiting");
+    fireEvent.click(screen.getAllByRole("button", { name: "Write your own" })[0]);
+    fireEvent.change(screen.getByLabelText("Your caption for Part 1"), { target: { value: "A leaf." } });
+
+    expect(screen.getByText("At least 12 characters.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save caption" })).toBeDisabled();
+  });
+
+  it("says a picture changed when the server refuses the press", async () => {
+    media.captions.mockResolvedValue(TWO);
+    media.approveCaptions.mockRejectedValue(
+      new ApiError(409, "changed", { detail: { code: "visual_caption_review_changed" } }),
+    );
+    await open();
+    await screen.findByText("New captions · 2 waiting");
+    fireEvent.click(screen.getByRole("button", { name: "Approve pictures and narration" }));
+
+    expect(
+      await screen.findByText("A picture changed while you had it open, so its caption needs another look."),
+    ).toBeInTheDocument();
+  });
+
+  it("says it couldn't check the captions, rather than saying nothing", async () => {
+    media.captions.mockRejectedValue(new Error("network"));
+    await open();
+
+    expect(
+      await screen.findByText("We couldn’t check this lesson’s picture captions just now."),
+    ).toBeInTheDocument();
+  });
+
+  it("points a ready lesson's last step back to captions still waiting", async () => {
+    api.review.mockResolvedValue(
+      reviewWith([picture("p1", "s-1", "approved")], { reviewComplete: true }),
+    );
+    media.captions.mockResolvedValue([TWO[0]]);
+    await open(5);
+
+    expect(await screen.findByText(/A picture has a new caption waiting in step 1/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Look at it" }));
+    expect(await screen.findByText("New captions · 1 waiting")).toBeInTheDocument();
   });
 });

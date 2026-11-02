@@ -1,4 +1,4 @@
-import { ApiError } from "@/lib/api/client";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
 
 /**
  * Statuses with which a public link read ANSWERS that the link is no good.
@@ -23,3 +23,30 @@ const DEAD_LINK_STATUSES = [404, 410, 422];
 export function linkIsDead(err: unknown): boolean {
   return err instanceof ApiError && DEAD_LINK_STATUSES.includes(err.status);
 }
+
+/**
+ * A teacher's invite whose reserved account no longer matches it (backend
+ * 4c5706a; answered at lookup as well as acceptance since ed123cb).
+ *
+ * A 409, so `linkIsDead` does not see it - and it is not dead: the link is
+ * fine, the account behind it changed, and only a school administrator can
+ * sort that out. Retrying the same link gets the same answer every time.
+ */
+export function isInviteConflict(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    err.status === 409 &&
+    apiErrorCode(err.detail) === "invited_teacher_conflict"
+  );
+}
+
+/**
+ * What that teacher is told, wherever they meet it - the join landing or the
+ * activation form. OURS, not the server's: ed123cb sends a sentence with each
+ * 409, but a different one at lookup and at acceptance, and both are written
+ * for an administrator ("the reserved teacher account"). In copy-for-lydia.md.
+ */
+export const INVITE_CONFLICT_COPY = {
+  title: "This invite no longer matches your account",
+  body: "The account set up for you has changed since this invite was sent, so this link can’t finish it. Ask your school administrator to review your invite.",
+} as const;

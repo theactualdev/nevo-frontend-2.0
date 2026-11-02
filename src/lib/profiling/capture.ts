@@ -474,11 +474,17 @@ function wordCount(value: unknown): number | null {
  *    condition and nothing else.
  *  - Nothing else is skipped. "Not sure" is a response, not a skip (B117),
  *    and goes as `not_sure`, above.
- *  - A WORD CONFLICT PRACTICE TRIAL (`practice: true`) is NOT SENT. The
- *    contract has no practice marker, and `inhibition` takes only congruent
- *    or incongruent (frontend_unblockers.py: "inhibition requires congruent
- *    or incongruent") - one practice trial would refuse the whole run with a
- *    422. Kept on the device in the capture; asked of Teslim.
+ *  - A WORD CONFLICT TRIAL (`inhibition`, SS) goes with its `target` - what
+ *    the word said, LEFT or RIGHT - and the eight practice trials go too,
+ *    marked `practice: true`, ahead of the thirty-two (Teslim, ed123cb: "Word
+ *    Conflict can send all 40 trials: eight marked practice: true, followed
+ *    by 32 scored trials"). The server marks each against its target, and
+ *    refuses the whole run unless all forty are there: eight practice, eight
+ *    scored of each condition and target, no target four times running. They
+ *    used to be held back, when the contract had no practice marker (#887).
+ *    With NO `correct` (null): the device does not mark the tap (Lydia, 29
+ *    Oct: "send the raw responses and do not compute correctness on your
+ *    side"), and the module records none to pass on.
  *
  * Not carried, because `BaselineTrial` has no field for them: coordinates
  * (B14, above) and the intervals between the taps inside a recall.
@@ -557,7 +563,6 @@ export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
         break;
       }
       case "trial_pick": {
-        if (p.practice === true) break;
         const act = String(p.act);
         const declined = p.notSure === true;
         const dimension = DIMENSION_OF_ACT[act] ?? act.slice(0, 60);
@@ -582,6 +587,14 @@ export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
           responseTimeMs !== null
             ? wordCount(p.readingWordCount)
             : null;
+        /*
+         * WHAT A WORD CONFLICT WORD SAID (ed123cb), which the server marks the
+         * tap against. Only on an `inhibition` trial whose word is known.
+         */
+        const target =
+          act === "inhibition" && (p.word === "left" || p.word === "right")
+            ? (p.word.toUpperCase() as "LEFT" | "RIGHT")
+            : null;
         trials.push({
           dimension,
           condition: conditionOf(e),
@@ -598,6 +611,8 @@ export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
               ? p.itemId
               : null,
           ...(readingWordCount === null ? {} : { readingWordCount }),
+          ...(target === null ? {} : { target }),
+          ...(p.practice === true ? { practice: true } : {}),
         });
         break;
       }

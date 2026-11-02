@@ -244,6 +244,12 @@ export function EditAccessPanel({
                       className="rounded-[10px] bg-nevo-cream-elevated px-[15px] py-[13px]"
                       person={{ userId: member.userId, name }}
                       level={member.accessLevel}
+                      promoted={{
+                        by: member.seniorPromotedBy,
+                        byName: member.seniorPromotedByName,
+                        at: member.seniorPromotedAt,
+                      }}
+                      me={me}
                       you={member.userId === me}
                       canChange={viewerSenior && member.status.toLowerCase() === "active" && !saving}
                       onChange={(next) => onLevel?.(next)}

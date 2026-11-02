@@ -152,11 +152,86 @@ describe("waiting on the parent", () => {
     expect(screen.queryByRole("button", { name: "This date is correct" })).toBeNull();
   });
 
-  it("goes back to the school once the parent has given the date and it still holds", async () => {
-    held.mockResolvedValue([
-      check({ schoolRecheckedAt: "2026-10-21T09:00:00Z", parentReconfirmedAt: "2026-10-21T12:00:00Z" }),
-    ]);
+});
+
+describe("both checks done and it still holds (S5, design cb527bf)", () => {
+  const both = (over: Partial<AgeCheck> = {}) =>
+    check({
+      schoolRecheckedAt: "2026-10-21T09:00:00Z",
+      parentReconfirmedAt: "2026-10-21T12:00:00Z",
+      parentName: "Mrs. Adeyemi",
+      ...over,
+    });
+
+  it("never offers the check again - the loop people were stuck in", async () => {
+    held.mockResolvedValue([both()]);
     render(<DobHoldView />);
-    expect(within(await card()).getByRole("button", { name: "Correct it" })).toBeInTheDocument();
+    const c = await card();
+    expect(within(c).getByText("On hold · both checks done")).toBeInTheDocument();
+    expect(within(c).queryByRole("button", { name: "This date is correct" })).toBeNull();
+    expect(within(c).queryByRole("button", { name: "Correct it" })).toBeNull();
+    // The intro tells a school to check each one; this card asks no check.
+    expect(screen.queryByText(/Check each one against your record/)).toBeNull();
+  });
+
+  it("says what it waits on and who can move it, the parent named as the server sends", async () => {
+    held.mockResolvedValue([both()]);
+    render(<DobHoldView />);
+    const said = (await card()).textContent ?? "";
+    expect(said).toMatch(/we’ve heard back from Mrs\. Adeyemi\. The two still differ/);
+    expect(said).toMatch(/Your record reads 14 March 2013; Mrs\. Adeyemi’s doesn’t match it\./);
+    // Not a dead end (Lydia, 28 Oct): one agreed date, then support.
+    expect(said).toMatch(
+      /You and Mrs\. Adeyemi together\. Agree Tunde’s real date between you, then send it to us at support@nevolearning\.com\./,
+    );
+    // Since ed123cb the server tells the parent when their second check leaves it held.
+    expect(said).toMatch(
+      /We’ve let Mrs\. Adeyemi know the dates still don’t match\. If it isn’t settled, Tunde’s record is removed on 19 November 2026\./,
+    );
+    // Held from the frame: no roster route sets the date, and no day count is ours to give.
+    expect(screen.queryByRole("link", { name: /Set the agreed date/ })).toBeNull();
+    expect(said).not.toMatch(/days from today/);
+  });
+
+  it("says what's true when the dates agree but fall outside the year group (Lydia, 31 Oct, Q12)", async () => {
+    // Agreeing dates can still hold - outside the enrolled age band.
+    held.mockResolvedValue([both({ differs: false })]);
+    render(<DobHoldView />);
+    const said = (await card()).textContent ?? "";
+    expect(said).toMatch(
+      /The dates now agree, but the date of birth does not match the year group Tunde is enrolled in, and the school needs to check the enrolment rather than the date\./,
+    );
+    // Nothing that says the dates differ, and nothing about agreeing one.
+    expect(said).not.toMatch(/still differ|doesn’t match it|We’ve let/);
+    expect(said).not.toMatch(/What it’s waiting on|Who can move it/);
+    // Still a way to support, and still the removal date.
+    expect(within(await card()).getByRole("link", { name: "This doesn’t look right to me" })).toBeInTheDocument();
+    expect(said).toMatch(/Tunde’s record is removed on 19 November 2026\./);
+  });
+
+  it("says where the agreed date goes - support, by email, with the child named", async () => {
+    held.mockResolvedValue([both()]);
+    render(<DobHoldView />);
+    const link = within(await card()).getByRole("link", { name: "support@nevolearning.com" });
+    const href = link.getAttribute("href") ?? "";
+    expect(href.startsWith("mailto:support@nevolearning.com?")).toBe(true);
+    expect(decodeURIComponent(href)).toMatch(/Agreed date of birth for Tunde/);
+  });
+
+  it("emails support with the child's first name, not a form", async () => {
+    held.mockResolvedValue([both()]);
+    render(<DobHoldView />);
+    const link = within(await card()).getByRole("link", { name: "This doesn’t look right to me" });
+    const href = link.getAttribute("href") ?? "";
+    expect(href.startsWith("mailto:support@nevolearning.com?")).toBe(true);
+    expect(decodeURIComponent(href)).toMatch(/Tunde/);
+  });
+
+  it("says 'the parent' when the server names no one", async () => {
+    held.mockResolvedValue([both({ parentName: null })]);
+    render(<DobHoldView />);
+    const said = (await card()).textContent ?? "";
+    expect(said).toMatch(/You and Tunde’s parent together\./);
+    expect(said).toMatch(/the parent’s doesn’t match it\./);
   });
 });

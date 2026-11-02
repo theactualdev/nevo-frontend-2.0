@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeIndexedDb } from "@/test/fakeIndexedDb";
+import type { BaselineTrial } from "@/lib/api/baseline";
 import {
   BaselineCapture,
   baselineRunContext,
@@ -9,6 +10,7 @@ import {
   tapPoint,
   wordsShown,
 } from "./capture";
+import { wordConflictTrials, type WordConflictTrial } from "./wordConflict";
 
 /**
  * The trials are the only thing that leaves the device (B9, 5 Oct).
@@ -942,21 +944,93 @@ describe("BaselineCapture — held until consent allows it", () => {
 });
 
 /*
- * 2C, Word Conflict (Teslim 4c5706a): "send dimension `inhibition` with
- * condition congruent or incongruent" - and the API refuses any other
- * condition there, which would refuse the whole run. So the eight practice
- * trials are not sent at all until the contract has a practice marker.
+ * 2C, Word Conflict (Teslim, ed123cb): "Word Conflict can send all 40
+ * trials: eight marked practice: true, followed by 32 scored trials", every
+ * one with its LEFT or RIGHT target, which the server marks against. It
+ * refuses the whole run otherwise.
  */
 describe("Word Conflict's trials", () => {
-  it("go up as inhibition, with their condition, the word tapped and whether it matched", () => {
+  const pickOf = (t: WordConflictTrial, chosen: "left" | "right", rtMs = 600) => ({
+    module: "pattern_flanker",
+    act: "inhibition",
+    choice: chosen === "left" ? 0 : 1,
+    rtMs,
+    congruency: t.condition,
+    ...(t.practice ? { practice: true } : {}),
+    word: t.word,
+    arrow: t.arrow,
+    chosenOption: chosen,
+  });
+
+  /** ed123cb's `word_conflict_sequence` and per-trial check, as the server runs them. */
+  const serverTakes = (trials: BaselineTrial[]) => {
+    const rows = trials.filter((t) => t.dimension === "inhibition");
+    if (!rows.every((t) => t.target === "LEFT" || t.target === "RIGHT")) return false;
+    if (!rows.every((t) => t.condition === "congruent" || t.condition === "incongruent")) return false;
+    const practice = rows.filter((t) => t.practice);
+    const scored = rows.filter((t) => !t.practice);
+    if (practice.length !== 8 || scored.length !== 32) return false;
+    for (const condition of ["congruent", "incongruent"]) {
+      for (const target of ["LEFT", "RIGHT"]) {
+        if (scored.filter((t) => t.condition === condition && t.target === target).length !== 8) return false;
+      }
+    }
+    let run = 0;
+    let previous: string | undefined;
+    for (const t of scored) {
+      run = t.target === previous ? run + 1 : 1;
+      if (run > 3) return false;
+      previous = t.target;
+    }
+    return true;
+  };
+
+  /*
+   * RAW, UNMARKED (Lydia, 29 Oct: "send the raw responses and do not compute
+   * correctness on your side"). The module records the word tapped and the
+   * word shown, and nothing about whether they match; `correct` goes null.
+   */
+  it("go up as inhibition, with their condition, the word tapped, the word as the target, and no mark", () => {
     const c = new BaselineCapture("wc");
-    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 0, rtMs: 640, congruency: "incongruent", practice: true, word: "left", arrow: "right", chosenOption: "left", correct: true });
-    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 1, rtMs: 720, congruency: "incongruent", word: "left", arrow: "right", chosenOption: "right", correct: false });
-    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 1, rtMs: 510, congruency: "congruent", word: "right", arrow: "right", chosenOption: "right", correct: true });
+    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 1, rtMs: 720, congruency: "incongruent", word: "left", arrow: "right", chosenOption: "right" });
+    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 1, rtMs: 510, congruency: "congruent", word: "right", arrow: "right", chosenOption: "right" });
 
     expect(baselineTrials(c)).toEqual([
-      { dimension: "inhibition", condition: "incongruent", response: "right", correct: false, responseTimeMs: 720, probeItemId: null },
-      { dimension: "inhibition", condition: "congruent", response: "right", correct: true, responseTimeMs: 510, probeItemId: null },
+      { dimension: "inhibition", condition: "incongruent", response: "right", correct: null, responseTimeMs: 720, probeItemId: null, target: "LEFT" },
+      { dimension: "inhibition", condition: "congruent", response: "right", correct: null, responseTimeMs: 510, probeItemId: null, target: "RIGHT" },
     ]);
   });
+
+  it("send a practice trial too, marked practice, with its own condition and target", () => {
+    const c = new BaselineCapture("wc");
+    c.record("trial_pick", { module: "pattern_flanker", act: "inhibition", choice: 0, rtMs: 640, congruency: "incongruent", practice: true, word: "left", arrow: "right", chosenOption: "left" });
+
+    expect(baselineTrials(c)).toEqual([
+      { dimension: "inhibition", condition: "incongruent", response: "left", correct: null, responseTimeMs: 640, probeItemId: null, target: "LEFT", practice: true },
+    ]);
+  });
+
+  it("are all forty from a whole run, in the shape the server takes, practice first", () => {
+    const c = new BaselineCapture("wc");
+    const list = wordConflictTrials();
+    // Any taps at all: the shape is the list's, never the child's answers.
+    list.forEach((t, i) => c.record("trial_pick", pickOf(t, i % 3 ? t.word : t.word === "left" ? "right" : "left")));
+
+    const trials = baselineTrials(c);
+    expect(trials).toHaveLength(40);
+    expect(trials.slice(0, 8).every((t) => t.practice === true)).toBe(true);
+    expect(trials.slice(8).some((t) => t.practice)).toBe(false);
+    expect(serverTakes(trials)).toBe(true);
+    // Every one unmarked: the server marks the response against the target.
+    expect(trials.every((t) => t.correct === null)).toBe(true);
+  });
+
+  it("put no target on any other dimension", () => {
+    const c = new BaselineCapture("wc");
+    c.record("trial_pick", { module: "pattern_flanker", act: "pattern", choice: 0, rtMs: 400, pair: "same", correct: true });
+
+    expect(baselineTrials(c)[0]).not.toHaveProperty("target");
+    expect(baselineTrials(c)[0]).not.toHaveProperty("practice");
+  });
 });
+

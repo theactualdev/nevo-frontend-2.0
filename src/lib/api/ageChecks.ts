@@ -37,6 +37,8 @@ export interface AgeCheck {
   deletionDueAt: string | null;
   schoolRecheckedAt: string | null;
   parentReconfirmedAt: string | null;
+  /** The linked parent's name, as the server sends it (554a6bb). Null when none is linked. */
+  parentName?: string | null;
   /**
    * Whether this hold can clear through the re-check (both dates present, at
    * most two years apart, inside the enrolled band, not expired). The
