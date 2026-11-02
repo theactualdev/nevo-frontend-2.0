@@ -501,7 +501,8 @@ export const intelligenceApi = {
    */
   allFlags: async (
     maxPages = 10,
-    filter: { openOnly?: boolean } = {},
+    /** `classId` is the server's own filter: one class's children only. */
+    filter: { openOnly?: boolean; classId?: string } = {},
   ): Promise<{ flags: AttentionFlag[]; complete: boolean }> => {
     const PAGE = 200;
     const flags: AttentionFlag[] = [];

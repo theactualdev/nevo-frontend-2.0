@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { classesApi, type ClassStudent } from "@/lib/api/classes";
 import { getToken } from "@/lib/auth/session";
+import { classesOnce } from "@/lib/classes/classesOnce";
 import { useHasSession } from "./useHasSession";
 import { studentName } from "./useClassRoster";
 
@@ -70,7 +71,9 @@ export function useStudentDirectory(): StudentDirectory {
     let cancelled = false;
     void (async () => {
       try {
-        const classes = await classesApi.myClasses();
+        // Once per CLASS: a class taught for two subjects is two assignments,
+        // and reading it twice listed each of its children twice.
+        const classes = classesOnce(await classesApi.myClasses());
         const settled = await Promise.allSettled(
           /*
            * EVERY CLASS. This took the first 12 and dropped the rest without
