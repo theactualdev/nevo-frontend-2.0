@@ -421,10 +421,18 @@ function WaitingCard({ check, person, done }: { check: AgeCheck; person: Person;
 }
 
 /**
- * D30 S5: both checks done, the dates still differ. Nothing to confirm or
+ * D30 S5: both checks done, and the hold still stands. Nothing to confirm or
  * correct here - the same check again won't settle it.
+ *
+ * TWO WAYS TO GET HERE since ed123cb, told apart by the server's `differs`:
+ * the dates still differ (too far apart), or the dates now AGREE but fall
+ * outside the year group the child is enrolled in. For the second, the card
+ * says what's true, in Lydia's words (31 Oct, Q12), and leaves out the two
+ * boxes about agreeing a date - the date is agreed; the enrolment is the
+ * question.
  */
 function BothCheckedCard({ check, person }: { check: AgeCheck; person: Person }) {
+  const agree = !check.differs;
   const schoolDate = longDate(check.schoolDateOfBirth);
   const removal = longDay(check.deletionDueAt);
   const parentName = check.parentName?.trim() || null;
@@ -451,13 +459,22 @@ function BothCheckedCard({ check, person }: { check: AgeCheck; person: Person })
         </span>
       </div>
 
-      <p className="m-0 mt-4 text-[14px] leading-[1.6] text-nevo-near-black/72">
-        You&rsquo;ve checked the date on your record, and we&rsquo;ve heard back from {parent}. The
-        two still differ, so {person.first}&rsquo;s account stays on hold. Nobody has got this wrong
-        - the records just don&rsquo;t agree yet, and running the same check again won&rsquo;t
-        settle it.
-      </p>
+      {agree ? (
+        <p className="m-0 mt-4 text-[14px] leading-[1.6] text-nevo-near-black/72">
+          You&rsquo;ve checked the date on your record, and we&rsquo;ve heard back from {parent}. The
+          dates now agree, but the date of birth does not match the year group {person.first} is
+          enrolled in, and the school needs to check the enrolment rather than the date.
+        </p>
+      ) : (
+        <p className="m-0 mt-4 text-[14px] leading-[1.6] text-nevo-near-black/72">
+          You&rsquo;ve checked the date on your record, and we&rsquo;ve heard back from {parent}. The
+          two still differ, so {person.first}&rsquo;s account stays on hold. Nobody has got this
+          wrong - the records just don&rsquo;t agree yet, and running the same check again
+          won&rsquo;t settle it.
+        </p>
+      )}
 
+      {agree ? null : (
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <div className="rounded-[10px] bg-nevo-cream px-4 py-3.5">
           <span className="block text-[12.5px] font-semibold text-nevo-near-black/60">
@@ -483,6 +500,7 @@ function BothCheckedCard({ check, person }: { check: AgeCheck; person: Person })
           </p>
         </div>
       </div>
+      )}
 
       <div className="mt-4">
         <a href={mail} className="cursor-pointer text-[14px] font-semibold text-nevo-navy hover:underline">
