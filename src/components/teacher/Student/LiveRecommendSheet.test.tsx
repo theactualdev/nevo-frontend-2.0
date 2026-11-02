@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { clearSession, setSession } from "@/lib/auth/session";
+import { readKeptDraft, writeKeptDraft } from "@/lib/drafts/keptDraft";
 
 const { create, review, useLessonLibrary } = vi.hoisted(() => ({
   create: vi.fn(),
@@ -656,5 +658,48 @@ describe("the library's own sign-off", () => {
       screen.getByText("None of your lessons is reviewed yet, so there is nothing to send Amara. Review one from your library first."),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Your library is empty/)).not.toBeInTheDocument();
+  });
+});
+
+/*
+ * SCRUM-246: a note to the child survives a lapse or leaving the page, kept
+ * for this child; closing the sheet on purpose lets it go.
+ */
+describe("a note not yet sent", () => {
+  beforeEach(() => {
+    clearSession();
+    window.localStorage.clear();
+    setSession({
+      token: "tok",
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      userId: "t-1",
+      role: "teacher",
+    });
+  });
+  const note = () => screen.getByRole("textbox") as HTMLTextAreaElement;
+
+  it("is offered back for this child, and put back on request", () => {
+    writeKeptDraft("recommend-note:s-1", "Try this one first.");
+    show();
+
+    expect(note().value).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Put it back" }));
+    expect(note().value).toBe("Try this one first.");
+  });
+
+  it("is not offered for another child", () => {
+    writeKeptDraft("recommend-note:s-2", "For someone else.");
+    show();
+
+    expect(screen.queryByRole("button", { name: "Put it back" })).not.toBeInTheDocument();
+  });
+
+  it("is let go when the sheet is closed on purpose", async () => {
+    show();
+    fireEvent.change(note(), { target: { value: "Half a note." } });
+    await waitFor(() => expect(readKeptDraft("recommend-note:s-1")).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(readKeptDraft("recommend-note:s-1")).toBeNull();
   });
 });
