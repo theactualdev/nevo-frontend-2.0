@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import {
   lessonsOf,
   namedSegments,
@@ -13,6 +13,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
+import { useKeptDraft } from "@/hooks/useKeptDraft";
+import { KeptDraftNotice } from "@/components/shared/KeptDraftNotice";
 
 /**
  * C07d for a REAL staged upload: the unit Nevo made, the steering a teacher
@@ -116,6 +118,13 @@ export function LiveStructureTree({
   const [closed, setClosed] = useState<Set<string>>(() => new Set());
   // Edits the server has not seen yet.
   useUnsavedGuard(dirty, "lesson");
+  /*
+   * AND THEY SURVIVE THE SESSION LAPSING (SCRUM-246, part 2: "your edits to
+   * this lesson"), kept for this upload and offered back when the teacher
+   * signs in again - never laid over the saved structure until they say so.
+   */
+  const keptValue = useMemo(() => ({ draft, title, rows }), [draft, title, rows]);
+  const kept = useKeptDraft(`upload-structure:${uploadId}`, keptValue, dirty);
 
   const lessonKey = (lesson: StructureLesson, li: number) =>
     lesson.lessonId ?? `new-${li}`;
@@ -471,6 +480,20 @@ export function LiveStructureTree({
             {allOpen ? "Collapse all" : "Expand all"}
           </button>
         </div>
+        {kept.kept && (
+          <KeptDraftNotice
+            className="mb-3.5"
+            onRestore={() => {
+              const back = kept.restore();
+              if (!back) return;
+              setDraft(back.draft);
+              setTitle(back.title);
+              setRows(back.rows);
+              touched();
+            }}
+            onDiscard={kept.discard}
+          />
+        )}
         <div className="mb-3.5 flex items-center gap-3 rounded-[12px] bg-nevo-navy px-[18px] py-[15px]">
           <span className="shrink-0 text-nevo-violet" aria-hidden>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

@@ -60,6 +60,11 @@ export interface LibraryCard {
   kind: CardKind;
   /** Draws C06's eye badge in place of the status pill. */
   needsReview: boolean;
+  /**
+   * The server's lesson-wide sign-off (`reviewComplete`), or null where it
+   * said nothing. The doors that send a lesson to children read this.
+   */
+  reviewComplete?: boolean | null;
   /** Segment count and origin, or the fixture's subject line. */
   meta: string;
   /** The quiet third line. */
@@ -121,15 +126,30 @@ const SOURCE_LABEL: Record<LessonSourceType, string> = {
  * `outstandingOf` failed the gate for not saying so; the name was the defect,
  * not the rule.
  */
+/*
+ * THE SIGN-OFF, WHERE THE SERVER SENDS IT (Teslim 294584b, 27 Oct). Since
+ * cdba131 a lesson goes to a class only once its whole review is signed:
+ * key points, checks, guiding questions and rewrites. Per-section approval
+ * no longer decides it, so a card counting unapproved sections said "Ready"
+ * over a lesson the server would refuse to assign. `reviewComplete` is the
+ * answer; the section count stays only for a deployment that does not send
+ * it, where it is all there is.
+ */
 function outstandingCountOf(lesson: LessonSummary): number {
   return typeof lesson.unapprovedSegmentCount === "number"
     ? lesson.unapprovedSegmentCount
     : lesson.reviewSegmentCount;
 }
 
+function waitsForReview(lesson: LessonSummary): boolean {
+  return typeof lesson.reviewComplete === "boolean"
+    ? !lesson.reviewComplete
+    : outstandingCountOf(lesson) > 0;
+}
+
 function needsReviewOf(lesson: LessonSummary): boolean {
   return (
-    outstandingCountOf(lesson) > 0 &&
+    waitsForReview(lesson) &&
     lesson.status !== "failed" &&
     lesson.status !== "pending" &&
     lesson.status !== "processing"
@@ -139,9 +159,9 @@ function needsReviewOf(lesson: LessonSummary): boolean {
 function statusOf(lesson: LessonSummary): CardStatus {
   switch (lesson.status) {
     case "completed":
-      return outstandingCountOf(lesson) > 0 ? "Needs review" : "Ready";
+      return waitsForReview(lesson) ? "Needs review" : "Ready";
     case "completed_with_review":
-      return outstandingCountOf(lesson) > 0 ? "Needs review" : "Ready";
+      return waitsForReview(lesson) ? "Needs review" : "Ready";
     case "pending":
     case "processing":
       return "Preparing";
@@ -195,6 +215,8 @@ function toCard(lesson: LessonSummary): LibraryCard {
     status: statusOf(lesson),
     kind,
     needsReview: needsReviewOf(lesson),
+    reviewComplete:
+      typeof lesson.reviewComplete === "boolean" ? lesson.reviewComplete : null,
     // C06's meta line gained a duration on 1 Sep. 0 and absent both mean "no
     // estimate" - the figure is floored per content type server-side, so a
     // real lesson is never 0 minutes and "0 min" would be a claim.
@@ -242,6 +264,7 @@ const FIXTURE_CARDS: LibraryCard[] = LIBRARY_LESSONS.map((l) => ({
   // The designed fixtures only carry Assigned/Ready/Draft - none is a
   // review state, so no fixture card draws the badge.
   needsReview: false,
+  reviewComplete: null,
   meta: l.meta,
   footer: l.assigned,
   subject: l.subject,

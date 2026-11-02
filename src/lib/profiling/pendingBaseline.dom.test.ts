@@ -560,3 +560,52 @@ describe("two flushes for the same child at once", () => {
     await amaras;
   });
 });
+
+/*
+ * A senior-band run parked before #916 holds Word Conflict's thirty-two with
+ * no target and no practice - the practice was never kept. ed123cb refused
+ * that shape; 3888e72 takes it again for the transition, so it goes as
+ * parked. A run built since goes with all forty.
+ */
+describe("a senior-band run parked before ed123cb", () => {
+  const conflict = Array.from({ length: 32 }, (_, i) => ({
+    dimension: "inhibition",
+    condition: i % 2 ? "congruent" : "incongruent",
+    response: i % 4 < 2 ? "left" : "right",
+    correct: true,
+    responseTimeMs: 600,
+    probeItemId: null,
+  }));
+
+  /*
+   * Teslim, 3888e72 (29 Oct): the server "accepts the app's current 32
+   * scored Word Conflict trials without targets" again, so the run goes as it
+   * was parked and the child keeps their Word Conflict.
+   */
+  it("resends whole, Word Conflict and all, in the shape 3888e72 takes again", async () => {
+    const submit = vi.spyOn(baselineApi, "submitTrials").mockResolvedValue(true);
+    holdBaseline("sess-ss", [...TRIALS, ...conflict], null, { ageBand: "senior_secondary" });
+    signInAs("child-ss");
+
+    await expect(flushPendingBaseline("child-ss", "sess-ss")).resolves.toBe(true);
+
+    expect(submit).toHaveBeenCalledWith("sess-ss", [...TRIALS, ...conflict], {
+      ageBand: "senior_secondary",
+    });
+    expect(readPendingBaseline()).toBeNull();
+  });
+
+  it("sends a run built since whole, all forty with it", async () => {
+    const submit = vi.spyOn(baselineApi, "submitTrials").mockResolvedValue(true);
+    const forty = [
+      ...conflict.slice(0, 8).map((t) => ({ ...t, practice: true, target: t.response === "left" ? "LEFT" : "RIGHT" })),
+      ...conflict.map((t) => ({ ...t, target: t.response === "left" ? "LEFT" : "RIGHT" })),
+    ] as typeof conflict;
+    holdBaseline("sess-ss2", [...TRIALS, ...forty], null, { ageBand: "senior_secondary" });
+    signInAs("child-ss2");
+
+    await expect(flushPendingBaseline("child-ss2", "sess-ss2")).resolves.toBe(true);
+
+    expect(submit).toHaveBeenCalledWith("sess-ss2", [...TRIALS, ...forty], { ageBand: "senior_secondary" });
+  });
+});

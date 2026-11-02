@@ -424,20 +424,47 @@ describe("D05's Teaches, from the teacher's record (8 Oct)", () => {
   });
 });
 
-describe("a teacher who hasn't joined yet (16 Oct)", () => {
-  it("is listed greyed with the reason, and a removed teacher isn't listed at all", async () => {
-    // The server assigns an active teacher only; an invited one was refused
-    // as "The requested teacher was not found."
-    listTeachers.mockResolvedValue([
-      { id: "t-bello", name: "Bisi Bello", email: "b@school.edu.ng", status: "active" },
-      { id: "t-new", name: "Invited Teacher", email: "n@school.edu.ng", status: "invited" },
-      { id: "t-gone", name: "Gone Teacher", email: "g@school.edu.ng", status: "deactivated" },
-    ]);
-    const { container } = fromClass(undefined, vi.fn());
-    const invited = await screen.findByRole("option", { name: "Invited Teacher (invited, not yet joined)" });
-    expect(invited).toBeDisabled();
-    expect(screen.getByRole("option", { name: "Bisi Bello" })).toBeEnabled();
+describe("a teacher who hasn't joined yet (L11, 26 Oct; backend 4c5706a)", () => {
+  const STAFF = [
+    { id: "t-bello", name: "Bisi Bello", email: "b@school.edu.ng", status: "active" },
+    { id: "t-new", name: "Invited Teacher", email: "n@school.edu.ng", status: "invited" },
+    { id: "t-gone", name: "Gone Teacher", email: "g@school.edu.ng", status: "deactivated" },
+  ];
+
+  it("can be chosen - no greyed state - and a removed teacher isn't listed at all", async () => {
+    listTeachers.mockResolvedValue(STAFF);
+    fromClass(undefined, vi.fn());
+    expect(await screen.findByRole("option", { name: "Invited Teacher (invited)" })).toBeEnabled();
     expect(screen.queryByRole("option", { name: /Gone Teacher/ })).toBeNull();
-    expect(said(container)).toMatch(/A teacher you've invited can be assigned once they've joined\./);
+  });
+
+  it("says plainly the assignment takes effect when they join, and makes it", async () => {
+    listTeachers.mockResolvedValue(STAFF);
+    getTeacher.mockResolvedValue({ id: "t-new", name: "Invited Teacher", status: "invited", subjects: ["Mathematics"] });
+    const { container } = fromClass(undefined, vi.fn());
+    fireEvent.change(await screen.findByRole("combobox", { name: "Teacher" }), {
+      target: { value: "t-new" },
+    });
+    await waitFor(() =>
+      expect(said(container)).toMatch(/Invited Teacher hasn't joined yet\. This assignment takes effect when they join\./),
+    );
+    await waitFor(() => expect(said(container)).toMatch(/Teaches Mathematics/));
+    fireEvent.click(screen.getByRole("button", { name: /^Co-teacher/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign Mathematics to 1 class" }));
+    await waitFor(() =>
+      expect(createAssignment).toHaveBeenCalledWith(
+        expect.objectContaining({ teacherId: "t-new", classId: "c-2a", schoolSubjectId: "sub-maths" }),
+      ),
+    );
+  });
+
+  it("says nothing about joining for a teacher who already has", async () => {
+    listTeachers.mockResolvedValue(STAFF);
+    const { container } = fromClass(undefined, vi.fn());
+    fireEvent.change(await screen.findByRole("combobox", { name: "Teacher" }), {
+      target: { value: "t-bello" },
+    });
+    await screen.findByRole("option", { name: "Bisi Bello" });
+    expect(said(container)).not.toMatch(/hasn't joined yet/);
   });
 });

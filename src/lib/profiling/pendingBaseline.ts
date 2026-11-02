@@ -342,6 +342,12 @@ async function flushOnce(
       write(pending);
       key = keyFor(pending);
     }
+    /*
+     * As parked, Word Conflict and all. A run parked before ed123cb holds the
+     * thirty-two with no target and no practice, which the server takes again
+     * since 3888e72 ("accepts the app's current 32 scored Word Conflict
+     * trials without targets"), so that child keeps their Word Conflict.
+     */
     const ok = await baselineApi.submitTrials(
       pending.sessionId,
       pending.trials,

@@ -15,8 +15,10 @@ const DEVICE_TASK_ID = "device:";
 
 /**
  * A task the engine can name for the day that this screen has nothing to show
- * for: the question task with no question served, and the motor-speed task,
- * which has no warm-up of its own (Teslim's 7c98014, 27 Oct, rotated it in).
+ * for: the question task with no question served, and the motor-speed task
+ * where it cannot run - from a deployment that sends no `motorTask`, or on a
+ * cursor device (Teslim's 7c98014, 27 Oct, rotated it in; ed123cb gave it
+ * the route).
  */
 export type UnpresentableTask = "domain" | "motor_speed";
 
@@ -38,6 +40,8 @@ export interface WarmUpItem {
  *    engine did name a task, and `cannotPresent` says which: it goes to the
  *    engine as skipped (B117).
  *  - `ready`: run this. `live` is false only for the signed-out walkthrough.
+ *  - `motor`: the motor-speed day, run as onboarding's motor step (ed123cb).
+ *    `sampleCount` is how many timings the route takes: the step's eight.
  *
  * `doneToday` is the account's answer to "has this child done today's?" (B10,
  * 1 Oct), whenever the read answered with one. Absent means nobody said: the
@@ -46,6 +50,7 @@ export interface WarmUpItem {
 export type WarmUpPrompt =
   | { state: "waiting" }
   | { state: "none"; doneToday?: boolean; cannotPresent?: UnpresentableTask }
+  | { state: "motor"; sampleCount: number; doneToday?: boolean }
   | {
       state: "ready";
       dimension: BaselineDimension;
@@ -122,14 +127,19 @@ export function toPrompt(res: Partial<RecalibratePrompt>): WarmUpPrompt {
   const done =
     typeof res.doneToday === "boolean" ? { doneToday: res.doneToday } : {};
   /*
-   * THE MOTOR-SPEED DAY (7c98014, 27 Oct). The engine now rotates the motor
-   * task into the daily warm-up, and no warm-up screen for it is drawn: the
-   * motor step is onboarding's. So it goes as the question task with no
-   * question does - the nothing-state, and the engine told it was skipped
-   * (B117) - never as silence, which it was, nor as onboarding's step run
-   * where no frame puts it.
+   * THE MOTOR-SPEED DAY (7c98014, 27 Oct). The engine rotates the motor task
+   * into the daily warm-up. Since ed123cb (29 Oct) the read carries
+   * `motorTask` and the route takes the step's timings, so the day is
+   * onboarding's motor step (08a), run as the warm-up's task (`motor`; Hub,
+   * 29 Oct). A read without `motorTask` is a deployment that cannot take
+   * them: then it goes as the question task with no question does - the
+   * nothing-state, and the engine told it was skipped (B117).
    */
   if (dimension === "motor_speed") {
+    const count = res.motorTask?.sampleCount;
+    if (typeof count === "number" && Number.isInteger(count) && count > 0) {
+      return { state: "motor", sampleCount: count, ...done };
+    }
     return { state: "none", cannotPresent: "motor_speed", ...done };
   }
   if (

@@ -105,6 +105,8 @@ const QUICK_CHECK = {
   correctNote: "Yes.",
   recoveryNote: "Not quite.",
   conceptId: "concept-1",
+  // Reviewed: the hint is shown on a check asked again, one that holds.
+  holds: true,
 };
 
 const text = (heading: string) => ({

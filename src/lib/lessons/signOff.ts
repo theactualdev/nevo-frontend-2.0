@@ -28,6 +28,14 @@ export async function awaitingSignOff(lessonIds: string[]): Promise<Set<string>>
   return new Set(answers.filter((id): id is string => id !== null));
 }
 
+/**
+ * Under a list that leaves out lessons nobody has signed off. Since Teslim's
+ * 294584b the library says which they are (`reviewComplete`), so the doors
+ * that send a lesson leave them off, as they do lessons still being read.
+ */
+export const UNREVIEWED_LEFT_OFF =
+  "Lessons you haven’t finished reviewing aren’t listed here. Review them from your library first.";
+
 /** Where a lesson is reviewed (C07k). */
 export const reviewHrefFor = (lessonId: string) =>
   `/teacher/lessons/${lessonId}/review`;

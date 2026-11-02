@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect } from "react";
+import { WAY_BACK } from "@/components/student/Auth/AccountOnPauseScreen";
 import { purgeStoredCaptures } from "@/lib/profiling/capture";
-import { HoldWayBack } from "./WaitingOnConsent";
+import { cn } from "@/lib/utils";
+import { HoldWayBack, useLeaveForThePicker } from "./WaitingOnConsent";
 
 /** 00e's words, verbatim. */
 export const WITHDRAWN_COPY = {
   heading: "Nevo isn't available to you at the moment",
   line: "Someone at home or at school can tell you more.",
+  someoneElse: "Someone else using this device?",
 } as const;
 
 /**
@@ -20,16 +23,22 @@ export const WITHDRAWN_COPY = {
  * every day."
  *
  * So, as the frame has it: "a calm, still dot rather than the breathing one,
- * no 'soon', no countdown, no button, no sign-in route. It never uses the
- * word consent, never mentions a parent, never mentions withdrawal, and never
- * implies a decision was made about the child by anybody."
+ * no 'soon', no countdown, and no sign-in route back for this child." It
+ * never uses the word consent, never mentions a parent, never mentions
+ * withdrawal, and never implies a decision was made about the child by
+ * anybody.
  *
  * BUT THERE IS A WAY BACK (Lydia, 17 Oct), which the frame does not draw:
  * "Consent Withdrawn: yes, give it Back, same as waiting-on-consent ... A
  * shared device should not be stuck." So 00d's row - the chevron, top left,
  * and the same cropped wordmark (`HoldWayBack`) - and it leaves for the
- * device picker; it moves nothing along. Nothing onward, still: no retry, no
- * sign-in form, no link.
+ * device picker; it moves nothing along.
+ *
+ * AND THE FRAME'S OWN WAY FORWARD (design 5bb9ee2, 28 Oct): "the neutral
+ * 'Someone else using this device?' hand-off to the shared-device picker -
+ * the same exit Account Closed uses - so it never ends at the browser". Under
+ * the line, in Account Closed's link style, and it leaves exactly as Back
+ * does. Still no retry, no sign-in form, nothing that moves this child on.
  *
  * Reached from every door a withdrawn child can use: a refused request
  * (`withdrawnDoor`), a sign-in (`studentDestination`), and 05 Entry, which
@@ -50,6 +59,7 @@ export function ConsentWithdrawn() {
   useEffect(() => {
     void purgeStoredCaptures();
   }, []);
+  const leave = useLeaveForThePicker();
   return (
     <div className="flex min-h-dvh w-full flex-col bg-nevo-cream text-nevo-near-black">
       <HoldWayBack />
@@ -67,6 +77,14 @@ export function ConsentWithdrawn() {
           <p className="mt-[18px] max-w-[280px] text-base leading-[1.6] text-nevo-near-black/70 sm:max-w-[420px] sm:text-[17px] lg:max-w-[440px]">
             {WITHDRAWN_COPY.line}
           </p>
+          {/* 00e: 26px under the line, a size under it (15px, 16px from sm). */}
+          <button
+            type="button"
+            onClick={leave}
+            className={cn(WAY_BACK, "mt-[26px] text-[15px] sm:text-base")}
+          >
+            {WITHDRAWN_COPY.someoneElse}
+          </button>
         </div>
       </div>
     </div>

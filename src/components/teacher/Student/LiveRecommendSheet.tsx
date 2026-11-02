@@ -8,7 +8,7 @@ import { assignmentsApi } from "@/lib/api/assignments";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { useLessonLibrary } from "@/hooks/useLessonLibrary";
 import { cn } from "@/lib/utils";
-import { awaitingSignOff, reviewHrefFor } from "@/lib/lessons/signOff";
+import { awaitingSignOff, reviewHrefFor, UNREVIEWED_LEFT_OFF } from "@/lib/lessons/signOff";
 
 /**
  * C08c Recommend a Lesson, for a real student.
@@ -113,9 +113,18 @@ export function LiveRecommendSheet({
    *
    * Filtered only when live: the fixtures are never offered here at all.
    */
+  /*
+   * NOR ONE NOBODY HAS SIGNED OFF: a recommendation is an assignment, and
+   * Assign waits for the lesson-wide sign-off (Lydia, 25 Oct). The library
+   * says which since Teslim's 294584b. The send still asks the review, for a
+   * sign-off that lapsed after the list was read.
+   */
   const cards = live
-    ? libraryCards.filter((c) => c.kind === "normal")
+    ? libraryCards.filter((c) => c.kind === "normal" && c.reviewComplete !== false)
     : libraryCards;
+  const heldBack = live
+    ? libraryCards.filter((c) => c.kind === "normal" && c.reviewComplete === false).length
+    : 0;
   /** What the teacher has picked themselves. */
   const [picked, setChoice] = useState<string | null>(null);
   /*
@@ -295,7 +304,9 @@ export function LiveRecommendSheet({
          * unreachable - so the failure copy below has never been on screen.
          */
         <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/62">
-          {live
+          {live && heldBack > 0
+            ? `None of your lessons is reviewed yet, so there is nothing to send ${firstName}. Review one from your library first.`
+            : live
             ? `Your library is empty, so there is nothing to send ${firstName} yet. Upload a lesson and it will appear here.`
             : `We couldn${"’"}t reach your library just now. Nothing has changed, so you can try again.`}
         </p>
@@ -343,6 +354,11 @@ export function LiveRecommendSheet({
             </button>
           ))}
         </div>
+      )}
+      {live && cards.length > 0 && heldBack > 0 && (
+        <p className="mt-2.5 text-[13px] leading-[1.5] text-nevo-near-black/60">
+          {UNREVIEWED_LEFT_OFF}
+        </p>
       )}
 
       {/* C08c's "Add a note for Amara (optional)". Hidden when there is

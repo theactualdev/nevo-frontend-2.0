@@ -76,6 +76,7 @@ import { isChunkable } from "@/lib/lessons/chunk";
 import {
   LESSON_STATUS,
   lessonsApi,
+  type ComprehensionGate,
   type LessonQuestionAttempt,
   type LessonQuestionAttemptWrite,
   type ReteachingResponse,
@@ -743,6 +744,26 @@ export function LessonPlayer({
     () => new Map(),
   );
   /*
+   * THE SERVER'S OWN GATE, WHERE IT HAS SPOKEN (`comprehensionGate`): while it
+   * is on (`required`), whether the section can be left (`canAdvance`) is its
+   * word, followed over anything decided here. By section, from each check
+   * answer's reply and the sitting's read as it opens. Where it is off or
+   * unsaid, the check's own `holds` decides (Lydia, 26 Oct).
+   */
+  const [serverGates, setServerGates] = useState<ReadonlyMap<string, boolean>>(
+    () => new Map(),
+  );
+  const noteServerGate = (fallbackSegment: string, gate?: ComprehensionGate | null) => {
+    if (gate?.required !== true) return;
+    const segmentId = gate.segmentId ?? fallbackSegment;
+    setServerGates((prev) => new Map(prev).set(segmentId, gate.canAdvance));
+  };
+  /**
+   * The checks put to the child on this page, by `checkKey`. One that does not
+   * hold is behind them once it has been asked.
+   */
+  const askedChecks = useRef<Set<string>>(new Set());
+  /*
    * The section whose check was just answered right, its way on not yet
    * taken: the sheet stays on that check, with "Next check" or "Finish",
    * until it is - see `checkShown`.
@@ -1184,6 +1205,27 @@ export function LessonPlayer({
     );
     return { check: checksHere[Math.max(0, at)], at: Math.max(0, at) };
   })();
+  /*
+   * WHETHER THE CHECK ON SHOW HOLDS THE CHILD (Lydia, 26 Oct; Olayinka's go,
+   * 30 Oct): the server's gate where it is on, and otherwise only a check
+   * whose key a person wrote or a teacher reviewed (`holds`). A generated,
+   * unreviewed key never gates - 424 checks across 30 older lessons, until
+   * each lesson's checks are signed off.
+   */
+  const shownHolds = !checkShown
+    ? false
+    : serverGates.has(segment.id)
+      ? serverGates.get(segment.id) === false
+      : checkShown.check.holds;
+  // `checkKey`'s key, as a string made here: handing the check itself on
+  // during render reads to the compiler as the lesson's data being changed.
+  const shownKey = checkShown
+    ? `${checkShown.check.id ?? `${segment.id}:${checkShown.at}`}`
+    : null;
+  // A check is asked once the sheet has opened on it.
+  useEffect(() => {
+    if (checkOpen && shownKey) askedChecks.current.add(shownKey);
+  }, [checkOpen, shownKey]);
 
   /*
    * THE PACE HELD ON THE SECTION ON SCREEN as the sitting's word lands with a
@@ -2136,6 +2178,27 @@ export function LessonPlayer({
       !passedChecks.has(segment.id) &&
       !handedOff.has(segment.id)
     ) {
+      /*
+       * A CHECK THAT DOES NOT HOLD IS ASKED, AND THEN THE CHILD GOES ON
+       * (`shownHolds`). Once the sheet has opened on it, whatever happened
+       * there - a right answer, a miss that gave way to the other ways in, a
+       * tap out - Next takes them past it: to the section's next check, or on
+       * past the section. A check that holds is asked again, as always.
+       */
+      if (checkShown && !shownHolds && shownKey && askedChecks.current.has(shownKey)) {
+        const next = checkShown.at + 1;
+        setGaveWayOn(null);
+        setRightOn(null);
+        setChecksDone((prev) =>
+          new Map(prev).set(segment.id, Math.max(next, prev.get(segment.id) ?? 0)),
+        );
+        if (next < checksHere.length) {
+          setCheckOpen(true);
+          return;
+        }
+        advancePastSegment();
+        return;
+      }
       setCheckOpen(true);
       return;
     }
@@ -2703,10 +2766,11 @@ export function LessonPlayer({
    * Lydia, 23 Oct: a missed in-lesson check no longer moves the child on; the
    * section is offered another way, in place, position kept, and the child
    * moves on once they have got it - "a gate with no ways out is worse than
-   * no gate". The player holds every check (Olayinka, 25 Oct; Lydia, 26 Oct),
-   * so Olayinka switched the ways in on for every check on 26 Oct, ahead of
-   * the server's own gate. The server says which ways the section has and
-   * which it suggests (`reteaching`); nothing here chooses one.
+   * no gate". Olayinka switched the ways in on for every check on 26 Oct,
+   * ahead of the server's own gate, and they stay on every check - one that
+   * holds the child (`shownHolds`) and one that does not alike. The server
+   * says which ways the section has and which it suggests (`reteaching`);
+   * nothing here chooses one.
    *
    * Where it is said: THE ANSWER'S OWN REPLY. Since Teslim's cdba131 a marked
    * miss returns its re-teaching at once (`reteaching`, top level), whether
@@ -2732,6 +2796,8 @@ export function LessonPlayer({
         if (gate.required === true && gate.reteaching) {
           setReteach(gate.reteaching);
         }
+        // The section it names, where it names one: its word on leaving it.
+        if (gate.segmentId) noteServerGate(gate.segmentId, gate);
       })
       // Unread is nothing to offer yet: the next miss's reply brings it.
       .catch(() => {});
@@ -3917,6 +3983,8 @@ export function LessonPlayer({
               (stored) => {
                 handOffFrom(segment.id, stored);
                 noteReteaching(segment.id, stored);
+                // The server's own gate, where it is on (`shownHolds`).
+                noteServerGate(segment.id, stored.comprehensionGate);
               },
             );
             if (correct) answeredRight.current.add(checkpointId ?? segment.id);

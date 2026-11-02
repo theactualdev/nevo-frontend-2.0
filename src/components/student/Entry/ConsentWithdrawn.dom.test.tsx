@@ -56,14 +56,54 @@ describe("ConsentWithdrawn", () => {
     );
   });
 
-  it("offers nothing onward and no way to sign in - Back is the only thing to press", () => {
+  it("offers nothing onward and no way to sign in - Back and the hand-off to the next child only", () => {
     render(<ConsentWithdrawn />);
 
     expect(
-      screen.getAllByRole("button").map((b) => b.getAttribute("aria-label")),
-    ).toEqual(["Back"]);
+      screen
+        .getAllByRole("button")
+        .map((b) => b.getAttribute("aria-label") ?? b.textContent),
+    ).toEqual(["Back", "Someone else using this device?"]);
     expect(screen.queryAllByRole("link")).toHaveLength(0);
     expect(document.querySelector("form, input")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/sign in|try again|check/i);
+  });
+
+  /*
+   * Design 5bb9ee2, 28 Oct: "Its one way forward is the neutral 'Someone else
+   * using this device?' hand-off to the shared-device picker - the same exit
+   * Account Closed uses - so it never ends at the browser."
+   */
+  it("hands the device on under the line, in Account Closed's link style", () => {
+    render(<ConsentWithdrawn />);
+
+    const handOff = screen.getByRole("button", {
+      name: "Someone else using this device?",
+    });
+    expect(handOff.className).toContain("text-nevo-violet-text");
+    expect(handOff.className).toContain("underline");
+    expect(
+      screen
+        .getByText("Someone at home or at school can tell you more.")
+        .compareDocumentPosition(handOff) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("leaves as Back does: a signed-in child signed out, then the picker", () => {
+    setSession({
+      token: "tok",
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      userId: "student-1",
+      role: "student",
+    });
+    render(<ConsentWithdrawn />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Someone else using this device?" }),
+    );
+
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(WAITING_WAY_BACK).toBe("/auth/login");
   });
 
   it("is the page a withdrawn child is sent to", () => {

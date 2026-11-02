@@ -624,3 +624,37 @@ describe("a lesson nobody has signed off", () => {
     await vi.waitFor(() => expect(create).toHaveBeenCalled());
   });
 });
+
+describe("the library's own sign-off", () => {
+  it("leaves a lesson nobody has signed off off the list, and says so", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: [
+        LESSONS[0],
+        { ...LESSONS[1], reviewComplete: false },
+      ],
+      live: true,
+      sample: false,
+      loading: false,
+    });
+    show();
+
+    expect(screen.getByRole("button", { name: /Fractions 3/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Photosynthesis/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/aren’t listed here/)).toBeInTheDocument();
+  });
+
+  it("says none is reviewed yet, not that the library is empty, when all are held", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: LESSONS.map((l) => ({ ...l, reviewComplete: false })),
+      live: true,
+      sample: false,
+      loading: false,
+    });
+    show();
+
+    expect(
+      screen.getByText("None of your lessons is reviewed yet, so there is nothing to send Amara. Review one from your library first."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Your library is empty/)).not.toBeInTheDocument();
+  });
+});

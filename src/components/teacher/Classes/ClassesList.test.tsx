@@ -85,14 +85,21 @@ describe("the school line", () => {
     expect(screen.queryByText(SCHOOL_LINE)).not.toBeInTheDocument();
   });
 
-  it("still backs the designed screen once the read has actually failed", () => {
-    // Not back yet and never coming are different, and only the second is a
-    // reason to put the designed screen on display.
-    useTeacherClasses.mockReturnValue(state({ loading: false, sample: true }));
+  it("backs the designed screen on the signed-out walkthrough", () => {
+    useTeacherClasses.mockReturnValue(state({ loading: false }));
 
     render(<ClassesList />);
 
     expect(screen.getByText(SCHOOL_LINE)).toBeInTheDocument();
+  });
+
+  it("shows no fixture school once the read has actually failed", () => {
+    // SCRUM-200 (Lydia, 28 Oct): a failed read is not the designed screen.
+    useTeacherClasses.mockReturnValue(state({ loading: false, sample: true }));
+
+    render(<ClassesList />);
+
+    expect(screen.queryByText(SCHOOL_LINE)).not.toBeInTheDocument();
   });
 
   it("never shows the fixture school to someone whose own school is known", () => {
@@ -223,7 +230,8 @@ describe("the sample mark", () => {
      * Walking up from each rendered fixture name is what actually encodes the
      * property, and it stays true if the layouts are ever restructured.
      */
-    useTeacherClasses.mockReturnValue(state({ sample: true }));
+    // The signed-out walkthrough: the fixtures' one legitimate home.
+    useTeacherClasses.mockReturnValue(state());
 
     render(<ClassesList />);
 
@@ -233,6 +241,24 @@ describe("the sample mark", () => {
     for (const node of names) {
       expect(node.closest("[data-nevo-sample]")).not.toBeNull();
     }
+  });
+
+  /*
+   * SCRUM-200 (Lydia, 28 Oct): "Teacher screens must never show sample data
+   * when a read fails, because that is invented data presented as real." This
+   * screen showed the fixture three, marked and labelled; now it shows none.
+   */
+  it("shows no fixture class at all when the read failed", () => {
+    useTeacherClasses.mockReturnValue(state({ sample: true }));
+
+    const { container } = render(<ClassesList />);
+
+    for (const c of TEACHER_CLASSES) expect(screen.queryByText(c.name)).toBeNull();
+    expect(container.querySelector("[data-nevo-sample]")).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "We couldn’t load your classes just now" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
   it("marks nothing when the teacher is seeing their own classes", () => {

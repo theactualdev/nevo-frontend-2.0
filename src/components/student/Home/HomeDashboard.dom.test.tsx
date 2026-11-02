@@ -1252,6 +1252,126 @@ describe("what Home says when there is nothing, or nothing left", () => {
   });
 });
 
+/*
+ * SCRUM-75, Lydia 28 Oct: "Home, with next-work, due item first. Interrupting
+ * a child as they open the app takes the choice away". The engine's
+ * `nextWork` already puts a due review before new work; Home shows that one
+ * review first, in frame 22's words, and sends nobody anywhere.
+ */
+describe("a due review on Home (SCRUM-75)", () => {
+  const assignment = (id: string, title: string) => ({
+    id: `as-${id}`,
+    status: "assigned",
+    availableFrom: null,
+    dueAt: null,
+    note: null,
+    lesson: { id, title, segmentCount: 4 },
+  });
+  const work = (over: Record<string, unknown> = {}) => ({
+    lessonId: "les-cells",
+    conceptId: "con-osmosis",
+    conceptName: "Osmosis",
+    segmentId: null,
+    segmentPosition: 0,
+    kind: "review",
+    ...over,
+  });
+  const live = (nextWork: unknown) =>
+    dashboard.useStudentDashboard.mockReturnValue({
+      data: {
+        assignments: [assignment("les-new", "New Decimals")],
+        recentProgress: [],
+        nextWork,
+      },
+      failed: false,
+      loading: false,
+    });
+  const settled = async (container: HTMLElement) =>
+    waitFor(() => expect(container.querySelector(".animate-pulse")).toBeNull());
+
+  it("shows the review the engine puts first, as a way into its review session", async () => {
+    signIn();
+    live(work());
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    const due = screen.getByRole("region", { name: "Ready for another look" });
+    const link = within(due).getByRole("link", {
+      name: "Take another look at Osmosis",
+    });
+    expect(link).toHaveTextContent("Osmosis");
+    expect(link).toHaveAttribute(
+      "href",
+      "/student/lessons/les-cells/review-session?concept=con-osmosis",
+    );
+  });
+
+  it("puts it before Today's lessons", async () => {
+    signIn();
+    live(work());
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    const due = screen.getByRole("region", { name: "Ready for another look" });
+    const today = screen.getByRole("region", { name: "Today's lessons" });
+    expect(
+      due.compareDocumentPosition(today) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("never interrupts: Home opens as Home, and nothing is navigated to", async () => {
+    signIn();
+    live(work());
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+    await act(async () => {});
+
+    expect(router.push).not.toHaveBeenCalled();
+    expect(screen.getByRole("region", { name: "Today's lessons" })).toBeInTheDocument();
+  });
+
+  it("draws nothing for new work, which has no frame or words on Home yet", async () => {
+    signIn();
+    live(work({ kind: "new_work" }));
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.queryByText("Ready for another look")).toBeNull();
+    expect(screen.queryByText("Osmosis")).toBeNull();
+  });
+
+  it("draws nothing when the engine names no next work, or a review with no name", async () => {
+    signIn();
+    for (const next of [null, undefined, work({ conceptName: "  " })]) {
+      live(next);
+      const { container, unmount } = render(<HomeDashboard />);
+      await settled(container);
+
+      expect(screen.queryByText("Ready for another look")).toBeNull();
+      unmount();
+    }
+  });
+
+  it("is never in the walkthrough: a signed-out visitor has no review", async () => {
+    dashboard.useStudentDashboard.mockReturnValue({
+      data: null,
+      failed: false,
+      loading: false,
+    });
+
+    const { container } = render(<HomeDashboard />);
+    await waitFor(() =>
+      expect(container.querySelector(`[${SAMPLE_ATTR}]`)).not.toBeNull(),
+    );
+
+    expect(screen.queryByText("Ready for another look")).toBeNull();
+  });
+});
+
 describe("no date over the greeting", () => {
   /*
    * Nevo Home Frame, 13 Oct: the "TUESDAY · 3 JULY" eyebrow is removed and

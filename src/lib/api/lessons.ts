@@ -51,6 +51,13 @@ export interface LessonSummary {
    * apart before making a claim about whether a lesson is assigned.
    */
   assignmentCount?: number;
+  /**
+   * The lesson-wide sign-off, as the review itself says it (Teslim 294584b,
+   * 27 Oct): key points, checks, guiding questions and rewrites all current.
+   * Assign waits for it (Lydia, 25 Oct). Absent on an older deployment, and
+   * absent is not "no".
+   */
+  reviewComplete?: boolean;
   /** Shipped 31 Aug. Free text; only the staged upload routes can set one. */
   subject?: string | null;
   /**
@@ -657,6 +664,45 @@ export interface LessonModule {
   sequenceOrder: number;
   /** Which segments belong to it, by segment id. */
   segmentIds: string[];
+  /**
+   * The same segments by their record ids (UUIDs), in order (Teslim 58b1a55).
+   * `segmentIds` can carry a segment's KEY instead; this never does, and it is
+   * what `PUT …/structure` takes.
+   */
+  segmentRecordIds?: string[];
+}
+
+/**
+ * `PUT /api/v1/lessons/{id}/structure` (C07d, Teslim d78756b): a committed
+ * lesson's names, order and sections. The segment set must be the same one
+ * (422 `structure_segments_mismatch`); order, membership and the section set
+ * can't change while the lesson is assigned (409 `lesson_structure_in_use`).
+ */
+export interface CommittedStructureWrite {
+  title: string;
+  segments: { id: string; title: string | null }[];
+  modules: {
+    /** Absent for a section this edit starts. */
+    id?: string;
+    title: string;
+    segmentRecordIds: string[];
+    /** Written from the payload, so sent back as read or they are wiped. */
+    recap: string | null;
+    preview: string | null;
+  }[];
+}
+
+export interface CommittedStructure {
+  lessonId: string;
+  title: string;
+  segments: { id: string; title: string | null }[];
+  modules: {
+    id: string | null;
+    title: string;
+    segmentRecordIds: string[];
+    recap: string | null;
+    preview: string | null;
+  }[];
 }
 
 /**
@@ -1158,6 +1204,10 @@ export const lessonsApi = {
       `/api/v1/lessons/${lessonId}/key-points/approve-all`,
       { expectedContentHash },
     ),
+
+  /** C07d's one save: a committed lesson's names, order and sections. */
+  editStructure: (lessonId: string, body: CommittedStructureWrite) =>
+    api.put<CommittedStructure>(`/api/v1/lessons/${lessonId}/structure`, body),
 
   approveAllRewrites: (lessonId: string, expectedContentHash: string) =>
     api.post<LessonReview>(

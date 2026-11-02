@@ -15,16 +15,13 @@ import {
 } from "@/hooks/useStudentProgress";
 import { useSubjectProgress } from "@/hooks/useSubjectProgress";
 import { reviewSessionHref } from "@/lib/lessons/reviewHref";
+import { DUE_CHIP, DUE_CHIP_LINK } from "./dueChip";
 import type {
   SessionRow,
   SubjectDetail as SubjectDetailData,
 } from "./progressData";
 import { SubjectTexture } from "./ProgressTab";
 import { SessionDetailSheet } from "./SessionDetailSheet";
-
-/** One "ready for another look" chip, openable or not. */
-const DUE_CHIP =
-  "rounded-full bg-nevo-navy/10 px-3 py-1.5 text-[13px] text-nevo-navy ring-1 ring-nevo-navy/20 ring-inset";
 
 /**
  * Subject Detail (screen 23) — a deeper, still-calm look at one subject, reached
@@ -368,7 +365,7 @@ function LiveSubjectDetail({
                   // 14 Oct: back returns to where you came from).
                   href={reviewSessionHref(lessonId, c.conceptId, here)}
                   aria-label={`Take another look at ${c.name}`}
-                  className={`${DUE_CHIP} cursor-pointer transition hover:bg-nevo-navy/[0.16] active:scale-[0.98]`}
+                  className={DUE_CHIP_LINK}
                 >
                   {c.name}
                 </Link>

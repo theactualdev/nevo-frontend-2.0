@@ -104,6 +104,8 @@ const QUICK_CHECK = {
   correctNote: "Yes.",
   recoveryNote: "Not quite.",
   conceptId: "concept-1",
+  // Reviewed: misses run up on a check that holds.
+  holds: true,
 };
 
 const text = (heading: string) => ({

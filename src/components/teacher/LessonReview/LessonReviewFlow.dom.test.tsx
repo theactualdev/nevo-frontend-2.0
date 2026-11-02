@@ -15,6 +15,11 @@ const api = vi.hoisted(() => ({
   approveSegment: vi.fn(),
 }));
 vi.mock("@/lib/api/lessons", () => ({ lessonsApi: api }));
+// No new captions here (Q10's are tested in the media file); never the network.
+vi.mock("@/lib/api/media", async (actual) => ({
+  ...(await actual<typeof import("@/lib/api/media")>()),
+  mediaApi: { captions: vi.fn().mockResolvedValue([]) },
+}));
 vi.mock("@/hooks/useHydrated", () => ({ useHydrated: () => true }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -480,5 +485,20 @@ describe("the same at 73 sections as at 7", () => {
       screen.getByRole("button", { name: "+ 68 more sections, each rewritten the same way" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Accept all rewrites" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * C07d, as its port note has it: optional editing, "reached from step 1 only
+ * when a teacher wants to change something".
+ */
+describe("the way to change how it is broken up", () => {
+  it("is offered on step 1", async () => {
+    await open();
+
+    expect(screen.getByRole("link", { name: "Change something" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1/structure",
+    );
   });
 });

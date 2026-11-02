@@ -79,8 +79,11 @@ function centredCard(): boolean {
  * back to the section, not on past it. Continue after a right answer
  * (`onContinue`) is the frame's way on. Olayinka, 25 Oct: "the child
  * shouldn't be able to move with a wrong answer." Lydia, 26 Oct: a check
- * carrying its own authored answer "gates normally" - and the client cannot
- * yet tell an authored key from a generated one, so every check holds.
+ * carrying its own authored answer "gates normally", and a generated,
+ * unreviewed key never gates. Since 30 Oct (Olayinka's go) the player holds
+ * only a check the server marks `teacherReviewed`, or its own gate where it is
+ * on (`shownHolds`); any other is asked here as before, and Next then takes
+ * the child past it. This sheet is the same either way.
  *
  * THE BREAK IS INSIDE IT (Lydia, 23 Oct: a hold at a check is not live until
  * the break is reachable at all times, including from inside the check

@@ -7,6 +7,7 @@ import { MasteryDualTrack } from "@/components/teacher/Student/MasteryDualTrack"
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { getClassInsights, hasGap } from "@/lib/mocks/teacherInsights";
 import { MaybeSample, SampleRegion } from "@/components/shared/SampleRegion";
+import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
 import { LiveClassInsights } from "./LiveClassInsights";
 import { setAskNevoClass } from "@/components/teacher/Shell/askNevoScope";
 import { cn } from "@/lib/utils";
@@ -62,10 +63,15 @@ export function InsightsView() {
   // `ClassesList` carries the same guard and says the same thing; this is its
   // sibling, missed when that one was fixed because the shape here is a
   // ternary rather than an `&&`.
-  const selectable = loading ? [] : classes;
+  //
+  // SIGNED IN, A FAILED READ SHOWS NOTHING INVENTED (Lydia, SCRUM-200, 28
+  // Oct). It offered the fixture three and their insights under a line saying
+  // they were samples; "that is invented data presented as real". `sample` is
+  // only ever true signed in, so the walkthrough keeps its classes.
+  const selectable = loading || sample ? [] : classes;
   const picked = classId ? selectable.find((c) => c.id === classId) : null;
   const data =
-    classId && !live && !loading ? getClassInsights(classId) : null;
+    classId && !live && !loading && !sample ? getClassInsights(classId) : null;
   const liveClass = live && picked ? picked : null;
 
   const pills = (
@@ -78,7 +84,7 @@ export function InsightsView() {
           on screen, and the mark said otherwise. This page draws no skeleton
           while it waits, so the signed-in sweep checked straight away and,
           whenever the backend was slow, failed every lane's run (8 Oct). */}
-      <MaybeSample showing={!live && !loading} kind="teacher:insights-classes">
+      <MaybeSample showing={!live && !loading && !sample} kind="teacher:insights-classes">
       {selectable.map((c) => {
         const on = c.id === classId;
         return (
@@ -114,20 +120,6 @@ export function InsightsView() {
     </div>
   );
 
-  /*
-   * Shown in BOTH shells. The first draft put it only in the populated return,
-   * so a teacher whose class read failed and who had not yet picked a class -
-   * which is the state they LAND on - saw the fixture three in the selector
-   * with nothing saying they were samples. The warning has to reach the screen
-   * where the wrong choice gets made.
-   */
-  const sampleNotice = sample ? (
-    <p className="mt-3 max-w-[620px] text-[13px] leading-[1.5] text-nevo-near-black/60 italic">
-      We couldn&rsquo;t reach your school just now, so these are sample classes
-      and sample insights, not your week.
-    </p>
-  ) : null;
-
   // ---- C14 A3: no class selected. The shell itself changes shape - the
   // header stops scrolling and the body centres in the viewport. ----
   if (!data && !liveClass) {
@@ -135,8 +127,18 @@ export function InsightsView() {
       <div className="flex min-h-full flex-1 flex-col">
         <div className="shrink-0 px-[38px] pt-[34px] xl:px-[52px] xl:pt-11">
           {heading}
-          {sampleNotice}
         </div>
+        {sample ? (
+          // No classes to offer, so no "pick one above" under an empty row.
+          <div className="flex flex-1 flex-col items-center justify-center px-10 pb-9 text-left xl:px-12 xl:pb-10">
+            <ReadFailed
+              as="h2"
+              title="We couldn’t load your classes just now"
+              body="Their insights haven’t gone anywhere. Try again in a moment."
+              className="w-full"
+            />
+          </div>
+        ) : (
         <div className="flex flex-1 flex-col items-center justify-center px-10 pb-9 text-center xl:px-12 xl:pb-10">
           <IllustrationWrapper
             src="/illustrations/empty-insights-select.png"
@@ -177,6 +179,7 @@ export function InsightsView() {
           </>
           )}
         </div>
+        )}
       </div>
     );
   }
@@ -193,8 +196,6 @@ export function InsightsView() {
             className={liveClass.name}
           />
         )}
-
-        {sampleNotice}
 
         {/* ---- C09 sparse: one calm card, nothing else ---- */}
         {data && (

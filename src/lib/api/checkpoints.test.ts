@@ -203,6 +203,34 @@ describe("toQuickCheck carries what the answer write needs", () => {
   });
 });
 
+/*
+ * WHETHER A CHECK HOLDS THE CHILD (Lydia, 26 Oct; Olayinka's go, 30 Oct):
+ * only a key a person wrote or a teacher reviewed, as the server says it
+ * (`teacherReviewed`). Never inferred: absent or false holds nothing.
+ */
+describe("toQuickCheck and the hold", () => {
+  const options = [
+    { value: "a", label: "Carbon dioxide" },
+    { value: "b", label: "Oxygen" },
+  ];
+
+  it("holds a check the server marks teacher-reviewed", () => {
+    expect(
+      toQuickCheck(checkpoint({ answerKey: "a", options, teacherReviewed: true }))!.holds,
+    ).toBe(true);
+  });
+
+  it("holds nothing where the server says not reviewed", () => {
+    expect(
+      toQuickCheck(checkpoint({ answerKey: "a", options, teacherReviewed: false }))!.holds,
+    ).toBe(false);
+  });
+
+  it("holds nothing where the server says nothing", () => {
+    expect(toQuickCheck(checkpoint({ answerKey: "a", options }))!.holds).toBe(false);
+  });
+});
+
 describe("toQuickCheck and a spoken check (B16)", () => {
   const options = [
     { value: "a", label: "Carbon dioxide" },

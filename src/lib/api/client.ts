@@ -25,6 +25,7 @@ import { isAdminRole } from "@/lib/constants/permissions";
 import { API_ORIGIN } from "./upstream";
 import { purgeStoredCaptures } from "@/lib/profiling/capture";
 import { isHeldAtDoor } from "@/lib/auth/doorSession";
+import { releaseUnsavedGuards } from "@/lib/auth/unsavedRelease";
 
 // Default: the same-origin catch-all proxy (`app/api/backend/[...path]`),
 // which forwards to the FastAPI backend - the backend has no CORS headers, so
@@ -306,6 +307,9 @@ function handleAuthFailure(
   // picks the door the screen offers. The backend's admin roles are
   // `senco_admin` and `other_admin`, never a plain "admin".
   redirecting = true;
+  // No "Leave site?" over an ending the teacher didn't choose (SCRUM-246):
+  // their unsaved work is kept on the device instead, and offered back.
+  releaseUnsavedGuards();
   window.location.assign(
     sessionExpiredDoor(
       role,

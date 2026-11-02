@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
+import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
 import { HOME_CLASSES } from "@/lib/mocks/teacherHome";
 import { cn } from "@/lib/utils";
 
@@ -40,12 +41,13 @@ export function HomeClasses() {
   }
 
   if (sample) {
+    // With a way to try again (Lydia, SCRUM-200, 28 Oct), not a line alone.
     return (
-      <p className="mt-3.5 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/60 italic">
-        We couldn&rsquo;t reach your school just now, so your classes
-        aren&rsquo;t here. They haven&rsquo;t gone anywhere. Try again in
-        a moment.
-      </p>
+      <ReadFailed
+        title="We couldn’t load your classes just now"
+        body="They haven’t gone anywhere. Try again in a moment."
+        className="mt-3.5 xl:mt-4"
+      />
     );
   }
 

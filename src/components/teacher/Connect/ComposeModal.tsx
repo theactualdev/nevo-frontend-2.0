@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
+import { useKeptDraft } from "@/hooks/useKeptDraft";
+import { KeptDraftNotice } from "@/components/shared/KeptDraftNotice";
 import { useStudentDirectory } from "@/hooks/useStudentDirectory";
 import { useHasSession } from "@/hooks/useHasSession";
 import { studentSlug } from "@/lib/mocks/teacherStudents";
@@ -89,6 +91,9 @@ export function ComposeModal({
   const [phase, setPhase] = useState<Phase>("form");
   // A message written and not yet sent, or one that failed to go.
   useUnsavedGuard(text.trim().length > 0 && phase !== "sent");
+  // The words of a new message survive the session lapsing (SCRUM-246). The
+  // recipient is chosen again: it is read from the roster each time.
+  const keptText = useKeptDraft("connect-compose", text, text.trim().length > 0 && phase !== "sent");
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
@@ -450,6 +455,13 @@ export function ComposeModal({
                   </button>
                 </div>
 
+                {keptText.kept && (
+                  <KeptDraftNotice
+                    className="mt-3.5"
+                    onRestore={() => setText(keptText.restore() ?? "")}
+                    onDiscard={keptText.discard}
+                  />
+                )}
                 <label className="mt-3.5 block text-[13px] font-semibold text-nevo-near-black/70 xl:mt-4">
                   Message
                   <textarea

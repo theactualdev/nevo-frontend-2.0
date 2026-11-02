@@ -55,8 +55,18 @@ describe("the class code on a sample class", () => {
     signIn();
     render(<ClassRoute fixture={FIXTURE} classId={FIXTURE.id} />);
 
-    expect(screen.getByText(FIXTURE.name)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Class code/ })).not.toBeInTheDocument();
+  });
+
+  // SCRUM-200 (Lydia, 28 Oct): nor is the sample class itself.
+  it("shows that teacher no sample class at all, only that the read failed", () => {
+    signIn();
+    const { container } = render(<ClassRoute fixture={FIXTURE} classId={FIXTURE.id} />);
+
+    expect(screen.queryByText(FIXTURE.name)).not.toBeInTheDocument();
+    expect(container.querySelector("[data-nevo-sample]")).toBeNull();
+    expect(screen.getByText(/couldn.t load this class/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
   it("is not offered on the signed-out walkthrough either", () => {

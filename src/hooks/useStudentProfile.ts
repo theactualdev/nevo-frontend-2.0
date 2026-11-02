@@ -39,9 +39,9 @@ export interface MasteryConcept {
   conceptId: string;
   /** Resolved from `/api/concepts`; the id itself if it cannot be. */
   name: string;
-  /** 0-100, as the frame's bars want. */
-  understanding: number;
-  reading: number;
+  /** 0-100, as the frame's bars want. Null when the engine sent none. */
+  understanding: number | null;
+  reading: number | null;
   practiceCount: number;
 }
 
@@ -152,7 +152,16 @@ export interface StudentProfileState {
   failed: boolean;
 }
 
-const pct = (p: number) => Math.round(Math.max(0, Math.min(1, p)) * 100);
+/**
+ * A probability as the bars want it, or null for none. `pct(null)` was 0 -
+ * `Math.min(1, null)` is 0 - so a concept the engine had no estimate for
+ * drew as an empty bar, which "reads as zero, which is a claim we have not
+ * earned" (Lydia, SCRUM-200, 28 Oct).
+ */
+const pct = (p: number | null | undefined): number | null =>
+  typeof p === "number" && Number.isFinite(p)
+    ? Math.round(Math.max(0, Math.min(1, p)) * 100)
+    : null;
 
 export function useStudentProfile(studentId: string): StudentProfileState {
   const [profile, setProfile] = useState<StudentProfileResponse | null>(null);
@@ -305,14 +314,10 @@ export function useStudentProfile(studentId: string): StudentProfileState {
       // swallowed - and when it failed a teacher was shown a raw UUID as the
       // name of the concept their student was struggling with.
       name: m.conceptName as string,
-      /*
-       * TEACHER LANE: both are nullable since d461b60 (withheld from a
-       * student; staff reads still carry numbers), and `pct(null)` draws 0%.
-       * Cast to compile with the behaviour unchanged; the null guard is the
-       * teacher lane's to add (student lane, 20 Oct contract catch-up).
-       */
-      understanding: pct(m.masteryProbabilityConcept as number),
-      reading: pct(m.masteryProbabilityReading as number),
+      // Both nullable since d461b60. A null stays null, and the bar says
+      // "Not enough yet to show this." in its place (`MasteryDualTrack`).
+      understanding: pct(m.masteryProbabilityConcept),
+      reading: pct(m.masteryProbabilityReading),
       practiceCount: m.practiceCount,
     })),
     recommendations,

@@ -119,7 +119,7 @@ describe("activating on a device someone else is signed into", () => {
 
   it("ends nothing when the activation itself failed", async () => {
     // Nothing was activated, so nobody new is at the keyboard.
-    acceptInvitation.mockRejectedValue(new Error("expired"));
+    acceptInvitation.mockRejectedValue(new ApiError(410, "expired"));
     render(<SetPasswordForm mode="activation" />);
     fillAndSubmit(true);
 

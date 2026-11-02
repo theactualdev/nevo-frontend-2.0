@@ -31,8 +31,16 @@ import { useStudentDirectory } from "./useStudentDirectory";
  * teacher's tap means "I have read this" and clears the card from their own
  * view only, while acknowledging is learning support's act. So the card no
  * longer acknowledges (see `LiveFlagCard`), and this filter still drops a
- * flag once learning support has acknowledged it. Filtering on the viewer's
- * own read waits on backend: the flag carries no per-viewer read state.
+ * flag once learning support has acknowledged it.
+ *
+ * THE VIEWER'S OWN READ IS ON THE FLAG NOW (SCRUM-252: `seenByMe`, set by
+ * `POST …/seen`). It is carried, not filtered here: it clears a card from
+ * the teacher's Home, and a class page still counts a flag they have read,
+ * because the flag is still open.
+ *
+ * ONLY OPEN FLAGS (Teslim 9c35c95, 27 Oct). A flag now closes when its
+ * evidence stops holding (`resolvedAt`), and `openOnly` leaves closed ones
+ * out, so a child who recovered stops being "worth your attention".
  *
  * That is why `studentId` is carried through: the card needs somewhere to go,
  * and the flag endpoint names a student by id only.
@@ -50,6 +58,8 @@ export interface TeacherFlag {
   generatedAt: string;
   /** Navy accent and the drop glyph, as C03 uses for a sudden change. */
   isSudden: boolean;
+  /** This teacher has read it - their Home no longer shows it. */
+  seenByMe?: boolean;
 }
 
 /**
@@ -95,7 +105,7 @@ export function useTeacherFlags(): TeacherFlags {
    * whole. `allFlags` reads 200 at a time until a short page and says
    * whether it got to the end.
    */
-  const run = useCallback(() => intelligenceApi.allFlags(), []);
+  const run = useCallback(() => intelligenceApi.allFlags(10, { openOnly: true }), []);
   const { data: all, failed, loading } = useLiveQuery<{
     flags: AttentionFlag[];
     complete: boolean;
@@ -121,6 +131,7 @@ export function useTeacherFlags(): TeacherFlags {
           note: f.description,
           generatedAt: f.generatedAt,
           isSudden: suddenish(f.flagType),
+          seenByMe: f.seenByMe === true,
         };
       }),
     live: true,

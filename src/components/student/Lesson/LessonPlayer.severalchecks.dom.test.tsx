@@ -90,6 +90,8 @@ const check = (n: number) => ({
   correctId: "r",
   correctNote: `Yes, ${n}.`,
   recoveryNote: "Not quite.",
+  // Reviewed: each of these holds the child (23 Oct).
+  holds: true,
 });
 
 const text = (heading: string) => ({

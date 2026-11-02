@@ -13,8 +13,11 @@ import {
 import { cn } from "@/lib/utils";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
+import { useKeptDraft } from "@/hooks/useKeptDraft";
+import { KeptDraftNotice } from "@/components/shared/KeptDraftNotice";
 import { ComposeModal } from "./ComposeModal";
 import { MaybeSample } from "@/components/shared/SampleRegion";
+import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * C10 Connect - individual threads between a teacher and their students, and
@@ -147,6 +150,16 @@ export function ConnectView() {
   // than assigned - setting it from an effect would be a setState during
   // render's shadow, which this codebase rules out.
   const active = threads.find((t) => t.id === activeId) ?? threads[0] ?? null;
+  /*
+   * A REPLY BEING WRITTEN SURVIVES THE SESSION LAPSING (SCRUM-246), kept for
+   * this thread and offered back when the teacher signs in again. Only a
+   * real thread has anyone to send it to, so only a real thread keeps one.
+   */
+  const keptReply = useKeptDraft(
+    active?.recipientId ? `connect-reply:${active.id}` : null,
+    draft,
+    draft.trim().length > 0,
+  );
   /*
    * WHAT A PHONE SEES. Only the thread the link named - never "the first
    * thread", which on a phone would be a conversation nobody asked to open.
@@ -286,11 +299,6 @@ export function ConnectView() {
           <h1 className="text-[21px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-2xl">
             Connect
           </h1>
-          {sample && (
-            <p className="mt-1 text-[13px] leading-[1.5] text-nevo-near-black/55 italic">
-              We couldn&rsquo;t reach your messages, so these are samples.
-            </p>
-          )}
         </div>
         {newMessageButton(true)}
       </div>
@@ -313,6 +321,21 @@ export function ConnectView() {
               <div className="h-12 w-[45%] animate-pulse self-end rounded-[14px] bg-nevo-navy/10" />
             </div>
           </div>
+        </div>
+      ) : sample ? (
+        /*
+         * THE READ FAILED. Signed in, this listed sample conversations under
+         * a line saying so - "invented data presented as real" (Lydia,
+         * SCRUM-200, 28 Oct). Not the empty state either: that says there
+         * are none.
+         */
+        <div className="flex flex-1 items-start justify-center border-t border-nevo-near-black/8 p-10 max-md:border-t-0 max-md:px-[18px] max-md:py-6 xl:p-12">
+          <ReadFailed
+            as="h2"
+            title="We couldn’t load your messages just now"
+            body="They haven’t gone anywhere. Try again in a moment."
+            className="w-full"
+          />
         </div>
       ) : threads.length === 0 ? (
         /* C14 A4 - the governing empty state. */
@@ -488,7 +511,15 @@ export function ConnectView() {
                   </p>
                 </div>
               ) : (
-              <div className="flex shrink-0 items-center gap-2.5 border-t border-nevo-near-black/8 px-[22px] pt-3.5 pb-[84px] max-md:px-4 max-md:py-3 xl:gap-3 xl:px-7 xl:pt-4">
+              <div className="shrink-0 border-t border-nevo-near-black/8 px-[22px] pt-3.5 pb-[84px] max-md:px-4 max-md:py-3 xl:px-7 xl:pt-4">
+              {keptReply.kept && (
+                <KeptDraftNotice
+                  className="mb-3"
+                  onRestore={() => setDraft(keptReply.restore() ?? "")}
+                  onDiscard={keptReply.discard}
+                />
+              )}
+              <div className="flex items-center gap-2.5 xl:gap-3">
                 <input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
@@ -519,6 +550,7 @@ export function ConnectView() {
                     <path d="M22 2l-7 20-4-9-9-4z" />
                   </svg>
                 </button>
+              </div>
               </div>
               )}
             </div>
