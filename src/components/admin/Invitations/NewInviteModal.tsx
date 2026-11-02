@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import type { AdminClass } from "@/lib/api/classes";
-import { invitesApi, type Invitation } from "@/lib/api/invites";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
+import {
+  INVITATION_ALREADY_PENDING,
+  invitesApi,
+  type Invitation,
+} from "@/lib/api/invites";
 import { cn } from "@/lib/utils";
 import { deliveryLine } from "./deliveryCopy";
 import {
@@ -39,7 +44,7 @@ const FIELD =
 
 const HINT = "mt-2 text-[12.5px] leading-[1.5] text-nevo-near-black/55";
 
-type Phase = "idle" | "sending" | "sent" | "failed";
+type Phase = "idle" | "sending" | "sent" | "failed" | "waiting";
 
 export function NewInviteModal({
   classes,
@@ -85,7 +90,17 @@ export function NewInviteModal({
         setPhase("sent");
         onSent();
       })
-      .catch(() => setPhase("failed"));
+      .catch((err: unknown) => {
+        // Not a fault, and trying again would be refused the same way: this
+        // teacher's invitation is already in the list (ed123cb).
+        setPhase(
+          err instanceof ApiError &&
+            err.status === 409 &&
+            apiErrorCode(err.detail) === INVITATION_ALREADY_PENDING
+            ? "waiting"
+            : "failed",
+        );
+      });
   };
 
   const joinLink = sent?.token
@@ -159,6 +174,42 @@ export function NewInviteModal({
             </p>
           </div>
         ) : null}
+      </Modal>
+    );
+  }
+
+  // ------------------------------------------------------------ WAITING ---
+  // Lydia's words, 31 Oct (Q11b).
+  if (phase === "waiting") {
+    return (
+      <Modal
+        title="This person already has an invitation waiting."
+        onClose={onClose}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setPhase("idle")}
+              className={cn(GHOST_BTN, "flex-1")}
+            >
+              Go back
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                reset();
+                onClose();
+              }}
+              className={cn(PRIMARY_BTN, "flex-1 justify-center")}
+            >
+              Done
+            </button>
+          </>
+        }
+      >
+        <p className="m-0 text-[14.5px] leading-[1.6] text-nevo-near-black/72">
+          Resend it instead.
+        </p>
       </Modal>
     );
   }
