@@ -52,10 +52,10 @@ describe("ConsentPill", () => {
 /**
  * These two count different things and the difference is the whole ruling.
  *
- * This used to be one function called `blockedByConsent`, feeding a header that
- * read "N can't begin lessons yet". SCRUM-80 says Nevo is not the consent gate:
- * `not_sent` and `pending` are the school's paperwork and the child proceeds.
- * Only a withdrawal stops processing.
+ * One counts the records a school still has to complete; the other counts a
+ * parent's explicit refusal, which only the parent can lift. (SCRUM-80's "the
+ * child proceeds" is overtaken - the consent gate is the product, Hub 2 Nov -
+ * but the two numbers still answer different questions.)
  */
 const ROWS = [
   { consent: at("confirmed") },
@@ -84,7 +84,7 @@ describe("withdrawnCount", () => {
 
   it("is not the same number as the paperwork count", () => {
     // If these ever agree on this fixture, one of them has been rewritten
-    // into the other and the SCRUM-80 distinction is gone.
+    // into the other and the distinction is gone.
     expect(withdrawnCount(ROWS)).not.toBe(withoutRecordedConsent(ROWS));
   });
 });
