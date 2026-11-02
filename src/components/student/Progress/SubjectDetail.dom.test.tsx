@@ -488,3 +488,39 @@ describe("the session markers", () => {
     ).toBeTruthy();
   });
 });
+
+/*
+ * THE LINE ASKS THEM TO TRY AGAIN, SO THE WAY TO IS THERE (audit, 2 Nov,
+ * backlog 12). The progress read failing said "Give it a moment and try
+ * again" with nothing to press - the only way on was Back - while the same
+ * screen's lessons read already had its Try again.
+ */
+describe("a progress read that failed", () => {
+  it("says it could not load, and offers Try again, which reads it again", async () => {
+    signIn();
+    hooks.useStudentProgress.mockReturnValue({
+      subjects: [],
+      lessons: [],
+      reflection: null,
+      highlights: [],
+      loading: false,
+      failed: true,
+      live: true,
+    });
+    const reload = vi.fn();
+    const was = window.location;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...was, reload },
+    });
+
+    render(<SubjectDetail subject={null} slug="Mathematics" />);
+
+    expect(
+      await screen.findByText(/We couldn.t load this just now/),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(reload).toHaveBeenCalledTimes(1);
+    Object.defineProperty(window, "location", { configurable: true, value: was });
+  });
+});
