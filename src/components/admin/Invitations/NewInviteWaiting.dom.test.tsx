@@ -11,9 +11,17 @@ import { NewInviteModal } from "./NewInviteModal";
  */
 
 const create = vi.fn();
+const reissue = vi.fn();
 vi.mock("@/lib/api/invites", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/invites")>();
-  return { ...actual, invitesApi: { ...actual.invitesApi, create: (d: unknown) => create(d) } };
+  return {
+    ...actual,
+    invitesApi: {
+      ...actual.invitesApi,
+      create: (d: unknown) => create(d),
+      reissue: (id: string) => reissue(id),
+    },
+  };
 });
 
 const send = () => {
@@ -41,4 +49,56 @@ describe("a teacher who already has an invitation waiting", () => {
     send();
     expect(await screen.findByText(/Something went wrong/)).toBeInTheDocument();
   });
+});
+
+describe("a teacher whose invitation was revoked (Lydia, 2 Nov)", () => {
+  const revoked = () =>
+    new ApiError(409, "conflict", {
+      detail: { code: "invitation_reissue_available", invitationId: "inv-old" },
+    });
+
+  it("says it was revoked, and reissues that invitation from here", async () => {
+    create.mockRejectedValueOnce(revoked());
+    reissue.mockResolvedValueOnce({
+      id: "inv-old",
+      token: "tok",
+      role: "teacher",
+      email: "folake@school.edu.ng",
+      name: "Folake Adeyemi",
+      status: "pending",
+      expiresAt: "2099-01-01T00:00:00Z",
+      deliveryStatus: "sent",
+      consentStatus: null,
+    });
+    send();
+    expect(await screen.findByText("This teacher’s invitation was revoked.")).toBeInTheDocument();
+    expect(screen.getByText("Reissue it instead.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reissue invitation" }));
+    expect(await screen.findByText("Invitation reissued to folake@school.edu.ng")).toBeInTheDocument();
+    expect(reissue).toHaveBeenCalledWith("inv-old");
+  });
+
+  it("says why when the reissue is refused, and stays on the form's answer", async () => {
+    create.mockRejectedValueOnce(revoked());
+    reissue.mockRejectedValueOnce(
+      new ApiError(409, "conflict", { detail: { code: "teacher_email_in_use" } }),
+    );
+    send();
+    fireEvent.click(await screen.findByRole("button", { name: "Reissue invitation" }));
+    expect(
+      await screen.findByText(
+        "This email address is now used by another account, so the invitation cannot be reissued.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("This teacher’s invitation was revoked.")).toBeInTheDocument();
+  });
+
+  it("falls back to the plain failure when the server names no invitation to reissue", async () => {
+    create.mockRejectedValueOnce(
+      new ApiError(409, "conflict", { detail: { code: "invitation_reissue_available" } }),
+    );
+    send();
+    expect(await screen.findByText(/Something went wrong/)).toBeInTheDocument();
+  });
+
 });
