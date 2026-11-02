@@ -19,8 +19,11 @@ const DONE_BEFORE = 3;
  *   `completed` (Hub, 28 Oct). "Never the word 'conflict'".
  * - `nothing`: "the calm case where there is simply no probe to run".
  *
- * The words are the frame's, exactly (Hub, 28 Oct: "Use the frame's exact
- * words"). "No warm-up waiting" is the frame's own; it is with Lydia.
+ * The words are the frame's (Hub, 28 Oct: "Use the frame's exact words"),
+ * less one. The nothing-state named "no warm-up waiting", and the warm-up
+ * lives somewhere else. Lydia, 31 Oct: "Say 'Nothing to do here right now'"
+ * - which its heading already says, so that sentence goes rather than the
+ * heading being said twice.
  */
 export type ProbeEnd = "done" | "nothing";
 
@@ -35,7 +38,7 @@ export const PROBE_END_COPY: Record<
   },
   nothing: {
     heading: "Nothing to do here right now",
-    body: "There's no warm-up waiting at the moment. You can go on to Nevo and come back any time.",
+    body: "You can go on to Nevo and come back any time.",
     action: "Go to my lessons",
   },
 };

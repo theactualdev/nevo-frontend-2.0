@@ -2172,8 +2172,18 @@ function BuildTray({
  * with the last piece, and "That's the total" arrived in its place - under
  * the finger that had just placed that piece, so a double tap, or one tap
  * too many, built the answer and submitted it too. Now the tray keeps its
- * row, its piece spent where it was, and "That's the total" arrives below
- * it: the child sees what they built, and confirms it with a tap of its own.
+ * row, and "That's the total" arrives below it: the child sees what they
+ * built, and confirms it with a tap of its own.
+ *
+ * THE SPENT ROW READS COMPLETE (design 5bb9ee2, S1: "never an empty gap, and
+ * never implies anything is missing"). Once every piece is in, a dot and
+ * `TRAY_DONE_LINE` take the row - Lydia's general words, 31 Oct, for the
+ * frame's "That's all three quarters in". True wherever it shows: every tray
+ * is done only once the build holds every piece it asks for. The spent row
+ * stays under the line, unseen and inert, so the row keeps its exact height
+ * and nothing below it moves; and a keyboard's focus on the last piece goes
+ * to the line in its place, never on to "That's the total", where a held key
+ * would commit.
  */
 function TapToAdd({
   done = false,
@@ -2183,29 +2193,66 @@ function TapToAdd({
   done?: boolean;
   children: React.ReactNode;
 }) {
+  const row = useRef<HTMLDivElement>(null);
+  const line = useRef<HTMLParagraphElement>(null);
+  // Before the row goes inert and the browser drops the focus inside it.
+  useLayoutEffect(() => {
+    if (done && row.current?.contains(document.activeElement)) {
+      line.current?.focus();
+    }
+  }, [done]);
   return (
     <div
       data-reveal="tray"
       data-tray-done={done || undefined}
-      className="mt-4 flex items-center justify-center gap-2.5"
+      className="mt-4 grid place-items-center"
     >
-      <span
-        aria-hidden
-        className={cn("text-xs text-nevo-near-black/55", done && "opacity-50")}
+      <div
+        ref={row}
+        aria-hidden={done || undefined}
+        inert={done}
+        className={cn(
+          "col-start-1 row-start-1 flex items-center justify-center gap-2.5",
+          done && "invisible",
+        )}
       >
-        Tap to add
-      </span>
-      {children}
+        <span aria-hidden className="text-xs text-nevo-near-black/55">
+          Tap to add
+        </span>
+        {children}
+      </div>
+      <p
+        ref={line}
+        role="status"
+        tabIndex={done ? -1 : undefined}
+        className="col-start-1 row-start-1 outline-none"
+      >
+        {done && (
+          <span className="flex items-center gap-2.5 motion-safe:animate-nevo-rise">
+            <span
+              aria-hidden
+              className="size-2 shrink-0 rounded-full bg-nevo-violet"
+            />
+            <span className="text-sm leading-[1.45] text-pretty text-nevo-violet-text sm:text-[15px]">
+              {TRAY_DONE_LINE}
+            </span>
+          </span>
+        )}
+      </p>
     </div>
   );
 }
+
+/** The spent tray's line (Lydia, 31 Oct; design 5bb9ee2, S1). */
+export const TRAY_DONE_LINE = "That's everything in, so the total is complete.";
 
 /**
  * A SPENT PIECE: one with nothing left to add, dimmed where it was. It is
  * still the same button, so a child working the tray by keyboard or switch
  * keeps their place on it - focus is never moved onto "That's the total",
  * where a held key would commit - but it is marked disabled and does
- * nothing, however often it is pressed.
+ * nothing, however often it is pressed. Once the whole build is in, the row
+ * goes under the finished line, and the focus with it (`TapToAdd`).
  */
 const SPENT = "cursor-default opacity-50";
 

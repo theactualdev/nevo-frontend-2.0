@@ -123,7 +123,7 @@ function expectNothingState() {
     "Nothing to do here right now",
   );
   expect(document.body.textContent).toContain(
-    "There's no warm-up waiting at the moment. You can go on to Nevo and come back any time.",
+    "You can go on to Nevo and come back any time.",
   );
   expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
     NOTHING,
