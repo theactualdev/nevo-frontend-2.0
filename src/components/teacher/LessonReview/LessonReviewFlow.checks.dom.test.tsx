@@ -187,9 +187,42 @@ describe("reading what the lesson asks", () => {
     await open(3);
     fireEvent.click(screen.getByRole("button", { name: /question 1\?/ }));
 
-    const right = screen.getByText("Light").closest("li")!;
+    // "Light" is also on the row's one line now; the choice is the one in a list.
+    const right = screen.getAllByText("Light").map((n) => n.closest("li")).find(Boolean)!;
     expect(within(right).getByText("The answer")).toBeInTheDocument();
     expect(within(screen.getByText("Salt").closest("li")!).queryByText("The answer")).toBeNull();
+  });
+
+  /*
+   * Lydia, 2 Nov: "make each item fast to judge, with the question and its
+   * expected answer side by side, one line each."
+   */
+  it("shows each check's question and expected answer on one line, without opening it", async () => {
+    await open(3);
+
+    const row = screen.getByRole("button", { name: /question 1\?/ });
+    expect(row).toHaveAttribute("aria-expanded", "false");
+    expect(within(row).getByText("Light")).toBeInTheDocument();
+    expect(screen.getAllByText("Expected answer").length).toBeGreaterThan(0);
+  });
+
+  it("lists every check, with no more to open", async () => {
+    api.review.mockResolvedValue(
+      reviewOf({ checks: [1, 2, 3, 4, 5, 6, 7].map((n) => check(n)) }),
+    );
+    await open(3);
+
+    expect(screen.getAllByRole("button", { name: /question \d\?/ })).toHaveLength(7);
+    expect(screen.queryByText(/\+ \d+ more/)).toBeNull();
+  });
+
+  it("says when a check came with no answer to show", async () => {
+    api.review.mockResolvedValue(
+      reviewOf({ checks: [check(1, { questionAnswerType: "text", questionOptions: [], questionAnswerKey: null })] }),
+    );
+    await open(3);
+
+    expect(within(screen.getByRole("button", { name: /question 1\?/ })).getByText("none given")).toBeInTheDocument();
   });
 
   it("shows the answer itself where there are no choices", async () => {
