@@ -177,7 +177,16 @@ export function AccountSettings() {
       );
   };
 
-  const others = sessions.filter((s) => !s.current);
+  /*
+   * ONLY WHERE YOU'RE STILL SIGNED IN. `GET /auth/sessions` returns signed-out
+   * sessions too (`active: false`, the server's word for revoked), so every
+   * device ever signed out stayed on the list with "End it", and a sign-out
+   * looked like nothing happened - the row came straight back. Expiry is the
+   * server's to judge and `active` doesn't cover it yet (asked).
+   */
+  const live = sessions.filter((s) => s.active);
+  const others = live.filter((s) => !s.current);
+  const here = live.find((s) => s.current) ?? live[0] ?? null;
 
   const nameChanged =
     firstName.trim() !== (me?.firstName ?? "") ||
@@ -493,7 +502,7 @@ export function AccountSettings() {
       >
         {/* Empty is not "only this device": the device asking is always in
             the list, so none at all means we could not tell. */}
-        {sessionsRead === "loading" ? null : sessionsRead === "failed" || sessions.length === 0 ? (
+        {sessionsRead === "loading" ? null : sessionsRead === "failed" || live.length === 0 ? (
           <ReadFailed
             what="where you're signed in"
             onRetry={() => {
@@ -511,12 +520,12 @@ export function AccountSettings() {
            */
           <p className="m-0 max-w-[58ch] text-sm leading-[1.6] text-nevo-near-black/70">
             This is the only device signed in as you
-            {sessions[0] ? `, last active ${when(sessions[0].lastSeenAt)}` : ""}.
+            {here ? `, last active ${when(here.lastSeenAt)}` : ""}.
             If you sign in somewhere else, it will appear here.
           </p>
         ) : (
           <div className="flex flex-col gap-3">
-            {sessions.map((s) => (
+            {live.map((s) => (
               <div
                 key={s.id}
                 className="rounded-[10px] border border-nevo-near-black/12 px-4 py-3.5"
