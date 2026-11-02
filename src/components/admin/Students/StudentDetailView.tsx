@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { ageChecksApi } from "@/lib/api/ageChecks";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import {
   studentsApi,
   type AdminStudentDetail,
@@ -72,6 +73,20 @@ import { WriteFailed } from "../WriteFailed";
 
 type Phase = "loading" | "ready" | "failed" | "denied";
 
+/**
+ * A restore the server REFUSED for good, in its own words: the learner's
+ * records erased (410 `learner_retention_purged`), or a parent's processing
+ * consent withdrawn (409 `consent_withdrawn`). Neither changes on a retry, so
+ * "try again in a moment" would offer one that can't work (the 2 Nov audit).
+ * Null for anything else, which keeps the ordinary try-again line.
+ */
+function restoreRefusal(err: unknown): string | null {
+  if (!(err instanceof ApiError)) return null;
+  const code = apiErrorCode(err.detail);
+  if (code !== "learner_retention_purged" && code !== "consent_withdrawn") return null;
+  return apiErrorMessage(err.detail);
+}
+
 export function StudentDetailView({
   studentId,
   back = null,
@@ -97,8 +112,8 @@ export function StudentDetailView({
   const [working, setWorking] = useState(false);
   /** The deactivate was refused. Hold the dialog and say so. */
   const [deactivateFailed, setDeactivateFailed] = useState(false);
-  /** A restore was refused - said, not swallowed. */
-  const [restoreFailed, setRestoreFailed] = useState(false);
+  /** A restore was refused - said, not swallowed, in the server's words when it gave them. */
+  const [restoreFailed, setRestoreFailed] = useState<false | { message: string | null }>(false);
   /** The add-a-guardian form is open. */
   const [addingGuardian, setAddingGuardian] = useState(false);
   /** What the request just sent to a new guardian said about delivery. */
@@ -582,7 +597,7 @@ export function StudentDetailView({
                   // Was `.catch(() => undefined)`: a refused restore left the
                   // page byte-identical, so it read as a dead button. The
                   // class page's restore was fixed the same way.
-                  .catch(() => setRestoreFailed(true))
+                  .catch((err: unknown) => setRestoreFailed({ message: restoreRefusal(err) }))
                   .finally(() => setWorking(false));
               }}
               className={TEXT_ACTION}
@@ -590,7 +605,11 @@ export function StudentDetailView({
               Restore this student
             </button>
             {restoreFailed ? (
-              <WriteFailed className="mt-2" what={`restore ${firstName}`} />
+              <WriteFailed
+                className="mt-2"
+                what={`restore ${firstName}`}
+                message={restoreFailed.message}
+              />
             ) : null}
             <p className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/55">
               They pick up exactly where they left off, in the same class unless
