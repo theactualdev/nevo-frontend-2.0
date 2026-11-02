@@ -123,4 +123,51 @@ export const mediaApi = {
   /** Undo a withdrawal, while the server still allows it. */
   restore: (lessonId: string, mediaId: string) =>
     api.post<LessonMediaItem>(`/api/v1/lessons/${lessonId}/media/${mediaId}/restore`),
+
+  /** The new captions waiting for a teacher (66be3b8, 229e9a8). */
+  captions: (lessonId: string) =>
+    api.get<VisualCaptionReview[]>(`/api/v1/lessons/${lessonId}/visual-captions`),
+
+  /**
+   * Approve the named sections' waiting captions. The body is the bare list of
+   * section ids. 409 `visual_caption_review_changed` if any moved since read.
+   */
+  approveCaptions: (lessonId: string, segmentIds: string[]) =>
+    api.post<VisualCaptionApproval>(
+      `/api/v1/lessons/${lessonId}/visual-captions/approve-all`,
+      segmentIds,
+    ),
+
+  /** A teacher's own caption, 12 to 240 characters. Saving it approves it. */
+  editCaption: (lessonId: string, segmentId: string, caption: string) =>
+    api.put<VisualCaptionApproval>(
+      `/api/v1/lessons/${lessonId}/visual-captions/${segmentId}`,
+      { caption },
+    ),
 };
+
+/**
+ * A picture's new caption, waiting for a teacher (66be3b8, 229e9a8).
+ *
+ * A live picture re-checked under a newer safety policy gets a caption written
+ * for it, and a child is not given the new one until a teacher approves it.
+ * Approving writes it as the picture's caption and its alt text.
+ */
+export interface VisualCaptionReview {
+  segmentId: string;
+  segmentTitle: string | null;
+  caption: string;
+  imageUrl: string | null;
+  safetyReviewedAt: string | null;
+}
+
+export interface VisualCaptionApproval {
+  approvedCount: number;
+  approvedBy: string;
+  approvedByName: string;
+  approvedAt: string;
+}
+
+/** The server's bounds on a teacher's caption (`VisualCaptionEdit`). */
+export const CAPTION_MIN = 12;
+export const CAPTION_MAX = 240;

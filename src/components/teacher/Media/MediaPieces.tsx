@@ -30,7 +30,13 @@ export function MediaTile({
   className,
   children,
 }: {
-  image: VisualVariant;
+  /**
+   * Only what the tile reads. A caption under review carries just the
+   * picture's address, and no `storagePath` means a dead link is said so
+   * rather than re-signed.
+   */
+  image: Pick<VisualVariant, "imageUrl"> &
+    Partial<Pick<VisualVariant, "previewUrl" | "storagePath" | "width" | "height">>;
   alt: string;
   className?: string;
   /** Drawn over the picture: a flag, a chip. */

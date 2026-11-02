@@ -15,6 +15,11 @@ const api = vi.hoisted(() => ({
   approveSegment: vi.fn(),
 }));
 vi.mock("@/lib/api/lessons", () => ({ lessonsApi: api }));
+// No new captions here (Q10's are tested in the media file); never the network.
+vi.mock("@/lib/api/media", async (actual) => ({
+  ...(await actual<typeof import("@/lib/api/media")>()),
+  mediaApi: { captions: vi.fn().mockResolvedValue([]) },
+}));
 vi.mock("@/hooks/useHydrated", () => ({ useHydrated: () => true }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
