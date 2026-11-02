@@ -23,7 +23,9 @@ const DONE_BEFORE = 3;
  * less one. The nothing-state named "no warm-up waiting", and the warm-up
  * lives somewhere else. Lydia, 31 Oct: "Say 'Nothing to do here right now'"
  * - which its heading already says, so that sentence goes rather than the
- * heading being said twice.
+ * heading being said twice. Its place, first under the heading, is Lydia's
+ * line of 2 Nov: "If something needs doing here, it will appear on your home
+ * screen."
  */
 export type ProbeEnd = "done" | "nothing";
 
@@ -38,7 +40,7 @@ export const PROBE_END_COPY: Record<
   },
   nothing: {
     heading: "Nothing to do here right now",
-    body: "You can go on to Nevo and come back any time.",
+    body: "If something needs doing here, it will appear on your home screen. You can go on to Nevo and come back any time.",
     action: "Go to my lessons",
   },
 };
