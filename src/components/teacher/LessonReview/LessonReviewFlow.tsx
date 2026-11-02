@@ -146,10 +146,13 @@ export function LessonReviewFlow({
   const complete = review.reviewComplete === true;
   const media = mediaView(review, segments);
   /*
-   * WHAT THE KEY-POINT PRESS ALSO SIGNS. Since Teslim's 10c6bf8 it approves
-   * every picture and recording waiting in its snapshot. So while one is still
-   * waiting, the review opens on step 1, where they are shown, and step 2's
-   * press is held until they are approved there.
+   * MEDIA HAS ITS OWN PRESS, in step 1, and nothing else signs it. Teslim's
+   * 10c6bf8 once made the key-point press approve every waiting picture and
+   * recording too, so step 2 was held until they were approved; cdba131 took
+   * media out of the key points (Lydia, 24 Oct), and the hold and its "accepting
+   * the key points approves them too" outlived it. While media waits the review
+   * still opens on step 1, where it is shown - but the key points no longer
+   * wait for it.
    */
   const mediaWaiting = media.awaiting.length > 0;
   const [step, setStep] = useState<Step>(
@@ -306,9 +309,7 @@ export function LessonReviewFlow({
         refusal ??
         (pointsSigned
           ? signoffLine(review.keyPointApproval!)
-          : mediaWaiting
-            ? "Approve the pictures and narration in step 1 first. Accepting the key points approves them too."
-            : missingLeft > 0
+          : missingLeft > 0
             ? `Decide the ${plural(missingLeft, "section", "sections")} with no key point first: add one or leave it out.`
             : flagsLeft > 0
               ? `${flagsLeft} flagged above - handle or accept, your call.`
@@ -321,7 +322,7 @@ export function LessonReviewFlow({
       ) : (
         <button
           type="button"
-          disabled={mediaWaiting || missingLeft > 0 || flow.working !== null}
+          disabled={missingLeft > 0 || flow.working !== null}
           onClick={() => {
             void flow.approveKeyPoints().then((ok) => ok && setStep(3));
           }}
