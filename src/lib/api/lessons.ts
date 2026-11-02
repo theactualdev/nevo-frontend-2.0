@@ -225,8 +225,21 @@ export interface ReadingGroup {
   pauseAfter?: boolean;
 }
 
+/**
+ * SCRUM-290: present only when an authored activity is CURRENTLY withheld from
+ * children - on teacher reads, which keep the activity. Absent means children
+ * can reach it, and the screen says nothing. The front end never infers it.
+ */
+export interface ActivityAvailability {
+  reachableByStudents: false;
+  /** One today: the player cannot draw the activity's safety line. */
+  reason: "safety_instruction_not_rendered" | (string & {});
+}
+
 export interface LessonSegment extends SegmentVariants {
   id: string;
+  /** SCRUM-290: see `ActivityAvailability`. Teacher reads only. */
+  activityAvailability?: ActivityAvailability | null;
   /** Shipped 1 Sep. 0 or absent means no estimate - see `LessonSummary`. */
   estimatedMinutes?: number;
   segmentKey: string;
