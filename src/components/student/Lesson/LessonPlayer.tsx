@@ -31,7 +31,11 @@ import {
   type SignalEventType,
 } from "@/lib/constants";
 import { useLesson, useSignals } from "@/hooks";
-import { formFactor, type SessionOutcome } from "@/hooks/useSignals";
+import {
+  formFactor,
+  type SessionOutcome,
+  type TrackEvent,
+} from "@/hooks/useSignals";
 import {
   useRuntimeAdaptation,
   type AppliedAdaptations,
@@ -117,6 +121,10 @@ import { useLessonProgress } from "@/hooks/useLessonProgress";
 import { AudioSegment } from "./AudioSegment";
 import { BreakOfferPill } from "./BreakOfferPill";
 import { BreakScreen } from "./BreakScreen";
+import {
+  CalculationBreakCard,
+  CalculationBreakPill,
+} from "./CalculationBreak";
 import { CalculationBoundary } from "./CalculationBoundary";
 import { CalculationSolver, type StepGiven } from "./CalculationSolver";
 import { FeedbackStrip } from "./FeedbackStrip";
@@ -1137,6 +1145,18 @@ export function LessonPlayer({
   // Trigger travels into `break_start`.
   const breakOrigin = useRef<"advance" | "offer" | "check">("advance");
   const breakTrigger = useRef<string>("adaptation_plan");
+  /**
+   * The child's own break on a calculation, taken in place (see
+   * `CalculationBreak`): the section it was taken on, for the card, and in
+   * the ref what ending it owes - the sitting's return, or our own
+   * `break_end`, and since when.
+   */
+  const [calcBreakOn, setCalcBreakOn] = useState<string | null>(null);
+  const calcBreak = useRef<{
+    segmentId: string;
+    asked: { sitting: string; started: Promise<boolean> } | null;
+    since: number;
+  } | null>(null);
   // Break OFFERS (B.7/§4): spent per segment, whoever made them. Declining
   // spends; the same segment never re-asks.
   /*
@@ -1556,15 +1576,18 @@ export function LessonPlayer({
 
   // Runs the clock above while the segment is on screen. Declared AFTER it,
   // so on a segment change this starts the new clock rather than the old one.
+  // A break taken in place on a calculation stops it too: resting is not
+  // time on the segment, wherever the break is drawn.
+  const clockRunning = segmentShowing && calcBreakOn !== segment.id;
   useEffect(() => {
     const clock = segmentClock.current;
-    if (!segmentShowing || !clock) return;
+    if (!clockRunning || !clock) return;
     clock.since = performance.now();
     return () => {
       if (clock.since !== null) clock.shownMs += performance.now() - clock.since;
       clock.since = null;
     };
-  }, [segmentShowing, index]);
+  }, [clockRunning, index]);
 
   /*
    * HOW FAR DOWN THE SEGMENT HAS BEEN ON SCREEN, MEASURED ON WHAT SCROLLS.
@@ -2419,23 +2442,24 @@ export function LessonPlayer({
     sitting: string;
     started: Promise<boolean>;
   } | null>(null);
+  /** The child's own break, started on the sitting where there is one. */
+  const startSittingBreak = () => {
+    const sitting = progress.sessionId;
+    return choicesHeld && sitting && getToken()
+      ? {
+          sitting,
+          started: lessonsApi.controlBreak(lesson.id, sitting, "start").then(
+            () => true,
+            () => false,
+          ),
+        }
+      : null;
+  };
   const takeBreakFromCheck = () => {
     setCheckOpen(false);
     breakOrigin.current = "check";
     breakTrigger.current = "student_request";
-    const sitting = progress.sessionId;
-    breakOnSitting.current =
-      choicesHeld && sitting && getToken()
-        ? {
-            sitting,
-            started: lessonsApi
-              .controlBreak(lesson.id, sitting, "start")
-              .then(
-                () => true,
-                () => false,
-              ),
-          }
-        : null;
+    breakOnSitting.current = startSittingBreak();
     setBreakActive(BREAK_TYPES.MICRO);
   };
   /**
@@ -2446,15 +2470,52 @@ export function LessonPlayer({
   const returnFromBreak = () => {
     const asked = breakOnSitting.current;
     breakOnSitting.current = null;
-    if (!asked) return;
-    void asked.started.then((ok) =>
-      ok
-        ? lessonsApi
-            .controlBreak(lesson.id, asked.sitting, "return")
-            .catch(() => {})
-        : undefined,
-    );
+    returnOnSitting(lesson.id, asked);
   };
+
+  /*
+   * "TAKE A BREAK" ON A CALCULATION (Calculation Solver Frame, `break-mid`):
+   * the same child's own break as the check's - on the sitting where there is
+   * one, which records it, and as our own `break_start` and `break_end`
+   * (`student_request`, micro) where there is not - drawn in place over the
+   * calculation rather than as a screen. One at a time.
+   */
+  const takeCalcBreak = () => {
+    if (calcBreak.current) return;
+    const asked = startSittingBreak();
+    if (!asked) {
+      trackEvent(SIGNAL_EVENT_TYPES.BREAK_START, {
+        breakType: BREAK_TYPES.MICRO,
+        trigger: "student_request",
+      });
+    }
+    calcBreak.current = {
+      segmentId: segment.id,
+      asked,
+      since: performance.now(),
+    };
+    setCalcBreakOn(segment.id);
+  };
+  const endCalcBreak = () => {
+    const held = calcBreak.current;
+    if (!held) return;
+    calcBreak.current = null;
+    endHeldCalcBreak(held, lesson.id, trackEvent);
+    setCalcBreakOn(null);
+    setObserved((o) => ({ ...o, breaksTaken: o.breaksTaken + 1 }));
+  };
+  // A section left mid-break, or the lesson: the break ends with it, so the
+  // sitting is never left paused behind the child.
+  useEffect(
+    () => () => {
+      const held = calcBreak.current;
+      if (!held) return;
+      calcBreak.current = null;
+      endHeldCalcBreak(held, lesson.id, trackEvent);
+      setCalcBreakOn(null);
+    },
+    [segment.id, lesson.id, trackEvent],
+  );
 
   /** Keeps a pick with the segment it was made on, for this visit. */
   const keepChoice = (segmentId: string, patch: ChosenVersion) => {
@@ -3495,6 +3556,14 @@ export function LessonPlayer({
             been said for the segment, and on no other screen. The solver
             draws to the same level (`supportLevel`).
           */}
+          {/* The calculation's own way to a break, at every step (frame:
+              beside the title, before the dots). */}
+          {calcShowing && phase === "segments" && (
+            <CalculationBreakPill
+              onBreak={takeCalcBreak}
+              onBreakNow={calcBreakOn === segment.id}
+            />
+          )}
           <ScaffoldIndicator key={`scaf-${segment.id}`} level={supportLevel} />
         </div>
         {/* THE CONTROL COLUMN (Nevo Lesson Player Frame, 51b9e2a): right
@@ -3717,11 +3786,17 @@ export function LessonPlayer({
                   onAbandon={(promptId) => answerGuided(promptId, "abandoned")}
                 />
               )}
+            {calcShowing && calcBreakOn === segment.id && (
+              <CalculationBreakCard onReady={endCalcBreak} />
+            )}
             <div
               // Remount on either axis so entry motion replays and per-modality
               // state (audio playback, ticked steps) never leaks across segments.
               key={`${segment.id}:${modality}`}
               ref={bodyRef}
+              // The calculation waits under the break's card, just as the
+              // child left it, and takes nothing until they are back.
+              inert={calcBreakOn === segment.id}
               /*
                * FOCUSABLE, BECAUSE THE REMOUNT ABOVE DESTROYS FOCUS.
                *
@@ -4126,6 +4201,47 @@ export function LessonPlayer({
       <div ref={setPadDock} data-pad-dock className="shrink-0" />
     </div>
   );
+}
+
+/**
+ * A break started on the sitting, returned once its start has landed: never
+ * before it, and never for a start that failed - a return that overtook its
+ * start would leave the sitting paused.
+ */
+function returnOnSitting(
+  lessonId: string,
+  asked: { sitting: string; started: Promise<boolean> } | null,
+): void {
+  if (!asked) return;
+  void asked.started.then((ok) =>
+    ok
+      ? lessonsApi.controlBreak(lessonId, asked.sitting, "return").catch(() => {})
+      : undefined,
+  );
+}
+
+/**
+ * The end a calculation's break owes: the sitting's return where the server
+ * recorded its start, or our own `break_end` with how long it lasted.
+ */
+function endHeldCalcBreak(
+  held: {
+    asked: { sitting: string; started: Promise<boolean> } | null;
+    since: number;
+  },
+  lessonId: string,
+  trackEvent: TrackEvent,
+): void {
+  if (held.asked) {
+    returnOnSitting(lessonId, held.asked);
+    return;
+  }
+  trackEvent(SIGNAL_EVENT_TYPES.BREAK_END, {
+    breakType: BREAK_TYPES.MICRO,
+    trigger: "student_request",
+    // Monotonic (rule 4): the break's length goes to the engine.
+    durationMs: Math.max(0, Math.round(performance.now() - held.since)),
+  });
 }
 
 /** Renders the segment through the active modality. */
