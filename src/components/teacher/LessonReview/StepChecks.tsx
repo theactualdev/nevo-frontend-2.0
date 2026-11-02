@@ -80,9 +80,10 @@ function Chevron({ open }: { open: boolean }) {
 }
 
 /**
- * PLACEHOLDER WORDS for the calculation reveal parts (8c4ccef), proposed to
- * Lydia as question 16 (29 Oct) and held until she answers. One place, so
- * her words replace these and nothing else.
+ * The words for the calculation reveal parts (8c4ccef). Lydia approved the
+ * group (2 Nov, Q10: "Yes, build it, and unapproved pieces are not served");
+ * the words are ours and in copy-for-lydia.md. One place, so hers replace
+ * these and nothing else.
  */
 export const PARTS_COPY = {
   label: "When a child slows down, these steps arrive in pieces",
@@ -202,7 +203,8 @@ export function StepChecks({
  * ITS OWN PRESS, not the checks': the parts never hold back Assign, so the
  * step's footer and the last step say nothing of them. ALL OR NONE, because
  * the server has no per-step route - a teacher who disagrees with one step
- * cannot accept the rest (raised with Lydia, 29 Oct).
+ * cannot accept the rest (raised with Lydia, 29 Oct; she approved it as is,
+ * 2 Nov).
  */
 function RevealParts({
   items,
