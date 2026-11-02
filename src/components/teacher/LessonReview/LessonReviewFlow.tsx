@@ -1289,16 +1289,14 @@ function StepLive({
           ))}
         </div>
       )}
+      {/* Lydia, 2 Nov (Q13): "A picture has a new caption waiting in step 1."
+          and "let the step be the route" - the step bar above already goes
+          there, so there is no link of its own. */}
       {captionsWaiting > 0 && (
         <p className={cn(SUB, "mt-5 max-w-[460px] text-nevo-near-black/66")}>
-          {`${captionsWaiting === 1 ? "A picture has a new caption" : `${captionsWaiting} pictures have new captions`} waiting in step 1. `}
-          <button
-            type="button"
-            onClick={() => onGo(1)}
-            className="cursor-pointer border-none bg-transparent p-0 font-semibold text-nevo-navy underline underline-offset-[3px]"
-          >
-            {captionsWaiting === 1 ? "Look at it" : "Look at them"}
-          </button>
+          {captionsWaiting === 1
+            ? "A picture has a new caption waiting in step 1."
+            : `${captionsWaiting} pictures have new captions waiting in step 1.`}
         </p>
       )}
       <div className="mt-[26px] flex flex-wrap justify-center gap-3">
