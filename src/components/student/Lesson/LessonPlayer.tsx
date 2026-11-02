@@ -60,6 +60,7 @@ import {
   HintOverlay,
   SocraticPanel,
   type GuidedAnswerOutcome,
+  type GuidedMarking,
   type GuidedReply,
   type PanelPrompt,
 } from "./AffectiveLayer";
@@ -78,6 +79,7 @@ import {
   lessonsApi,
   type ComprehensionGate,
   type LessonQuestionAttempt,
+  type SocraticHandoffPrompt,
   type LessonQuestionAttemptWrite,
   type ReteachingResponse,
   type SegmentChoiceWrite,
@@ -1938,14 +1940,21 @@ export function LessonPlayer({
    * did not land costs one reading, and telling a child their thinking did
    * not count would be worse and untrue.
    */
+  /*
+   * The panel's answer, MARKED BY THE SERVER (backend `guided_panel.py`,
+   * c268404; audit, 2 Nov): its reply is handed back to the panel to follow
+   * (`GuidedMarking`). Out of turn is a 409 naming the step being asked; any
+   * other refusal or failure is an answer not marked, and the panel goes on
+   * as it always did.
+   */
   const answerGuided = (
     promptId: string,
     outcome: GuidedAnswerOutcome | "abandoned",
     reply?: GuidedReply,
-  ) => {
+  ): Promise<GuidedMarking | null> | undefined => {
     const studentId = getSession()?.userId;
-    if (!live || !studentId) return;
-    void intelligenceApi
+    if (!live || !studentId) return undefined;
+    return intelligenceApi
       .answerGuidedQuestion({
         studentId,
         sessionId: progress.sessionId ?? null,
@@ -1953,7 +1962,20 @@ export function LessonPlayer({
         ...reply,
         outcome,
       })
-      .catch(() => {});
+      .then(
+        (res): GuidedMarking => ({
+          correct: res?.correct ?? null,
+          feedback: res?.feedback ?? null,
+          next: res?.prompt?.id ?? null,
+          panelComplete: res?.panelComplete === true,
+        }),
+        (cause): GuidedMarking | null => {
+          const current = outOfTurnPrompt(cause);
+          return current
+            ? { correct: null, current, panelComplete: false }
+            : null;
+        },
+      );
   };
   // UDL accommodations (37c) - cross-session delivery themes from the plan.
   const readingOn = Boolean(plan?.accommodations?.reading);
@@ -2229,7 +2251,7 @@ export function LessonPlayer({
     if (on && isCalculation(asEntered(on))) return;
     if (answeredRight.current.has(stored.questionId ?? segmentId)) return;
     const prompts = (stored.guidedPrompts ?? []).flatMap((p) =>
-      p?.id && p.prompt?.trim() ? [{ id: p.id, prompt: p.prompt }] : [],
+      p?.id && p.prompt?.trim() ? [handoffPrompt(p)] : [],
     );
     if (prompts.length === 0) return;
     setCheckOpen(false);
@@ -4126,6 +4148,41 @@ export function LessonPlayer({
       <div ref={setPadDock} data-pad-dock className="shrink-0" />
     </div>
   );
+}
+
+/**
+ * A hand-off's guided step as the panel draws it: its choices by their words,
+ * each sent by its value (which the server marks by), and its answer type.
+ *
+ * A MULTIPLE-CHOICE STEP IS SHOWN AS A QUESTION TO THINK ABOUT, with nothing
+ * to answer: the panel picks one choice, and one pick sent for a step whose
+ * key is several would be marked wrong whatever the child knew. Keep going
+ * stays the way on. No frame draws a several-pick answer here.
+ */
+function handoffPrompt(p: SocraticHandoffPrompt): PanelPrompt {
+  if (p.answerType === "multiple_choice") return { prompt: p.prompt };
+  const options = (p.options ?? []).filter((o) => o?.label?.trim());
+  return {
+    id: p.id,
+    prompt: p.prompt,
+    ...(options.length > 0
+      ? {
+          options: options.map((o) => o.label),
+          optionValues: options.map((o) => o.value),
+        }
+      : {}),
+    ...(p.answerType ? { answerType: p.answerType } : {}),
+  };
+}
+
+/** A 409 `guided_step_out_of_order`'s step: the one the server is asking. */
+function outOfTurnPrompt(cause: unknown): string | undefined {
+  if (!(cause instanceof ApiError) || cause.status !== 409) return undefined;
+  if (apiErrorCode(cause.detail) !== "guided_step_out_of_order") return undefined;
+  const inner = (cause.detail as { detail?: { prompt?: { id?: unknown } } })
+    ?.detail;
+  const id = inner?.prompt?.id;
+  return typeof id === "string" && id ? id : undefined;
 }
 
 /** Renders the segment through the active modality. */

@@ -101,6 +101,32 @@ const TYPE_FIRST = "Type a little first, then Send.";
  */
 const PICK_FIRST = "Pick one first, then Send.";
 
+/**
+ * 17d S6's lead line over a guided question asked again after a miss, verbatim
+ * (Lesson Player frame, `reask`). Only with the step's explanation under it:
+ * the server asks the SAME question again, not a reworded one, so the line
+ * would claim a different way that is not there without the explanation to
+ * be it (rule 10, Hub 2 Nov; reworded re-asks are Teslim ask 24).
+ */
+export const REASK_LEAD = "Let's come at it a different way.";
+
+/**
+ * The design system's "not that one" pulse (the solver's, SCRUM-94): a soft
+ * violet ring that plays once over what was answered and moves nothing.
+ * Keyed by `run`, so each miss plays it again. Reduced motion skips it.
+ */
+function MissPulse({ run }: { run: number }) {
+  if (run === 0) return null;
+  return (
+    <span
+      key={run}
+      aria-hidden
+      data-miss-pulse
+      className="pointer-events-none absolute inset-0 rounded-[10px] motion-safe:animate-nevo-nudge"
+    />
+  );
+}
+
 /** 38's in-place note under a Send that had nothing to send. */
 function SendNudge({ children }: { children: string }) {
   return (
@@ -132,19 +158,57 @@ function without<V>(map: ReadonlyMap<string, V>, key: string) {
   return next;
 }
 
+/** How a guided step is answered, as the server names it. */
+export type GuidedAnswerType =
+  | "single_choice"
+  | "multiple_choice"
+  | "numeric"
+  | "boolean"
+  | "text";
+
 /** A row the panel lists: an answerable prompt, or a bare guided question. */
 export interface PanelPrompt {
   /** Absent on a bare `guidedQuestions` string, which cannot be answered. */
   id?: string;
   prompt: string;
+  /** The choices, as drawn. */
   options?: string[];
+  /**
+   * What each choice is answered with, by position: the option's own value,
+   * which the server marks by (`answer_matches`). Absent: the drawn words.
+   */
+  optionValues?: (string | number | boolean)[];
+  /** The server's answer type, where it names one. */
+  answerType?: GuidedAnswerType;
 }
 
 /**
- * What a reply carries: the option picked, or how much was written. Never the
- * words - there is no shape here that could hold them.
+ * What a reply carries: the option picked (`option` for a word, `answer` for
+ * a number or true/false), a numeric step's entry (`answer`), or how much was
+ * written. Never free words - there is no shape here that could hold them.
  */
-export type GuidedReply = { option: string } | { responseLength: number };
+export type GuidedReply =
+  | { option: string }
+  | { answer: string | number | boolean }
+  | { responseLength: number };
+
+/**
+ * What the server made of an answer (`GuidedAnswerResponse`), as the panel
+ * uses it. Null, or nothing at all from `onAnswer`, is an answer it did not
+ * mark: the prompt closes as answered, as it always did.
+ */
+export interface GuidedMarking {
+  /** Right, wrong, or null for an answer it could not mark. */
+  correct: boolean | null;
+  /** The step's explanation after a miss, where it does not give it away. */
+  feedback?: string | null;
+  /** The prompt to answer next after a right answer, if there is one. */
+  next?: string | null;
+  /** Every step passed. */
+  panelComplete: boolean;
+  /** Answered out of turn: the prompt the server is asking now. */
+  current?: string;
+}
 
 /**
  * `moved_on` the first time a prompt is answered, `asked_again` every time
@@ -174,13 +238,25 @@ export type PanelEntry = "self" | "handoff";
  * are the frame's; the choices path has none drawn, so its line is the same
  * sentence for a pick - see `PICK_FIRST`.
  *
- * THE CHILD'S WORDS STAY HERE. A write-in sends its length and nothing else,
- * which is all the contract accepts, and the field is cleared once it is sent.
+ * THE CHILD'S WORDS STAY HERE. Free writing sends its length and nothing
+ * else, and the field is cleared once it is sent. A numeric step's entry and
+ * a picked choice are answers to a markable question, and go as answers
+ * (`GuidedReply`; Hub, 2 Nov).
  *
- * AN ANSWER IS NOT MARKED: "left to backend - not drawn here on a guess", and
- * the answer route returns nothing to show. So the prompt simply closes, takes
- * 38's answered tint, and stays a target - opening it again and sending is the
- * child asking the same question again (`asked_again`).
+ * THE SERVER MARKS IT, AND THE PANEL FOLLOWS (audit, 2 Nov, launch-level:
+ * every written answer was refused and the reply ignored). `onAnswer`'s
+ * promise is the server's marking (`GuidedMarking`):
+ * - Right: the prompt takes 38's answered tint, and the next one the server
+ *   names opens.
+ * - A miss re-asks rather than advancing (17d S6): the same question, its
+ *   field or pick cleared to try again. With the step's explanation, 17d's
+ *   lead line and the explanation over it; with none, no words - the design
+ *   system's soft violet pulse, so the child knows to try again. No verdict,
+ *   no counter, nothing crossed out.
+ * - Out of turn: the prompt the server is asking opens instead.
+ * - Not marked (no reply, a refusal, a prompt the server holds no key for):
+ *   as before - it closes, takes the answered tint and stays a target, and
+ *   opening it again and sending is the child asking again (`asked_again`).
  *
  * KEEP GOING FROM THE MOMENT IT OPENS (Lydia, SCRUM-275, 21 Oct): "The panel
  * is support, not a test, and a child has to be able to leave it." So frame
@@ -258,12 +334,15 @@ export function SocraticPanel({
    * screen - none when it lists only bare questions.
    */
   onShown?: (promptIds: string[]) => void;
-  /** The child pressed Send on a prompt. */
+  /**
+   * The child pressed Send on a prompt. The server's marking, where there is
+   * one to wait for - see `GuidedMarking`.
+   */
   onAnswer?: (
     promptId: string,
     reply: GuidedReply,
     outcome: GuidedAnswerOutcome,
-  ) => void;
+  ) => void | Promise<GuidedMarking | null>;
   /** The child left a prompt they had opened without sending. */
   onAbandon?: (promptId: string) => void;
 }) {
@@ -283,6 +362,19 @@ export function SocraticPanel({
   );
   /** The prompt whose Send was pressed with nothing picked or typed. */
   const [nudged, setNudged] = useState<string | null>(null);
+  /**
+   * The last miss the server marked: on which prompt, the step's explanation
+   * if it sent one, and how many misses so far (which replays the pulse).
+   */
+  const [missed, setMissed] = useState<{
+    id: string;
+    feedback: string | null;
+    run: number;
+  } | null>(null);
+  /** Every step passed, as the server says. */
+  const [complete, setComplete] = useState(false);
+  /** A reply is out: a second Send waits for it, rather than racing it. */
+  const marking = useRef(false);
   // Read by the unmount cleanup, which sees only refs.
   const opened = useRef<Set<string>>(new Set());
   const shown = useRef(false);
@@ -335,9 +427,10 @@ export function SocraticPanel({
    */
   const answerable = prompts.flatMap((p) => (p.id ? [p.id] : []));
   const workedThrough =
-    answerable.length > 0
+    complete ||
+    (answerable.length > 0
       ? answerable.every((id) => answered.has(id))
-      : entry === "handoff";
+      : entry === "handoff");
   const ending: { line: string; tryAgain?: () => void } | undefined =
     workedThrough && active === null
       ? entry === "handoff"
@@ -357,35 +450,114 @@ export function SocraticPanel({
     setActive(active === id ? null : id);
   };
 
+  /** What was sent is let go of: the pick, or the field, empty again. */
+  const clearAnswer = (id: string) => {
+    setPicked((prev) => without(prev, id));
+    setDrafts((prev) => without(prev, id));
+  };
+
+  /** Not marked: closed, answered, and still a target - as it always was. */
+  const answeredUnmarked = (id: string) => {
+    opened.current.delete(id);
+    setAnswered((prev) => new Set(prev).add(id));
+    clearAnswer(id);
+    setActive((on) => (on === id ? null : on));
+  };
+
+  /** The server's marking, followed - see `GuidedMarking`. */
+  const follow = (id: string, marked: GuidedMarking | null) => {
+    if (marked?.current && marked.current !== id) {
+      opened.current.add(marked.current);
+      setActive(marked.current);
+      return;
+    }
+    if (!marked || marked.correct === null) {
+      answeredUnmarked(id);
+      if (marked?.panelComplete) setComplete(true);
+      return;
+    }
+    if (marked.correct === false) {
+      // Asked again: the same question, cleared to try again.
+      clearAnswer(id);
+      setMissed((was) => ({
+        id,
+        feedback: marked.feedback?.trim() || null,
+        run: (was?.run ?? 0) + 1,
+      }));
+      setActive(id);
+      // Back in the field it was typed in, ready to try again.
+      field.current?.focus();
+      return;
+    }
+    opened.current.delete(id);
+    setAnswered((prev) => new Set(prev).add(id));
+    clearAnswer(id);
+    setMissed(null);
+    if (marked.panelComplete) {
+      setComplete(true);
+      setActive(null);
+      return;
+    }
+    const next = marked.next;
+    if (next && prompts.some((p) => p.id === next)) {
+      opened.current.add(next);
+      setActive(next);
+    } else {
+      setActive(null);
+    }
+  };
+
   const send = (id: string, reply: GuidedReply) => {
+    if (marking.current) return;
     const outcome: GuidedAnswerOutcome = answered.has(id)
       ? "asked_again"
       : "moved_on";
-    opened.current.delete(id);
-    setAnswered((prev) => new Set(prev).add(id));
-    setPicked((prev) => without(prev, id));
-    setDrafts((prev) => without(prev, id));
     setNudged(null);
-    setActive(null);
-    onAnswer?.(id, reply, outcome);
+    const reply$ = onAnswer?.(id, reply, outcome);
+    if (!reply$) {
+      answeredUnmarked(id);
+      return;
+    }
+    marking.current = true;
+    reply$
+      .then(
+        (marked) => follow(id, marked),
+        () => follow(id, null),
+      )
+      .finally(() => {
+        marking.current = false;
+      });
   };
 
-  const sendPicked = (id: string) => {
+  const sendPicked = (id: string, prompt: PanelPrompt) => {
     const choice = picked.get(id);
     if (choice === undefined) {
       setNudged(id);
       return;
     }
-    send(id, { option: choice });
+    // By the option's value, which is what the server marks.
+    const at = (prompt.options ?? []).indexOf(choice);
+    const value = at >= 0 ? prompt.optionValues?.[at] : undefined;
+    if (value === undefined || typeof value === "string") {
+      send(id, { option: value ?? choice });
+    } else {
+      send(id, { answer: value });
+    }
   };
 
-  const sendWritten = (id: string) => {
-    const length = (drafts.get(id) ?? "").trim().length;
-    if (length === 0) {
+  const sendWritten = (id: string, prompt: PanelPrompt) => {
+    const text = (drafts.get(id) ?? "").trim();
+    if (text.length === 0) {
       setNudged(id);
       return;
     }
-    send(id, { responseLength: Math.min(length, MAX_RESPONSE_LENGTH) });
+    // A number for a numeric step is its answer; free words never leave.
+    send(
+      id,
+      prompt.answerType === "numeric"
+        ? { answer: text }
+        : { responseLength: Math.min(text.length, MAX_RESPONSE_LENGTH) },
+    );
   };
 
   const write = (id: string, next: (text: string) => string) => {
@@ -394,10 +566,10 @@ export function SocraticPanel({
   };
 
   /** The prompt open for a write-in, which is what docks the keyboard. */
-  const writingIn =
-    prompts.find(
-      (p) => p.id !== undefined && p.id === active && !p.options?.length,
-    )?.id ?? null;
+  const writingInPrompt = prompts.find(
+    (p) => p.id !== undefined && p.id === active && !p.options?.length,
+  );
+  const writingIn = writingInPrompt?.id ?? null;
 
   // No questions sent, none made up: no panel (rule 5).
   if (prompts.length === 0) return null;
@@ -468,10 +640,30 @@ export function SocraticPanel({
                 }
                 const options = p.options ?? [];
                 const expanded = active === id;
+                const missHere = missed?.id === id ? missed : null;
                 const choice = picked.get(id);
                 const text = drafts.get(id) ?? "";
                 return (
                   <div key={id} className="flex flex-col">
+                    {/* 17d S6: a miss re-asks. With the step's explanation,
+                        the frame's lead line and the explanation over the
+                        same question; with none, no words (`MissPulse`). */}
+                    {missHere && missHere.feedback && (
+                      <div role="status" className="mb-2.5">
+                        <span className="inline-flex items-center gap-2">
+                          <span
+                            aria-hidden
+                            className="size-[7px] shrink-0 rounded-full bg-nevo-violet"
+                          />
+                          <span className="text-[13px] leading-[1.4] text-nevo-near-black/62">
+                            {REASK_LEAD}
+                          </span>
+                        </span>
+                        <p className="mt-1.5 text-[13.5px] leading-[1.5] text-nevo-near-black">
+                          {missHere.feedback}
+                        </p>
+                      </div>
+                    )}
                     <button
                       type="button"
                       aria-expanded={expanded}
@@ -493,8 +685,9 @@ export function SocraticPanel({
                         <div
                           role="radiogroup"
                           aria-label={p.prompt}
-                          className="mt-2.5 flex flex-col gap-2"
+                          className="relative mt-2.5 flex flex-col gap-2"
                         >
+                          <MissPulse run={missHere?.run ?? 0} />
                           {options.map((option) => {
                             const on = choice === option;
                             return (
@@ -534,7 +727,7 @@ export function SocraticPanel({
                         </div>
                         <button
                           type="button"
-                          onClick={() => sendPicked(id)}
+                          onClick={() => sendPicked(id, p)}
                           className={cn(SEND, "mt-3.5")}
                         >
                           Send
@@ -544,32 +737,35 @@ export function SocraticPanel({
                     )}
                     {expanded && options.length === 0 && (
                       <>
-                        <input
-                          ref={field}
-                          value={text}
-                          onChange={(e) => {
-                            const typed = e.target.value;
-                            write(id, () => typed);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") sendWritten(id);
-                          }}
-                          // The Nevo keyboard below drives entry on touch; a
-                          // hardware keyboard still types on desktop.
-                          inputMode="none"
-                          autoComplete="off"
-                          aria-label={p.prompt}
-                          placeholder="Type your answer"
-                          className={cn(
-                            "mt-3 min-h-12 w-full rounded-[10px] border-[1.5px] bg-nevo-cream px-3.5 py-3 text-[13.5px] leading-[1.4] text-nevo-near-black outline-none placeholder:text-nevo-near-black/40",
-                            text
-                              ? "border-nevo-violet/60"
-                              : "border-nevo-near-black/18",
-                          )}
-                        />
+                        <div className="relative mt-3">
+                          <input
+                            ref={field}
+                            value={text}
+                            onChange={(e) => {
+                              const typed = e.target.value;
+                              write(id, () => typed);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") sendWritten(id, p);
+                            }}
+                            // The Nevo keyboard below drives entry on touch; a
+                            // hardware keyboard still types on desktop.
+                            inputMode="none"
+                            autoComplete="off"
+                            aria-label={p.prompt}
+                            placeholder="Type your answer"
+                            className={cn(
+                              "min-h-12 w-full rounded-[10px] border-[1.5px] bg-nevo-cream px-3.5 py-3 text-[13.5px] leading-[1.4] text-nevo-near-black outline-none placeholder:text-nevo-near-black/40",
+                              text
+                                ? "border-nevo-violet/60"
+                                : "border-nevo-near-black/18",
+                            )}
+                          />
+                          <MissPulse run={missHere?.run ?? 0} />
+                        </div>
                         <button
                           type="button"
-                          onClick={() => sendWritten(id)}
+                          onClick={() => sendWritten(id, p)}
                           className={cn(SEND, "mt-3")}
                         >
                           Send
@@ -617,7 +813,10 @@ export function SocraticPanel({
                 layout="qwerty"
                 onKey={(c) => write(writingIn, (t) => t + c)}
                 onBackspace={() => write(writingIn, (t) => t.slice(0, -1))}
-                onReturn={() => sendWritten(writingIn)}
+                onReturn={() => {
+                  if (writingInPrompt?.id)
+                    sendWritten(writingInPrompt.id, writingInPrompt);
+                }}
                 className="sticky bottom-0 -mx-[22px] mt-3.5 -mb-[22px]"
               />
             )}
