@@ -1035,6 +1035,39 @@ describe("the form as 00c draws it", () => {
       screen.getByText("Let's wait a little before trying again."),
     ).toBeVisible();
   });
+
+  it("pauses on the server's 429, and lifts it here when its retryAt arrives (SCRUM-251)", async () => {
+    loginPin.mockRejectedValue(
+      new ApiError(429, "Too Many Requests", {
+        detail: {
+          code: "too_many_attempts",
+          message: "slow",
+          retryAt: new Date(Date.now() + 20_000).toISOString(),
+        },
+      }),
+    );
+    render(<ReturningSignInScreen />);
+    fill();
+    await signInNow();
+
+    expect(
+      screen.getByText("Let's wait a little before trying again."),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(19_000);
+    });
+    expect(document.querySelector("[data-held-pin]")).not.toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    expect(
+      screen.queryByText("Let's wait a little before trying again."),
+    ).toBeNull();
+    expect(document.querySelector("[data-held-pin]")).toBeNull();
+  });
 });
 
 describe("one keyboard at a time (ruling D)", () => {
