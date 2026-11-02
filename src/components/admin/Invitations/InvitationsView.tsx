@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
-import { invitesApi, type Invitation } from "@/lib/api/invites";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
+import {
+  RESERVED_TEACHER_STATE_CHANGED,
+  invitesApi,
+  type Invitation,
+} from "@/lib/api/invites";
 import { cn } from "@/lib/utils";
 import {
   CARD,
@@ -236,7 +241,13 @@ export function InvitationsView() {
       .catch(() => say("Your browser wouldn't let us copy that"));
   };
 
-  const resend = (invite: Invitation) => {
+  /**
+   * Resend a live or expired invite, or REISSUE a revoked one (ed123cb;
+   * Lydia's "Reissue invitation", 31 Oct). Both send the invitation again and
+   * answer with the refreshed row, so they share one path: the row is
+   * replaced, and delivery is read from this answer.
+   */
+  const resend = (invite: Invitation, via: "resend" | "reissue" = "resend") => {
     setBusy(invite.id);
     setHandout(null);
     setResent((prev) => {
@@ -244,8 +255,7 @@ export function InvitationsView() {
       delete next[invite.id];
       return next;
     });
-    invitesApi
-      .resend(invite.id)
+    (via === "reissue" ? invitesApi.reissue(invite.id) : invitesApi.resend(invite.id))
       .then((answer) => {
         const updated = withResend(invite, answer);
         setInvites((prev) => prev.map((i) => (i.id === updated.id ? withResend(i, answer) : i)));
@@ -278,7 +288,24 @@ export function InvitationsView() {
           [updated.id]: `Invite resent to ${updated.email ?? inviteeName(updated)}`,
         }));
       })
-      .catch(() => say("That didn't resend. We're on it - try again in a moment."))
+      .catch((err: unknown) => {
+        if (via === "reissue") {
+          // A refusal is the server's answer, and trying again won't change
+          // it. Lydia's sentence for the account changing (31 Oct, Q11a);
+          // its first clause for the refusals she has no words for yet.
+          if (err instanceof ApiError && err.status === 409) {
+            say(
+              apiErrorCode(err.detail) === RESERVED_TEACHER_STATE_CHANGED
+                ? "This invitation cannot be reissued, because the account it was reserved for has changed."
+                : "This invitation cannot be reissued.",
+            );
+            return;
+          }
+          say("That didn't reissue. We're on it - try again in a moment.");
+          return;
+        }
+        say("That didn't resend. We're on it - try again in a moment.");
+      })
       .finally(() => setBusy(null));
   };
 
@@ -582,10 +609,22 @@ export function InvitationsView() {
                             * offered Revoke, and a revoked one offered a dead
                             * link to copy and hand to someone.
                             */}
-                          {joined || s === "revoked" ? (
+                          {joined ? (
                             <span className="text-[13px] text-nevo-near-black/45">
                               Nothing to do
                             </span>
+                          ) : s === "revoked" ? (
+                            /* A revoked teacher can only come back through
+                               their original invitation (ed123cb): a new one
+                               is refused. Lydia's words, 31 Oct (Q11a). */
+                            <button
+                              type="button"
+                              disabled={working || writesPaused}
+                              onClick={() => resend(invite, "reissue")}
+                              className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:opacity-45"
+                            >
+                              Reissue invitation
+                            </button>
                           ) : (
                             <>
                               {/* Only when the read actually carried a
@@ -601,17 +640,24 @@ export function InvitationsView() {
                                   Copy link
                                 </button>
                               ) : null}
-                              <button
-                                type="button"
-                                disabled={working || writesPaused}
-                                onClick={() => resend(invite)}
-                                className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:opacity-45"
-                              >
-                                Resend
-                              </button>
-                              {/* Revoke is for a live invite. An expired one
-                                  already cannot be used. */}
-                              {s === "pending" ? (
+                              {/* Not for "Account changed": the server refuses
+                                  it, and "resending something that will be
+                                  refused wastes the sender's time twice"
+                                  (Lydia, 31 Oct, Q11c). */}
+                              {s === "conflicted" ? null : (
+                                <button
+                                  type="button"
+                                  disabled={working || writesPaused}
+                                  onClick={() => resend(invite)}
+                                  className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:opacity-45"
+                                >
+                                  Resend
+                                </button>
+                              )}
+                              {/* Revoke is for a live invite - one whose
+                                  account changed is still live on the server.
+                                  An expired one already cannot be used. */}
+                              {s === "pending" || s === "conflicted" ? (
                                 <button
                                   type="button"
                                   disabled={working || writesPaused}

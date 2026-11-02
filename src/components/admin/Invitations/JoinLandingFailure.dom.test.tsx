@@ -17,7 +17,9 @@ vi.mock("@/lib/api/invites", async (importOriginal) => {
   return { ...actual, invitesApi: { ...actual.invitesApi, lookupJoin: (t: string) => lookupJoin(t) } };
 });
 
-beforeEach(() => lookupJoin.mockReset());
+beforeEach(() => {
+  lookupJoin.mockReset();
+});
 
 describe("JoinLanding when the lookup fails", () => {
   it("does not call a link dead because Nevo could not be reached", async () => {
@@ -76,6 +78,18 @@ describe("JoinLanding when the lookup fails", () => {
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 
+  it("tells someone whose link was already used that they've joined, and points at sign-in (Lydia, Q11d)", async () => {
+    lookupJoin.mockRejectedValueOnce(
+      new ApiError(409, "conflict", { detail: { code: "join_link_used" } }),
+    );
+    const { container } = render(<JoinLanding token="tok" />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/You have already joined/));
+    expect(screen.getByRole("link", { name: "Sign in instead" })).toHaveAttribute("href", "/auth/teacher");
+    expect(visibleText(container)).not.toMatch(/no longer valid|couldn.t check/);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
   it("keeps a revoked link on 'no longer valid' - only the expired code says expired", async () => {
     lookupJoin.mockRejectedValueOnce(
       new ApiError(410, "gone", { detail: { code: "join_link_revoked" } }),
@@ -86,7 +100,7 @@ describe("JoinLanding when the lookup fails", () => {
     expect(visibleText(container)).not.toMatch(/has expired/);
   });
 
-  it("doesn't read any other 409 as the link's answer", async () => {
+  it("doesn't read any 409 it can't name as the link's answer", async () => {
     lookupJoin.mockRejectedValueOnce(new ApiError(409, "conflict", { detail: { code: "something_else" } }));
     const { container } = render(<JoinLanding token="tok" />);
 
