@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import {
+  ASK_YOUR_TEACHER,
+  CHECKED_NOTHING_YET,
   WAITING_WAY_BACK,
   WaitingOnConsent,
   WaitingOnConsentPage,
@@ -59,9 +61,28 @@ describe("what it says", () => {
 
     const text = (document.body.textContent ?? "").replace(/\s+/g, " ").trim();
 
-    // No space between the two: `textContent` concatenates block elements
-    // without one, so this is the heading and the line and nothing besides.
-    expect(text).toBe(`Nevo isn't quite ready for you yet${LINE}`);
+    // No space between them: `textContent` concatenates block elements
+    // without one, so this is the heading, the line and what to ask, and
+    // nothing besides.
+    expect(text).toBe(
+      `Nevo isn't quite ready for you yet${LINE}${ASK_YOUR_TEACHER}`,
+    );
+  });
+
+  it("tells the child what to ask, as a sentence and never a control (Lydia, 31 Oct and 2 Nov)", () => {
+    render(<WaitingOnConsent onCheckAgain={vi.fn()} />);
+
+    const ask = screen.getByText(ASK_YOUR_TEACHER);
+    expect(ask.tagName).toBe("P");
+    expect(ask.closest("button, a")).toBeNull();
+    // Where the frame draws its button: under Check again.
+    const check = screen.getByRole("button", { name: "Check again" });
+    expect(
+      check.compareDocumentPosition(ask) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: /ask your teacher/i }),
+    ).toBeNull();
   });
 });
 
@@ -156,6 +177,61 @@ describe("Check again", () => {
 
     expect(screen.queryByRole("button", { name: "Check again" })).toBeNull();
   });
+
+  /*
+   * Lydia, 31 Oct: "Check again must show it checked, with nothing changed
+   * yet. A button that looks inert teaches a child the app is broken." Her
+   * line, 2 Nov.
+   */
+  it("says it checked once a read answers that nothing has changed", async () => {
+    render(
+      <WaitingOnConsent
+        onCheckAgain={vi.fn().mockResolvedValue("still-waiting")}
+      />,
+    );
+    expect(screen.getByRole("status").textContent).toBe("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await act(async () => {});
+
+    expect(screen.getByRole("status").textContent).toBe(CHECKED_NOTHING_YET);
+  });
+
+  it.each([
+    ["the read failed", () => Promise.reject(new Error("offline"))],
+    ["the read did not answer", () => Promise.resolve(undefined)],
+  ])("says nothing new when %s - nothing was checked", async (_, read) => {
+    render(<WaitingOnConsent onCheckAgain={read} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await act(async () => {});
+
+    expect(screen.getByRole("status").textContent).toBe("");
+  });
+
+  it("clears the line on a new press until that answer is in, so it is said afresh", async () => {
+    let answer: (v: "still-waiting") => void = () => {};
+    const onCheckAgain = vi
+      .fn()
+      .mockResolvedValueOnce("still-waiting")
+      .mockReturnValueOnce(new Promise((r) => (answer = r)));
+    render(<WaitingOnConsent onCheckAgain={onCheckAgain} />);
+    const check = screen.getByRole("button", { name: "Check again" });
+    fireEvent.click(check);
+    await act(async () => {});
+
+    fireEvent.click(check);
+    expect(screen.getByRole("status").textContent).toBe("");
+    await act(async () => answer("still-waiting"));
+
+    expect(screen.getByRole("status").textContent).toBe(CHECKED_NOTHING_YET);
+  });
+
+  it("holds the line's room open, so nothing under it moves when it comes", () => {
+    render(<WaitingOnConsent onCheckAgain={vi.fn()} />);
+
+    expect(screen.getByRole("status").className).toContain("min-h-[21px]");
+  });
 });
 
 describe("Check again, for a child signed in and sent here from a door", () => {
@@ -186,7 +262,7 @@ describe("Check again, for a child signed in and sent here from a door", () => {
       "the read did not answer",
       "/student/unchecked?next=%2Fstudent%2Fdashboard",
     ],
-  ])("stays here as it was when %s", async (_, to) => {
+  ])("stays here when %s", async (_, to) => {
     studentDestination.mockResolvedValue(to);
     render(<WaitingOnConsentPage />);
 
@@ -195,6 +271,23 @@ describe("Check again, for a child signed in and sent here from a door", () => {
 
     expect(replace).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Check again" })).toBeTruthy();
+  });
+
+  it("says it checked when the gate answers still waiting, and not when it did not answer", async () => {
+    studentDestination.mockResolvedValueOnce("/student/waiting");
+    render(<WaitingOnConsentPage />);
+    const check = screen.getByRole("button", { name: "Check again" });
+
+    fireEvent.click(check);
+    await act(async () => {});
+    expect(screen.getByRole("status").textContent).toBe(CHECKED_NOTHING_YET);
+
+    studentDestination.mockResolvedValueOnce(
+      "/student/unchecked?next=%2Fstudent%2Fdashboard",
+    );
+    fireEvent.click(check);
+    await act(async () => {});
+    expect(screen.getByRole("status").textContent).toBe("");
   });
 });
 
@@ -208,11 +301,11 @@ describe("what it deliberately does not do", () => {
     expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 
-  it("shows no progress, countdown or status", () => {
+  it("shows no progress or countdown, and says nothing in its status before a press", () => {
     render(<WaitingOnConsent onCheckAgain={vi.fn()} />);
 
     expect(screen.queryByRole("progressbar")).toBeNull();
-    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("");
     expect(document.body.textContent).not.toMatch(
       /refresh|loading|soon|progress|checking|%/i,
     );
