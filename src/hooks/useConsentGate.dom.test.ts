@@ -218,3 +218,99 @@ describe("useConsentGate — answered, still asking, or no answer to be had", ()
     expect(myConsentGate).toHaveBeenCalledTimes(2);
   });
 });
+
+/*
+ * A READ THAT FAILED, ASKED AGAIN (SCRUM-257). The event stream fails closed
+ * on a failed read and has no Try again of its own, so a blip as a lesson
+ * opens would otherwise silence the whole lesson. With `retry` the read goes
+ * again until one answers; without it, nothing changes for the screens that
+ * have their own way back.
+ */
+describe("useConsentGate — asked again after a failed read", () => {
+  const settle = () =>
+    act(async () => {
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+    });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("asks once and no more without `retry`", async () => {
+    vi.useFakeTimers();
+    signIn();
+    myConsentGate.mockRejectedValue(new Error("network"));
+
+    const { result } = renderHook(() => useConsentGate());
+    await settle();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+
+    expect(myConsentGate).toHaveBeenCalledOnce();
+    expect(consentAnswer(result.current)).toBe("unknown");
+  });
+
+  it("asks again with `retry`, staying unread meanwhile, until one answers", async () => {
+    vi.useFakeTimers();
+    signIn();
+    myConsentGate
+      .mockRejectedValueOnce(new Error("network"))
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValue(gate("granted"));
+
+    const { result } = renderHook(() => useConsentGate({ retry: true }));
+    await settle();
+    expect(consentAnswer(result.current)).toBe("unknown");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(myConsentGate).toHaveBeenCalledTimes(2);
+    // Never back to "still asking": the answer it has is that there is none.
+    expect(consentAnswer(result.current)).toBe("unknown");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    expect(myConsentGate).toHaveBeenCalledTimes(3);
+    expect(consentAnswer(result.current)).toBe("allowed");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+    expect(myConsentGate).toHaveBeenCalledTimes(3);
+  });
+
+  it("asks again at once when the device is back online", async () => {
+    signIn();
+    myConsentGate
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue(gate("granted"));
+
+    const { result } = renderHook(() => useConsentGate({ retry: true }));
+    await settle();
+    expect(consentAnswer(result.current)).toBe("unknown");
+
+    window.dispatchEvent(new Event("online"));
+    await settle();
+
+    expect(myConsentGate).toHaveBeenCalledTimes(2);
+    expect(consentAnswer(result.current)).toBe("allowed");
+  });
+
+  it("stops asking once the screen has gone", async () => {
+    vi.useFakeTimers();
+    signIn();
+    myConsentGate.mockRejectedValue(new Error("network"));
+
+    const { unmount } = renderHook(() => useConsentGate({ retry: true }));
+    await settle();
+    unmount();
+    window.dispatchEvent(new Event("online"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+
+    expect(myConsentGate).toHaveBeenCalledOnce();
+  });
+});

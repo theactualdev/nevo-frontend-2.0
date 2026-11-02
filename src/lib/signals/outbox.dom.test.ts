@@ -9,10 +9,12 @@ vi.mock("@/lib/api", async (importOriginal) => {
 import { ApiError } from "@/lib/api";
 import { clearSession, setSession } from "@/lib/auth/session";
 import {
+  allowSignals,
   deliverHeldSignals,
   forgetSignals,
   holdSignals,
   lastTry,
+  pauseSignals,
   withholdSignals,
 } from "./outbox";
 
@@ -33,13 +35,16 @@ const events = (n: number) =>
     timestamp: "2026-10-01T09:00:01.000Z",
     payload: { i },
   }));
-const signInAs = (userId: string) =>
+/** Signed in, with their consent read as allowing it (SCRUM-257). */
+const signInAs = (userId: string) => {
   setSession({
     token: "tok",
     expiresAt: new Date(Date.now() + 3600_000).toISOString(),
     userId,
     role: "student",
   });
+  allowSignals(userId);
+};
 const held = () =>
   JSON.parse(window.localStorage.getItem("nevo.signals.outbox") ?? "[]") as {
     userId: string;
@@ -112,6 +117,82 @@ describe("held signals", () => {
     await Promise.all([deliverHeldSignals(), deliverHeldSignals()]);
 
     expect(submitBatch).toHaveBeenCalledTimes(1);
+  });
+});
+
+/*
+ * THE DEVICE FAILS CLOSED (SCRUM-257). Held events go only for a child whose
+ * consent this page has read as allowing it. Before that, and while a read
+ * is failing, they stay held - not deleted, since neither is a withdrawal.
+ */
+describe("held signals for a child whose consent is not read yet", () => {
+  const signedInOnly = (userId: string) =>
+    setSession({
+      token: "tok",
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      userId,
+      role: "student",
+    });
+
+  it("wait, unsent, until a read allows them", async () => {
+    holdSignals("child-r1", ENVELOPE, events(2));
+    signedInOnly("child-r1");
+
+    await deliverHeldSignals();
+    expect(submitBatch).not.toHaveBeenCalled();
+    expect(held().map((h) => h.userId)).toContain("child-r1");
+
+    allowSignals("child-r1");
+    await deliverHeldSignals();
+    expect(submitBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("stay held while the read is failing, and get no last try at sign-out", async () => {
+    holdSignals("child-r2", ENVELOPE, events(1));
+    signInAs("child-r2");
+    pauseSignals("child-r2");
+
+    await deliverHeldSignals();
+    expect(submitBatch).not.toHaveBeenCalled();
+    expect(held().map((h) => h.userId)).toContain("child-r2");
+
+    forgetSignals("child-r2", "tok");
+    expect(submitBatch).not.toHaveBeenCalled();
+  });
+
+  it("keep their age while they wait, so an old batch still expires", async () => {
+    holdSignals("child-r4", ENVELOPE, events(1));
+    const age = () =>
+      (
+        JSON.parse(window.localStorage.getItem("nevo.signals.outbox") ?? "[]") as {
+          userId: string;
+          heldAt: number;
+        }[]
+      ).find((h) => h.userId === "child-r4")?.heldAt;
+    const was = age();
+    signedInOnly("child-r4");
+    const later = vi.spyOn(Date, "now").mockReturnValue((was ?? 0) + 60_000);
+
+    await deliverHeldSignals();
+    later.mockRestore();
+
+    expect(submitBatch).not.toHaveBeenCalled();
+    expect(age()).toBe(was);
+  });
+
+  it("put the rest back when a read fails during a delivery", async () => {
+    holdSignals("child-r3", ENVELOPE, events(1));
+    holdSignals("child-r3", ENVELOPE, events(2));
+    signInAs("child-r3");
+    submitBatch.mockImplementationOnce(async () => {
+      pauseSignals("child-r3");
+      return { acceptedEvents: 1 };
+    });
+
+    await deliverHeldSignals();
+
+    expect(submitBatch).toHaveBeenCalledTimes(1);
+    expect(held().filter((h) => h.userId === "child-r3")).toHaveLength(1);
   });
 });
 

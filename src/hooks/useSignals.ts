@@ -17,13 +17,15 @@ import {
 import { usableSession } from "@/lib/auth/doorSession";
 import { onSessionEnd } from "@/lib/auth/sessionEnd";
 import {
+  allowSignals,
   deliverHeldSignals,
   holdSignals,
   installSignalDelivery,
   lastTry,
+  pauseSignals,
   withholdSignals,
 } from "@/lib/signals/outbox";
-import { useConsentGate } from "./useConsentGate";
+import { consentAnswer, useConsentGate } from "./useConsentGate";
 
 /**
  * Form-factor tag for session context (Touch Signal Contract G6).
@@ -111,8 +113,22 @@ export type TrackEvent = (
  * went on sending for a child whose guardian had withdrawn. The hook reads the
  * same gate now; on a withdrawal it sends nothing more, queues nothing more,
  * and deletes what it and the outbox hold for that child. Consent not yet
- * recorded is not a withdrawal (SCRUM-121) and stops nothing, and a read that
- * fails stops nothing either - see `useConsentGate`.
+ * recorded is not a withdrawal (SCRUM-121) and stops nothing.
+ *
+ * AND IT FAILS CLOSED (SCRUM-257, Lydia, 20 Oct). A read that failed was read
+ * as "not withdrawn", so a child whose consent could not be read went on
+ * producing evidence that reached us. For a signed-in child the stream now
+ * goes only on an answer that allows it:
+ *  - Still asking: events are kept here, in memory, and none go.
+ *  - The read failed: what was kept is dropped, nothing more is collected,
+ *    and what the outbox holds for them stays there unsent. The read goes
+ *    again (`retry`), and an answer that allows it starts the stream afresh -
+ *    nothing from the gap, because nothing was collected in it.
+ *  - Nothing is kept in the outbox, and no last try is made, for a child
+ *    whose consent was never read as allowing it.
+ * The child sees nothing of any of it: no screen, no interruption. Before
+ * sign-in there is nobody to ask for, and the stream holds for the session to
+ * come as it always has; that session's own answer then decides.
  *
  * TWO WAYS A BATCH CAN BE LOST, and both are guarded:
  *
@@ -168,15 +184,39 @@ export function useSignals(
   const alive = useRef(true);
   /** True once the consent gate has reported a withdrawal. Never cleared. */
   const stopped = useRef(false);
-  const { withdrawn } = useConsentGate();
+  /** The child whose consent was read as allowing this stream, if any. */
+  const cleared = useRef<string | null>(null);
+  /** The child whose consent could not be read: nothing is collected for them. */
+  const unread = useRef<string | null>(null);
+  const consent = consentAnswer(useConsentGate({ retry: true }));
   useEffect(() => {
-    if (!withdrawn) return;
-    stopped.current = true;
-    queue.current = [];
     // The gate answered for whoever is signed in now; that is whose it was.
-    const who = getSession()?.userId ?? owner.current;
-    if (who) withholdSignals(who);
-  }, [withdrawn]);
+    const who = getSession()?.userId ?? null;
+    if (consent === "withdrawn") {
+      stopped.current = true;
+      queue.current = [];
+      cleared.current = null;
+      const whose = who ?? owner.current;
+      if (whose) withholdSignals(whose);
+      return;
+    }
+    // Nobody signed in is nobody to ask for, not a failed read.
+    if (!who) return;
+    if (consent === "allowed") {
+      cleared.current = who;
+      if (unread.current === who) unread.current = null;
+      // Anything an earlier screen kept for them, now that it may go.
+      allowSignals(who);
+      void deliverHeldSignals();
+    } else if (consent === "unknown") {
+      unread.current = who;
+      if (cleared.current === who) cleared.current = null;
+      queue.current = [];
+      // What is collected after an answer opens with its own context.
+      contextQueued.current = false;
+      pauseSignals(who);
+    }
+  }, [consent]);
   /*
    * THE SESSION'S CLOCK ANCHOR: one wall-clock reading and one monotonic
    * reading, taken at the same instant and reset together per session id.
@@ -301,7 +341,8 @@ export function useSignals(
     const env = envelope();
     // Never a session a door is holding: the stream is not theirs (19 Oct).
     const who = owner.current ?? usableSession()?.userId ?? null;
-    if (!env || !who) return;
+    // Nor a child whose consent was never read as allowing it (SCRUM-257).
+    if (!env || !who || cleared.current !== who) return;
     holdSignals(who, env, queue.current);
     queue.current = [];
   }, [envelope]);
@@ -322,6 +363,13 @@ export function useSignals(
       // own child is signed in, and goes nowhere if nobody is.
       const signedIn = usableSession();
       if (!signedIn?.token) {
+        capHeld(queue);
+        return;
+      }
+      // Fails closed (SCRUM-257): nothing goes before this child's consent
+      // is read as allowing it. While it cannot be read, nothing is even
+      // collected (`trackEvent`), and what was is dropped (above).
+      if (cleared.current !== signedIn.userId) {
         capHeld(queue);
         return;
       }
@@ -384,6 +432,9 @@ export function useSignals(
     (type: SignalEventType, payload?: Record<string, unknown>) => {
       // A withdrawn consent: nothing more is captured, let alone sent.
       if (stopped.current) return;
+      // Nor while it cannot be read for the child signed in (SCRUM-257).
+      const me = usableSession()?.userId;
+      if (me && unread.current === me) return;
       if (!contextQueued.current) {
         contextQueued.current = true;
         queue.current.push({
@@ -408,9 +459,9 @@ export function useSignals(
 
   useEffect(() => {
     alive.current = true;
-    // Anything an earlier screen could not send, now that one is open.
+    // Anything an earlier screen could not send goes once this child's
+    // consent is read as allowing it (`allowSignals`, above), not before.
     installSignalDelivery();
-    void deliverHeldSignals();
 
     const id = setInterval(flush, SIGNAL_BATCH.FLUSH_INTERVAL_MS);
     /*

@@ -14,6 +14,9 @@ export {
 const ASKING: ConsentGate = { withdrawn: false, known: false, unreadable: false };
 const NOBODY: ConsentGate = { withdrawn: false, known: false, unreadable: true };
 
+/** When a failed read goes again, with `retry`: then every minute. */
+const RETRY_MS = [5_000, 15_000, 30_000, 60_000];
+
 /** Who is signed in: an id, null for nobody, undefined before hydration. */
 const whoNow = (): string | null => getSession()?.userId ?? null;
 const whoOnServer = (): string | null | undefined => undefined;
@@ -45,10 +48,18 @@ const whoOnServer = (): string | null | undefined => undefined;
  * (`consentAnswer`, in `lib/auth/consentAnswer`).
  *
  * Still only a withdrawal is a refusal. `not_sent` and `pending` are not
- * (SCRUM-121), and a failed read is not one either: it holds a capture, it
- * does not stop a child's lessons, and `useSignals` reads `withdrawn` alone.
+ * (SCRUM-121), and a failed read is not one either: it holds a capture and
+ * does not stop a child's lessons. What it does stop is the lesson's event
+ * stream, which fails closed on it (SCRUM-257, `useSignals`).
+ *
+ * `retry` is for a reader that stays on screen through a failed read and has
+ * no Try again of its own - the event stream, which no child sees. The read
+ * goes again after `RETRY_MS`, and at once when the device comes back online,
+ * until one answers. It stays `unreadable` meanwhile, never back to asking.
  */
-export function useConsentGate(): ConsentGate {
+export function useConsentGate({
+  retry = false,
+}: { retry?: boolean } = {}): ConsentGate {
   /*
    * WHO, not merely whether anyone is: an answer is about one child, and a
    * tablet changes hands. An answer read for one account is never shown for
@@ -69,21 +80,45 @@ export function useConsentGate(): ConsentGate {
     // Bearer-only.
     if (!who) return;
     let cancelled = false;
-    void consentsApi.myConsentGate().then(
-      (gate) => {
-        if (cancelled) return;
-        const withdrawn = processingWithdrawn(gate);
-        setRead({ who, gate: { withdrawn, known: true, unreadable: false } });
-      },
-      () => {
-        // Not a withdrawal. Not permission either: see above.
-        if (!cancelled) setRead({ who, gate: NOBODY });
-      },
-    );
+    /** The next read after a failed one, while one is waiting. */
+    let again: ReturnType<typeof setTimeout> | undefined;
+    let failures = 0;
+    const ask = () => {
+      clearTimeout(again);
+      again = undefined;
+      void consentsApi.myConsentGate().then(
+        (gate) => {
+          if (cancelled) return;
+          const withdrawn = processingWithdrawn(gate);
+          setRead({ who, gate: { withdrawn, known: true, unreadable: false } });
+        },
+        () => {
+          if (cancelled) return;
+          // Not a withdrawal. Not permission either: see above.
+          setRead((was) =>
+            was?.who === who && was.gate === NOBODY ? was : { who, gate: NOBODY },
+          );
+          if (!retry) return;
+          again = setTimeout(
+            ask,
+            RETRY_MS[Math.min(failures, RETRY_MS.length - 1)],
+          );
+          failures += 1;
+        },
+      );
+    };
+    // Back online is the likeliest moment a failed read will answer.
+    const onOnline = () => {
+      if (again !== undefined) ask();
+    };
+    if (retry) window.addEventListener("online", onOnline);
+    ask();
     return () => {
       cancelled = true;
+      clearTimeout(again);
+      window.removeEventListener("online", onOnline);
     };
-  }, [who]);
+  }, [who, retry]);
 
   // Before hydration nothing is known about the session, so nothing is
   // settled: still asking.
