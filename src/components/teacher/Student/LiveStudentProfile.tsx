@@ -95,6 +95,21 @@ function initialsOf(first: string | null, last: string | null): string {
   return (a + b).toUpperCase() || "?";
 }
 
+/**
+ * C08's "A flag Learning Support has acknowledged": plain text under the flag,
+ * "Adaora from learning support saw this on 12 October." Where no name is
+ * sent, "Learning support saw this on 12 October." The name is the server's
+ * as sent (their chosen name, else their full name). With no date we can
+ * read, the line says only that it was seen.
+ */
+function seenLine(seen: { by: string | null; on: string | null }): string {
+  const who = seen.by ? `${seen.by} from learning support` : "Learning support";
+  const at = seen.on ? new Date(seen.on) : null;
+  return at && !Number.isNaN(at.getTime())
+    ? `${who} saw this on ${at.toLocaleDateString("en-GB", { day: "numeric", month: "long" })}.`
+    : `${who} has seen this.`;
+}
+
 export function LiveStudentProfile({
   state,
   studentId,
@@ -326,7 +341,16 @@ export function LiveStudentProfile({
                       month: "short",
                     })}
                   </span>
-                  <span className="min-w-0">{n.note}</span>
+                  <span className="min-w-0">
+                    {n.note}
+                    {/* No chip, no badge, no colour - the frame's own words
+                        for this line. */}
+                    {n.seen && (
+                      <span className="mt-1 block text-[13px] text-nevo-near-black/60 xl:text-[13.5px]">
+                        {seenLine(n.seen)}
+                      </span>
+                    )}
+                  </span>
                 </p>
               ))}
             </div>

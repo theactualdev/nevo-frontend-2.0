@@ -30,15 +30,31 @@ describe("what the banner is given", () => {
     );
   });
 
-  it("drops a flag somebody has already seen", () => {
-    // The banner is what still wants the teacher, not a history - the same
-    // rule "Worth your attention" follows on the dashboard.
+  it("keeps a flag learning support has seen, with who and when (C08)", () => {
+    // It was dropped, so the flag vanished from the class teacher's view the
+    // moment learning support read it. The flag is still open.
     const out = toNoticed([
-      flag({ id: "f-1", acknowledged: true }),
+      flag({
+        id: "f-1",
+        acknowledged: true,
+        acknowledgedAt: "2026-10-12T09:00:00Z",
+        acknowledgedByName: "Adaora Obi",
+      }),
       flag({ id: "f-2", acknowledged: false }),
     ]);
 
-    expect(out.map((n) => n.id)).toEqual(["f-2"]);
+    expect(out.map((n) => n.id).sort()).toEqual(["f-1", "f-2"]);
+    expect(out.find((n) => n.id === "f-1")?.seen).toEqual({
+      by: "Adaora Obi",
+      on: "2026-10-12T09:00:00Z",
+    });
+    expect(out.find((n) => n.id === "f-2")?.seen).toBeNull();
+  });
+
+  it("carries no name it was not sent", () => {
+    const out = toNoticed([flag({ acknowledged: true, acknowledgedAt: "2026-10-12T09:00:00Z" })]);
+
+    expect(out[0].seen).toEqual({ by: null, on: "2026-10-12T09:00:00Z" });
   });
 
   it("puts the most recent first", () => {
@@ -60,6 +76,7 @@ describe("what the banner is given", () => {
       "id",
       "isSudden",
       "note",
+      "seen",
     ]);
   });
 
@@ -68,7 +85,7 @@ describe("what the banner is given", () => {
     expect(toNoticed([flag({ flagType: "engagement_decline" })])[0].isSudden).toBe(false);
   });
 
-  it("says nothing when every flag has been seen", () => {
-    expect(toNoticed([flag({ acknowledged: true })])).toEqual([]);
+  it("still shows a flag when every one has been seen", () => {
+    expect(toNoticed([flag({ acknowledged: true })])).toHaveLength(1);
   });
 });
