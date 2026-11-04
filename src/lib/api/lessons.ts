@@ -122,6 +122,13 @@ export interface LessonSummary {
  * `studentCount` is distinct children rather than assignment rows, so a child
  * assigned twice is one child.
  */
+/** `GET /api/content/lessons/totals` (LibraryTotalsResponse). */
+export interface LibraryTotals {
+  lessonsUploaded: number;
+  liveToClasses: number;
+  inReview: number;
+}
+
 export interface LessonClass {
   id: string;
   name: string;
@@ -1111,6 +1118,13 @@ export const lessonsApi = {
             }
           : undefined,
     }),
+
+  /**
+   * C06's three stat cards, counted BY THE SERVER across the whole library
+   * (SCRUM-245: the numbers are the server's, never summed from a page). The
+   * same default scope as `list` - a teacher's own lessons.
+   */
+  totals: () => api.get<LibraryTotals>("/api/content/lessons/totals"),
 
   /**
    * One lesson with its ordered segments AND its review flags. Deliberately

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   useLessonLibrary,
+  useLibraryTotals,
   type CardStatus,
 } from "@/hooks/useLessonLibrary";
 import { cn } from "@/lib/utils";
@@ -101,6 +102,8 @@ export function LessonLibrary() {
   // they are gated on having subjects to show, which is the honest condition.
   const { cards: lessons, live, sample, loading, slow, capped } =
     useLessonLibrary();
+  /* C06's stat cards, the server's own totals (backlog item 13). */
+  const totals = useLibraryTotals();
 
   /**
    * "All", then every subject on the shelf, first-seen order.
@@ -227,6 +230,32 @@ export function LessonLibrary() {
         <p className="mt-2 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/55">
           {`Showing the first ${LIBRARY_CEILING.toLocaleString("en-GB")} of your lessons. Search only looks through these.`}
         </p>
+      )}
+
+      {/* C06's stat cards: uploaded, live, in review - no trend arrows. The
+          SERVER's counts across the whole library (SCRUM-245), so they hold
+          past the first page; absent rather than summed when the read did
+          not come back. */}
+      {live && totals && (
+        <div className="mt-[18px] grid max-w-[1000px] grid-cols-3 gap-3 xl:mt-[22px] xl:gap-3.5">
+          {[
+            { n: totals.lessonsUploaded, label: "Lessons uploaded" },
+            { n: totals.liveToClasses, label: "Live to classes" },
+            { n: totals.inReview, label: "In review" },
+          ].map((s) => (
+            <div
+              key={s.label}
+              className="flex flex-col gap-1.5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-elevation-1"
+            >
+              <span className="text-[30px] leading-none font-semibold tracking-[-0.02em] text-nevo-navy xl:text-[34px]">
+                {s.n.toLocaleString("en-GB")}
+              </span>
+              <span className="text-[12.5px] font-semibold tracking-[0.04em] text-nevo-near-black/50 uppercase">
+                {s.label}
+              </span>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Search + upload: one row on desktop, stacked full-width on tablet */}
