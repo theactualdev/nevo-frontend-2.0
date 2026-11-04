@@ -24,6 +24,7 @@ const base = {
   narrative: narrative(),
   labels: 0,
   adaptations: 1240,
+  adaptationPeriod: "in First term",
 };
 
 describe("boardPackText", () => {
@@ -39,7 +40,14 @@ describe("boardPackText", () => {
     // adaptation count, since both are the board-facing points."
     const t = boardPackText(base)!;
     expect(t).toContain("Diagnostic labels stored: 0");
-    expect(t).toContain("Adaptations made: 1,240");
+    // The tile's term figure, in the tile's words - not a total "so far".
+    expect(t).toContain("Adaptations made: 1,240 across all students in First term.");
+    expect(t).not.toMatch(/so far/);
+  });
+
+  it("leaves the count out when there's no term to name, as the tile does", () => {
+    const t = boardPackText({ ...base, adaptationPeriod: null })!;
+    expect(t).not.toMatch(/Adaptations made/);
   });
 
   it("states the compliance claim in the card's own words, not a second copy", () => {
