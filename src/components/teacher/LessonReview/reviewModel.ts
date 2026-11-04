@@ -176,10 +176,33 @@ export function onDay(iso: string): string {
 }
 
 /** "Approved by Ms. Adeyemi · 19 October", C07k's live-step record. */
-export function signoffLine(record: ReviewSignoff, what?: string): string {
+export function signoffLine(
+  record: Pick<ReviewSignoff, "approvedByName" | "approvedAt">,
+  what?: string,
+): string {
   const day = onDay(record.approvedAt);
   const who = `${what ? `${what} approved` : "Approved"} by ${record.approvedByName}`;
   return day ? `${who} · ${day}` : who;
+}
+
+/**
+ * Who approved the lesson's pictures and narration, from each item's own
+ * record (SCRUM-286: "The approval record names who approved, as with
+ * rewrites"). Every approved item carries `approvedByName` and `approvedAt`,
+ * and no screen showed them. One record per person, at their latest approval:
+ * step 1's one press makes that a single record in the ordinary case, and two
+ * people who each approved some are both named rather than folded into one.
+ */
+export function mediaApprovals(
+  review: LessonReview,
+): Pick<ReviewSignoff, "approvedByName" | "approvedAt">[] {
+  const latest = new Map<string, string>();
+  for (const m of review.media?.items ?? []) {
+    if (m.status !== "approved" || !m.approvedByName || !m.approvedAt) continue;
+    const seen = latest.get(m.approvedByName);
+    if (!seen || Date.parse(m.approvedAt) > Date.parse(seen)) latest.set(m.approvedByName, m.approvedAt);
+  }
+  return [...latest].map(([approvedByName, approvedAt]) => ({ approvedByName, approvedAt }));
 }
 
 /**
@@ -189,17 +212,22 @@ export function signoffLine(record: ReviewSignoff, what?: string): string {
  * ordinary case and what C07k draws. Two when they differ, because folding a
  * second teacher's sign-off into the first one's name would misstate who
  * decided. A lesson with no rewrites has only the key points to sign.
+ *
+ * The pictures and narration are a part like any other (SCRUM-286).
  */
 export function approvalLines(review: LessonReview): string[] {
   // The checks step signs the checks, or only their guiding questions where
   // every check came with its answer; either is that step's record.
-  const parts = (
-    [
-      ["Key points", review.keyPointApproval],
-      ["Checks", review.checksApproval?.current ? review.checksApproval : review.guidedStepsApproval],
-      ["Rewrites", review.rewriteApproval],
-    ] as const
-  ).flatMap(([what, record]) => (record?.current ? [{ what, record }] : []));
+  const parts: { what: string; record: Pick<ReviewSignoff, "approvedByName" | "approvedAt"> }[] = [
+    ...mediaApprovals(review).map((record) => ({ what: "Pictures and narration", record })),
+    ...(
+      [
+        ["Key points", review.keyPointApproval],
+        ["Checks", review.checksApproval?.current ? review.checksApproval : review.guidedStepsApproval],
+        ["Rewrites", review.rewriteApproval],
+      ] as const
+    ).flatMap(([what, record]) => (record?.current ? [{ what, record }] : [])),
+  ];
   if (parts.length === 0) return [];
   const first = parts[0].record;
   const same = parts.every(
