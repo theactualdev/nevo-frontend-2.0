@@ -50,6 +50,10 @@ export type UploadStatus =
  * ladder back to "Receiving the file" - both for the longest part of the
  * wait, which is the exact reading of "the product has hung" that LU-01
  * exists to prevent. Observed on a live upload, not reasoned about.
+ *
+ * The four older names are kept for a deployment that still sends them, and
+ * `scripts/enum-check.mjs` reports them as that rather than as drift.
+ * @legacy lessons structure adaptations complete
  */
 export type UploadStage =
   | "lessons"
