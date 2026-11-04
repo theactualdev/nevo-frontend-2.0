@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useStudentFlags } from "@/hooks/useStudentFlags";
+import { useEscalated } from "@/hooks/useEscalated";
 import { SummaryChip } from "@/components/teacher/shared/SummaryChip";
 import { profileChip } from "@/components/teacher/shared/summaryState";
 import { useStudentSessions } from "@/hooks/useStudentSessions";
@@ -134,7 +135,10 @@ export function LiveStudentProfile({
   // C08's one chip, in design's precedence (12 Oct). Read from the open
   // flags only: a read that failed or is in flight is no chip, not "nothing
   // to see" - the noticing section below says which.
-  const chip = profileChip(noticed);
+  // Flagged: someone raised this child for learning support and it is still
+  // open - the server's own filter (backlog item 7).
+  const escalated = useEscalated({ studentId });
+  const chip = profileChip(noticed, escalated.students.has(studentId));
   /* C08's "What Nevo has noticed", from the class this profile was opened
      from. Also before the guard below. */
   const observations = useRosterObservations(classId, studentId);
