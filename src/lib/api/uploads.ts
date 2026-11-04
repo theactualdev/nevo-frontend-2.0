@@ -55,7 +55,20 @@ export type UploadStage =
   | "lessons"
   | "structure"
   | "adaptations"
-  | "complete";
+  | "complete"
+  /*
+   * THE SERVER'S NAMES NOW (live spec and the upload worker at 3901b87: "The
+   * five real processing phases shown by the upload console"). The four
+   * above are kept for a deployment that still sends them - the client works
+   * with both (deploy order, Lydia 31 Oct). Every one of these fell through
+   * to "Reading the document" on the single ladder, and off the block ladder
+   * altogether, for the whole wait.
+   */
+  | "receiving_file"
+  | "reading_document"
+  | "finding_sections"
+  | "preparing_adaptations"
+  | "ready_to_assign";
 
 export interface StructureModule {
   title: string;
