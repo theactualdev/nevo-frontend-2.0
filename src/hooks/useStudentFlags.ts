@@ -22,10 +22,14 @@ import { suddenish } from "./useTeacherFlags";
  * type is the engine's word for which this is. The type's own words are never
  * rendered.
  *
- * ACKNOWLEDGED FLAGS ARE DROPPED, the same rule "Worth your attention" on the
- * dashboard follows: the banner is what still wants the teacher, not a
- * history. Nothing here acknowledges anything: acknowledging is learning
- * support's act (Lydia, 13 Oct), and opening a profile is not it.
+ * ACKNOWLEDGED FLAGS STAY, with who saw them and when (C08's "A flag Learning
+ * Support has acknowledged": "Adaora from learning support saw this on 12
+ * October."). They were dropped, so a flag vanished from the class teacher's
+ * view of the child the moment learning support read it - as though Nevo had
+ * stopped noticing. The flag is still open; what changed is that someone
+ * saw it, and that is what the line says. Nothing here acknowledges anything:
+ * acknowledging is learning support's act (Lydia, 13 Oct), and opening a
+ * profile is not it. Home's "Worth your attention" keeps its own rule.
  *
  * NO WINDOW IS CLAIMED. The frame labels this "This week:" and the contract
  * cannot support it: a flag carries `generatedAt`, the route declares no
@@ -41,22 +45,33 @@ export interface Noticed {
   generatedAt: string;
   /** A `sudden_change` flag, as `useTeacherFlags` reads it for Home. */
   isSudden: boolean;
+  /**
+   * Learning support has seen it: who, as the server names them (null when
+   * it sends no name), and when (null when it sends no date). Null when no
+   * one has.
+   */
+  seen: { by: string | null; on: string | null } | null;
 }
 
 /**
- * Newest first, acknowledged ones gone.
+ * Newest first, acknowledged ones included with who saw them.
  *
  * Exported for its own tests: the profile mocks this hook, so a mapper tested
  * only through the component is a mapper nothing runs.
  */
 export function toNoticed(flags: AttentionFlag[]): Noticed[] {
   return flags
-    .filter((f) => !f.acknowledged)
     .map((f) => ({
       id: f.id,
       note: f.description,
       generatedAt: f.generatedAt,
       isSudden: suddenish(f.flagType),
+      seen: f.acknowledged
+        ? {
+            by: f.acknowledgedByName?.trim() || null,
+            on: f.acknowledgedAt ?? null,
+          }
+        : null,
     }))
     .sort((a, b) => Date.parse(b.generatedAt) - Date.parse(a.generatedAt));
 }
