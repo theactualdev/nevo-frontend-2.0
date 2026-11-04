@@ -97,6 +97,8 @@ export const PHOTOSYNTHESIS: Lesson = {
         correctId: "co2",
         correctNote: "That's it - plants take in carbon dioxide and give out oxygen.",
         recoveryNote: "Not quite. Let's look again.",
+        // Written by people for the walkthrough: it holds, as an authored key does.
+        holds: true,
       },
     },
     {
@@ -138,6 +140,8 @@ export const PHOTOSYNTHESIS: Lesson = {
         correctId: "sugar",
         correctNote: "That's it - the light becomes sugar, the plant's food.",
         recoveryNote: "Not quite. Let's look again.",
+        // Written by people for the walkthrough: it holds, as an authored key does.
+        holds: true,
       },
     },
     {

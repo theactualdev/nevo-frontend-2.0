@@ -29,7 +29,9 @@ import { answerText, type CheckRow, type ChecksView } from "./reviewModel";
  * never signed: nothing generated it (Lydia, 26 Oct).
  */
 
-const SHOWN = 5;
+/** A check's one line: the question, then its expected answer, then the opener. */
+const LINE =
+  "grid grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_auto] items-center gap-4 px-[17px]";
 
 const EYEBROW =
   "block font-mono text-[11px] font-bold tracking-[0.1em] text-nevo-violet uppercase";
@@ -158,19 +160,31 @@ export function StepChecks({
   );
 }
 
-/** One group of checks, five shown, each opening to its answer. */
+/**
+ * One group of checks, ONE LINE EACH: the question and the answer it is
+ * marked against, side by side (Lydia, 2 Nov: "make each item fast to judge,
+ * with the question and its expected answer side by side, one line each").
+ *
+ * Every row shows, with no "+ N more": at a line each, the whole list is a
+ * glance, and a click to see the rest is the slow part she asked to remove.
+ * Opening a row still gives the section, the full question, every choice and
+ * the guiding questions, for the one that needs a closer look.
+ */
 function CheckList({ label, rows }: { label: string; rows: CheckRow[] }) {
   const [open, setOpen] = useState<Set<string>>(() => new Set());
-  const [all, setAll] = useState(false);
-  const shown = all ? rows : rows.slice(0, SHOWN);
   return (
     <div className="mt-6">
       <span className={SECTION_LABEL}>{label}</span>
       <div className={cn(CARD, "mt-3 overflow-hidden")}>
-        {shown.map((row) => {
+        <div aria-hidden className={cn(LINE, "border-b border-nevo-near-black/8 py-2")}>
+          <span className={TAG}>Question</span>
+          <span className={TAG}>Expected answer</span>
+          <span className="w-4" />
+        </div>
+        {rows.map((row) => {
           const isOpen = open.has(row.key);
           return (
-            <div key={row.key} className="border-b border-nevo-near-black/6">
+            <div key={row.key} className="border-b border-nevo-near-black/6 last:border-b-0">
               <button
                 type="button"
                 aria-expanded={isOpen}
@@ -182,18 +196,30 @@ function CheckList({ label, rows }: { label: string; rows: CheckRow[] }) {
                     return next;
                   })
                 }
-                className="flex w-full cursor-pointer items-center gap-3 border-none bg-transparent px-[17px] py-[13px] text-left"
+                className={cn(LINE, "w-full cursor-pointer border-none bg-transparent py-[11px] text-left")}
               >
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[12px] text-nevo-near-black/50">{row.label}</span>
-                  <span className={cn(ROW_TEXT, "mt-0.5 block leading-[1.45]")}>{row.prompt}</span>
+                <span className={cn(ROW_TEXT, "truncate")} title={row.prompt}>
+                  {row.prompt}
                 </span>
-                <span className="shrink-0 text-nevo-near-black/40">
+                <span
+                  className={cn(
+                    "truncate text-[14px] font-semibold xl:text-[15px]",
+                    row.answer ? "text-nevo-navy" : "font-medium text-nevo-near-black/45",
+                  )}
+                  title={row.answer ?? undefined}
+                >
+                  {row.answer ?? "none given"}
+                </span>
+                <span className="w-4 shrink-0 text-nevo-near-black/40">
                   <Chevron open={isOpen} />
                 </span>
               </button>
               {isOpen && (
                 <div className="flex flex-col gap-4 px-[17px] pb-4">
+                  <div>
+                    <span className="block text-[12px] text-nevo-near-black/50">{row.label}</span>
+                    <p className={cn(ROW_TEXT, "mt-0.5 leading-[1.5]")}>{row.prompt}</p>
+                  </div>
                   {row.type && <Answer type={row.type} options={row.options} answerKey={row.answerKey} />}
                   {row.guided && row.guided.steps.length > 0 && (
                     <div>
@@ -230,15 +256,6 @@ function CheckList({ label, rows }: { label: string; rows: CheckRow[] }) {
             </div>
           );
         })}
-        {rows.length > SHOWN && !all && (
-          <button
-            type="button"
-            onClick={() => setAll(true)}
-            className="w-full cursor-pointer border-none bg-transparent px-[17px] py-3 text-left text-[12.5px] text-nevo-near-black/55 hover:text-nevo-navy"
-          >
-            {`+ ${rows.length - SHOWN} more`}
-          </button>
-        )}
       </div>
     </div>
   );

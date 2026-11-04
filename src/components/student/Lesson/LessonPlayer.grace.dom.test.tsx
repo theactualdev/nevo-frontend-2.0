@@ -112,6 +112,8 @@ const check = (id: string, question: string) => ({
   correctNote: "Yes.",
   recoveryNote: "Not quite.",
   conceptId: "concept-1",
+  // Reviewed: three misses on one check need a check that holds.
+  holds: true,
 });
 const text = (heading: string) => ({
   modalities: ["text"],

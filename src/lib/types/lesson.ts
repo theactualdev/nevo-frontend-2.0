@@ -176,6 +176,14 @@ export interface QuickCheck {
   /** Soft-violet (never red) note on a miss — always reassures continuity. */
   recoveryNote: string;
   /**
+   * WHETHER IT HOLDS THE CHILD (Lydia, 26 Oct): only a check whose answer key
+   * a person wrote, or a teacher has reviewed - the server's
+   * `teacherReviewed`. A generated, unreviewed key never gates: such a check
+   * is asked, and the child goes on past it whatever they answer. Never
+   * inferred here; false wherever the server does not say true.
+   */
+  holds: boolean;
+  /**
    * The recording a SPOKEN check plays (B16). Present only when the server
    * set the checkpoint's format to spoken and sent one; the printed question
    * stays on screen either way.
