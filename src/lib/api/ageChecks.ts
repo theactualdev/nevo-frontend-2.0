@@ -30,7 +30,11 @@ export interface AgeCheck {
   /** The server's word for "on hold": the account cannot activate. */
   blocksAccess: boolean;
   enrolledAgeBand: string | null;
-  /** The server's own reasons, as untyped strings. Never rendered, never interpreted. */
+  /**
+   * The server's own reasons, as untyped strings. Never rendered. Read for one
+   * thing only: `enrolled_age_band_unavailable` picks D30's no-year-group
+   * line (Lydia, 2 Nov) - the server's word, not a judgement made here.
+   */
   holdReasons: string[];
   schoolNotifiedAt: string | null;
   /** When the roster record is removed if nothing is resolved. Null when nothing is pending. */
@@ -39,6 +43,12 @@ export interface AgeCheck {
   parentReconfirmedAt: string | null;
   /** The linked parent's name, as the server sends it (554a6bb). Null when none is linked. */
   parentName?: string | null;
+  /**
+   * When a linked parent was last asked to enter the date again: on the
+   * school's re-check while the hold stands, and on a resend (66be3b8). Null
+   * when no parent account was there to ask.
+   */
+  parentNotifiedAt?: string | null;
   /**
    * Whether this hold can clear through the re-check (both dates present, at
    * most two years apart, inside the enrolled band, not expired). The
