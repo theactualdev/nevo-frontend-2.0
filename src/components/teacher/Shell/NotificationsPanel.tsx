@@ -46,6 +46,14 @@ const KIND_ICON: Record<NotificationKind, React.ReactNode> = {
       <path d="M3.5 20a5.5 5.5 0 0 1 11 0" />
     </svg>
   ),
+  /* NEUTRAL, truly (5 Nov). Unknown types fell back to `done`, whose mark
+     is a tick - so a "support needed" or "review due" row read as resolved,
+     a state nothing had said. A dot says only that something arrived. */
+  other: (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <circle cx="12" cy="12" r="3.5" />
+    </svg>
+  ),
 };
 
 export function NotificationsPanel({
