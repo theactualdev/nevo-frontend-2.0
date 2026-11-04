@@ -5,6 +5,7 @@ import { useSessionLapse } from "@/hooks/useSessionLapse";
 import { useSessionRefresh } from "@/hooks/useSessionRefresh";
 import { useSessionElsewhere } from "./sessionElsewhere";
 import { AskNevo } from "./AskNevo";
+import { UploadMarker } from "./UploadMarker";
 import { SystemMessagesProvider } from "@/components/shared/SystemMessages";
 import { UnsavedChangesProvider } from "./UnsavedChanges";
 import { TeacherSidebar } from "./TeacherSidebar";
@@ -126,6 +127,9 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
       </main>
       {/* C15: Ask Nevo floats on every console surface except upload. */}
       {!inUpload && <AskNevo />}
+      {/* C07j LU-03: the upload follows the teacher everywhere but the
+          upload screen, which already shows it. */}
+      {!inUpload && <UploadMarker />}
     </div>
     </PhoneBarProvider>
     </UnsavedChangesProvider>
