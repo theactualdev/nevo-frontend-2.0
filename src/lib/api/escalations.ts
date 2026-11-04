@@ -51,7 +51,12 @@ export interface Escalation {
   studentId: string;
   /** Nullable on the wire, so never render it without a fallback. */
   studentFirstName: string | null;
+  /** Live 4 Nov, with the class and teacher names. Optional: older rows lack them. */
+  studentName?: string | null;
+  classId?: string | null;
+  className?: string | null;
   teacherId: string;
+  teacherName?: string | null;
   note: string;
   /** Server-derived summary of the child. Read-only; see the note above. */
   recentPicture: string;
