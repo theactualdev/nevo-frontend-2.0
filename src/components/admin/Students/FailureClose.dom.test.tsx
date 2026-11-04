@@ -189,4 +189,10 @@ describe("the erase modal's statement", () => {
     expect(text).toContain(`${ERASURE_LINE} This cannot be undone.`);
     expect(text).not.toMatch(/everything identifying them|statutory period/);
   });
+
+  it("is Lydia's wording word for word (4 Nov, answer 27; confirmed 5 Nov)", () => {
+    expect(ERASURE_LINE).toBe(
+      "When you ask us to delete a record it is removed from the live system straight away. A copy can remain in our recovery backups for up to seven more days, and if we ever restore from one we reapply your deletion before anyone can see the data again. Files are not held in those backups at all, so a deleted file is gone immediately.",
+    );
+  });
 });
