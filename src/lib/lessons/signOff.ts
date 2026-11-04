@@ -1,27 +1,83 @@
 import { lessonsApi } from "@/lib/api/lessons";
 
 /**
- * ASSIGN WAITS FOR THE LESSON-WIDE SIGN-OFF (Lydia, 25 Oct): "Assigning a
- * lesson whose media and checks have not been approved puts unreviewed content
- * in front of children, which is the thing all of this exists to prevent."
+ * WHAT HOLDS ASSIGN, and how that changed on 2 Nov.
  *
- * The sign-off is the server's `reviewComplete` on `GET /lessons/{id}/review`,
- * and it is only there. The library list carries no such field, so the two
- * doors that pick a lesson from the list - the assign wizard and the
- * recommend sheet - ask the review of each lesson they are about to send,
- * and only those.
+ * Lydia, 25 Oct: "Assigning a lesson whose media and checks have not been
+ * approved puts unreviewed content in front of children". So Assign waited
+ * for the lesson-wide sign-off, the server's `reviewComplete`, at every door.
  *
- * Only a lesson the server says is NOT signed off is held. A review that could
- * not be read holds nothing: refusing a teacher over our own outage is worse
- * than letting the server refuse with a reason, the rule the lesson page
- * already keeps.
+ * Lydia, 2 Nov, revised: "unreviewed generated questions are simply not
+ * served until approved". The checks stop holding Assign, because nothing
+ * unreviewed reaches a child either way. Teslim's b0e0a4f is the server's
+ * half: `canAssign` on the library list and the lesson read, `readyToAssign`
+ * on the review without the checks, and the assignment guard on
+ * `readyToAssign`. Key points, guiding questions and rewrites still hold it.
+ *
+ * WHICH SERVER IS THIS. `canAssign` arrives with that change and not before,
+ * so its presence is the one honest signal that the split has happened. A
+ * server without it still refuses an assignment the full review hasn't
+ * signed (deploy order, Lydia 31 Oct: the client works with both).
  */
-export async function awaitingSignOff(lessonIds: string[]): Promise<Set<string>> {
+export function splitsAssignable(
+  lesson: { canAssign?: boolean | null } | null | undefined,
+): boolean {
+  return typeof lesson?.canAssign === "boolean";
+}
+
+/**
+ * Whether the full sign-off still GATES Assign, for the doors that read the
+ * review: the lesson page, the upload finish and the review's last step. Where
+ * the server has split them, `readyToAssign` - the gate those doors already
+ * take - is the whole answer, and the sign-off is only part of the sentence.
+ */
+export function signOffGates(
+  lesson: { canAssign?: boolean | null } | null | undefined,
+): boolean {
+  return !splitsAssignable(lesson);
+}
+
+/**
+ * A library card the list doors (the assign wizard, the recommend sheet) may
+ * offer. `canAssign` where the server sends it; before that, the rule they
+ * kept since 25 Oct - only a lesson the server says is NOT signed off is held,
+ * and an unread sign-off holds nothing.
+ */
+export function assignable(card: {
+  canAssign?: boolean | null;
+  reviewComplete?: boolean | null;
+}): boolean {
+  return typeof card.canAssign === "boolean"
+    ? card.canAssign
+    : card.reviewComplete !== false;
+}
+
+/**
+ * Of the lessons about to be sent, the ones the server would refuse - asked
+ * of each lesson's review at the moment of sending, because a verdict can
+ * lapse after the list was read (new pictures or guiding questions arrive).
+ *
+ * `split` says which server: where it has split assignable from fully
+ * reviewed, a lesson is held when its `readyToAssign` is false, which is what
+ * its guard checks; before that, when its `reviewComplete` is false.
+ *
+ * A review that could not be read holds nothing: refusing a teacher over our
+ * own outage is worse than letting the server refuse with a reason, the rule
+ * the lesson page already keeps.
+ */
+export async function awaitingSignOff(
+  lessonIds: string[],
+  split = false,
+): Promise<Set<string>> {
   const answers = await Promise.all(
     lessonIds.map((id) =>
       Promise.resolve()
         .then(() => lessonsApi.review(id))
-        .then((review) => (review.reviewComplete === false ? id : null))
+        .then((review) =>
+          (split ? review.readyToAssign === false : review.reviewComplete === false)
+            ? id
+            : null,
+        )
         .catch(() => null),
     ),
   );
@@ -29,12 +85,12 @@ export async function awaitingSignOff(lessonIds: string[]): Promise<Set<string>>
 }
 
 /**
- * Under a list that leaves out lessons nobody has signed off. Since Teslim's
- * 294584b the library says which they are (`reviewComplete`), so the doors
- * that send a lesson leave them off, as they do lessons still being read.
+ * Under a list that leaves out lessons that can't be sent yet. It said
+ * "Lessons you haven't finished reviewing", which stopped being true once a
+ * lesson with only its checks to review can be assigned and IS listed.
  */
 export const UNREVIEWED_LEFT_OFF =
-  "Lessons you haven’t finished reviewing aren’t listed here. Review them from your library first.";
+  "Lessons that can’t be assigned yet aren’t listed here. Review them from your library first.";
 
 /** Where a lesson is reviewed (C07k). */
 export const reviewHrefFor = (lessonId: string) =>

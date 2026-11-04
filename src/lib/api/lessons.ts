@@ -54,10 +54,22 @@ export interface LessonSummary {
   /**
    * The lesson-wide sign-off, as the review itself says it (Teslim 294584b,
    * 27 Oct): key points, checks, guiding questions and rewrites all current.
-   * Assign waits for it (Lydia, 25 Oct). Absent on an older deployment, and
-   * absent is not "no".
+   * Assign waited for it (Lydia, 25 Oct) until `canAssign` below. Absent on an
+   * older deployment, and absent is not "no".
    */
   reviewComplete?: boolean;
+  /**
+   * Whether this lesson can go to a class now: the server's own answer, kept
+   * apart from the full review (Teslim b0e0a4f, 2 Nov). Every sign-off but the
+   * checks', and no flagged section waiting. The checks stopped holding Assign
+   * on Lydia's 2 Nov ruling: "unreviewed generated questions are simply not
+   * served until approved".
+   *
+   * Absent on a server deployed before it, which still wants the full review -
+   * so its PRESENCE is what says the split has happened. See
+   * `lib/lessons/signOff`.
+   */
+  canAssign?: boolean;
   /** Shipped 31 Aug. Free text; only the staged upload routes can set one. */
   subject?: string | null;
   /**

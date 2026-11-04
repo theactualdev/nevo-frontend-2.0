@@ -25,6 +25,7 @@ import {
 } from "./reviewModel";
 import { StepChecks } from "./StepChecks";
 import { getSession } from "@/lib/auth/session";
+import { splitsAssignable } from "@/lib/lessons/signOff";
 
 /**
  * C07k, "Send a lesson in four calm steps" (Lydia, 19 Oct; design 534ba31), five
@@ -195,7 +196,7 @@ export function LessonReviewFlow({
           ? !checksNeeded && (checks.signoff !== null || step > 3)
           : n === 4
             ? rewritesSigned || (noRewrites && step > 4)
-            : complete && step === 5;
+            : (splitsAssignable(lesson) ? review.readyToAssign : complete) && step === 5;
 
   const back = () => setStep((s) => Math.max(1, s - 1) as Step);
   const refusedHere = (work: string) =>
@@ -597,6 +598,7 @@ export function LessonReviewFlow({
               checks={checks}
               rewritesSigned={rewritesSigned || noRewrites}
               captionsWaiting={flow.captions.length}
+              split={splitsAssignable(lesson)}
               onGo={setStep}
             />
           )}
@@ -1228,6 +1230,7 @@ function StepLive({
   checks,
   rewritesSigned,
   captionsWaiting,
+  split,
   onGo,
 }: {
   lessonId: string;
@@ -1236,25 +1239,44 @@ function StepLive({
   checks: ChecksView;
   rewritesSigned: boolean;
   /**
+   * The server has split assignable from fully reviewed (Teslim b0e0a4f;
+   * Lydia, 2 Nov): live is its `readyToAssign`, which leaves the checks out.
+   * Before that, live is the full sign-off.
+   */
+  split: boolean;
+  /**
    * New captions still waiting in step 1. They hold back nothing, so a ready
    * lesson opens here - and they would never be seen without this line.
    */
   captionsWaiting: number;
   onGo: (step: Step) => void;
 }) {
-  if (review.reviewComplete !== true) {
+  const live = split ? review.readyToAssign : review.reviewComplete === true;
+  /* Checks that hold nothing any more, but are still the teacher's to see. */
+  const checksAfter = split && checks.checksPending;
+  if (!live) {
     /*
      * WHAT IS STILL WAITING, IN STEP ORDER, from the server's own sign-offs.
      * This said "Accept the rewrites" to a lesson whose rewrites were signed
      * and whose checks were not, and sent the teacher back to the rewrites.
+     *
+     * Once the server has split them, the checks are not among what holds
+     * it; the guiding questions still are.
      */
+    const step3 = split
+      ? checks.guidedPending && {
+          step: 3 as Step,
+          words: "the guiding questions",
+          go: "Go to the guiding questions",
+        }
+      : (checks.checksPending || checks.guidedPending) && {
+          step: 3 as Step,
+          words: "the checks",
+          go: "Go to the checks",
+        };
     const waiting = [
       !pointsSigned && { step: 2 as Step, words: "the key points", go: "Go to the key points" },
-      (checks.checksPending || checks.guidedPending) && {
-        step: 3 as Step,
-        words: "the checks",
-        go: "Go to the checks",
-      },
+      step3,
       !rewritesSigned && { step: 4 as Step, words: "the rewrites", go: "Go to the rewrites" },
     ].filter((w): w is { step: Step; words: string; go: string } => Boolean(w));
     return (
@@ -1292,6 +1314,15 @@ function StepLive({
         It&rsquo;s in your library. Assign it to a class and it&rsquo;ll open
         for students at the time you choose.
       </p>
+      {/* Ready with its checks still to see (Lydia, 2 Nov: "unreviewed
+          generated questions are simply not served until approved"). The
+          step bar above is the way back to them, as for the captions. */}
+      {checksAfter && (
+        <p className={cn(SUB, "mt-3 max-w-[460px] text-nevo-near-black/66")}>
+          The checks Nevo wrote answers for are still waiting in step 3.
+          Children aren&rsquo;t asked them until you accept them.
+        </p>
+      )}
       {lines.length > 0 && (
         <div className="mt-5 flex flex-col items-center gap-2">
           {lines.map((line) => (

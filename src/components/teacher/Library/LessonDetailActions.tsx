@@ -51,6 +51,11 @@ export function stillToCheck(
  * HERE, beside `ready`, for the reason above: a gate ANDed together by the
  * caller is one this component's tests cannot see.
  *
+ * UNTIL THE SERVER SPLIT THEM (Teslim b0e0a4f; Lydia, 2 Nov). Its
+ * `readyToAssign` now leaves the checks out, and its guard takes that alone,
+ * so where it has split them `signOffGates` is false: the sign-off still
+ * chooses the sentence, and `ready` is the whole gate.
+ *
  * EDIT IS BACK, as C06b draws it beside Assign (backlog item 15), and goes to
  * the committed lesson's structure page (C07d, #899): its title, its sections'
  * names and their order. It was withdrawn because it routed into the upload
@@ -66,6 +71,7 @@ export function LessonDetailActions({
   compact = false,
   ready = true,
   signedOff = null,
+  signOffGates = true,
   checking = false,
   outstandingKeyPoints = 0,
   outstandingSections = 0,
@@ -96,6 +102,12 @@ export function LessonDetailActions({
    */
   signedOff?: boolean | null;
   /**
+   * Whether `signedOff` holds Assign, or only words the line under it: false
+   * once the server has split assignable from fully reviewed
+   * (`signOffGates()` in `lib/lessons/signOff`).
+   */
+  signOffGates?: boolean;
+  /**
    * The verdict has not arrived. Assign waits, and says nothing - there is no
    * refusal to explain yet, and "Still being checked." is a sentence about
    * the lesson, not about our read of it.
@@ -109,7 +121,7 @@ export function LessonDetailActions({
   // C06b's tablet draws 42px / 14px buttons; desktop 44px / 14.5px.
   const h = compact ? "h-[42px] text-sm" : "h-[42px] text-sm xl:h-11 xl:text-[14.5px]";
   const awaitingReview = signedOff === false;
-  const blocked = !ready || awaitingReview || checking;
+  const blocked = !ready || (awaitingReview && signOffGates) || checking;
 
   return (
     // Under the title on tablet, so it reads from the left; beside it on desktop.

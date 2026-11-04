@@ -516,3 +516,52 @@ describe("a calculation step's reveal parts", () => {
     expect(screen.queryByText(/arrive in pieces/)).toBeNull();
   });
 });
+
+/**
+ * Once the server splits assignable from fully reviewed (Teslim b0e0a4f;
+ * Lydia, 2 Nov: "unreviewed generated questions are simply not served until
+ * approved"), live is `readyToAssign`, and the checks are not among what
+ * holds it. The guiding questions still are.
+ */
+describe("live, once the server sends canAssign", () => {
+  beforeEach(() => {
+    api.detail.mockResolvedValue({ ...lesson, canAssign: true });
+  });
+
+  it("is ready with its checks still to see, and says they wait", async () => {
+    api.review.mockResolvedValue(reviewOf({ readyToAssign: true }));
+    await open(5);
+
+    expect(screen.getByRole("heading", { name: "This lesson is ready" })).toBeInTheDocument();
+    expect(
+      screen.getByText(/The checks Nevo wrote answers for are still waiting in step 3./),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Assign to classes" })).toBeInTheDocument();
+  });
+
+  it("names the guiding questions, not the checks, as what still holds it", async () => {
+    api.review.mockResolvedValue(reviewOf({ readyToAssign: false, guidedSteps: [guided(1)] }));
+    await open(5);
+
+    expect(screen.getByRole("heading", { name: "Not live yet" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Accept the guiding questions, and it goes into your library ready to assign.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to the guiding questions" })).toBeInTheDocument();
+  });
+
+  it("says nothing of the checks once they are accepted", async () => {
+    api.review.mockResolvedValue(
+      reviewOf({
+        readyToAssign: true,
+        reviewComplete: true,
+        checks: [check(1, { teacherReviewed: true })],
+      }),
+    );
+    await open(5);
+
+    expect(screen.queryByText(/still waiting in step 3/)).not.toBeInTheDocument();
+  });
+});

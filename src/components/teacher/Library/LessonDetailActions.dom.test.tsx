@@ -208,3 +208,24 @@ describe("the lesson-wide sign-off", () => {
     expect(screen.getByText("2 key points still to check")).toBeInTheDocument();
   });
 });
+
+/**
+ * Once the server splits assignable from fully reviewed (Teslim b0e0a4f), its
+ * `readyToAssign` leaves the checks out and its guard takes that alone.
+ */
+describe("once the server has split them", () => {
+  it("lets Assign go on ready alone, with the checks still to review", () => {
+    render(<LessonDetailActions lessonId="l-1" ready signedOff={false} signOffGates={false} />);
+
+    expect(screen.getByRole("link", { name: "Assign to a class" })).toBeInTheDocument();
+    expect(screen.queryByText("Review this lesson to assign it.")).not.toBeInTheDocument();
+  });
+
+  it("still says the review waits when the server says no", () => {
+    render(
+      <LessonDetailActions lessonId="l-1" ready={false} signedOff={false} signOffGates={false} />,
+    );
+
+    expect(screen.getByText("Review this lesson to assign it.")).toBeInTheDocument();
+  });
+});

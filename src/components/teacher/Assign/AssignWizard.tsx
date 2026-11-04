@@ -15,9 +15,11 @@ import { cn } from "@/lib/utils";
 import { dayOf, longDay, soonestOpening } from "./pastDate";
 import { MaybeSample } from "@/components/shared/SampleRegion";
 import {
+  assignable,
   awaitingSignOff,
   notReviewedTail,
   reviewHrefFor,
+  splitsAssignable,
   UNREVIEWED_LEFT_OFF,
 } from "@/lib/lessons/signOff";
 import { TryAgain } from "@/components/teacher/shared/ReadFailed";
@@ -372,17 +374,22 @@ export function AssignWizard({
    * so they are left off like a lesson still being read, and a line says so.
    * Confirm still asks each picked lesson's review: a sign-off can lapse
    * after the list was read, when new pictures or guiding questions arrive.
+   *
+   * Since Teslim's b0e0a4f it is the server's `canAssign`, which leaves the
+   * checks out (Lydia, 2 Nov) - see `assignable()`.
    */
   const lessons = live
     ? cards
-        .filter((c) => c.kind === "normal" && c.reviewComplete !== false)
+        .filter((c) => c.kind === "normal" && assignable(c))
         .map((c) => ({ id: c.id, title: c.title, meta: c.meta }))
     : !signedIn
       ? LESSONS
       : [];
   const heldBack = live
-    ? cards.filter((c) => c.kind === "normal" && c.reviewComplete === false).length
+    ? cards.filter((c) => c.kind === "normal" && !assignable(c)).length
     : 0;
+  /** The server has split assignable from fully reviewed - see `signOff`. */
+  const split = live && cards.some(splitsAssignable);
 
   /*
    * ONLY WHAT IS OFFERED IS CHOSEN (T106). `?lesson=` seeds the choice before
@@ -558,7 +565,7 @@ export function AssignWizard({
     setSubmitting(true);
     setError("");
     setErrorHref("");
-    const held = await awaitingSignOff(picked);
+    const held = await awaitingSignOff(picked, split);
     if (held.size > 0) {
       setSubmitting(false);
       setUnreviewed([...held]);
