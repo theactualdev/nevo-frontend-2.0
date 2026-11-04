@@ -30,8 +30,19 @@ import { randomId } from "@/lib/utils";
  *   device comes back online; a refusal is not;
  * - what is unsent survives the page in storage, and goes first next time.
  *
- * NOTHING ELSE. No time is sent (the server stamps each transition), nothing
- * is read back, and nothing a child sees changes. No away while no section is
+ * ONE TIME, AND ONLY WHERE THE SERVER'S STAMP IS WRONG (Teslim, e5a0544; the
+ * Hub, 4 Nov). An away that could not be sent as it happened - the network
+ * gone, or the events before it stuck - arrives late, and the server stamped
+ * it on arrival: a two-minute absence read as 0 s. So the return that closes
+ * such an absence carries its length, measured on this page with
+ * `performance.now()` (rule 4) from the moment the page went away, and the
+ * server dates the away from that. Never on an away (the server refuses it
+ * there), never for an away sent live (the server's stamps are right), and
+ * never for one this page did not see begin: after a reload there is no
+ * measurement, so nothing is sent. Over the server's bound, nothing either.
+ *
+ * NOTHING ELSE. No other time is sent (the server stamps each transition),
+ * nothing is read back, and nothing a child sees changes. No away while no section is
  * on screen - the after-lesson questions, or a finished lesson - because an
  * away nothing will close would leave the rest of the sitting unestablished.
  */
@@ -48,6 +59,8 @@ const SHELF = "nevo.attention.v1";
 const MAX_QUEUED = 100;
 /** Between tries after a network failure or a server error, then the last. */
 const RETRY_MS = [1_000, 3_000, 10_000, 30_000];
+/** The longest absence the server takes a length for (e5a0544): ten hours. */
+const MAX_AWAY_MS = 36_000_000;
 
 const shelfKey = (owner: string) => `${SHELF}.${owner}`;
 
@@ -113,13 +126,36 @@ function reporterFor(owner: string, sessionId: string): Reporter {
   let tries = 0;
   let retry: ReturnType<typeof setTimeout> | null = null;
   let leaving: ReturnType<typeof setTimeout> | null = null;
+  /*
+   * THE ABSENCE THIS PAGE SAW BEGIN: when (`performance.now()`), and whether
+   * its away could not go as it happened. Never stored: a reload has a clock
+   * of its own, so an absence from before one has no length here.
+   */
+  let awayAt: number | null = null;
+  let awayLate = false;
 
   const save = () => writeHeld(owner, sessionId, held);
 
-  const queue = (action: AttentionAction, segmentId: string) => {
-    held.queue.push({ action, segmentId, clientEventId: randomId() });
+  const queue = (
+    action: AttentionAction,
+    segmentId: string,
+    awayMs?: number,
+  ) => {
+    held.queue.push({
+      action,
+      segmentId,
+      clientEventId: randomId(),
+      ...(awayMs === undefined ? {} : { clientAwayDurationMs: awayMs }),
+    });
     if (held.queue.length > MAX_QUEUED) held.queue.splice(0, 1);
     save();
+  };
+
+  /** The open absence's length, where its away could not go as it happened. */
+  const lateLength = (): number | undefined => {
+    if (awayAt === null || !awayLate) return undefined;
+    const ms = Math.round(performance.now() - awayAt);
+    return ms <= MAX_AWAY_MS ? ms : undefined;
   };
 
   /** The sitting is not one the server will take anything for. */
@@ -152,6 +188,10 @@ function reporterFor(owner: string, sessionId: string): Reporter {
         const status = cause instanceof ApiError ? cause.status : 0;
         const refused =
           status >= 400 && status < 500 && status !== 408 && status !== 429;
+        // While away nothing else is queued, so what could not go is the
+        // away or what it waits behind: it will be late. (Each away starts
+        // the flag afresh.)
+        awayLate = true;
         if (!refused) {
           // The network, or the server's own trouble: the same event again.
           const wait = RETRY_MS[Math.min(tries, RETRY_MS.length - 1)];
@@ -183,7 +223,7 @@ function reporterFor(owner: string, sessionId: string): Reporter {
       if (held.open) {
         const away = held.open.segmentId;
         delete held.open;
-        queue("return", away);
+        queue("return", away, lateLength());
         shown = away;
       }
       if (segmentId !== null && segmentId !== shown) queue("return", segmentId);
@@ -193,6 +233,8 @@ function reporterFor(owner: string, sessionId: string): Reporter {
     hide() {
       if (gone || held.open || shown === null) return;
       held.open = { segmentId: shown };
+      awayAt = performance.now();
+      awayLate = false;
       queue("away", shown);
       // The page may not run again: let the request outlive it.
       pump(true);

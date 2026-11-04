@@ -315,3 +315,190 @@ describe("one coherent sitting", () => {
     ]);
   });
 });
+
+/*
+ * AN ABSENCE WHOSE AWAY COULD NOT GO AS IT HAPPENED (Teslim, e5a0544; the
+ * Hub, 4 Nov; case 13 of the device tests). Its return carries the length,
+ * measured here with `performance.now()`; nothing else from the device clock,
+ * and nothing for an away that went live.
+ */
+describe("the length of an absence the server could not stamp", () => {
+  let clock = 0;
+  beforeEach(() => {
+    clock = 10_000;
+    vi.spyOn(performance, "now").mockImplementation(() => clock);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  const bodies = () =>
+    report.mock.calls.map(([, r]) => r as Record<string, unknown>);
+
+  it("sends none for an away that went as it happened", async () => {
+    mount();
+    await settle();
+    setVisibility("hidden");
+    await settle();
+    clock += 120_000;
+    setVisibility("visible");
+    await settle();
+
+    expect(sent()).toEqual([
+      ["return", SEG_A],
+      ["away", SEG_A],
+      ["return", SEG_A],
+    ]);
+    expect(bodies().every((b) => !("clientAwayDurationMs" in b))).toBe(true);
+  });
+
+  it("puts the measured length on the return when the away could not go, and on nothing else", async () => {
+    mount();
+    await settle();
+    // The network is gone as the page goes away.
+    report.mockRejectedValueOnce(new ApiError(0, "offline"));
+    setVisibility("hidden");
+    await settle();
+    clock += 120_000;
+    setVisibility("visible");
+    window.dispatchEvent(new Event("online"));
+    await settle();
+
+    expect(sent()).toEqual([
+      ["return", SEG_A],
+      ["away", SEG_A],
+      ["away", SEG_A],
+      ["return", SEG_A],
+    ]);
+    const [, away, awayAgain, back] = bodies();
+    expect(away).not.toHaveProperty("clientAwayDurationMs");
+    expect(awayAgain).toEqual(away);
+    expect(back.clientAwayDurationMs).toBe(120_000);
+  });
+
+  it("measures it when an away went late but before the child was back", async () => {
+    mount();
+    await settle();
+    report.mockRejectedValueOnce(new ApiError(503, "unavailable"));
+    setVisibility("hidden");
+    await settle();
+    clock += 30_000;
+    window.dispatchEvent(new Event("online"));
+    await settle();
+    clock += 45_000;
+    setVisibility("visible");
+    await settle();
+
+    expect(bodies().at(-1)).toMatchObject({
+      action: "return",
+      clientAwayDurationMs: 75_000,
+    });
+  });
+
+  it("counts an away held up behind an event that could not go as late too", async () => {
+    // The first section's return cannot go, and again as the page goes away,
+    // so the away waits behind it.
+    report
+      .mockRejectedValueOnce(new ApiError(0, "offline"))
+      .mockRejectedValueOnce(new ApiError(0, "offline"));
+    mount();
+    await settle();
+    setVisibility("hidden");
+    await settle();
+    clock += 60_000;
+    setVisibility("visible");
+    window.dispatchEvent(new Event("online"));
+    await settle();
+
+    expect(bodies().at(-1)).toMatchObject({
+      action: "return",
+      clientAwayDurationMs: 60_000,
+    });
+  });
+
+  it("sends none for an absence this page did not see begin - after a reload", async () => {
+    const first = mount();
+    await settle();
+    report.mockRejectedValue(new ApiError(0, "offline"));
+    setVisibility("hidden");
+    window.dispatchEvent(new Event("pagehide"));
+    await settle();
+    first.unmount();
+
+    resetAttentionReports();
+    report.mockReset().mockResolvedValue({});
+    clock = 500;
+    setVisibility("visible");
+    mount();
+    await settle();
+
+    expect(sent()).toEqual([
+      ["away", SEG_A],
+      ["return", SEG_A],
+    ]);
+    expect(bodies().every((b) => !("clientAwayDurationMs" in b))).toBe(true);
+  });
+
+  it("sends none after a reload even when the old away fails again before the child is back", async () => {
+    const first = mount();
+    await settle();
+    report.mockRejectedValue(new ApiError(0, "offline"));
+    setVisibility("hidden");
+    window.dispatchEvent(new Event("pagehide"));
+    await settle();
+    first.unmount();
+
+    // A new page, opened while still hidden: the old away tries and fails.
+    resetAttentionReports();
+    report.mockReset().mockRejectedValueOnce(new ApiError(0, "offline"));
+    report.mockResolvedValue({});
+    clock = 90_000;
+    mount();
+    window.dispatchEvent(new Event("online"));
+    await settle();
+    clock += 30_000;
+    setVisibility("visible");
+    await settle();
+
+    expect(sent()).toEqual([
+      ["away", SEG_A],
+      ["away", SEG_A],
+      ["return", SEG_A],
+    ]);
+    expect(bodies().every((b) => !("clientAwayDurationMs" in b))).toBe(true);
+  });
+
+  it("sends none over the server's ten-hour bound", async () => {
+    mount();
+    await settle();
+    report.mockRejectedValueOnce(new ApiError(0, "offline"));
+    setVisibility("hidden");
+    await settle();
+    clock += 36_000_001;
+    setVisibility("visible");
+    window.dispatchEvent(new Event("online"));
+    await settle();
+
+    expect(bodies().at(-1)).toMatchObject({ action: "return" });
+    expect(bodies().at(-1)).not.toHaveProperty("clientAwayDurationMs");
+  });
+
+  it("starts each absence afresh: a later one that went live carries none", async () => {
+    mount();
+    await settle();
+    report.mockRejectedValueOnce(new ApiError(0, "offline"));
+    setVisibility("hidden");
+    await settle();
+    clock += 10_000;
+    setVisibility("visible");
+    window.dispatchEvent(new Event("online"));
+    await settle();
+    setVisibility("hidden");
+    await settle();
+    clock += 20_000;
+    setVisibility("visible");
+    await settle();
+
+    const returns = bodies().filter((b) => b.action === "return");
+    expect(returns.at(-2)?.clientAwayDurationMs).toBe(10_000);
+    expect(returns.at(-1)).not.toHaveProperty("clientAwayDurationMs");
+  });
+});

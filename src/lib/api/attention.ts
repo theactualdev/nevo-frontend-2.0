@@ -27,6 +27,13 @@ export interface AttentionReport {
    * second interval.
    */
   clientEventId: string;
+  /**
+   * On a `return` only (e5a0544; 422 `away_duration_requires_return` on an
+   * away): how long the absence lasted, measured on the device with
+   * `performance.now()` (rule 4). The server then dates the away from it
+   * rather than from when the away arrived. 0 to 36,000,000.
+   */
+  clientAwayDurationMs?: number;
 }
 
 /** `AttentionState`, the server's view after the transition. */
