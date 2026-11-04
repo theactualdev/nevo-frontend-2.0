@@ -6,7 +6,6 @@ import {
   readContact,
   schoolApi,
   type AcademicConfig,
-  type RetentionPolicy,
   type School,
   type SchoolTerm,
 } from "@/lib/api/school";
@@ -40,19 +39,15 @@ import {
 } from "./SettingsView";
 
 /**
- * D12 General + data retention, and D12b calendar and taxonomy.
+ * D12 General, and D12b calendar and taxonomy.
  *
- * RETENTION IS WRITTEN IN PLAIN WORDS, and D12 is emphatic about why: it is a
- * decision an admin should make understanding exactly what happens to a
- * deactivated student's records and when, not a buried toggle. So the selected
- * policy is restated as a sentence underneath, and the sentence names the
- * consequence - permanently deleted, cannot be recovered - rather than
- * softening it.
- *
- * The three options are the API's own (`contract`, `contract_plus_3_years`,
- * `contract_plus_7_years`). D12 also offers "12 months"; there is no enum
- * value for it, so it is not offered. Raised with backend rather than mapped
- * onto whichever value looked closest.
+ * NO DATA RETENTION SECTION (Lydia, 4 Nov). It offered "contract", "+3
+ * years" and "+7 years" and promised a deactivated child's records stay that
+ * long, then go - but the server purges on its own clock whatever is chosen
+ * (the 2 Nov audit), so the choice stored a value nothing read. "Either the
+ * setting does what it says or it does not exist." It comes back, with words
+ * that are true, once Teslim says what the server does and someone decides
+ * the right period.
  *
  * THE TAXONOMY EDITOR IS THE ONE THAT MATTERS MOST DOWNSTREAM. It writes
  * `academicConfig.yearGroupLabels`, which `lib/constants/yearGroups.ts` reads
@@ -65,27 +60,6 @@ import {
 type Phase = "idle" | "saving" | "saved" | "failed";
 type Load = "loading" | "ready" | "failed";
 
-/** SCRUM-99 D12.5's OPTIONS, verbatim - they were paraphrased. */
-const RETENTION: { value: RetentionPolicy; label: string; plain: string }[] = [
-  {
-    value: "contract",
-    label: "Keep for the length of our contract",
-    plain:
-      "their profile and learning history stay available until your contract with Nevo ends",
-  },
-  {
-    value: "contract_plus_3_years",
-    label: "Keep for 3 years after our contract ends",
-    plain:
-      "their profile and learning history stay available until three years after your contract ends",
-  },
-  {
-    value: "contract_plus_7_years",
-    label: "Keep for 7 years after our contract ends",
-    plain:
-      "their profile and learning history stay available until seven years after your contract ends",
-  },
-];
 
 
 /** The server refusing a settings change to anyone but a senior admin. */
@@ -116,9 +90,6 @@ export function SchoolSettings({
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [location, setLocation] = useState("");
-  const [retention, setRetention] = useState<RetentionPolicy>("contract");
-  /** Retention is its own section with its own save - SCRUM-99's per-section rule. */
-  const [retentionPhase, setRetentionPhase] = useState<Phase>("idle");
   const [general, setGeneral] = useState<Phase>("idle");
   /** Which half of the General save failed, when the first half landed. */
   const [generalNote, setGeneralNote] = useState<string | null>(null);
@@ -152,14 +123,6 @@ export function SchoolSettings({
     setLocation(contact.location ?? "");
   }, []);
 
-  const hydrateRetention = useCallback((s: School) => {
-    setRetention(
-      RETENTION.some((r) => r.value === s.retentionPolicy)
-        ? (s.retentionPolicy as RetentionPolicy)
-        : "contract",
-    );
-  }, []);
-
   const hydrateCalendar = useCallback((s: School) => {
     setAcademic(readAcademic(s));
   }, []);
@@ -175,12 +138,11 @@ export function SchoolSettings({
     (s: School) => {
       setSchool(s);
       hydrateGeneral(s);
-      hydrateRetention(s);
       hydrateCalendar(s);
       hydrateTaxonomy(s);
       setLoad("ready");
     },
-    [hydrateGeneral, hydrateRetention, hydrateCalendar, hydrateTaxonomy],
+    [hydrateGeneral, hydrateCalendar, hydrateTaxonomy],
   );
 
   useEffect(() => {
@@ -214,7 +176,6 @@ export function SchoolSettings({
     );
   }
 
-  const chosen = RETENTION.find((r) => r.value === retention) ?? RETENTION[0];
 
   const saveGeneral = () => {
     setGeneral("saving");
@@ -256,27 +217,6 @@ export function SchoolSettings({
             : null,
         );
         setGeneral("failed");
-      });
-  };
-
-  /** Retention alone: one write, and it refreshes only its own field. */
-  const saveRetention = () => {
-    setRetentionPhase("saving");
-    schoolApi
-      .update({ retentionPolicy: retention })
-      .then((s) => {
-        setSchool(s);
-        hydrateRetention(s);
-        setRetentionPhase("saved");
-        setTimeout(() => setRetentionPhase("idle"), 2200);
-      })
-      .catch((err: unknown) => {
-        if (seniorOnly(err)) {
-          setSeniorRefused(true);
-          setRetentionPhase("idle");
-          return;
-        }
-        setRetentionPhase("failed");
       });
   };
 
@@ -401,10 +341,6 @@ export function SchoolSettings({
     contactEmail.trim() !== (savedContact.contactEmail ?? "") ||
     contactPhone.trim() !== (savedContact.contactPhone ?? "") ||
     location.trim() !== (savedContact.location ?? "");
-  const savedRetention = RETENTION.some((r) => r.value === school.retentionPolicy)
-    ? school.retentionPolicy
-    : "contract";
-  const retentionDirty = retention !== savedRetention;
   const savedAcademic = readAcademic(school);
   const calendarDirty =
     JSON.stringify([academic.yearStart ?? "", academic.yearEnd ?? "", academic.terms ?? []]) !==
@@ -485,68 +421,13 @@ export function SchoolSettings({
           </div>
         </div>
 
-        {/* General's own save. It sat under Data retention and saved both,
-            so changing the name looked like it needed the retention section,
-            and vice versa. */}
+        {/* General's own save - one per section (SCRUM-99). */}
         <SaveRow
           phase={general}
           onSave={saveGeneral}
           failureNote={generalNote}
           dirty={generalDirty}
         />
-      </SettingsSection>
-
-      {/* ---------------------------------------------------------- RETENTION */}
-      <SettingsSection id="settings-retention" title="Data retention">
-        <label htmlFor="set-retention" className={S_LABEL}>
-          When a student is deactivated, keep their records for…
-        </label>
-        <select
-          id="set-retention"
-          value={retention}
-          onChange={(e) => setRetention(e.target.value as RetentionPolicy)}
-          className={cn(S_FIELD, "cursor-pointer")}
-        >
-          {RETENTION.map((r) => (
-            <option key={r.value} value={r.value}>
-              {r.label}
-            </option>
-          ))}
-        </select>
-
-        {/* Plain words, and they name the consequence rather than soften it. */}
-        <p className="m-0 mt-4 max-w-[62ch] text-sm leading-[1.6] text-nevo-near-black/70">
-          When you deactivate a student, {chosen.plain} in case they return or a
-          record is needed. After that they&rsquo;re permanently deleted and
-          can&rsquo;t be recovered. Active students are never affected.
-        </p>
-        {/*
-          * SCRUM-99's VS ERASURE line, verbatim, and it is a done-when: "The
-          * erasure distinction is stated on screen."
-          *
-          * Two retention periods exist and the spec is emphatic they must not
-          * be conflated - this setting governs a DEACTIVATED student's record,
-          * while an outright erasure follows the separate, shorter period
-          * SCRUM-40 fixes at 90 days and which is not editable here. The
-          * spec's own reasoning for saying it out loud: "the two numbers being
-          * different is exactly what confuses people."
-          */}
-        <p className="m-0 mt-2 max-w-[62ch] text-sm leading-[1.6] text-nevo-near-black/70">
-          This is about students you deactivate. If you erase a record
-          outright, a shorter period applies that we&rsquo;re required to keep.
-        </p>
-        {school.retentionDays ? (
-          <p className="m-0 mt-2 text-[12.5px] text-nevo-near-black/50">
-            Currently {school.retentionDays.toLocaleString()} days.
-          </p>
-        ) : null}
-        {/* SCRUM-99: "Names the dependents" - what else follows this setting. */}
-        <p className="m-0 mt-2 max-w-[62ch] text-[12.5px] leading-[1.5] text-nevo-near-black/50">
-          It applies to the students under &ldquo;Show deactivated&rdquo; on
-          your roster, and to leaving students when you promote a year.
-        </p>
-
-        <SaveRow phase={retentionPhase} onSave={saveRetention} dirty={retentionDirty} />
       </SettingsSection>
 
       {/* --------------------------------------------------- ACADEMIC YEAR */}
