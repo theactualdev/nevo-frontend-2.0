@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import type { OnboardingState } from "@/lib/api/onboarding";
 import { AdminDashboard } from "./AdminDashboard";
@@ -13,6 +13,15 @@ import { AdminDashboard } from "./AdminDashboard";
 const gate = vi.fn();
 vi.mock("@/hooks", () => ({ useSetupGate: () => gate() }));
 vi.mock("./OverviewView", () => ({ OverviewView: () => <h2>Overview</h2> }));
+
+const resendLink = vi.fn();
+vi.mock("@/lib/api/emailConfirmation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/emailConfirmation")>();
+  return {
+    ...actual,
+    emailConfirmationApi: { ...actual.emailConfirmationApi, resend: () => resendLink() },
+  };
+});
 
 const subscription = vi.fn();
 vi.mock("@/lib/api/billing", async (importOriginal) => {
@@ -142,11 +151,40 @@ describe("AdminDashboard", () => {
     expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
   });
 
-  it("lets an unconfirmed email come first", () => {
-    // D01b AC-05 owns that console, banner and all.
-    open(state(), "email_unconfirmed");
+  it("lets an unconfirmed email come first, with AC-05's console - never 'live on Nevo' (audit, launch)", async () => {
+    gate.mockReturnValue({
+      loading: false,
+      pause: "email_unconfirmed",
+      onboarding: state(),
+      email: "f.adebayo@brightgate.edu.ng",
+      refresh: vi.fn(),
+    });
+    const { container } = render(<AdminDashboard />);
+    expect(await screen.findByRole("heading", { name: "Brightgate Academy" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Add your roster" })).toBeInTheDocument();
+    // The first steps are there, and plainly paused.
+    expect(visibleText(container)).toMatch(/Create a class Paused until your email is confirmed\./);
+    expect(visibleText(container)).toMatch(/Invite teachers Paused until your email is confirmed\./);
+    expect(visibleText(container)).not.toMatch(/live on Nevo|Welcome to Nevo|school code/i);
+  });
+
+  it("says why a roster can't be uploaded yet when asked, with the resend right there", async () => {
+    resendLink.mockResolvedValue(undefined);
+    gate.mockReturnValue({
+      loading: false,
+      pause: "email_unconfirmed",
+      onboarding: state(),
+      email: "f.adebayo@brightgate.edu.ng",
+      refresh: vi.fn(),
+    });
     render(<AdminDashboard />);
-    expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Upload a roster" }));
+    expect(
+      screen.getByText(/Confirm your email first - we sent a link to f\.adebayo@brightgate\.edu\.ng\./),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Resend it" }));
+    await waitFor(() => expect(resendLink).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/Sent\. It may take a minute to arrive\./)).toBeInTheDocument();
   });
 
   it("fails open to the Overview when the onboarding read failed", () => {
