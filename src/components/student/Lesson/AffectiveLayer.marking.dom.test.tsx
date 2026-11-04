@@ -136,7 +136,12 @@ describe("what the server's marking does", () => {
     ).toContain("bg-nevo-violet/14");
   });
 
-  it("asks the same question again after a miss, with the lead line over the step's explanation", async () => {
+  /*
+   * THE EXPLANATION ONLY AFTER THE RETRY (Lydia, 4 Nov: "the explanation is
+   * held back until after the retry"). The server's check for an explanation
+   * that gives the answer away cannot catch every one, so none leads a retry.
+   */
+  it("asks the same question again after a miss, holding the step's explanation back", async () => {
     open(
       vi
         .fn()
@@ -150,10 +155,10 @@ describe("what the server's marking does", () => {
     pick("Out of the cell");
     await settle();
 
-    expect(screen.getByText(REASK_LEAD)).toBeInTheDocument();
-    expect(
-      screen.getByText("Water moves towards more salt."),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(REASK_LEAD)).toBeNull();
+    expect(screen.queryByText("Water moves towards more salt.")).toBeNull();
+    // The pulse says to try again, with no words.
+    expect(document.querySelector("[data-miss-pulse]")).not.toBeNull();
     // The same question, still open, its pick cleared to try again.
     expect(screen.getByRole("button", { name: FIRST.prompt })).toHaveAttribute(
       "aria-expanded",
@@ -171,6 +176,49 @@ describe("what the server's marking does", () => {
     expect(document.body.textContent).not.toMatch(
       /wrong|incorrect|try again\b/i,
     );
+  });
+
+  it("draws the explanation under the lead line once the retry is answered and missed too", async () => {
+    open(
+      vi.fn().mockResolvedValue(
+        marking({ correct: false, feedback: "Water moves towards more salt." }),
+      ),
+    );
+    pick("Out of the cell");
+    await settle();
+    fireEvent.click(screen.getByRole("radio", { name: "Out of the cell" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await settle();
+
+    expect(screen.getByText(REASK_LEAD)).toBeInTheDocument();
+    expect(
+      screen.getByText("Water moves towards more salt."),
+    ).toBeInTheDocument();
+  });
+
+  it("counts each step's misses on their own: a first miss on the next step holds its explanation", async () => {
+    const onAnswer = vi
+      .fn()
+      .mockResolvedValueOnce(marking({ correct: false, feedback: "First's why." }))
+      .mockResolvedValueOnce(marking({ correct: null, current: "gq-2" }))
+      .mockResolvedValueOnce(
+        marking({ correct: false, feedback: "Second's why." }),
+      );
+    open(onAnswer);
+    pick("Out of the cell");
+    await settle();
+    // Answered out of turn: the server is asking the second step now.
+    fireEvent.click(screen.getByRole("radio", { name: "Into the cell" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await settle();
+    fireEvent.change(screen.getByRole("textbox", { name: SECOND.prompt }), {
+      target: { value: "3" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await settle();
+
+    expect(screen.queryByText("Second's why.")).toBeNull();
+    expect(screen.queryByText("First's why.")).toBeNull();
   });
 
   it("says nothing after a miss with no explanation, and plays the soft violet pulse instead", async () => {
@@ -242,7 +290,7 @@ describe("what the server's marking does", () => {
     );
   });
 
-  it("draws the explanation too, with the other words, where both are sent", async () => {
+  it("re-asks in the other words without the explanation, which comes only after that retry", async () => {
     const REASK = "Which side has more salt?";
     open(
       vi.fn().mockResolvedValue(
@@ -257,10 +305,16 @@ describe("what the server's marking does", () => {
     await settle();
 
     expect(screen.getByText(REASK_LEAD)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: REASK })).toBeInTheDocument();
+    expect(screen.queryByText("Water moves towards more salt.")).toBeNull();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Out of the cell" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await settle();
+
     expect(
       screen.getByText("Water moves towards more salt."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: REASK })).toBeInTheDocument();
   });
 
   it("keeps the question as it was, and says nothing, where the other words are the same", async () => {

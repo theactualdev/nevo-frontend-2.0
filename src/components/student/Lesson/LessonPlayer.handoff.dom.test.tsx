@@ -514,7 +514,9 @@ describe("a hand-off's steps, answered and marked by the server", () => {
     expect(screen.getByText("Let's keep going.")).toBeInTheDocument();
   });
 
-  it("asks a step again after a miss, with its explanation under the lead line", async () => {
+  it("asks a step again after a miss, with its explanation only once the retry is missed too", async () => {
+    // Lydia, 4 Nov: "the explanation is held back until after the retry".
+    const WHY = "The bottom number says how many equal pieces make the whole.";
     saveAttempt.mockResolvedValue(
       reply({ ...HANDOFF, guidedPrompts: [CHOICE] }),
     );
@@ -523,7 +525,7 @@ describe("a hand-off's steps, answered and marked by the server", () => {
       correct: false,
       panelComplete: false,
       prompt: { id: "gq-a", prompt: CHOICE.prompt },
-      feedback: "The bottom number says how many equal pieces make the whole.",
+      feedback: WHY,
     });
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
@@ -533,17 +535,19 @@ describe("a hand-off's steps, answered and marked by the server", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await act(async () => {});
 
-    expect(
-      screen.getByText("Let's come at it a different way."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "The bottom number says how many equal pieces make the whole.",
-      ),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(WHY)).toBeNull();
     expect(
       screen.getByRole("radio", { name: "The top number" }),
     ).toHaveAttribute("aria-checked", "false");
+
+    fireEvent.click(screen.getByRole("radio", { name: "The top number" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await act(async () => {});
+
+    expect(
+      screen.getByText("Let's come at it a different way."),
+    ).toBeInTheDocument();
+    expect(screen.getByText(WHY)).toBeInTheDocument();
   });
 
   it("asks a step again in the words the server sends for it after a miss (reaskPrompt)", async () => {

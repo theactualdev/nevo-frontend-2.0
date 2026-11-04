@@ -489,7 +489,8 @@ export function SocraticPanel({
         id,
         feedback: marked.feedback?.trim() || null,
         reask: marked.reask?.trim() || null,
-        run: (was?.run ?? 0) + 1,
+        // This step's misses: a miss on another step starts its own count.
+        run: was?.id === id ? was.run + 1 : 1,
       }));
       setActive(id);
       // Back in the field it was typed in, ready to try again.
@@ -659,15 +660,26 @@ export function SocraticPanel({
                     ? missHere.reask
                     : null;
                 const asked = reask ?? p.prompt;
+                /*
+                 * THE EXPLANATION ONLY AFTER THE RETRY (Lydia, 4 Nov: "the
+                 * box never contains the answer ... the explanation is held
+                 * back until after the retry"; the Hub: never ahead of a retry
+                 * anywhere it could hold the answer). The server withholds an
+                 * explanation it can tell gives the answer away, but not every
+                 * one that does. So a first miss re-asks without it, and it is
+                 * drawn once the re-ask has been answered and missed too.
+                 */
+                const explained =
+                  missHere && missHere.run > 1 ? missHere.feedback : null;
                 const choice = picked.get(id);
                 const text = drafts.get(id) ?? "";
                 return (
                   <div key={id} className="flex flex-col">
-                    {/* 17d S6: a miss re-asks. With the step's explanation
-                        or its question in other words, the frame's lead line,
-                        and the explanation where there is one, over the
+                    {/* 17d S6: a miss re-asks. With its question in other
+                        words, or the explanation once the retry is answered,
+                        the frame's lead line, and that explanation, over the
                         question; with neither, no words (`MissPulse`). */}
-                    {missHere && (missHere.feedback || reask) && (
+                    {missHere && (explained || reask) && (
                       <div role="status" className="mb-2.5">
                         <span className="inline-flex items-center gap-2">
                           <span
@@ -678,9 +690,9 @@ export function SocraticPanel({
                             {REASK_LEAD}
                           </span>
                         </span>
-                        {missHere.feedback && (
+                        {explained && (
                           <p className="mt-1.5 text-[13.5px] leading-[1.5] text-nevo-near-black">
-                            {missHere.feedback}
+                            {explained}
                           </p>
                         )}
                       </div>
