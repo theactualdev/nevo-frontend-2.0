@@ -21,6 +21,7 @@ import { consentAnswer } from "@/lib/auth/consentAnswer";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useRosterBand } from "@/hooks/useRosterBand";
 import { formFactor } from "@/hooks/useSignals";
+import { ErrorScreen } from "@/components/shared/SystemScreens";
 import {
   AGE_BANDS,
   BASELINE_DIMENSIONS,
@@ -188,7 +189,10 @@ export function WarmUpRun({
   /** The engine named this run, for this child - not the walkthrough, not a pin. */
   const live = prompt.state === "ready" && prompt.live;
   /** The account's answer, once the prompt has given one. */
-  const doneToday = prompt.state === "waiting" ? undefined : prompt.doneToday;
+  const doneToday =
+    prompt.state === "waiting" || prompt.state === "failed"
+      ? undefined
+      : prompt.doneToday;
   const hydrated = useHydrated();
   /*
    * THE MOTOR-SPEED DAY IS ONBOARDING'S MOTOR STEP (ed123cb; Hub, 29 Oct,
@@ -433,6 +437,15 @@ export function WarmUpRun({
    * not offered (19 Oct). The nothing-state takes its place.
    */
   const unconsented = consent === "unknown";
+  /*
+   * A READ THAT FAILED SAYS SO (Lydia, 4 Nov; audit, 2 Nov, backlog 9). The
+   * prompt's, or consent's: either way no task can be given, and the bare
+   * nothing-state was "nothing today", which nobody had said. Frame 28's
+   * Generic Error in its place: Try again asks again, Go back goes Home.
+   */
+  const unread = prompt.state === "failed" || unconsented;
+  const readAgain =
+    prompt.state === "failed" ? prompt.retry : () => window.location.reload();
   const running =
     !showDone &&
     !!task &&
@@ -716,6 +729,13 @@ export function WarmUpRun({
         </div>
       ) : asking ? (
         <WarmUpLoading onHome={() => router.push(HOME)} />
+      ) : unread ? (
+        <ErrorScreen
+          retry={readAgain}
+          onBack={() => router.push(HOME)}
+          mark={false}
+          className="flex min-h-0 flex-1 flex-col items-center justify-center px-10 pb-10 text-center"
+        />
       ) : motorRuns && motorDevice && !unconsented ? (
         <MotorStep
           band={band ?? FRAME_BAND}

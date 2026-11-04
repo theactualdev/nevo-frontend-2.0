@@ -38,6 +38,18 @@ import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
 
 const dashboard = vi.hoisted(() => ({ useStudentDashboard: vi.fn() }));
 vi.mock("@/hooks/useStudentDashboard", () => dashboard);
+// Today's warm-up as the engine names it: a task, so Home offers it. The card
+// is offered only for a run that can happen (Lydia, 4 Nov), and a read that
+// fails offers none - tested in `HomeDashboard.warmup.dom.test.tsx`.
+const warmUp = vi.hoisted(() => ({ prompt: vi.fn() }));
+vi.mock("@/lib/api/baseline", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/baseline")>();
+  return {
+    ...actual,
+    baselineApi: { ...actual.baselineApi, recalibratePrompt: warmUp.prompt },
+  };
+});
+
 
 // The child's full assignment list, finished ones included - which the
 // dashboard leaves out. Unread (failed) unless a test says otherwise.
@@ -68,6 +80,7 @@ beforeEach(() => {
   // Every other hook on this screen reads the network; none of them decides
   // the mark. Failing fast keeps them in their catch instead of pending.
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("no network")));
+  warmUp.prompt.mockReset().mockResolvedValue({ dimension: "wmc" });
   dashboard.useStudentDashboard.mockReset();
   assignments.list.mockReset();
   assignments.list.mockRejectedValue(new Error("no network"));

@@ -117,15 +117,21 @@ describe("WarmUpRun — before consent has answered", () => {
 });
 
 describe("WarmUpRun — when consent cannot be read", () => {
-  it("runs no task: the nothing-state, and Home", async () => {
+  it("runs no task, and says the read failed, with Go back Home (Lydia, 4 Nov)", async () => {
     consent.unreadable = true;
     render(<WarmUpRun />);
     await settle();
 
     expect(task()).toBeNull();
     expect(asking()).toBeNull();
-    expect(screen.queryAllByRole("button")).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    expect(
+      screen.getByRole("heading", { name: "Something went wrong" }),
+    ).toBeInTheDocument();
+    expect(screen.queryAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Try again",
+      "Go back",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Go back" }));
     expect(push).toHaveBeenCalledWith("/student/dashboard");
     expect(submit).not.toHaveBeenCalled();
     expect(holdBaseline).not.toHaveBeenCalled();
@@ -142,7 +148,7 @@ describe("WarmUpRun — when consent cannot be read", () => {
     await settle();
 
     expect(task()).toBeNull();
-    expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go back" })).toBeInTheDocument();
     expect(submit).not.toHaveBeenCalled();
     expect(holdBaseline).not.toHaveBeenCalled();
   });

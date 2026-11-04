@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { WarmUpRun } from "./WarmUpRun";
 import { clearSession, setSession } from "@/lib/auth/session";
 
@@ -118,16 +118,36 @@ describe("WarmUpRun while the engine is asked", () => {
 });
 
 describe("WarmUpRun when a read fails", () => {
-  it("moves to the nothing-state when the prompt read fails, never holding the spinner", async () => {
+  it("says the prompt read failed, never holding the spinner and never 'nothing today'", async () => {
+    // Lydia, 4 Nov: a state the server has not said is worse than a missing
+    // feature. The bare nothing-state was "nothing today"; it is frame 28's
+    // Generic Error now, with Try again and Go back.
     api.recalibratePrompt.mockRejectedValue(new Error("503"));
     api.myDashboard.mockReturnValue(never());
     render(<WarmUpRun />);
 
     await waitFor(() => expect(screen.queryByText(LOADING)).toBeNull());
     expect(screen.queryByTestId("warmup-loading-mark")).toBeNull();
-    expect(screen.getAllByRole("button")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Something went wrong" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button").map((b) => b.textContent),
+    ).toEqual(["Try again", "Go back"]);
     expect(screen.queryByText(TASK)).toBeNull();
+  });
+
+  it("asks again on Try again, and runs the task the engine names then", async () => {
+    api.recalibratePrompt
+      .mockRejectedValueOnce(new Error("503"))
+      .mockResolvedValue({ dimension: "attention" });
+    // The roster read fails too: the named task runs regardless (see below).
+    api.myDashboard.mockRejectedValue(new Error("503"));
+    render(<WarmUpRun />);
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText(TASK)).toBeInTheDocument();
+    expect(api.recalibratePrompt).toHaveBeenCalledTimes(2);
   });
 
   it("does not wait on the band when the engine names nothing", async () => {
