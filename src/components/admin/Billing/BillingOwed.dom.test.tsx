@@ -150,6 +150,8 @@ describe("Billing's invoice list", () => {
   });
 
   it("says an overdue invoice is past its due date, with no count or total worked out here (rule 3, L1)", async () => {
+    // The server's fields are absent here, so nothing may appear: the page
+    // must not fall back to working them out.
     upcoming.mockResolvedValue(charge({ invoiceId: null, invoiceNumber: null, status: null }));
     // Long overdue: the old page counted the days and raised a 60-day panel.
     const overdue = (id: string, invoiceNumber: string): Invoice => ({
@@ -175,6 +177,46 @@ describe("Billing's invoice list", () => {
       screen.getAllByText("Past its due date. Nothing has changed for your students."),
     ).toHaveLength(2);
     expect(container.textContent).not.toMatch(/days? past its due date|outstanding/);
+  });
+
+  it("says the server's day count, and raises D11.8's panel on its word with its count and total", async () => {
+    upcoming.mockResolvedValue(charge({ invoiceId: null, invoiceNumber: null, status: null }));
+    const owed = (id: string, invoiceNumber: string, days: number): Invoice => ({
+      id,
+      invoiceNumber,
+      issuedAt: "2026-01-01T00:00:00Z",
+      amount: "54825000.00",
+      status: "overdue",
+      dueAt: "2026-02-01",
+      paidAt: null,
+      pdfUrl: `/api/v1/billing/invoices/sch1/${invoiceNumber}.pdf`,
+      currency: "NGN",
+      periodLabel: null,
+      studentCount: null,
+      perStudentRate: null,
+      totalBeforeVat: null,
+      vatAmount: null,
+      daysOverdue: days,
+      // School-wide, the same on every row - and deliberately NOT the sum of
+      // the two rows shown, so a total worked out here would be caught.
+      outstandingCount: 3,
+      outstandingTotal: "164475000.00",
+      overduePanelApplies: true,
+    });
+    rows = [owed("inv3", "NEV-003", 64), owed("inv4", "NEV-004", 1)];
+    const { container } = render(<BillingView />);
+    await screen.findByRole("link", { name: "NEV-003" });
+    expect(
+      screen.getByText("64 days past its due date. Nothing has changed for your students."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("1 day past its due date. Nothing has changed for your students."),
+    ).toBeInTheDocument();
+    const text = visibleText(container);
+    expect(text).toMatch(/3 invoices are outstanding, totalling ₦164,475,000/);
+    expect(text).not.toMatch(/109,650,000/);
+    expect(text).toMatch(/Kuda Bank/);
+    expect(text).not.toMatch(/suspend|at risk|access/i);
   });
 });
 

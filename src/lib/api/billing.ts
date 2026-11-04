@@ -75,6 +75,19 @@ export interface Invoice {
    * be relabelled with a figure it was never charged at.
    */
   vatRate?: string | null;
+  /**
+   * D11.8'S FIGURES, THE SERVER'S (Teslim, 4 Nov). Whole days past due - 0
+   * when paid or not yet due. Defaulted in the contract, so optional here.
+   */
+  daysOverdue?: number;
+  /**
+   * School-wide, and the same on every row: how many invoices are unpaid,
+   * what they come to (a decimal string), and whether D11.8's page panel
+   * applies. The server decides all three; the page only words them.
+   */
+  outstandingCount?: number;
+  outstandingTotal?: string;
+  overduePanelApplies?: boolean;
 }
 
 /**
