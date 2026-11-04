@@ -22,12 +22,12 @@ import { LessonContext } from "@/context/LessonContext";
  * The route test is the shell's own, shared rather than copied: `/review` and
  * `/summary` sit under this layout and are not the player.
  *
- * AND ONLY WHERE THE PLAYER IS NOT TEACHING. IA 31: *"Ask Nevo is never
- * available during active Lesson Player content."* The move above put it over
- * every segment, break and after-lesson question, one tap from a hint while
- * the child's answers were being recorded. The completion screen and the
- * review session's entry (D108) switch `askNevoAllowed` on - see
- * `LessonComplete` and `ReviewEntryScreen`.
+ * AND ONLY WHERE THE PLAYER SAYS SO (`askNevoAllowed`). IA 31 kept it off
+ * all lesson content; Lydia brought it back into the player on 4 Nov, except
+ * while an answer is being taken - a check's sheet, a calculation step, the
+ * after-lesson questions. The player switches it for each of its screens
+ * (`askNevoHere` in `LessonPlayer`), the completion screen and the review
+ * session's entry (D108) among them.
  */
 export function LessonAskNevo() {
   const allowed = useContext(LessonContext)?.askNevoAllowed ?? false;

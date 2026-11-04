@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -9,6 +10,7 @@ import {
   useState,
 } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { LessonContext } from "@/context/LessonContext";
 import {
   AdaptiveToggleBar,
   preloadSettlingCharacter,
@@ -3029,6 +3031,32 @@ export function LessonPlayer({
   const calcShowing =
     modality === MODALITY.INTERACTIVE && isCalculation(segment);
   const calcBlocking = calcShowing && !solvedCalcs.has(segment.id);
+
+  /*
+   * ASK NEVO IN THE LESSON (Lydia, 4 Nov, reversing her 17 Oct item 29 - and
+   * with it IA 31's "never available during active Lesson Player content").
+   * The shell's own corner pill (frame 26: "always reachable, never
+   * interruptive") on every screen of the player, asking with the lesson's id
+   * as the completion screen always has. BUT CLOSED AND GONE WHILE AN ANSWER
+   * IS BEING TAKEN - a check's sheet open, a calculation step being answered,
+   * the after-lesson questions - where the Socratic panel is the help (the
+   * Hub, 4 Nov: the default put to Lydia). Gone is closed: the drawer goes
+   * with the pill, and opens fresh when it is back.
+   *
+   * THE PLAYER SAYS WHICH, FOR EVERY PHASE. The completion screen and the
+   * review session's entry switch it on themselves (`LessonComplete`,
+   * `ReviewEntryScreen`), but they are the player's children and their
+   * effects run first, so the player's word on its own phase has to agree.
+   */
+  const allowAskNevo = useContext(LessonContext)?.setAskNevoAllowed;
+  const askNevoHere =
+    phase === "complete" ||
+    phase === "review-entry" ||
+    (phase === "segments" && !checkOpen && !calcBlocking);
+  useEffect(() => {
+    allowAskNevo?.(askNevoHere);
+  }, [allowAskNevo, askNevoHere]);
+  useEffect(() => () => allowAskNevo?.(false), [allowAskNevo]);
   /*
    * THE CONTROL COLUMN'S TWO ROWS, AND THE SPACE HELD FOR THEM (Lydia, 26 Oct
    * #7): "Reserve the space only on sections that have more than one format,
@@ -3590,13 +3618,12 @@ export function LessonPlayer({
       <div ref={columnRef} className="min-h-0 flex-1 overflow-y-auto">
         <div
           className={cn(
-            // The 88px bottom padding on mobile was sized to clear the Ask Nevo
-            // trigger, which is `fixed` and would land on this column. Ask Nevo
-            // is no longer mounted over lesson content (IA 31, see
-            // `LessonAskNevo`), so it clears nothing now; the last line simply
-            // stops well above the chevrons. `sm:p-8` and `lg:p-10` reset it
-            // on their own, because their media rules come after the base
-            // utility.
+            // The 88px bottom padding on mobile clears the Ask Nevo trigger,
+            // which is `fixed` above the chevrons and would land on this
+            // column: it is over lesson content again (Lydia, 4 Nov; see
+            // `askNevoHere`), so the last line stops clear of it. `sm:p-8`
+            // and `lg:p-10` reset it on their own, because their media rules
+            // come after the base utility.
             //
             // THE FRAME'S COLUMN IS 620px (tablet) AND 680px (desktop) INSIDE
             // ITS 32px AND 40px SIDE PADDING, not including it (d6b9fbc,
