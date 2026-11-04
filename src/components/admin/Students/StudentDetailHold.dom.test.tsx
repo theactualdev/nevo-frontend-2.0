@@ -90,6 +90,48 @@ describe("what happened to the date (Lydia, 2 Nov, item 12)", () => {
     expect(await screen.findByText("Active")).toBeInTheDocument();
     expect(history).not.toHaveBeenCalled();
   });
+
+  /*
+   * Lydia's other line (2 Nov, item 12), buildable since ef7745c put the
+   * parent's confirmation on the same history. The day it took effect - never
+   * the parent's date, which on that row is `dateInForce`, and never their name.
+   */
+  const parentTookOver = {
+    previousSchoolDateOfBirth: "2014-09-03",
+    newSchoolDateOfBirth: null,
+    actorUserId: "u-parent",
+    actorName: "Ngozi Okafor",
+    changedAt: "2026-10-25T12:00:00Z",
+    dateInForce: "2013-11-30",
+    source: "parent_confirmation",
+  };
+
+  it("says when a parent's date was confirmed and took over, without the date itself", async () => {
+    held.mockResolvedValue([]);
+    list.mockResolvedValue([{ id: "ac1", studentId: "s1", blocksAccess: false }]);
+    history.mockResolvedValue([parentTookOver]);
+    const { container } = render(<StudentDetailView studentId="s1" />);
+    expect(
+      await screen.findByText(
+        "A parent’s date of birth was confirmed and now applies, from 25 October 2026.",
+      ),
+    ).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/30 November 2013|2013-11-30|November 2013/);
+    expect(container.textContent).not.toMatch(/Ngozi Okafor/);
+  });
+
+  it("tells both in the order they happened - one account of the record", async () => {
+    held.mockResolvedValue([]);
+    list.mockResolvedValue([{ id: "ac1", studentId: "s1", blocksAccess: false }]);
+    // Out of order on purpose: the record reads oldest first.
+    history.mockResolvedValue([parentTookOver, edit("2013-03-14", "2014-09-03")]);
+    const { container } = render(<StudentDetailView studentId="s1" />);
+    await screen.findByText(/A parent’s date of birth was confirmed/);
+    const text = container.textContent ?? "";
+    expect(text.indexOf("Grace Eze changed this child’s date of birth")).toBeLessThan(
+      text.indexOf("A parent’s date of birth was confirmed"),
+    );
+  });
 });
 
 describe("a student held for a date of birth check", () => {
