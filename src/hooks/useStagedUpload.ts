@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   uploadsApi,
+  type UploadReasonCode,
   type UploadStage,
   type UploadStatus,
   type UploadStructure,
@@ -115,6 +116,12 @@ export interface StagedUpload {
    */
   failureReason: string | null;
   /**
+   * The server's code for why the parse stopped (`UploadReasonCode`), which a
+   * screen may route on where it may not render `error`. Null until a poll
+   * answers with one, and on an older deployment.
+   */
+  reasonCode: UploadReasonCode | null;
+  /**
    * The backend's reference for a failure nobody planned for.
    *
    * A 500 is the one failure this console can say nothing useful about, and
@@ -152,7 +159,13 @@ export interface StagedUpload {
   reset: () => void;
 }
 
-export type StartOutcome = "staged" | "refused" | "failed" | "skipped";
+/**
+ * `unreadable`: the server read the file and found nothing in it to read -
+ * `POST /uploads` answers 400 for that and only that ("Could not read lesson
+ * file" / "No readable lesson text was found"; 413 is too large, 422 a bad
+ * request). Sending the same file again cannot change it.
+ */
+export type StartOutcome = "staged" | "refused" | "unreadable" | "failed" | "skipped";
 
 export function useStagedUpload(): StagedUpload {
   const [uploadId, setUploadId] = useState<string | null>(null);
@@ -169,6 +182,7 @@ export function useStagedUpload(): StagedUpload {
   >(null);
   const [error, setError] = useState<string | null>(null);
   const [failureReason, setFailureReason] = useState<string | null>(null);
+  const [reasonCode, setReasonCode] = useState<UploadReasonCode | null>(null);
   const [incident, setIncident] = useState<string | null>(null);
   const [slow, setSlow] = useState(false);
   /**
@@ -197,6 +211,7 @@ export function useStagedUpload(): StagedUpload {
     setFailureKind(null);
     setError(null);
     setFailureReason(null);
+    setReasonCode(null);
     setIncident(null);
     setSlow(false);
     setTick(0);
@@ -226,6 +241,7 @@ export function useStagedUpload(): StagedUpload {
           const status = err instanceof ApiError ? err.status : undefined;
           const refused = status !== undefined && status < 500;
           setFailureKind(refused ? "file" : "request");
+          if (status === 400) return "unreadable";
           return refused ? "refused" : "failed";
         });
     },
@@ -299,6 +315,7 @@ export function useStagedUpload(): StagedUpload {
           setLessonTitle(res.lessonTitle ?? null);
           setError(res.error);
           setFailureReason(res.failureReason ?? null);
+          setReasonCode(res.reasonCode ?? null);
           if (res.status === "failed") {
             setFailed(true);
             // Nevo answered. It read the file and could not finish, which
@@ -352,6 +369,7 @@ export function useStagedUpload(): StagedUpload {
     failureKind,
     error,
     failureReason,
+    reasonCode,
     incident,
     slow,
     start,
