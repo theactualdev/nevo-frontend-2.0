@@ -289,7 +289,7 @@ export function PatternFlankerModule({
             trial={conflictTrials[Math.min(trial, conflictTrials.length - 1)]}
             at={trial}
             picked={picked}
-            onPick={(i, t, e) =>
+            onPick={(i, t) =>
               pick(
                 i,
                 {
@@ -311,7 +311,6 @@ export function PatternFlankerModule({
                   arrow: t.arrow,
                   chosenOption: i === 0 ? "left" : "right",
                 },
-                e,
               )
             }
           />
@@ -340,7 +339,7 @@ export function PatternFlankerModule({
                 label="Same"
                 className={size.button}
                 pressed={picked === 0}
-                onClick={(e) =>
+                onClick={() =>
                   pick(
                     0,
                     {
@@ -349,7 +348,6 @@ export function PatternFlankerModule({
                       // when the pair IS the same. The reducer had only speed.
                       correct: patternTrial.same === true,
                     },
-                    e,
                   )
                 }
               />
@@ -357,14 +355,13 @@ export function PatternFlankerModule({
                 label="Different"
                 className={size.button}
                 pressed={picked === 1}
-                onClick={(e) =>
+                onClick={() =>
                   pick(
                     1,
                     {
                       pair: patternTrial.same ? "same" : "different",
                       correct: patternTrial.same === false,
                     },
-                    e,
                   )
                 }
               />
@@ -394,7 +391,7 @@ export function PatternFlankerModule({
             <FlankerButtons
               band={band}
               picked={picked}
-              onPick={(i, e) =>
+              onPick={(i) =>
                 pick(
                   i,
                   {
@@ -407,7 +404,6 @@ export function PatternFlankerModule({
                     // the finding.
                     correct: flankerTrial.target === (i === 0 ? "left" : "right"),
                   },
-                  e,
                 )
               }
             />
@@ -435,7 +431,7 @@ export function FlankerButtons({
   band: AgeBand;
   /** The index already picked (Left 0, Right 1), or -1. */
   picked: number;
-  onPick: (index: 0 | 1, e: React.MouseEvent) => void;
+  onPick: (index: 0 | 1) => void;
 }) {
   const size = SIZE[band] ?? SIZE.p46;
   return (
@@ -451,7 +447,7 @@ export function FlankerButtons({
         iconOnly
         className={size.arrowButton}
         pressed={picked === 0}
-        onClick={(e) => onPick(0, e)}
+        onClick={() => onPick(0)}
       />
       <TrialButton
         icon={
@@ -464,7 +460,7 @@ export function FlankerButtons({
         iconOnly
         className={size.arrowButton}
         pressed={picked === 1}
-        onClick={(e) => onPick(1, e)}
+        onClick={() => onPick(1)}
       />
     </div>
   );
@@ -493,7 +489,6 @@ function WordConflict({
   onPick: (
     index: 0 | 1,
     trial: WordConflictTrial,
-    e: React.MouseEvent,
   ) => void;
 }) {
   return (
@@ -538,7 +533,7 @@ function WordConflict({
             }
             className="w-full sm:h-16 sm:text-lg"
             pressed={picked === i}
-            onClick={(e) => onPick(i as 0 | 1, trial, e)}
+            onClick={() => onPick(i as 0 | 1, trial)}
           />
         ))}
       </div>

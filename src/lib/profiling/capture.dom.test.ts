@@ -7,7 +7,6 @@ import {
   baselineTrials,
   purgeStoredCaptures,
   sweepStoredCaptures,
-  tapPoint,
   wordsShown,
 } from "./capture";
 import { wordConflictTrials, type WordConflictTrial } from "./wordConflict";
@@ -749,24 +748,6 @@ describe("BaselineCapture.stop — a withdrawn guardian", () => {
     c.record("tap", { cell: 1 });
 
     expect(c.stream).toHaveLength(1);
-  });
-});
-
-describe("tapPoint — where the finger landed", () => {
-  it("keeps the coordinates exactly, unrounded", () => {
-    // Rounded coordinates are noise the engine cannot undo (frontend §2).
-    expect(tapPoint({ clientX: 120.5, clientY: 44.25, detail: 1 })).toEqual({
-      x: 120.5,
-      y: 44.25,
-    });
-  });
-
-  it("records no point for a keyboard press, rather than a false 0,0", () => {
-    expect(tapPoint({ clientX: 0, clientY: 0, detail: 0 })).toEqual({});
-  });
-
-  it("records nothing when there was no event", () => {
-    expect(tapPoint(undefined)).toEqual({});
   });
 });
 

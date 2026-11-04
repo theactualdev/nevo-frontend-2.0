@@ -253,7 +253,7 @@ describe("PatternFlankerModule — a new trial paints clean", () => {
 });
 
 describe("PatternFlankerModule — where a tap landed", () => {
-  it("records the coordinates with the pick", () => {
+  it("records no coordinates with the pick (Lydia, 4 Nov)", () => {
     const capture = new BaselineCapture("fl-coords");
     render(
       <PatternFlankerModule
@@ -269,7 +269,10 @@ describe("PatternFlankerModule — where a tap landed", () => {
       clientY: 610,
     });
 
-    expect(picks(capture, "pattern")[0]).toMatchObject({ x: 33.5, y: 610 });
+    const pick = picks(capture, "pattern")[0];
+    expect(pick).toBeDefined();
+    expect(pick).not.toHaveProperty("x");
+    expect(pick).not.toHaveProperty("y");
   });
 });
 

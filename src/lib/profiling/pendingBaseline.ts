@@ -33,7 +33,7 @@ import { getSession } from "@/lib/auth/session";
  * WHAT IS PARKED IS THE TRIALS, NOT A REDUCED VECTOR (B9, 5 Oct). The device
  * used to reduce the run to means, accuracies and spans and hold those. It
  * now holds one `BaselineTrial` per answer and the server reduces them. The
- * rest of the raw capture - coordinates above all - still never leaves the
+ * rest of the raw capture still never leaves the
  * device and is still purged as soon as the trials are taken.
  */
 
