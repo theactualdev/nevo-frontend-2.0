@@ -321,7 +321,12 @@ describe("a flag card in Flags", () => {
     );
     render(<LiveClassInsights {...CLASS} />);
 
-    expect(screen.getByRole("link", { name: /Ada Obi/ })).toHaveAttribute("href", "/teacher/students/s-7");
+    // With the class, so the profile shows what Nevo has noticed and its way
+    // back to this roster (backlog item 9).
+    expect(screen.getByRole("link", { name: /Ada Obi/ })).toHaveAttribute(
+      "href",
+      "/teacher/students/s-7?class=c9",
+    );
   });
 });
 
