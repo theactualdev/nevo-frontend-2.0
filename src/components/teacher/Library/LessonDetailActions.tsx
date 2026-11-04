@@ -51,18 +51,18 @@ export function stillToCheck(
  * HERE, beside `ready`, for the reason above: a gate ANDed together by the
  * caller is one this component's tests cannot see.
  *
- * EDIT IS GONE, and this is the part to put back first. LR-06 wants it to
- * open the lesson itself - title, key points, how Nevo should treat it - and
- * there is no endpoint that edits any of those. What it did instead was
- * route into the upload flow and ask the teacher for a different file, which
- * is the defect SCRUM-153 reports as item 4. A control that does the wrong
- * thing is worse than an absent one, so it waits for the endpoint. Design
- * draws Assign and Edit as a pair; that pair returns with LR-06.
+ * EDIT IS BACK, as C06b draws it beside Assign (backlog item 15), and goes to
+ * the committed lesson's structure page (C07d, #899): its title, its sections'
+ * names and their order. It was withdrawn because it routed into the upload
+ * flow and asked the teacher for a different file (SCRUM-153 item 4); the
+ * page it opens now edits this lesson. LR-06's "how Nevo should treat it"
+ * still has no endpoint, and the key points are edited in the review.
  */
 export function LessonDetailActions({
   lessonId,
   variantsHref,
   mediaHref,
+  editHref,
   compact = false,
   ready = true,
   signedOff = null,
@@ -78,6 +78,8 @@ export function LessonDetailActions({
    * where the lesson has live media to look at.
    */
   mediaHref?: string;
+  /** C06b's "Edit the lesson": the lesson's structure page, where it has one. */
+  editHref?: string;
   compact?: boolean;
   /**
    * The SERVER's verdict on whether this lesson can go to a class.
@@ -134,6 +136,15 @@ export function LessonDetailActions({
             className={`inline-flex cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] font-semibold text-nevo-cream transition-[filter,transform] hover:brightness-93 active:scale-[0.99] xl:px-5 ${h}`}
           >
             Assign to a class
+          </Link>
+        )}
+        {/* C06b's outlined pair to Assign. */}
+        {editHref && (
+          <Link
+            href={editHref}
+            className={`inline-flex cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[18px] font-medium text-nevo-navy transition-[background-color,transform] hover:bg-nevo-navy/6 active:scale-[0.99] ${h}`}
+          >
+            Edit the lesson
           </Link>
         )}
         {mediaHref && (

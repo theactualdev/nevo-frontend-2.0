@@ -510,6 +510,9 @@ export function LiveLessonDetail({
                 ? `/teacher/lessons/${lesson.id}/media`
                 : undefined
             }
+            /* C06b's "Edit the lesson" (backlog item 15): the committed
+               lesson's structure page, which renames and reorders it. */
+            editHref={`/teacher/lessons/${lesson.id}/structure`}
             /* THE GATE IS `readyToAssign`, and the count is only what the
                line says. Backend asked for the split by name: a client that
                decides "ready" for itself is how this ticket started. */
