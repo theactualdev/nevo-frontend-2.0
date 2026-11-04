@@ -262,7 +262,7 @@ describe("a child with nothing assigned yet", () => {
 
     render(<LessonsTab />);
 
-    expect(body()).toMatch(/Your lessons will show up here soon/);
+    expect(body()).toMatch(/When your teacher sets your first lesson/);
     expect(body()).not.toMatch(/When your teacher sets one/);
   });
 });

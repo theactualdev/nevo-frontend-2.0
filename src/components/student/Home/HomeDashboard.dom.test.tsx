@@ -899,7 +899,7 @@ describe("Home's two lists", () => {
     await settled(container);
 
     expect(screen.queryByText(/Today's lessons/)).toBeNull();
-    expect(screen.queryByText("Your lessons will show up here soon")).toBeNull();
+    expect(screen.queryByText("When your teacher sets your first lesson, you'll find it right here.")).toBeNull();
     expect(screen.queryByText(/your first lesson/)).toBeNull();
     const pickUp = section(/Pick up where you left off/);
     expect(within(pickUp).getByText("Halfway Fractions")).toBeInTheDocument();
@@ -917,7 +917,7 @@ describe("Home's two lists", () => {
     await settled(container);
 
     expect(section(/Today's lessons/)).toBeInTheDocument();
-    expect(screen.queryByText("Your lessons will show up here soon")).toBeNull();
+    expect(screen.queryByText("When your teacher sets your first lesson, you'll find it right here.")).toBeNull();
     // New and part-way work both waiting: D98's no-note state.
     expect(screen.queryByText(/caught up/)).toBeNull();
   });
