@@ -20,6 +20,7 @@ import {
   reviewHrefFor,
   UNREVIEWED_LEFT_OFF,
 } from "@/lib/lessons/signOff";
+import { TryAgain } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * C07i Lesson Assignment: four steps, each a direct question - conversational
@@ -913,7 +914,11 @@ export function AssignWizard({
                   <p className="text-[14px] leading-[1.55] text-nevo-near-black/68">
                     We couldn&rsquo;t load your lessons, so we can&rsquo;t
                     assign them. Nothing has been sent - reopen this from your
-                    library and try again.
+                    library and try again.{" "}
+                    {/* Backlog item 45: the advice to reopen was the only way
+                        forward; nothing has been chosen yet at this step, so
+                        a reload loses nothing. */}
+                    <TryAgain />
                   </p>
                 )}
                 {/* An empty library had no nothing-state: the heading over
