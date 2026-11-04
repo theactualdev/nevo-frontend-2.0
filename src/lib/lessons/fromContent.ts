@@ -32,6 +32,7 @@ import { MODALITY, type Modality } from "@/lib/constants";
 import type {
   Assessment,
   CalcHighlight,
+  CalcMiniStep,
   CalcNarration,
   CalcScaffold,
   CalcToken,
@@ -856,6 +857,49 @@ function storedAnswers(
  * answer at all, or a choice whose stored answers name none of its own
  * options. A tap step is right when its `tapCount` is built.
  */
+/**
+ * A STEP'S MINI-STEPS, AS FEWER STEPS CAN ASK THEM (8c67353), in order, at most
+ * eight. ALL OR NONE: a choice or a number, each with the `questionId` its
+ * answer goes up under, a prompt, and an answer to tick against. One that is
+ * a tap (no frame draws a tray for a mini-step - the Hub, 4 Nov: absent until
+ * design draws one), free text (this screen has no field for it), or missing
+ * any of those leaves the step with none: half a breakdown would be a step
+ * with a piece left out.
+ */
+function miniStepsFor(step: WireCalculationStep): CalcMiniStep[] {
+  const given = Array.isArray(step.miniSteps) ? step.miniSteps.slice(0, 8) : [];
+  const out: CalcMiniStep[] = [];
+  for (const mini of given) {
+    const questionId =
+      typeof mini?.questionId === "string" ? mini.questionId.trim() : "";
+    const prompt = typeof mini?.prompt === "string" ? mini.prompt.trim() : "";
+    const id = typeof mini?.id === "string" ? mini.id : "";
+    if (!questionId || !prompt || !id) return [];
+    const answer =
+      mini.answer === undefined || mini.answer === null
+        ? ""
+        : String(mini.answer).trim();
+    if (!answer) return [];
+    if (mini.input === "choice") {
+      const options = (mini.options ?? []).map((o) => ({
+        value: String(o.value).trim(),
+        label: o.label,
+      }));
+      if (options.length < 2) return [];
+      if (!options.some((o) => isStoredAnswer(o.value, [answer]))) return [];
+      out.push({ id, questionId, prompt, input: "choice", options, accepted: [answer] });
+    } else if (mini.input === "number") {
+      const others = (mini.acceptedAnswers ?? [])
+        .map((a) => String(a).trim())
+        .filter((a) => a !== "" && a !== answer);
+      out.push({ id, questionId, prompt, input: "number", accepted: [answer, ...others] });
+    } else {
+      return [];
+    }
+  }
+  return out;
+}
+
 function calcStepFor(
   step: WireCalculationStep,
   manipulative: CalculationSegment["manipulative"],
@@ -876,6 +920,7 @@ function calcStepFor(
     typeof step.conceptExplanation === "string"
       ? step.conceptExplanation.trim()
       : "";
+  const miniSteps = miniStepsFor(step);
   const base = {
     stepId: step.stepId,
     prompt: step.prompt,
@@ -887,6 +932,7 @@ function calcStepFor(
     ...(narration ? { narration } : {}),
     ...(parts.length > 0 ? { parts } : {}),
     ...(explanation ? { explanation } : {}),
+    ...(miniSteps.length > 0 ? { miniSteps } : {}),
   };
 
   if (step.input === "choice") {
