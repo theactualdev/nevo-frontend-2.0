@@ -7,7 +7,7 @@ import { permissionsApi } from "@/lib/api/permissions";
 import { usersApi, type CurrentUser } from "@/lib/api/users";
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
-import { Avatar, CARD } from "../Roster/primitives";
+import { Avatar, CARD, PRIMARY_BTN } from "../Roster/primitives";
 import { ReadFailed } from "../ReadFailed";
 import { scopeName } from "../Team/adminScopes";
 import {
@@ -66,6 +66,8 @@ function when(iso: string): string {
 
 export function AccountSettings() {
   const [load, setLoad] = useState<Load>("loading");
+  /** Bumped by "Try again" on a failed first read, to ask again. */
+  const [attempt, setAttempt] = useState(0);
   const [me, setMe] = useState<CurrentUser | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -125,7 +127,7 @@ export function AccountSettings() {
         loadSessions();
       })
       .catch(() => setLoad("failed"));
-  }, [loadSessions]);
+  }, [loadSessions, attempt]);
 
   if (load === "loading") {
     return <div className={cn(CARD, "mt-5 h-[380px] animate-pulse")} />;
@@ -138,6 +140,18 @@ export function AccountSettings() {
           Nothing has changed - this is only about showing it to you. Try again
           in a moment.
         </p>
+        {/* A "Try again" with nothing to press sent people to reload the
+            page (the 2 Nov audit). It asks the read again, here. */}
+        <button
+          type="button"
+          onClick={() => {
+            setLoad("loading");
+            setAttempt((n) => n + 1);
+          }}
+          className={cn(PRIMARY_BTN, "mt-4")}
+        >
+          Try again
+        </button>
       </SettingsSection>
     );
   }
