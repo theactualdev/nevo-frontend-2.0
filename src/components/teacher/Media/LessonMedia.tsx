@@ -9,6 +9,7 @@ import { ApiError, apiErrorMessage } from "@/lib/api/client";
 import { lessonsApi, type LessonDetailResponse, type LessonSegment } from "@/lib/api/lessons";
 import { mediaApi, type LessonMediaItem, type MediaKind } from "@/lib/api/media";
 import { getToken } from "@/lib/auth/session";
+import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * C06c Lesson Media (design 82c213b, 23 Oct): a lesson children are already
@@ -66,12 +67,14 @@ export function LessonMediaRoute({ lessonId }: { lessonId: string }) {
   if (failed) {
     return (
       <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-        <div className="mx-auto max-w-[660px] rounded-[12px] bg-nevo-cream-elevated px-[26px] py-7 shadow-elevation-1">
-          <h1 className="text-[17px] font-semibold text-nevo-near-black">We couldn&rsquo;t load this lesson&rsquo;s media</h1>
-          <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/62">
-            It hasn&rsquo;t gone anywhere. Try again in a moment.
-          </p>
-        </div>
+        {/* With Try again and the way back (backlog item 16): it was the
+            card alone, so a failed read was a dead end. */}
+        <ReadFailed
+          as="h1"
+          title="We couldn’t load this lesson’s media"
+          back={{ href: `/teacher/lessons/${lessonId}`, label: "Back to the lesson" }}
+          className="mx-auto"
+        />
       </div>
     );
   }
