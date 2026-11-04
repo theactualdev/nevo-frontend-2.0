@@ -102,7 +102,11 @@ type Turn =
       interactionId?: string;
       vote?: 1 | -1;
     }
-  | { kind: "cannothelp" }
+  /**
+   * C15's hand-off. `text` is the SERVER'S words when a live answer came back
+   * `canHelp: false`; absent, it is the walkthrough's canned line.
+   */
+  | { kind: "cannothelp"; text?: string }
   /** A signed-in question that got no answer. Not a sample - nothing at all. */
   | { kind: "failed" }
   /** The day's allowance is spent. Not a failure, and never shown as one. */
@@ -307,7 +311,21 @@ export function AskNevo() {
       if (res?.threadId) threadId.current = res.threadId;
       setTurns((ts) => [
         ...ts,
-        res
+        /*
+         * THE SERVER SAYING THIS ONE IS NOT NEVO'S (canHelp: false, backlog
+         * item 11). It was drawn as an ordinary answer, so a signed-in teacher
+         * never reached C15's hand-off. Its look is the frame's; its words are
+         * the server's, because the frame's "Your school admin looks after
+         * that side of things" names who handles it, and nothing says the
+         * admin does - the server's own fallback sends a teacher to "your
+         * school support team". No vote: there is no answer to rate.
+         */
+        res && res.canHelp === false
+          ? {
+              kind: "cannothelp" as const,
+              text: (res.plainText || res.answer || "").trim() || undefined,
+            }
+          : res
           ? {
               kind: "answer",
               /*
@@ -620,7 +638,7 @@ export function AskNevo() {
                               printed again underneath. Design deleted
                               "Message your school admin" on 31 Aug. */}
                           <p className="text-[14.5px] leading-[1.6] text-nevo-near-black">
-                            {CANNOT_HELP_LINE}
+                            {t.text ?? CANNOT_HELP_LINE}
                           </p>
                         </div>
                       </div>
