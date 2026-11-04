@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { ApiError } from "@/lib/api/client";
 import type { ParentInvitation } from "@/lib/api/parent";
 
@@ -148,5 +148,33 @@ describe("when the link does not resolve", () => {
 
     expect(await screen.findByText(/couldn[’']t open this page/i)).toBeInTheDocument();
     expect(screen.queryByText(/no longer active/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Backlog 54: "Please try the link again in a moment" with nothing to press.
+ * Our own failure gets a Try again that reads the link again in place; a dead
+ * link does not, because asking again cannot revive it.
+ */
+describe("when the link can't be read just now", () => {
+  it("offers Try again, and reads the link again when pressed", async () => {
+    getInvitation
+      .mockRejectedValueOnce(new ApiError(500, "boom"))
+      .mockResolvedValueOnce(inv({ status: "pending" }));
+    render(<ParentPortal token={TOKEN} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(
+      await screen.findByRole("button", { name: /Yes, I give my consent/ }),
+    ).toBeInTheDocument();
+    expect(getInvitation).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers no Try again on a dead link", async () => {
+    getInvitation.mockRejectedValue(new ApiError(404, "not found"));
+    render(<ParentPortal token={TOKEN} />);
+
+    expect(await screen.findByText(/no longer active/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 });

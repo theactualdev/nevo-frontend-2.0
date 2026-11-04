@@ -166,3 +166,17 @@ describe("isoFrom", () => {
     expect(isoFrom("3", "September", "14")).toBeNull();
   });
 });
+
+/** Backlog 60: the date check's failed read had nothing to press. */
+describe("when the check can't be read", () => {
+  it("offers Try again, and asks again when pressed", async () => {
+    parentChecks.mockRejectedValueOnce(new Error("down"));
+    render(<ParentDateCheck />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(
+      await screen.findByRole("heading", { name: "Can you confirm Amara’s date of birth?" }),
+    ).toBeInTheDocument();
+    expect(parentChecks).toHaveBeenCalledTimes(2);
+  });
+});

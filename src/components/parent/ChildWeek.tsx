@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TryAgain } from "./TryAgain";
 import { parentApi, type ChildSubjectProgress } from "@/lib/api/parent";
 import {
   cardCopy,
@@ -36,6 +37,8 @@ export function ChildWeek({
   /** The day the window is judged against, captured once when the read lands. */
   const [today, setToday] = useState("");
   const [phase, setPhase] = useState<"loading" | "ready" | "failed">("loading");
+  /** Bumped by Try again, to read this child's week again. */
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,7 +56,7 @@ export function ChildWeek({
     return () => {
       cancelled = true;
     };
-  }, [studentId]);
+  }, [studentId, attempt]);
 
   if (phase === "loading") {
     return (
@@ -74,6 +77,12 @@ export function ChildWeek({
         <p className="mt-3 text-[15px] leading-[1.6] text-nevo-near-black/68">
           Please try again in a moment.
         </p>
+        <TryAgain
+          onClick={() => {
+            setPhase("loading");
+            setAttempt((a) => a + 1);
+          }}
+        />
       </div>
     );
   }
