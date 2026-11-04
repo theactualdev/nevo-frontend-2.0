@@ -127,6 +127,12 @@ export interface ParentConsentCompletion {
    */
   parentAccountCreated?: boolean;
   parentAccountReady?: boolean;
+  /**
+   * Where the date-of-birth check stands once consent is recorded
+   * (`matched | mismatch | resolved | awaiting_parent`). Only `matched` and
+   * `resolved` leave the child free to start; anything else may hold them.
+   */
+  ageCheck?: "matched" | "mismatch" | "resolved" | "awaiting_parent";
 }
 
 
