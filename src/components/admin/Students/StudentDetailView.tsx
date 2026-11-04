@@ -411,10 +411,10 @@ export function StudentDetailView({
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
             {/* NAMING A CHILD AS BLOCKED IS THE WORST PLACE TO GET THIS
-                WRONG, and this said "{name} can't begin lessons yet" for every
-                state but `confirmed`. Per SCRUM-80 only a withdrawal stops a
-                child; the rest describe the school's record, not the learner.
-                See `withoutRecordedConsent`. */}
+                WRONG. The line says what is recorded, which is true in every
+                state. (The consent gate is the product - Hub, 2 Nov - so an
+                unconfirmed consent does stop the child; the Overview's row
+                says so.) */}
             <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
               {student.consent?.status === "confirmed"
                 ? `Consent is recorded for ${firstName}`
