@@ -191,11 +191,23 @@ export function StudentsView() {
    * parent's date is never on it.
    */
   const [dobNotes, setDobNotes] = useState<Set<string>>(() => new Set());
+  /**
+   * Whether the held list answered. Without it, an active child's status pill
+   * is left off rather than reading "Active" about a child who may be on hold
+   * (Lydia, 4 Nov: an untrue state is worse than a missing one).
+   */
+  const [holdsRead, setHoldsRead] = useState(false);
   useEffect(() => {
     ageChecksApi
       .held()
-      .then((rows) => setDobNotes(new Set(rows.map((r) => r.studentId))))
-      .catch(() => setDobNotes(new Set()));
+      .then((rows) => {
+        setDobNotes(new Set(rows.map((r) => r.studentId)));
+        setHoldsRead(true);
+      })
+      .catch(() => {
+        setDobNotes(new Set());
+        setHoldsRead(false);
+      });
   }, []);
 
   /** Everyone on the roster who is not deactivated - what the header counts. */
@@ -662,18 +674,23 @@ export function StudentsView() {
                           ) : null}
                         </span>
                         <span className="flex">
-                          <span
-                            className={cn(
-                              "inline-flex flex-none items-center rounded-full px-3 py-1 text-[12.5px] font-semibold text-nevo-navy",
-                              deactivated
-                                ? "bg-nevo-near-black/[0.07] text-nevo-near-black/60"
-                                : st === "invited"
-                                  ? "bg-nevo-violet/24"
-                                  : "bg-nevo-navy/12",
-                            )}
-                          >
-                            {statusLabel(s.status)}
-                          </span>
+                          {/* A held child is ON HOLD here as on their page -
+                              not "Active". And with the held list unread, an
+                              active child gets no pill at all. */}
+                          {!deactivated && !holdsRead ? null : (
+                            <span
+                              className={cn(
+                                "inline-flex flex-none items-center rounded-full px-3 py-1 text-[12.5px] font-semibold text-nevo-navy",
+                                deactivated
+                                  ? "bg-nevo-near-black/[0.07] text-nevo-near-black/60"
+                                  : dobNotes.has(s.id) || st === "invited"
+                                    ? "bg-nevo-violet/24"
+                                    : "bg-nevo-navy/12",
+                              )}
+                            >
+                              {!deactivated && dobNotes.has(s.id) ? "On hold" : statusLabel(s.status)}
+                            </span>
+                          )}
                         </span>
                       </button>
                       <span className="flex justify-end pr-6">

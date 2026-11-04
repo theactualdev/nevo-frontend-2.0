@@ -109,9 +109,15 @@ export function StudentDetailView({
    * frame used to draw a held child as "Active, learning normally", which
    * contradicted the hold in production. On the server's `blocksAccess`, the
    * status reads "On hold" and points at the checks rather than describing
-   * the hold in its own words. Unread is not held.
+   * the hold in its own words.
+   *
+   * UNREAD IS NOT "ACTIVE" EITHER (Lydia, 4 Nov: "the product asserting a
+   * state that is not true ... is worse than any missing feature"). Null until
+   * the checks answer, and null when they can't be read - and then the Status
+   * line is left out rather than saying "Active" about a child who may be on
+   * hold. A deactivated child is deactivated whatever the checks say.
    */
-  const [held, setHeld] = useState(false);
+  const [held, setHeld] = useState<boolean | null>(null);
   useEffect(() => {
     let alive = true;
     ageChecksApi
@@ -119,7 +125,9 @@ export function StudentDetailView({
       .then((rows) => {
         if (alive) setHeld(rows.some((r) => r.studentId === studentId));
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (alive) setHeld(null);
+      });
     return () => {
       alive = false;
     };
@@ -279,6 +287,7 @@ export function StudentDetailView({
             label="Student ID / Admission Number"
             value={student.admissionNumber?.trim() || "Not set"}
           />
+          {held === null && !deactivated ? null : (
           <Field
             label="Status"
             value={
@@ -298,6 +307,7 @@ export function StudentDetailView({
               </span>
             }
           />
+          )}
           <Field label="Age band" value={student.ageBand ?? "Not set"} />
         </dl>
 
