@@ -534,8 +534,12 @@ describe("new captions in step 1", () => {
     media.captions.mockResolvedValue([TWO[0]]);
     await open(5);
 
-    expect(await screen.findByText(/A picture has a new caption waiting in step 1/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Look at it" }));
+    expect(await screen.findByText("A picture has a new caption waiting in step 1.")).toBeInTheDocument();
+    // Lydia (Q13): the step is the route - the step bar, no link of its own.
+    expect(screen.queryByRole("button", { name: /Look at/ })).toBeNull();
+    fireEvent.click(
+      within(screen.getByRole("navigation", { name: "Lesson review steps" })).getByRole("button", { name: /What I made/ }),
+    );
     expect(await screen.findByText("New captions · 1 waiting")).toBeInTheDocument();
   });
 });
