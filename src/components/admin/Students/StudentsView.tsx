@@ -38,6 +38,7 @@ import {
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
 import { SignInDetailsDownload } from "./SignInDetailsDownload";
+import { ERASURE_LINE } from "./EraseRecordModal";
 
 /**
  * D7 Students - the school roster.
@@ -479,7 +480,7 @@ export function StudentsView() {
                 school would repeat to a parent. */}
             {erased ? (
               <p className="m-0 mt-4 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-navy">
-                {`${erased}'s record has been erased. Only the small amount the law requires is kept, and that goes too once its statutory period ends.`}
+                {`${erased}'s record has been erased. ${ERASURE_LINE}`}
               </p>
             ) : null}
 

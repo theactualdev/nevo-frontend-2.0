@@ -64,7 +64,11 @@ export const LEGAL_DOCS: Record<
       {
         num: "07",
         title: "Your rights",
-        body: "You can ask to see the data held about your child, correct it, request its deletion, or withdraw consent at any time - and a student's access to their learning is never affected by doing so. Requests are made through the school as data controller. [Placeholder: full NDPA data-subject rights and response timelines to be confirmed.]",
+        // "...and a student's access to their learning is never affected by
+        // doing so" was untrue: withdrawing consent suspends the child's
+        // account (Lydia, 4 Nov). The deletion sentences are her erasure
+        // wording, verbatim, which applies wherever the product states it.
+        body: "You can ask to see the data held about your child, correct it, request its deletion, or withdraw consent at any time. Withdrawing consent suspends your child's account straight away. When you ask us to delete a record it is removed from the live system straight away. A copy can remain in our recovery backups for up to seven more days, and if we ever restore from one we reapply your deletion before anyone can see the data again. Files are not held in those backups at all, so a deleted file is gone immediately. Requests are made through the school as data controller. [Placeholder: full NDPA data-subject rights and response timelines to be confirmed.]",
       },
       {
         num: "08",

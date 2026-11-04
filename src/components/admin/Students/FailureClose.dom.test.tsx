@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { visibleText } from "@/test/visibleText";
 import type { AdminClass, AssignedClass } from "@/lib/api/classes";
 import { MoveStudentSheet } from "./MoveStudentSheet";
-import { EraseRecordModal } from "./EraseRecordModal";
+import { ERASURE_LINE, EraseRecordModal } from "./EraseRecordModal";
 import { BulkClassSheet } from "../Classes/BulkClassSheet";
 import { RemoveAccessSheet } from "../Teachers/RemoveAccessSheet";
 
@@ -172,5 +172,21 @@ describe("the hand-over rows", () => {
     );
     await waitFor(() => expect(visibleText(container)).toMatch(/JSS 2A/));
     expect(visibleText(container)).not.toMatch(/students/);
+  });
+});
+
+/**
+ * Lydia, 4 Nov (answer 27): what erasing does, in her words, before the
+ * commit - not "everything identifying them" and a statutory period that
+ * said nothing of the seven days a copy can sit in the recovery backups.
+ */
+describe("the erase modal's statement", () => {
+  it("is Lydia's erasure wording, and still says it cannot be undone", () => {
+    const { container } = render(
+      <EraseRecordModal studentId="s1" studentName="Amara Obi" onClose={() => {}} onErased={() => {}} />,
+    );
+    const text = container.ownerDocument.body.textContent ?? "";
+    expect(text).toContain(`${ERASURE_LINE} This cannot be undone.`);
+    expect(text).not.toMatch(/everything identifying them|statutory period/);
   });
 });
