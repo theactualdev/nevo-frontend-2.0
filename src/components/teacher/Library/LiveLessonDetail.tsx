@@ -18,6 +18,7 @@ import { SplitSourceNotice } from "./SplitSourceNotice";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useLessonReview } from "@/hooks/useLessonReview";
 import { useSegmentReview } from "@/hooks/useSegmentReview";
+import { TryAgain } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * Lesson detail for a real lesson (C06b), built from what
@@ -652,7 +653,9 @@ export function LiveLessonDetail({
              rather than left to look like a lesson nobody has. */
           <p className="mt-6 max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
             We couldn&rsquo;t load who has this lesson just now. Nothing is
-            wrong with the lesson - try again in a moment.
+            wrong with the lesson - try again in a moment.{" "}
+            {/* Backlog item 34. */}
+            <TryAgain />
           </p>
         ) : (
           <AssignmentSchedule assignments={assignments} classes={classes} />

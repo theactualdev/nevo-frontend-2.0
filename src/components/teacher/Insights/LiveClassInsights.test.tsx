@@ -72,6 +72,8 @@ describe("LiveClassInsights - telling the three states apart", () => {
     expect(
       screen.getByText(/This isn't about Year 7 Maths/),
     ).toBeInTheDocument();
+    // Backlog item 30: and something to press.
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
   it("NEVER says it is still gathering when the reads failed", () => {

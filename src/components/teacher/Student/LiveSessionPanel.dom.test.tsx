@@ -114,6 +114,8 @@ describe("when the read fails", () => {
 
     expect(screen.getByText(/couldn’t load that session/i)).toBeInTheDocument();
     expect(screen.getByText(/isn’t about Amara Okafor/i)).toBeInTheDocument();
+    // Backlog item 28: Close was the only way out.
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
   it("shows no session content it does not have", () => {

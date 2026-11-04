@@ -5,6 +5,7 @@ import type { SessionRow } from "@/lib/mocks/teacherStudents";
 import type { StudentSessionDetail } from "@/lib/api/students";
 import { useStudentSession } from "@/hooks/useStudentSessions";
 import { SessionPanel } from "./SessionPanel";
+import { TryAgain } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * C08d on a real session.
@@ -118,6 +119,8 @@ function SessionDetail({
               >
                 Close
               </button>
+              {/* Backlog item 28: Close was the only way out. */}
+              <TryAgain className="mt-4 block w-full text-center" />
             </>
           ) : (
             <>
