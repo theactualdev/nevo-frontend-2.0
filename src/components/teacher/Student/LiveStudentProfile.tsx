@@ -145,7 +145,11 @@ export function LiveStudentProfile({
   } = useStudentSessions(studentId);
   /* The noticing banner's source. Like the sessions list, it needs the id
      before `profile` is destructured. */
-  const { noticed } = useStudentFlags(studentId);
+  const {
+    noticed,
+    loading: flagsLoading,
+    failed: flagsFailed,
+  } = useStudentFlags(studentId);
   // C08's one chip, in design's precedence (12 Oct). Read from the open
   // flags only: a read that failed or is in flight is no chip, not "nothing
   // to see" - the noticing section below says which.
@@ -202,10 +206,19 @@ export function LiveStudentProfile({
    * on to have answered. It was drawn over in-flight and failed reads alike,
    * for a child with weeks of history: absence of an answer read as absence
    * of a profile.
+   *
+   * AND THE FLAGS (4 Nov sweep). With the flags read failed or in flight,
+   * "Still getting a picture" sat beside "2 things are worth your attention"
+   * for the same child - the contradiction the note above the card rules
+   * out. A child with an open flag is not early either, however few
+   * sessions they have.
    */
   const early =
     read("learnerProfile") === "ready" &&
     read("mastery") === "ready" &&
+    !flagsLoading &&
+    !flagsFailed &&
+    openFlagCount === 0 &&
     !observed &&
     concepts.length === 0;
   /**
@@ -831,7 +844,9 @@ export function LiveStudentProfile({
               setShared(true);
               say.show({
                 kind: "confirm",
-                message: `Sent to Learning Support. They${"’"}ll take it from here.`,
+                // Not "They'll take it from here": nothing confirms anyone
+                // holds Learning Support (Hub, 4 Nov; Teslim item 26).
+                message: "Sent to Learning Support.",
               });
             }}
           />

@@ -796,3 +796,29 @@ describe("C06b's treatments", () => {
     expect(row.firstElementChild).toHaveClass("font-semibold", "text-nevo-near-black/60");
   });
 });
+
+/**
+ * A REVIEW THAT NEVER CAME IS NOT A YES (4 Nov sweep). `ready` defaults to true
+ * over a failed read, which is right for the gate - the server refuses with a
+ * reason if it must - and wrong for "Ready" and "Ready when you are".
+ */
+describe("a lesson whose review could not be read", () => {
+  it("claims neither ready state, and says only that the read failed", () => {
+    reviewState({ failed: true });
+    show();
+
+    expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("We couldn’t load the review just now. Try again in a moment."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing is wrong with the lesson/)).not.toBeInTheDocument();
+  });
+
+  it("draws no ready card over a review that said no", () => {
+    reviewState({ ready: false });
+    show();
+
+    expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
+  });
+});

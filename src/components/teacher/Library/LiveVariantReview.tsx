@@ -8,14 +8,19 @@ import { AudioVariantPlayer } from "./AudioVariantPlayer";
 import { IllustrationWrapper } from "@/components/shared/IllustrationWrapper";
 import type { LessonSegment } from "@/lib/api/lessons";
 import { activityWithheld, withheldDetail } from "@/lib/lessons/activityWithheld";
-import {
-  VARIANT_ORIENTATION,
-  VARIANT_TABS,
-  type VariantTab,
-} from "@/lib/mocks/teacherIntelligence";
+import { VARIANT_TABS, type VariantTab } from "@/lib/mocks/teacherIntelligence";
 import { reasonCopy } from "@/lib/constants/reviewReasons";
 import { isActivity } from "@/lib/api/variants";
 import { cn } from "@/lib/utils";
+
+/**
+ * The orientation line for a REAL section, without the frame's first sentence
+ * (4 Nov sweep). "Nevo generates every one of these variants for each
+ * segment" sat above "Nevo has not generated a visual version of this
+ * section" on the same screen; which versions exist is the section's own say.
+ */
+const LIVE_VARIANT_ORIENTATION =
+  "During the lesson, the system decides which variant a student sees based on how they are engaging. You do not need to assign specific variants to specific students.";
 
 /**
  * Variant review, on the teacher's OWN lesson (C16d).
@@ -506,7 +511,7 @@ export function LiveVariantReview({
           Approval lives in the flow; nothing here approves.
         */}
         <p className="mt-4 text-[13px] leading-[1.6] text-nevo-near-black/60 italic xl:mt-[18px]">
-          {VARIANT_ORIENTATION}
+          {LIVE_VARIANT_ORIENTATION}
         </p>
 
         {segment.needsReview && (

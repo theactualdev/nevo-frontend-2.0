@@ -107,7 +107,18 @@ export function LiveClassInsights({
     );
   }
 
-  if (gathering) {
+  /*
+   * "Gathering" is the engine's word for the NARRATIVE. It returned here
+   * before the flags and misconceptions, so a class with children already
+   * flagged read "anything worth a look will appear here" over them
+   * (4 Nov sweep). The card stands only when there is nothing else to show.
+   */
+  if (
+    gathering &&
+    flags.length === 0 &&
+    misconceptions.length === 0 &&
+    concepts.length === 0
+  ) {
     return (
       <div className="mt-[26px] flex items-start gap-3.5 rounded-[12px] bg-nevo-cream-elevated p-6 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-8 xl:max-w-[640px] xl:gap-4 xl:p-7">
         <span className="mt-px size-[22px] shrink-0 text-nevo-violet xl:size-6">

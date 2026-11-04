@@ -223,7 +223,23 @@ export function useTeacherNotifications(): TeacherNotificationsState {
       setFeed((f) => f?.filter((n) => n.notificationId !== id) ?? f);
       setArchived((a) => [row, ...a]);
       if (!row.read) setUnread((u) => Math.max(0, u - 1));
-      if (getToken()) void notificationsApi.archive(id).catch(() => {});
+      /*
+       * NOT ARCHIVED AFTER ALL, so it comes back. The failure was swallowed
+       * and the panel kept saying `Archived "…"` with an Undo, over a row the
+       * next read would bring straight back (4 Nov sweep).
+       */
+      if (getToken())
+        void notificationsApi.archive(id).catch(() => {
+          setArchived((a) => a.filter((n) => n.notificationId !== id));
+          setFeed((f) =>
+            f && !f.some((n) => n.notificationId === id)
+              ? [row, ...f].sort(
+                  (x, y) => +new Date(y.createdAt) - +new Date(x.createdAt),
+                )
+              : f,
+          );
+          if (!row.read) setUnread((u) => u + 1);
+        });
     },
     [feed],
   );
@@ -240,8 +256,13 @@ export function useTeacherNotifications(): TeacherNotificationsState {
         : f,
     );
     if (!row.read) setUnread((u) => u + 1);
+    // Not restored, so it stays archived - and undoable - as it really is.
     if (getToken())
-      void notificationsApi.restore(row.notificationId).catch(() => {});
+      void notificationsApi.restore(row.notificationId).catch(() => {
+        setFeed((f) => f?.filter((n) => n.notificationId !== row.notificationId) ?? f);
+        setArchived((a) => [row, ...a]);
+        if (!row.read) setUnread((u) => Math.max(0, u - 1));
+      });
   }, [archived]);
 
   const markAllRead = useCallback(() => {

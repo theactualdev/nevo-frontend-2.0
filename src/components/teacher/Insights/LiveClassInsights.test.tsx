@@ -95,6 +95,21 @@ describe("LiveClassInsights - telling the three states apart", () => {
     expect(screen.queryByText(/couldn’t load/i)).not.toBeInTheDocument();
   });
 
+  // 4 Nov sweep: "gathering" is the narrative's word. A class with a child
+  // already flagged was told "anything worth a look will appear here".
+  it("shows the flags it has, rather than gathering over them", () => {
+    useClassInsights.mockReturnValue(
+      state({
+        gathering: true,
+        flags: [{ id: "f1", name: "Amara", studentId: "s-1", note: "Stopped halfway", isSudden: false }],
+      }),
+    );
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.getByText("Stopped halfway")).toBeInTheDocument();
+    expect(screen.queryByText(/Still gathering/)).not.toBeInTheDocument();
+  });
+
   it("A SETTLED WEEK IS NOT A NEW CLASS, and no longer reads as one", () => {
     /*
      * THE DEFECT, in one test. A class with nothing flagged, no

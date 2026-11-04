@@ -134,7 +134,12 @@ export function LiveShareSheet({
               Send to Learning Support?
             </h2>
             <p className="mt-[9px] text-[14.5px] leading-[1.55] text-nevo-near-black/68 xl:mt-2.5 xl:text-[15px]">
-              {`This shares ${firstName}${"’"}s recent picture and your note with your SENCo. They${"’"}ll follow up with you, and it stays between you and Learning Support.`}
+              {/* Without "They'll follow up with you, and it stays between you
+                  and Learning Support" (Hub, 4 Nov, on Lydia's principle):
+                  nothing confirms anyone holds Learning Support, and admins can
+                  read the escalations list. They come back when the server
+                  guarantees them (Teslim item 26). */}
+              {`This shares ${firstName}${"’"}s recent picture and your note with your SENCo.`}
             </p>
             <div className="mt-4 rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[15px] py-[13px] xl:mt-[18px] xl:px-4 xl:py-3.5">
               <p className="text-[13px] leading-[1.5] text-nevo-near-black xl:text-[13.5px]">
@@ -170,7 +175,8 @@ export function LiveShareSheet({
             and attached to the escalation, so this sentence is now a promise
             the backend keeps rather than one this sheet makes. */}
         <p className="mt-[9px] text-[14.5px] leading-[1.55] text-nevo-near-black/68 xl:mt-2.5 xl:text-[15px]">
-          {`A note goes to your SENCo along with ${firstName}${"’"}s recent picture. They${"’"}ll take it from here.`}
+          {/* Without "They'll take it from here" - the same reason. */}
+          {`A note goes to your SENCo along with ${firstName}${"’"}s recent picture.`}
         </p>
         {keptNote.kept && (
           <KeptDraftNotice

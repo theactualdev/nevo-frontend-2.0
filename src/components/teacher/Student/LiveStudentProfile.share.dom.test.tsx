@@ -96,7 +96,9 @@ describe("the quiet note", () => {
     send();
 
     expect(await screen.findByText(SHARED)).toBeInTheDocument();
-    expect(screen.getByText("Sent to Learning Support. They’ll take it from here.")).toBeInTheDocument();
+    expect(screen.getByText("Sent to Learning Support.")).toBeInTheDocument();
+    // No promise nothing confirms (Hub, 4 Nov; Teslim item 26).
+    expect(screen.queryByText(/take it from here|follow up with you|stays between you/)).toBeNull();
     // C14 B5: it dismisses.
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
