@@ -202,6 +202,11 @@ export interface GuidedMarking {
   correct: boolean | null;
   /** The step's explanation after a miss, where it does not give it away. */
   feedback?: string | null;
+  /**
+   * The question asked again after a miss in other words, where the step has
+   * them (`reaskPrompt`, 8c67353): the server sends it as the step's prompt.
+   */
+  reask?: string | null;
   /** The prompt to answer next after a right answer, if there is one. */
   next?: string | null;
   /** Every step passed. */
@@ -369,6 +374,7 @@ export function SocraticPanel({
   const [missed, setMissed] = useState<{
     id: string;
     feedback: string | null;
+    reask: string | null;
     run: number;
   } | null>(null);
   /** Every step passed, as the server says. */
@@ -482,6 +488,7 @@ export function SocraticPanel({
       setMissed((was) => ({
         id,
         feedback: marked.feedback?.trim() || null,
+        reask: marked.reask?.trim() || null,
         run: (was?.run ?? 0) + 1,
       }));
       setActive(id);
@@ -641,14 +648,26 @@ export function SocraticPanel({
                 const options = p.options ?? [];
                 const expanded = active === id;
                 const missHere = missed?.id === id ? missed : null;
+                /*
+                 * THE QUESTION IN OTHER WORDS after a miss, where the server
+                 * sends them (`reaskPrompt`; Hub, 4 Nov: "Use it when
+                 * present, with the frame's lead line"). Where it sends none,
+                 * or the same words, the same question as before.
+                 */
+                const reask =
+                  missHere?.reask && missHere.reask !== p.prompt
+                    ? missHere.reask
+                    : null;
+                const asked = reask ?? p.prompt;
                 const choice = picked.get(id);
                 const text = drafts.get(id) ?? "";
                 return (
                   <div key={id} className="flex flex-col">
-                    {/* 17d S6: a miss re-asks. With the step's explanation,
-                        the frame's lead line and the explanation over the
-                        same question; with none, no words (`MissPulse`). */}
-                    {missHere && missHere.feedback && (
+                    {/* 17d S6: a miss re-asks. With the step's explanation
+                        or its question in other words, the frame's lead line,
+                        and the explanation where there is one, over the
+                        question; with neither, no words (`MissPulse`). */}
+                    {missHere && (missHere.feedback || reask) && (
                       <div role="status" className="mb-2.5">
                         <span className="inline-flex items-center gap-2">
                           <span
@@ -659,9 +678,11 @@ export function SocraticPanel({
                             {REASK_LEAD}
                           </span>
                         </span>
-                        <p className="mt-1.5 text-[13.5px] leading-[1.5] text-nevo-near-black">
-                          {missHere.feedback}
-                        </p>
+                        {missHere.feedback && (
+                          <p className="mt-1.5 text-[13.5px] leading-[1.5] text-nevo-near-black">
+                            {missHere.feedback}
+                          </p>
+                        )}
                       </div>
                     )}
                     <button
@@ -678,13 +699,13 @@ export function SocraticPanel({
                             : active && PROMPT_IDLE,
                       )}
                     >
-                      {p.prompt}
+                      {asked}
                     </button>
                     {expanded && options.length > 0 && (
                       <>
                         <div
                           role="radiogroup"
-                          aria-label={p.prompt}
+                          aria-label={asked}
                           className="relative mt-2.5 flex flex-col gap-2"
                         >
                           <MissPulse run={missHere?.run ?? 0} />
@@ -752,7 +773,7 @@ export function SocraticPanel({
                             // hardware keyboard still types on desktop.
                             inputMode="none"
                             autoComplete="off"
-                            aria-label={p.prompt}
+                            aria-label={asked}
                             placeholder="Type your answer"
                             className={cn(
                               "min-h-12 w-full rounded-[10px] border-[1.5px] bg-nevo-cream px-3.5 py-3 text-[13.5px] leading-[1.4] text-nevo-near-black outline-none placeholder:text-nevo-near-black/40",

@@ -1966,6 +1966,12 @@ export function LessonPlayer({
         (res): GuidedMarking => ({
           correct: res?.correct ?? null,
           feedback: res?.feedback ?? null,
+          // A miss's reply asks the same step again, in other words where
+          // the step has them (`reaskPrompt`, 8c67353).
+          reask:
+            res?.correct === false && res.prompt?.id === promptId
+              ? res.prompt.prompt
+              : null,
           next: res?.prompt?.id ?? null,
           panelComplete: res?.panelComplete === true,
         }),

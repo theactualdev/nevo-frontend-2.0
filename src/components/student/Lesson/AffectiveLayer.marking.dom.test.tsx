@@ -208,6 +208,112 @@ describe("what the server's marking does", () => {
     );
   });
 
+  /*
+   * THE QUESTION IN OTHER WORDS (`reaskPrompt`, 8c67353; Hub, 4 Nov: "Use it
+   * when present, with the frame's lead line, and keep the reduced build when
+   * it's absent").
+   */
+  it("asks again in the server's other words, under the lead line, where it sends them", async () => {
+    const REASK = "Does water move towards the salty side or away from it?";
+    const onAnswer = vi
+      .fn()
+      .mockResolvedValue(marking({ correct: false, reask: REASK }));
+    open(onAnswer);
+    pick("Out of the cell");
+    await settle();
+
+    expect(screen.getByText(REASK_LEAD)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: REASK })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByRole("radiogroup", { name: REASK })).toBeInTheDocument();
+    expect(screen.queryByText(FIRST.prompt)).toBeNull();
+    // The lead line over it alone: no explanation was sent, so none is drawn.
+    expect(screen.getByRole("status").querySelectorAll("p")).toHaveLength(0);
+    // The same step: its answer still goes under its own id.
+    fireEvent.click(screen.getByRole("radio", { name: "Into the cell" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await settle();
+    expect(onAnswer).toHaveBeenLastCalledWith(
+      "gq-1",
+      { option: "in" },
+      expect.any(String),
+    );
+  });
+
+  it("draws the explanation too, with the other words, where both are sent", async () => {
+    const REASK = "Which side has more salt?";
+    open(
+      vi.fn().mockResolvedValue(
+        marking({
+          correct: false,
+          feedback: "Water moves towards more salt.",
+          reask: REASK,
+        }),
+      ),
+    );
+    pick("Out of the cell");
+    await settle();
+
+    expect(screen.getByText(REASK_LEAD)).toBeInTheDocument();
+    expect(
+      screen.getByText("Water moves towards more salt."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: REASK })).toBeInTheDocument();
+  });
+
+  it("keeps the question as it was, and says nothing, where the other words are the same", async () => {
+    open(
+      vi
+        .fn()
+        .mockResolvedValue(marking({ correct: false, reask: FIRST.prompt })),
+    );
+    pick("Out of the cell");
+    await settle();
+
+    expect(screen.queryByText(REASK_LEAD)).toBeNull();
+    expect(
+      screen.getByRole("button", { name: FIRST.prompt }),
+    ).toBeInTheDocument();
+    expect(document.querySelector("[data-miss-pulse]")).not.toBeNull();
+  });
+
+  it("names a numeric step's field with the re-ask too", async () => {
+    const REASK = "Count the membrane's sides again: how many?";
+    open(
+      vi.fn().mockResolvedValue(marking({ correct: false, reask: REASK })),
+      [SECOND],
+    );
+    fireEvent.click(screen.getByRole("button", { name: SECOND.prompt }));
+    fireEvent.change(screen.getByRole("textbox", { name: SECOND.prompt }), {
+      target: { value: "3" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await settle();
+
+    expect(screen.getByRole("textbox", { name: REASK })).toHaveValue("");
+  });
+
+  it("goes back to the question's own words once it is answered right", async () => {
+    const REASK = "Does water move towards the salty side or away from it?";
+    const onAnswer = vi
+      .fn()
+      .mockResolvedValueOnce(marking({ correct: false, reask: REASK }))
+      .mockResolvedValueOnce(marking({ correct: true, next: "gq-2" }));
+    open(onAnswer);
+    pick("Out of the cell");
+    await settle();
+    fireEvent.click(screen.getByRole("radio", { name: "Into the cell" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await settle();
+
+    expect(
+      screen.getByRole("button", { name: FIRST.prompt }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(REASK)).toBeNull();
+  });
+
   it("ends on the way back to the question once every step is passed", async () => {
     open(
       vi

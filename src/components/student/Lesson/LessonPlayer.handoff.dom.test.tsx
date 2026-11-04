@@ -546,6 +546,57 @@ describe("a hand-off's steps, answered and marked by the server", () => {
     ).toHaveAttribute("aria-checked", "false");
   });
 
+  it("asks a step again in the words the server sends for it after a miss (reaskPrompt)", async () => {
+    const REASK = "Which number tells you how many equal pieces there are?";
+    saveAttempt.mockResolvedValue(
+      reply({ ...HANDOFF, guidedPrompts: [CHOICE] }),
+    );
+    answerGuided.mockResolvedValue({
+      promptId: "gq-a",
+      correct: false,
+      panelComplete: false,
+      prompt: { id: "gq-a", prompt: REASK },
+      feedback: null,
+    });
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await miss();
+    fireEvent.click(await screen.findByRole("button", { name: CHOICE.prompt }));
+    fireEvent.click(screen.getByRole("radio", { name: "The top number" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await act(async () => {});
+
+    expect(
+      screen.getByText("Let's come at it a different way."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: REASK })).toBeInTheDocument();
+  });
+
+  it("never takes another step's prompt, or a right answer's next one, as a re-ask", async () => {
+    saveAttempt.mockResolvedValue(
+      reply({ ...HANDOFF, guidedPrompts: [CHOICE] }),
+    );
+    answerGuided.mockResolvedValue({
+      promptId: "gq-a",
+      correct: false,
+      panelComplete: false,
+      prompt: { id: "gq-b", prompt: "Some other step's question?" },
+      feedback: null,
+    });
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await miss();
+    fireEvent.click(await screen.findByRole("button", { name: CHOICE.prompt }));
+    fireEvent.click(screen.getByRole("radio", { name: "The top number" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await act(async () => {});
+
+    expect(screen.queryByText("Some other step's question?")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: CHOICE.prompt }),
+    ).toBeInTheDocument();
+  });
+
   it("opens the step the server is asking when a 409 says another was out of turn", async () => {
     const SECOND = {
       id: "gq-b",
