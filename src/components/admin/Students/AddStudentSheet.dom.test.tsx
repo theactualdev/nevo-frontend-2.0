@@ -400,3 +400,32 @@ describe("the school's own Student ID", () => {
     expect(screen.getByRole("button", { name: /^Add Zainab/ })).toBeEnabled();
   });
 });
+
+/**
+ * Backlog 39: a failed class read was swallowed into an empty list, so the
+ * Class select sat empty and nothing said why. It says so now, with a retry.
+ */
+describe("when the classes can't be read", () => {
+  it("says so under the Class select, and reads them again on Try again", async () => {
+    list.mockRejectedValueOnce(new Error("down"));
+    const { container } = mount();
+
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(
+        /We couldn't read your school's classes just now, so there's nothing to show here yet/,
+      ),
+    );
+    expect(screen.queryByRole("option", { name: "JSS 2A" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("option", { name: "JSS 2A" })).toBeInTheDocument();
+    expect(visibleText(container)).not.toMatch(/couldn't read your school's classes/);
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it("says nothing when they were read", async () => {
+    const { container } = mount();
+    await screen.findByRole("option", { name: "JSS 2A" });
+    expect(visibleText(container)).not.toMatch(/couldn't read/);
+  });
+});
