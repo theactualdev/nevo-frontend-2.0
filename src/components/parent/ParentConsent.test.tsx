@@ -140,7 +140,14 @@ describe("the request", () => {
     // pronouns were thickest.
     expect(container.textContent).toMatch(/at their own pace/);
     expect(container.textContent).toMatch(/how they[’']re getting on/);
-    expect(container.textContent).toMatch(/Amara[’']s progress is always saved/);
+    expect(container.textContent).toMatch(
+      /Amara[’']s progress carries between lessons, terms and devices\./,
+    );
+  });
+
+  it("doesn't promise progress is ALWAYS saved - an overclaim (Lydia, 5 Nov)", () => {
+    const { container } = render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    expect(container.textContent).not.toMatch(/always saved/i);
   });
 
   it("capitalises a nameless student's stand-in at the head of the heading", () => {
