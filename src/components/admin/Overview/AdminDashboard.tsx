@@ -1,6 +1,7 @@
 "use client";
 
 import { useSetupGate } from "@/hooks";
+import { ReadFailed } from "../ReadFailed";
 import { NotActiveDashboard } from "./NotActiveDashboard";
 import { OverviewView } from "./OverviewView";
 import { UnconfirmedDashboard } from "./UnconfirmedDashboard";
@@ -20,13 +21,16 @@ import { UnconfirmedDashboard } from "./UnconfirmedDashboard";
  * one thing a school can fix before anything here would help. It used to
  * render D04's early Overview, which told the school it "is live on Nevo".
  *
- * FAILS OPEN. If the onboarding read failed, `onboarding` is null and the
- * ordinary Overview renders, exactly as the gate pauses nothing on a failed
- * read. Telling a running school it is not active, on no evidence, would be
- * the worst sentence this page could say.
+ * NO LONGER FAILS OPEN. If the onboarding read failed, `onboarding` is null
+ * and this used to render the ordinary Overview - whose early variant tells a
+ * school that "{school} is live on Nevo", which may be a school that hasn't
+ * paid (the 2 Nov audit). Telling a running school it's not active would be
+ * wrong; telling an unpaid one it's live is just as wrong (Lydia, 4 Nov: "the
+ * product asserting a state that is not true ... is worse than any missing
+ * feature"). So a failed read says it failed, and offers to ask again.
  */
 export function AdminDashboard() {
-  const { loading, pause, onboarding } = useSetupGate();
+  const { loading, pause, onboarding, refresh } = useSetupGate();
 
   if (loading) {
     return (
@@ -42,6 +46,20 @@ export function AdminDashboard() {
 
   if (pause === "not_active" && onboarding) {
     return <NotActiveDashboard state={onboarding} />;
+  }
+
+  // Not active, active, or neither: only the read can say.
+  if (!onboarding) {
+    return (
+      <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
+        <div className="mx-auto max-w-[860px]">
+          <h2 className="mt-1 text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+            Overview
+          </h2>
+          <ReadFailed className="mt-6" what="your school's setup" onRetry={refresh} />
+        </div>
+      </div>
+    );
   }
 
   return <OverviewView />;
