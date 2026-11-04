@@ -12,7 +12,7 @@ import { ArrowRight, Check } from "lucide-react";
 import { cn, randomId } from "@/lib/utils";
 import { baselineApi } from "@/lib/api";
 import type { MotorTaskAnswer } from "@/lib/api/baseline";
-import { MotorStep, motorStepRuns } from "./MotorStep";
+import { MOTOR_LINE, MotorStep, motorStepRuns } from "./MotorStep";
 import { holdBaseline } from "@/lib/profiling/pendingBaseline";
 import { markWarmUpDone, warmUpDoneFor } from "@/lib/profiling/warmUpDone";
 import { getSession } from "@/lib/auth/session";
@@ -206,6 +206,15 @@ export function WarmUpRun({
   const motor = prompt.state === "motor" ? prompt : null;
   const motorDevice = motor && hydrated ? formFactor() : null;
   const motorRuns = motorDevice !== null && motorStepRuns(motorDevice);
+  /*
+   * AND THE CHILD IS TOLD WHAT IS COMING FIRST (Lydia, 31 Oct Q4: "The child
+   * still needs to know what is about to happen, so put that before the timed
+   * part rather than removing it"; 2 Nov: "Yes, build it as described"). A
+   * calm screen - the DAILY WARM-UP label, 08a's line and one button, "Start"
+   * - and only Start begins the timed step, so nothing is timed before the
+   * child is ready.
+   */
+  const [motorStarted, setMotorStarted] = useState(false);
   /*
    * The band, from the roster, for the child whose session this is. Read on
    * the client only: the session is invisible to the server. The task waits
@@ -717,12 +726,16 @@ export function WarmUpRun({
       ) : asking ? (
         <WarmUpLoading onHome={() => router.push(HOME)} />
       ) : motorRuns && motorDevice && !unconsented ? (
-        <MotorStep
-          band={band ?? FRAME_BAND}
-          formFactor={motorDevice}
-          capture={capture}
-          onComplete={finish}
-        />
+        motorStarted ? (
+          <MotorStep
+            band={band ?? FRAME_BAND}
+            formFactor={motorDevice}
+            capture={capture}
+            onComplete={finish}
+          />
+        ) : (
+          <MotorIntro onStart={() => setMotorStarted(true)} />
+        )
       ) : !dimension || unheard || unconsented ? (
         <WarmUpNothing onHome={() => router.push(HOME)} />
       ) : (
@@ -876,6 +889,27 @@ function WarmUpLoading({ onHome }: { onHome: () => void }) {
  * task whose taps the device may not keep is not offered. The wait before an
  * answer is `WarmUpLoading`'s.
  */
+/**
+ * Before the motor step: what is about to happen, and the child's own moment
+ * to begin it (Lydia, 31 Oct and 2 Nov). The run header's label, 08a's line in
+ * its own words, and Start - the warm-up's button, the only thing to press.
+ */
+function MotorIntro({ onStart }: { onStart: () => void }) {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center px-6 pb-10 sm:px-[30px]">
+      <div className="flex max-w-[440px] flex-col items-center gap-6 text-center">
+        <span className="font-mono text-[11px] font-bold tracking-[0.14em] text-nevo-violet">
+          DAILY WARM-UP
+        </span>
+        <p className="m-0 text-[17px] leading-[1.4] font-medium sm:text-xl">
+          {MOTOR_LINE}
+        </p>
+        <HomeButton label="Start" onClick={onStart} />
+      </div>
+    </div>
+  );
+}
+
 function WarmUpNothing({ onHome }: { onHome: () => void }) {
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center px-5 pb-10 sm:px-7">
