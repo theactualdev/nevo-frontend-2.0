@@ -50,12 +50,29 @@ export type UploadStatus =
  * ladder back to "Receiving the file" - both for the longest part of the
  * wait, which is the exact reading of "the product has hung" that LU-01
  * exists to prevent. Observed on a live upload, not reasoned about.
+ *
+ * The four older names are kept for a deployment that still sends them, and
+ * `scripts/enum-check.mjs` reports them as that rather than as drift.
+ * @legacy lessons structure adaptations complete
  */
 export type UploadStage =
   | "lessons"
   | "structure"
   | "adaptations"
-  | "complete";
+  | "complete"
+  /*
+   * THE SERVER'S NAMES NOW (live spec and the upload worker at 3901b87: "The
+   * five real processing phases shown by the upload console"). The four
+   * above are kept for a deployment that still sends them - the client works
+   * with both (deploy order, Lydia 31 Oct). Every one of these fell through
+   * to "Reading the document" on the single ladder, and off the block ladder
+   * altogether, for the whole wait.
+   */
+  | "receiving_file"
+  | "reading_document"
+  | "finding_sections"
+  | "preparing_adaptations"
+  | "ready_to_assign";
 
 export interface StructureModule {
   title: string;
