@@ -69,6 +69,20 @@ const enter = (day: string, month: string, year: string) => {
   fireEvent.change(screen.getByLabelText("Year"), { target: { value: year } });
 };
 
+describe("when the parent never gave a date (holdReasons: date_missing)", () => {
+  it("doesn't say the dates don't match - there was nothing to match - and still asks", async () => {
+    parentChecks.mockResolvedValue([
+      check({ schoolRecheckedAt: "2026-10-21T09:00:00Z", holdReasons: ["date_missing"] }),
+    ]);
+    const { container } = render(<ParentDateCheck />);
+    expect(
+      await screen.findByRole("heading", { name: "Can you confirm Amara’s date of birth?" }),
+    ).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/don’t quite match/);
+    expect(screen.getByRole("button", { name: "Confirm date of birth" })).toBeInTheDocument();
+  });
+});
+
 describe("the ask", () => {
   it("asks for one date, plainly, and never shows the school's", async () => {
     const { container } = render(<ParentDateCheck />);
