@@ -86,7 +86,9 @@ import { WAY_IN_PRESSES, waysInFor, type WayIn } from "@/lib/lessons/waysIn";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { msUntilServerTime } from "@/lib/api/serverClock";
 import {
+  lessonMoreSupport,
   lessonPace,
+  moreSupportOf,
   paceOf,
   paceWrite,
   withSessionChoices,
@@ -667,6 +669,16 @@ export function LessonPlayer({
   const [density, setDensity] = useState<Density | null>(() =>
     readHeld ? lessonPace(given.segments.map((s) => s.chosen)) : null,
   );
+  /*
+   * MORE SUPPORT ON A CALCULATION, the sitting's one value (`LessonChoice`,
+   * 8c67353) as the read shows it on its sections, like the pace above. The
+   * child's own, held on the server - see `pickMoreSupport`.
+   */
+  const [moreSupport, setMoreSupport] = useState(() =>
+    readHeld ? lessonMoreSupport(given.segments.map((s) => s.chosen)) : false,
+  );
+  // Picked since the lesson opened: newer than either read.
+  const [supportPicked, setSupportPicked] = useState(false);
   // Each segment's FORMAT. The read's pace is the lesson's, above, so none
   // is kept per segment here.
   const [chosen, setChosen] = useState<ReadonlyMap<string, ChosenVersion>>(
@@ -1283,6 +1295,11 @@ export function LessonPlayer({
         setPaceHeld({ segmentId: segment.id, density: manualDensity });
       }
       setDensity(pace);
+    }
+    // More support, the same way: the sitting's word, unless picked since.
+    const support = moreSupportOf(sittingState.lessonPreferences);
+    if (support !== undefined && !supportPicked && support !== moreSupport) {
+      setMoreSupport(support);
     }
   }
 
@@ -2491,6 +2508,21 @@ export function LessonPlayer({
   /** Which pace pick is the newest, for a refusal that lands late. */
   const paceTicket = useRef(0);
 
+  /*
+   * MORE SUPPORT, THE CHILD'S OWN, HELD FOR THE SITTING (8c67353,
+   * `moreSupport` on the same write as the pace): on, or cleared with null.
+   * It switches at once; a write that fails is honoured on screen and simply
+   * not kept past this visit, as the pace's is.
+   */
+  const pickMoreSupport = () => {
+    const next = !moreSupport;
+    setSupportPicked(true);
+    setMoreSupport(next);
+    void choiceWrite(segment.id, { moreSupport: next ? true : null })?.catch(
+      () => {},
+    );
+  };
+
   const pickDensity = (id: string) => {
     const d = id as Density;
     const segmentId = segment.id;
@@ -2805,25 +2837,26 @@ export function LessonPlayer({
   /*
    * A CALCULATION MISS'S RE-TEACHING IS SUPPORT IN THE STEP (6b5d496): the
    * server's one calculation route, "Show more support in this step", which
-   * it applies itself (`requiresChoice: false`) at `scaffoldLevel: strong`.
-   * That step goes to the strong level in the solver, as sent - no card and
-   * no words while Lydia decides whether there is a card at all (Hub, 29
-   * Oct). Kept for the step it named (`questionId`, the step's id); any
-   * other route, level or section is not this, and changes nothing.
+   * it applies itself (`requiresChoice: false`) at the level it names. That
+   * step goes to the level in the solver, and the card there says what
+   * changed (Lydia, 2 and 4 Nov). Kept for the step it named (`questionId`,
+   * the step's id); any other route, level or section changes nothing.
    */
   const [calcSupport, setCalcSupport] = useState<{
     segmentId: string;
     stepId: string;
+    level: "standard" | "strong";
   } | null>(null);
   const noteCalcSupport = (segmentId: string, stored: LessonQuestionAttempt) => {
     if (stored.correct !== false) return;
     const given = stored.reteaching ?? stored.comprehensionGate?.reteaching;
+    const named = given?.presentation?.scaffoldLevel;
     if (
       given?.segmentId === segmentId &&
       given.recommendedRoute?.action === "calculation_scaffold" &&
-      given.presentation?.scaffoldLevel === "strong"
+      (named === "standard" || named === "strong")
     ) {
-      setCalcSupport({ segmentId, stepId: given.questionId });
+      setCalcSupport({ segmentId, stepId: given.questionId, level: named });
     }
   };
   /** A miss's re-teaching, from its reply, for the section it answered. */
@@ -3795,9 +3828,11 @@ export function LessonPlayer({
                 // engine's standing density, which this screen does not draw.
                 calcSlower={manualDensity === DENSITY.SLOWER}
                 onCalcSlower={() => pickDensity(DENSITY.SLOWER)}
-                calcSupportStep={
+                calcMoreSupport={moreSupport}
+                onCalcMoreSupport={pickMoreSupport}
+                calcSupport={
                   calcSupport?.segmentId === segment.id
-                    ? calcSupport.stepId
+                    ? { stepId: calcSupport.stepId, level: calcSupport.level }
                     : null
                 }
                 onSystemScroll={systemScrolled}
@@ -4171,7 +4206,9 @@ function SegmentBody({
   supportLevel,
   calcSlower,
   onCalcSlower,
-  calcSupportStep,
+  calcMoreSupport,
+  onCalcMoreSupport,
+  calcSupport,
   engineHint,
   onEngineHintClosed,
   onSystemScroll,
@@ -4204,8 +4241,12 @@ function SegmentBody({
   calcSlower: boolean;
   /** The child pressed Slower in the solver's row. */
   onCalcSlower: () => void;
-  /** The step the server's re-teaching put at the strong level after a miss. */
-  calcSupportStep: string | null;
+  /** More support is on for the sitting - see `pickMoreSupport`. */
+  calcMoreSupport: boolean;
+  /** The child pressed More support in the solver's row. */
+  onCalcMoreSupport: () => void;
+  /** The server's support in one step after a miss - see `noteCalcSupport`. */
+  calcSupport: { stepId: string; level: "standard" | "strong" } | null;
   /** The engine's `offer_hint` text, which the solver shows as its own. */
   engineHint?: string;
   onEngineHintClosed: () => void;
@@ -4284,7 +4325,9 @@ function SegmentBody({
             level={supportLevel}
             slower={calcSlower}
             onSlower={onCalcSlower}
-            engineSupportStep={calcSupportStep}
+            moreSupport={calcMoreSupport}
+            onMoreSupport={onCalcMoreSupport}
+            engineSupport={calcSupport}
             engineHint={engineHint}
             onEngineHintClosed={onEngineHintClosed}
             onSystemScroll={onSystemScroll}

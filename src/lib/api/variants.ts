@@ -299,6 +299,13 @@ export interface CalculationStep {
    */
   parts?: string[];
   /**
+   * The idea behind this step, in a teacher's words (8c67353): what More
+   * support shows (Lydia: "concept help, never the hint"). A child's read
+   * carries it only once a teacher approved the step's support; absent, or
+   * null, the step has none.
+   */
+  conceptExplanation?: string | null;
+  /**
    * WHAT THIS STEP'S ANSWER IS - landed 16 Sep, and it is per STEP.
    *
    * The variant carries an answer too, and mapping that one onto every step is

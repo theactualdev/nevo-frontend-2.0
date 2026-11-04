@@ -4,7 +4,11 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, Delete, Pause, Play } from "lucide-react";
 import { Button, NevoKeyboard } from "@/components/shared";
-import { SCAFFOLD_LEVELS, type ScaffoldLevel } from "@/lib/constants";
+import {
+  SCAFFOLD_FILLED,
+  SCAFFOLD_LEVELS,
+  type ScaffoldLevel,
+} from "@/lib/constants";
 import type {
   CalcHighlight,
   CalcNarration,
@@ -17,7 +21,6 @@ import type {
 } from "@/lib/types";
 import { isStoredAnswer } from "@/lib/lessons/storedAnswer";
 import { cn } from "@/lib/utils";
-import { duration } from "@/styles/tokens/motion";
 import { NO_SOUND, PressedLine } from "./PressedLine";
 import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
 import { revealIn, scrollerOf, type Stretch } from "./revealStep";
@@ -39,11 +42,22 @@ function msSince(start: number | null): number | undefined {
 }
 
 /**
- * SLOWER'S BEAT: how long each piece of a step waits for the one before it -
- * the calm-entry motion token (`duration.breakEntry`). PROVISIONAL (Hub, 29
- * Oct): no frame gives Slower's pace, and design has been asked for it.
+ * SLOWER'S NEXT PIECE COMES WHEN THE CHILD TAPS, never on a timer (Lydia, 2
+ * Nov). The control is the one chunked reading already uses for its
+ * tap-to-continue parts (`TextSegment`), in its words - 37c UDL
+ * Accommodations: "each tap-to-continue", "Tap to continue" (Hub, 4 Nov:
+ * reuse the player's tap-to-continue control, no new words).
  */
-export const SLOWER_BEAT_MS = parseInt(duration.breakEntry, 10);
+export const SLOWER_NEXT = "Tap to continue";
+
+/** More support's card, as the solver frame labels it. */
+export const MORE_SUPPORT_LABEL = "LET'S LOOK AT THIS PART TOGETHER";
+
+/** The card's lines after a miss, Lydia's, verbatim (4 Nov). */
+export const CALC_SUPPORT_LINES = {
+  standard: "Here it is as a picture.",
+  strong: "Here it is as a picture, with a hint on the question.",
+} as const;
 
 /** The frame's own Slower line (`presentSlower`), above the question. */
 export const SLOWER_LINE = "No rush. Let's take this one a step at a time.";
@@ -93,27 +107,30 @@ export const SLOWER_LINE = "No rush. Let's take this one a step at a time.";
  *
  * THE CHILD'S OWN ROW: SLOWER AND MORE SUPPORT (the frame's gate controls;
  * Lydia, 29 Oct: "A gap on the backend should not cost a child a control on
- * their screen"). Fewer steps is left out until the server can send a step's
- * parts as answerable steps - "While anything is absent from a screen, the
- * engine must not offer it as a route there."
+ * their screen"). Fewer steps is left out until it is built on the steps'
+ * answerable mini-steps (8c67353) - "While anything is absent from a screen,
+ * the engine must not offer it as a route there."
  *  - SLOWER is the lesson's pace, the same switch the text's Slower chip is,
  *    held for the sitting on the server. Here it puts the frame's line above
  *    the question and lets the step arrive in pieces: the question, then the
  *    step's approved `parts` one at a time where it has them (8c4ccef), then
- *    the answer. One beat apart, on the calm-entry motion token - PROVISIONAL
- *    until design gives the pace (Hub, 29 Oct).
- *  - MORE SUPPORT is this step at the strong level: the drawing and the
- *    step's own hint, unasked (`supportAt`). Not the frame's "Let's look at
- *    this part together" card, whose explanation no field carries; held for
- *    Lydia. For this step only, as the frame's resets with the step, and not
- *    kept past the visit: the server holds no such choice.
+ *    the answer. Each next piece when the child taps "Tap to continue", never
+ *    on a timer (Lydia, 2 Nov; `SLOWER_NEXT`).
+ *  - MORE SUPPORT is the idea behind the step, in a teacher's words: the
+ *    step's `explanation` (`conceptExplanation`, 8c67353), in the frame's
+ *    "Let's look at this part together" card above the question - concept
+ *    help, never the hint (Lydia, via the Hub, 4 Nov). Only on a step that
+ *    has one: on any other there is no More support at all, since there is
+ *    nothing to show (rule 5; Teslim: "absence is the normal state"). Held
+ *    for the sitting on the server, as Slower is (`lessonPreferences`), so a
+ *    child who turned it on finds it on every step that has one.
  *
- * THE ENGINE'S SUPPORT AFTER A MISS (`engineSupportStep`): the server's only
+ * THE ENGINE'S SUPPORT AFTER A MISS (`engineSupport`): the server's only
  * calculation route since 6b5d496 is "support inside the current answerable
- * step" (`requiresChoice: false`, `scaffoldLevel: strong`), so that step goes
- * to the strong level as sent - with no card and no words while Lydia decides
- * whether there is a card at all (rule 7: a screen that visibly changes mode
- * tells a child something about them triggered it).
+ * step" (`requiresChoice: false`), at `scaffoldLevel` standard or strong. That
+ * step goes to the level as sent, and a card says what changed (Lydia, 2 Nov:
+ * "Yes, a card appears. The screen changing under a child with no
+ * explanation makes them think they did something wrong"; her lines, 4 Nov).
  */
 export function CalculationSolver({
   calculation,
@@ -137,18 +154,26 @@ export function CalculationSolver({
   level = null,
   slower = false,
   onSlower,
-  engineSupportStep = null,
+  moreSupport = false,
+  onMoreSupport,
+  engineSupport = null,
 }: {
   calculation: CalculationSegment;
   /** The lesson's pace is Slower: the child's own, held for the sitting. */
   slower?: boolean;
   /** The child pressed Slower. Absent, the row has no Slower. */
   onSlower?: () => void;
+  /** More support is on for the sitting: the child's own, held on the server. */
+  moreSupport?: boolean;
+  /** The child pressed More support. Absent, the row has no More support. */
+  onMoreSupport?: () => void;
   /**
-   * The step the server's re-teaching put at the strong level after a miss
-   * (`calculation_scaffold`), by its `stepId`. Any other step is as `level`.
+   * The server's support in one step after a miss (`calculation_scaffold`):
+   * the step, by its `stepId`, and the level it names - standard draws the
+   * picture, strong the picture and the step's hint. Never lower than
+   * `level`; any other step is as `level`.
    */
-  engineSupportStep?: string | null;
+  engineSupport?: { stepId: string; level: "standard" | "strong" } | null;
   /**
    * The support level the dots show (B116) - the engine config's
    * `initialScaffoldLevel` until something more specific is said. Null is
@@ -279,26 +304,52 @@ export function CalculationSolver({
     calculation.byId === true,
   );
   const manipulative = calculation.manipulative;
-  /** The step the child asked More support on; it lapses as the step moves on. */
-  const [supportAsked, setSupportAsked] = useState<string | null>(null);
-  const moreSupport = supportAsked === step.stepId;
   /*
-   * THIS STEP AT THE STRONG LEVEL where the child asked for More support, or
-   * the server's re-teaching put it there after a miss. Every other step is
-   * at the engine's level, which the dots show.
+   * THE SERVER'S SUPPORT IN THIS STEP, AFTER A MISS, AND THE CARD THAT SAYS SO
+   * (Lydia, 2 Nov: "It says what changed rather than offering a choice, in
+   * the ways-in card's shape"; her lines, 4 Nov). The step it names goes to
+   * its level - never below the dots' - and the card says what appeared:
+   *  - the picture: "Here it is as a picture."
+   *  - the picture and the step's hint: "Here it is as a picture, with a hint
+   *    on the question."
+   * "Plain, no praise, no judgment, and they say only what changed": so only
+   * what newly appears is said. A picture this calculation has none of, or
+   * one already on screen, is no change and gets no card; a hint with no
+   * words, or one already showing, is not said either.
    */
-  const stepStrong = moreSupport || engineSupportStep === step.stepId;
-  const support = supportAt(stepStrong ? SCAFFOLD_LEVELS.FULL : level);
+  const engineLevel =
+    engineSupport?.stepId === step.stepId
+      ? engineSupport.level === "strong"
+        ? SCAFFOLD_LEVELS.FULL
+        : SCAFFOLD_LEVELS.MODERATE
+      : null;
+  const supportLevel =
+    engineLevel &&
+    (level === null || SCAFFOLD_FILLED[engineLevel] > SCAFFOLD_FILLED[level])
+      ? engineLevel
+      : level;
+  const support = supportAt(supportLevel);
+  const before = supportAt(level);
+  const pictureAppeared =
+    Boolean(calculation.scaffold) && support.scaffold && !before.scaffold;
+  const hintAppeared =
+    support.hint && !before.hint && step.hint.trim() !== "";
+  const engineCard = pictureAppeared
+    ? hintAppeared
+      ? CALC_SUPPORT_LINES.strong
+      : CALC_SUPPORT_LINES.standard
+    : null;
 
   /*
-   * SLOWER'S PIECES, ONE BEAT APART. A step with approved `parts` is the step's
-   * own words split for slower pacing (8c4ccef: "each part is text, not a
-   * scored question"), so under Slower it is shown AS its parts - the first at
-   * once, each next one a beat later, then the answer (Lydia: "When he can
-   * send the parts, Slower uses those instead"). A step without them is the
-   * question at once and the answer a beat later. `shown` counts what has
-   * arrived after the first piece. Without Slower everything is there at once,
-   * the question whole, as it always was.
+   * SLOWER'S PIECES, EACH WHEN THE CHILD TAPS. A step with approved `parts` is
+   * the step's own words split for slower pacing (8c4ccef: "each part is
+   * text, not a scored question"), so under Slower it is shown AS its parts -
+   * the first at once, each next one on "Tap to continue", then the answer
+   * (Lydia: "When he can send the parts, Slower uses those instead"; 2 Nov:
+   * "the step in pieces, each revealed when the child taps", never timed). A
+   * step without them is the question, then the answer on a tap. `shown`
+   * counts what has arrived after the first piece. Without Slower everything
+   * is there at once, the question whole, as it always was.
    *
    * A STEP IS PACED ONLY IF SLOWER WAS ON AS IT OPENED. Pressed halfway
    * through, it paces the next step, and never takes away an answer area the
@@ -318,16 +369,30 @@ export function CalculationSolver({
   }
   const pacing = arrived.paced && slower && phase === "ask";
   const shown = pacing ? Math.min(arrived.shown, pieces) : pieces;
-  useEffect(() => {
-    if (!pacing || shown >= pieces) return;
-    const beat = setTimeout(
-      () => setArrived((a) => ({ ...a, shown: a.shown + 1 })),
-      SLOWER_BEAT_MS,
-    );
-    return () => clearTimeout(beat);
-  }, [pacing, shown, pieces]);
   /** The answer area is there: Slower's last piece, or at once without it. */
   const answerShown = shown >= pieces;
+  /*
+   * THE ANSWER AREA TAKES THE FOCUS WHEN A TAP BRINGS IT: "Tap to continue"
+   * goes as it arrives, and a keyboard would otherwise be left on nothing.
+   * Its first control, as a child pressing on would reach it next.
+   */
+  const answerArea = useRef<HTMLDivElement>(null);
+  const tappedIn = useRef(false);
+  useEffect(() => {
+    // Set only by the tap that brings the answer area, so it is here now.
+    if (!tappedIn.current) return;
+    tappedIn.current = false;
+    answerArea.current
+      ?.querySelector<HTMLElement>("button:not([disabled]), input, textarea")
+      ?.focus();
+  }, [answerShown]);
+  const nextPiece = () => {
+    if (shown + 1 >= pieces) tappedIn.current = true;
+    setArrived((a) => ({ ...a, shown: a.shown + 1 }));
+    onAct?.();
+  };
+  /** More support has something to show here: the step's explanation. */
+  const moreSupportHere = Boolean(onMoreSupport && step.explanation);
   /** Under Slower, the step as its parts, as many as have arrived. */
   const partsShown =
     pacing && parts.length > 0 ? parts.slice(0, shown + 1) : null;
@@ -577,25 +642,42 @@ export function CalculationSolver({
     <div className="mx-auto sm:max-w-[560px] lg:max-w-[600px]">
       {/*
         THE CHILD'S OWN ROW, as the frame's gate controls draw it: pills under
-        the title, navy while on, gone once the solve is done. Slower and More
-        support only - see the note at the top.
+        the title, navy while on, gone once the solve is done. Slower, and More
+        support where the step has an explanation - see the note at the top.
       */}
-      {!done && (
+      {!done && (onSlower || moreSupportHere) && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           {onSlower && (
             <RowControl on={slower} onPress={onSlower}>
               Slower
             </RowControl>
           )}
-          <RowControl
-            on={moreSupport}
-            onPress={() => {
-              setSupportAsked(moreSupport ? null : step.stepId);
-              onAct?.();
-            }}
+          {moreSupportHere && (
+            <RowControl
+              on={moreSupport}
+              onPress={() => {
+                onMoreSupport?.();
+                onAct?.();
+              }}
+            >
+              More support
+            </RowControl>
+          )}
+        </div>
+      )}
+
+      {/* What the server's support changed, while its step is asked. */}
+      {asking && engineCard && (
+        <div className="mb-[22px] rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+          <p
+            role="status"
+            className={cn(
+              "text-base font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[18px]",
+              reading && READING_BODY,
+            )}
           >
-            More support
-          </RowControl>
+            {engineCard}
+          </p>
         </div>
       )}
 
@@ -704,6 +786,26 @@ export function CalculationSolver({
 
         {asking && (
           <>
+            {/*
+              MORE SUPPORT'S CARD, above the question (`presentSupport`): the
+              frame's label and the step's explanation, held inside this very
+              step, never a new screen.
+            */}
+            {moreSupport && moreSupportHere && (
+              <div className="mb-4 rounded-[12px] bg-nevo-violet/14 px-4 py-3.5">
+                <p className="font-mono text-[10px] tracking-[0.06em] text-nevo-navy">
+                  {MORE_SUPPORT_LABEL}
+                </p>
+                <p
+                  className={cn(
+                    "mt-2 text-sm leading-[1.55] text-nevo-near-black sm:text-[15px]",
+                    readable,
+                  )}
+                >
+                  {step.explanation}
+                </p>
+              </div>
+            )}
             {/* The frame's Slower line, above the question (`presentSlower`). */}
             {slower && (
               <p
@@ -716,7 +818,11 @@ export function CalculationSolver({
               </p>
             )}
             {partsShown ? (
-              <div data-reveal="prompt" className="flex flex-col gap-2">
+              <div
+                data-reveal="prompt"
+                aria-live="polite"
+                className="flex flex-col gap-2"
+              >
                 {partsShown.map((part, i) => (
                   <p
                     key={i}
@@ -790,12 +896,30 @@ export function CalculationSolver({
             </div>
 
             {/*
-              THE ANSWER AREA, which under Slower comes last, a beat after the
-              step's last piece - and with it the docked pad. Faded in where it
-              arrives late; there at once, as always, without Slower.
+              SLOWER'S NEXT PIECE, ON THE CHILD'S TAP: chunked reading's own
+              control, in its place and its words (`SLOWER_NEXT`), where the
+              answer area will be.
+            */}
+            {!answerShown && (
+              <button
+                type="button"
+                onClick={nextPiece}
+                className="mt-5 flex h-11 w-full cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy/8 px-5 text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/12 active:scale-[0.99]"
+              >
+                {SLOWER_NEXT}
+              </button>
+            )}
+
+            {/*
+              THE ANSWER AREA, which under Slower comes last, on the tap after
+              the step's last piece - and with it the docked pad. Faded in
+              where it arrives late; there at once, as always, without Slower.
             */}
             {answerShown && (
-            <div className={cn(pacing && "motion-safe:animate-nevo-reveal")}>
+            <div
+              ref={answerArea}
+              className={cn(pacing && "motion-safe:animate-nevo-reveal")}
+            >
             {step.input === "choice" && (
               <>
                 <Nudged nudge={nudge} className="mt-4 flex flex-col gap-2.5">

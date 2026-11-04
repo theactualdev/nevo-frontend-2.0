@@ -7,23 +7,23 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
+import { CALC_SUPPORT_LINES } from "./CalculationSolver";
 import { calculationFromVariant } from "@/lib/lessons/fromContent";
 import { clearSession } from "@/lib/auth/session";
 import type { CalculationVariant } from "@/lib/api/variants";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
 
 /**
- * What the server says back about a calculation step it marked wrong (Teslim
- * 6b5d496): support inside that step, `calculation_scaffold` at
- * `scaffoldLevel: strong`, which it applies itself. The player puts that step
- * at the strong level in the solver - with no card and no words while Lydia
- * decides whether there is a card at all (Hub, 29 Oct) - and nothing else
- * the reply could say changes the solver. The answers themselves, and how
- * they are written, are `LessonPlayer.calcattempts`'s.
+ * A CALCULATION MISS'S RE-TEACHING IS SUPPORT IN THE STEP (Lydia, 2 and 4
+ * Nov). The server's reply to a wrong step names its one calculation route,
+ * `calculation_scaffold`, and a level; the step it names goes to that level
+ * and the card says what changed. Any other route, a right answer, or another
+ * section changes nothing.
  */
 
 const SESSION = "4f1c2a9e-8b7d-4c3a-9e2f-1a2b3c4d5e6f";
 const SEG = "0b9d6c1e-2f3a-4b5c-8d7e-6f5a4b3c2d1e";
+const HINT = "Look at the bottom number of each fraction.";
 
 const progress = vi.hoisted(() => ({
   report: vi.fn(),
@@ -90,7 +90,7 @@ const step = (over: Record<string, unknown> = {}) => ({
   ],
   answer: "same",
   targets: [],
-  hint: "Look at the bottom number of each fraction.",
+  hint: HINT,
   confirmationText: "",
   visualUpdate: "",
   assembles: "1/4 + 2/4 = ?/4",
@@ -100,54 +100,73 @@ const step = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const NUMBER = (over: Record<string, unknown> = {}) =>
-  step({
-    stepId: "s2",
-    prompt: "So what is 1 + 2?",
-    expectedInput: "numeric",
-    input: "number",
-    options: [],
-    answer: "3",
-    hint: "",
-    assembles: "1/4 + 2/4 = 3/4",
-    equationState: "1/4 + 2/4 = 3/4",
-    ...over,
-  });
+const LESSON = {
+  id: "l-1",
+  title: "Fractions",
+  segments: [
+    {
+      id: SEG,
+      modalities: ["text", "interactive"],
+      text: { heading: "Adding", body: { default: "Add them." } },
+      calculationVariant: "co_construction",
+      calculation: calculationFromVariant({
+        type: "co_construction",
+        conceptId: "c-1",
+        fullEquation: "1/4 + 2/4 = 3/4",
+        expression: "1/4 + 2/4",
+        answer: "3/4",
+        scaffold: {
+          kind: "bar",
+          parts: 4,
+          rows: 2,
+          marks: [1, 2],
+          labels: ["1/4", "2/4"],
+        },
+        manipulative: { kind: "fraction_bar", parts: 4, rows: 1, labels: [] },
+        steps: [step()],
+        completionStatement: "",
+      } as unknown as CalculationVariant),
+    },
+    {
+      id: "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d",
+      modalities: ["text"],
+      text: { heading: "After", body: { default: "Done." } },
+    },
+  ],
+} as unknown as Lesson;
 
-const lessonWith = (steps: ReturnType<typeof step>[]): Lesson =>
-  ({
-    id: "l-1",
-    title: "Fractions",
-    segments: [
-      {
-        id: SEG,
-        modalities: ["text", "interactive"],
-        text: { heading: "Adding", body: { default: "Add them." } },
-        calculationVariant: "co_construction",
-        calculation: calculationFromVariant({
-          type: "co_construction",
-          conceptId: "c-1",
-          fullEquation: "1/4 + 2/4 = 3/4",
-          expression: "1/4 + 2/4",
-          answer: "3/4",
-          scaffold: null,
-          manipulative: { kind: "fraction_bar", parts: 4, rows: 1, labels: [] },
-          steps,
-          completionStatement: "",
-        } as unknown as CalculationVariant),
-      },
-      {
-        id: "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d",
-        modalities: ["text"],
-        text: { heading: "After", body: { default: "Done." } },
-      },
-    ],
-  }) as unknown as Lesson;
-
+// The dots at light: the picture is not drawn until the server asks for it.
 const PLAN: AdaptationPlan = {
   lessonId: "l-1",
-  segments: [{ segmentId: SEG, startModality: "interactive" }],
+  segments: [{ segmentId: SEG, startModality: "interactive", scaffold: "light" }],
 };
+
+/** The server's reply to a wrong step, with the re-teaching it names. */
+const missed = (
+  action: string,
+  scaffoldLevel: string,
+  over: Record<string, unknown> = {},
+) => ({
+  id: "att-1",
+  lessonId: "l-1",
+  sessionId: SESSION,
+  questionId: "s1",
+  segmentId: SEG,
+  source: "calculation",
+  attemptNumber: 1,
+  answer: "differ",
+  correct: false,
+  submittedAt: "2026-11-04T12:00:00Z",
+  reteaching: {
+    questionId: "s1",
+    segmentId: SEG,
+    availableRoutes: [{ action, label: "Show more support in this step" }],
+    recommendedRoute: { action, label: "Show more support in this step" },
+    presentation: { scaffoldLevel },
+    screens: [],
+  },
+  ...over,
+});
 
 const tap = (name: string) =>
   fireEvent.click(screen.getByRole("button", { name }));
@@ -155,111 +174,92 @@ const pick = (label: string) => {
   tap(label);
   tap("Check my answer");
 };
-const clock = { now: 1_000 };
-let now: { mockRestore: () => void } | undefined;
+const card = () =>
+  screen
+    .queryAllByRole("status")
+    .find((s) =>
+      (Object.values(CALC_SUPPORT_LINES) as string[]).includes(
+        s.textContent ?? "",
+      ),
+    ) ?? null;
+/** Every write the player has made, settled. */
+const settled = () =>
+  waitFor(() => expect(saveAttempt).toHaveBeenCalled()).then(() =>
+    Promise.all(saveAttempt.mock.results.map((r) => r.value)),
+  );
 
 beforeEach(() => {
   window.localStorage.clear();
   progress.sessionId = SESSION;
   trackEvent.mockReset();
   saveAttempt.mockReset().mockResolvedValue({});
-  clock.now = 1_000;
-  now = vi.spyOn(performance, "now").mockImplementation(() => clock.now);
 });
 
 afterEach(() => {
-  now?.mockRestore();
   cleanup();
   clearSession();
 });
 
-
-/*
- * SUPPORT IN THE STEP AFTER A MISS (Teslim 6b5d496; Hub, 29 Oct). The
- * server's one calculation route: "Show more support in this step",
- * `requiresChoice: false`, at `scaffoldLevel: strong`. The step it names goes
- * to the strong level as sent - with no card and no words while Lydia
- * decides whether there is a card at all.
- */
-describe("support in the step after a calculation miss", () => {
-  const HINT = "Look at the bottom number of each fraction.";
-  const route = {
-    action: "calculation_scaffold",
-    label: "Show more support in this step",
-    requiresChoice: false,
-  };
-  const reteaching = (over: Record<string, unknown> = {}) => ({
-    questionId: "s1",
-    segmentId: SEG,
-    availableRoutes: [route],
-    recommendedRoute: route,
-    presentation: {
-      density: "low",
-      itemsPerScreen: 1,
-      pacing: "slow",
-      recheckRequired: true,
-      scaffoldLevel: "strong",
-    },
-    screens: [],
-    ...over,
-  });
-
-  it("puts the missed step at the strong level the server sends, with no card and no words", async () => {
-    saveAttempt.mockResolvedValue({ correct: false, reteaching: reteaching() });
-    render(<LessonPlayer lesson={lessonWith([step(), NUMBER()])} plan={PLAN} live />);
-    expect(screen.queryByText(HINT)).toBeNull();
-    expect(screen.getByRole("button", { name: "Need a hint?" })).toBeInTheDocument();
+describe("the server's support after a calculation miss", () => {
+  it("draws the picture in the step it names, and the card says so", async () => {
+    saveAttempt.mockResolvedValue(missed("calculation_scaffold", "standard"));
+    render(<LessonPlayer lesson={LESSON} plan={PLAN} live />);
+    expect(screen.queryByText("Picture it")).toBeNull();
 
     pick("1 and 2");
 
-    // The step's own hint, unasked, as the strong level draws it.
-    await waitFor(() => expect(screen.getByText(HINT)).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: "Need a hint?" })).toBeNull();
-    expect(document.body.textContent).not.toMatch(/show more support/i);
-    // The row's More support is the child's, and stays theirs.
-    expect(
-      screen.getByRole("button", { name: "More support" }),
-    ).toHaveAttribute("aria-pressed", "false");
+    expect(await screen.findByText("Picture it")).toBeInTheDocument();
+    expect(card()).toHaveTextContent("Here it is as a picture.");
+    expect(screen.queryByText(HINT)).toBeNull();
   });
 
-  it("reads it from the gate's re-teaching where the top level has none", async () => {
+  it("adds the step's hint at strong, and the card says both", async () => {
+    saveAttempt.mockResolvedValue(missed("calculation_scaffold", "strong"));
+    render(<LessonPlayer lesson={LESSON} plan={PLAN} live />);
+
+    pick("1 and 2");
+
+    expect(await screen.findByText(HINT)).toBeInTheDocument();
+    expect(card()).toHaveTextContent(
+      "Here it is as a picture, with a hint on the question.",
+    );
+  });
+
+  it.each([
+    ["another route", missed("slower", "standard")],
+    ["a level it does not name", missed("calculation_scaffold", "full")],
+    ["a right answer", missed("calculation_scaffold", "standard", { correct: true })],
+    [
+      "another section",
+      missed("calculation_scaffold", "standard", {
+        reteaching: {
+          ...missed("calculation_scaffold", "standard").reteaching,
+          segmentId: "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d",
+        },
+      }),
+    ],
+  ])("changes nothing for %s", async (_, reply) => {
+    saveAttempt.mockResolvedValue(reply);
+    render(<LessonPlayer lesson={LESSON} plan={PLAN} live />);
+
+    pick("1 and 2");
+    await settled();
+
+    expect(screen.queryByText("Picture it")).toBeNull();
+    expect(card()).toBeNull();
+  });
+
+  it("reads the re-teaching from the gate's reply as well", async () => {
+    const { reteaching, ...rest } = missed("calculation_scaffold", "standard");
     saveAttempt.mockResolvedValue({
-      correct: false,
-      comprehensionGate: { canAdvance: false, reteaching: reteaching() },
+      ...rest,
+      comprehensionGate: { required: true, canAdvance: false, reteaching },
     });
-    render(<LessonPlayer lesson={lessonWith([step(), NUMBER()])} plan={PLAN} live />);
+    render(<LessonPlayer lesson={LESSON} plan={PLAN} live />);
 
     pick("1 and 2");
 
-    await waitFor(() => expect(screen.getByText(HINT)).toBeInTheDocument());
-  });
-
-  it("changes nothing for any other route, level or section", async () => {
-    for (const other of [
-      reteaching({ recommendedRoute: { ...route, action: "slower" } }),
-      reteaching({ presentation: { scaffoldLevel: "standard" } }),
-      reteaching({ segmentId: "another-section" }),
-    ]) {
-      saveAttempt.mockReset().mockResolvedValue({ correct: false, reteaching: other });
-      render(<LessonPlayer lesson={lessonWith([step(), NUMBER()])} plan={PLAN} live />);
-
-      pick("1 and 2");
-      await waitFor(() => expect(saveAttempt).toHaveBeenCalled());
-      await new Promise((r) => setTimeout(r, 0));
-
-      expect(screen.queryByText(HINT)).toBeNull();
-      cleanup();
-    }
-  });
-
-  it("changes nothing after a right answer", async () => {
-    saveAttempt.mockResolvedValue({ correct: true, reteaching: reteaching() });
-    render(<LessonPlayer lesson={lessonWith([step(), NUMBER()])} plan={PLAN} live />);
-
-    pick("4 and 4");
-    await waitFor(() => expect(saveAttempt).toHaveBeenCalled());
-    await new Promise((r) => setTimeout(r, 0));
-
-    expect(screen.queryByText(HINT)).toBeNull();
+    expect(await screen.findByText("Picture it")).toBeInTheDocument();
+    expect(card()).toHaveTextContent("Here it is as a picture.");
   });
 });

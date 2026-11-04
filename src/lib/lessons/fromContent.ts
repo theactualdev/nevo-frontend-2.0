@@ -872,6 +872,10 @@ function calcStepFor(
         .map((p) => p.trim())
         .slice(0, 8)
     : [];
+  const explanation =
+    typeof step.conceptExplanation === "string"
+      ? step.conceptExplanation.trim()
+      : "";
   const base = {
     stepId: step.stepId,
     prompt: step.prompt,
@@ -882,6 +886,7 @@ function calcStepFor(
     highlights: highlightsFor(step),
     ...(narration ? { narration } : {}),
     ...(parts.length > 0 ? { parts } : {}),
+    ...(explanation ? { explanation } : {}),
   };
 
   if (step.input === "choice") {

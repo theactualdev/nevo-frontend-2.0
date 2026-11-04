@@ -320,6 +320,8 @@ export interface SegmentChoice {
   modality?: ContentModality | null;
   depth?: ChoiceDepth | null;
   slower?: boolean | null;
+  /** The sitting's More support on a calculation (8c67353). */
+  moreSupport?: boolean | null;
   /** The server's, never ours. */
   updatedAt?: string | null;
 }
@@ -334,6 +336,8 @@ export interface SegmentChoice {
 export interface LessonChoice {
   depth?: ChoiceDepth | null;
   slower?: boolean | null;
+  /** More support on a calculation, for the whole sitting (8c67353). */
+  moreSupport?: boolean | null;
   /** The server's, never ours. */
   updatedAt?: string | null;
 }
@@ -358,6 +362,7 @@ export interface SegmentChoiceWrite {
   modality?: ContentModality | null;
   depth?: ChoiceDepth | null;
   slower?: boolean | null;
+  moreSupport?: boolean | null;
 }
 
 /**

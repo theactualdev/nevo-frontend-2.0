@@ -54,6 +54,7 @@ export function chosenFrom(
   else if (choice.depth === "original" || choice.slower === false) {
     out.density = null;
   }
+  if (typeof choice.moreSupport === "boolean") out.moreSupport = choice.moreSupport;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -91,6 +92,28 @@ export function lessonPace(
     }
   }
   return depth;
+}
+
+/**
+ * MORE SUPPORT, AS THE LESSON READ SHOWS IT (8c67353): the sitting's one
+ * value, which each section's `deliveryPreference` carries - so on where any
+ * section says so. Nothing worked out: the server's value read back.
+ */
+export function lessonMoreSupport(
+  sections: readonly (ChosenVersion | undefined)[],
+): boolean {
+  return sections.some((chosen) => chosen?.moreSupport === true);
+}
+
+/**
+ * More support in the sitting's own word (`lessonPreferences`): on, off, or
+ * undefined where it says nothing - a server from before the field.
+ */
+export function moreSupportOf(
+  choice: LessonChoice | null | undefined,
+): boolean | undefined {
+  if (!choice || !("moreSupport" in choice)) return undefined;
+  return choice.moreSupport === true;
 }
 
 /** A pace as the wire holds it. Null clears that override (handoff §5). */

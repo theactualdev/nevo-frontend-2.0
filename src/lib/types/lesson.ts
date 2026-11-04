@@ -328,6 +328,11 @@ interface CalcStepBase {
    * Absent where the step has none: Slower then paces the step itself.
    */
   parts?: string[];
+  /**
+   * The idea behind the step (`conceptExplanation`, 8c67353), which More
+   * support shows. Absent where the step has none: no More support there.
+   */
+  explanation?: string;
 }
 
 /**
@@ -463,6 +468,8 @@ export interface CalculationSegment {
 export interface ChosenVersion {
   modality?: Modality;
   density?: Density | null;
+  /** More support on a calculation - the sitting's, as this section shows it. */
+  moreSupport?: boolean;
 }
 
 export interface LessonSegment {

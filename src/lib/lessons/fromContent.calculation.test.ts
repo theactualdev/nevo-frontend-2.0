@@ -372,6 +372,27 @@ describe("a calculation from the payload", () => {
     expect(calc?.steps[0].parts?.[7]).toBe("Part 8.");
   });
 
+  /*
+   * 8c67353: the idea behind a step (`conceptExplanation`), which More support
+   * shows. A child's read carries it only once a teacher approved the step's
+   * support; trimmed, and absent where it is missing, null or blank.
+   */
+  it("keeps a step's concept explanation, and none where it has none", () => {
+    const calc = calculationFromVariant(
+      algebra({
+        steps: [
+          step({ conceptExplanation: "  Both sides stay balanced.  " }),
+          step({ stepId: "st-2", stepNumber: 2, prompt: "Add 4.", answer: "3x", conceptExplanation: "   " }),
+          step({ stepId: "st-3", stepNumber: 3, prompt: "Add 5.", answer: "4x", conceptExplanation: null }),
+        ],
+      }),
+    );
+
+    expect(calc?.steps[0].explanation).toBe("Both sides stay balanced.");
+    expect(calc?.steps[1]).not.toHaveProperty("explanation");
+    expect(calc?.steps[2]).not.toHaveProperty("explanation");
+  });
+
   it("builds the signed-out walkthrough's calculation through this same path", () => {
     const calc = ADDING_FRACTIONS.segments.find((s) => s.calculation)?.calculation;
 
