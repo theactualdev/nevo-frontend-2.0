@@ -97,6 +97,7 @@ const REFUSED_WITHOUT_WORDS: Record<string, string> = {
   no_checks_to_approve: "There’s nothing here to accept any more.",
   visual_caption_review_changed:
     "A picture changed while you had it open, so its caption needs another look.",
+  no_calculation_parts_to_approve: "There’s nothing here to accept any more.",
   lesson_not_ready_for_review:
     "This lesson is still being prepared, so its checks can’t be accepted yet.",
 };
@@ -146,10 +147,13 @@ export function LessonReviewFlow({
   const complete = review.reviewComplete === true;
   const media = mediaView(review, segments);
   /*
-   * WHAT THE KEY-POINT PRESS ALSO SIGNS. Since Teslim's 10c6bf8 it approves
-   * every picture and recording waiting in its snapshot. So while one is still
-   * waiting, the review opens on step 1, where they are shown, and step 2's
-   * press is held until they are approved there.
+   * MEDIA HAS ITS OWN PRESS, in step 1, and nothing else signs it. Teslim's
+   * 10c6bf8 once made the key-point press approve every waiting picture and
+   * recording too, so step 2 was held until they were approved; cdba131 took
+   * media out of the key points (Lydia, 24 Oct), and the hold and its "accepting
+   * the key points approves them too" outlived it. While media waits the review
+   * still opens on step 1, where it is shown - but the key points no longer
+   * wait for it.
    */
   const mediaWaiting = media.awaiting.length > 0;
   const [step, setStep] = useState<Step>(
@@ -306,9 +310,7 @@ export function LessonReviewFlow({
         refusal ??
         (pointsSigned
           ? signoffLine(review.keyPointApproval!)
-          : mediaWaiting
-            ? "Approve the pictures and narration in step 1 first. Accepting the key points approves them too."
-            : missingLeft > 0
+          : missingLeft > 0
             ? `Decide the ${plural(missingLeft, "section", "sections")} with no key point first: add one or leave it out.`
             : flagsLeft > 0
               ? `${flagsLeft} flagged above - handle or accept, your call.`
@@ -321,7 +323,7 @@ export function LessonReviewFlow({
       ) : (
         <button
           type="button"
-          disabled={mediaWaiting || missingLeft > 0 || flow.working !== null}
+          disabled={missingLeft > 0 || flow.working !== null}
           onClick={() => {
             void flow.approveKeyPoints().then((ok) => ok && setStep(3));
           }}
@@ -573,6 +575,10 @@ export function LessonReviewFlow({
               signed={!checksNeeded}
               readLeaks={readLeaks}
               onReadLeak={(key) => setReadLeaks((s) => new Set(s).add(key))}
+              parts={flow.review?.calculationParts ?? []}
+              onAcceptParts={() => void flow.approveParts()}
+              acceptingParts={flow.working === "parts"}
+              partsRefusal={refusedHere("parts")}
             />
           )}
 
@@ -1289,16 +1295,14 @@ function StepLive({
           ))}
         </div>
       )}
+      {/* Lydia, 2 Nov (Q13): "A picture has a new caption waiting in step 1."
+          and "let the step be the route" - the step bar above already goes
+          there, so there is no link of its own. */}
       {captionsWaiting > 0 && (
         <p className={cn(SUB, "mt-5 max-w-[460px] text-nevo-near-black/66")}>
-          {`${captionsWaiting === 1 ? "A picture has a new caption" : `${captionsWaiting} pictures have new captions`} waiting in step 1. `}
-          <button
-            type="button"
-            onClick={() => onGo(1)}
-            className="cursor-pointer border-none bg-transparent p-0 font-semibold text-nevo-navy underline underline-offset-[3px]"
-          >
-            {captionsWaiting === 1 ? "Look at it" : "Look at them"}
-          </button>
+          {captionsWaiting === 1
+            ? "A picture has a new caption waiting in step 1."
+            : `${captionsWaiting} pictures have new captions waiting in step 1.`}
         </p>
       )}
       <div className="mt-[26px] flex flex-wrap justify-center gap-3">

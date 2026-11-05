@@ -76,8 +76,8 @@ describe("consentRequestsSent", () => {
   });
 
   it("counts withdrawn as sent, because the row asks whether it went out", () => {
-    // Per SCRUM-80 the school is not gating anything on the answer. A parent
-    // who withdrew was unambiguously asked.
+    // The row asks whether the request went out. A parent who withdrew was
+    // unambiguously asked.
     expect(consentRequestsSent([student("withdrawn")])).toBe(true);
   });
 

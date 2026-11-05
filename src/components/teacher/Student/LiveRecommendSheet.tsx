@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
+import { useKeptDraft } from "@/hooks/useKeptDraft";
+import { KeptDraftNotice } from "@/components/shared/KeptDraftNotice";
 import { assignmentsApi } from "@/lib/api/assignments";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { useLessonLibrary } from "@/hooks/useLessonLibrary";
@@ -142,6 +144,22 @@ export function LiveRecommendSheet({
   const [sent, setSent] = useState<string | null>(null);
   // Their own choice or words, not the default the sheet opened on.
   useUnsavedGuard((picked !== null || note.trim().length > 0) && sent === null);
+  /*
+   * The note to the child survives a lapse or leaving the page (SCRUM-246),
+   * kept for this child. The lesson is picked again: the list is read fresh,
+   * and a lesson kept from before may no longer be offered. Closing the sheet
+   * is throwing the note away, so the kept copy goes with it.
+   */
+  const keptNote = useKeptDraft(
+    `recommend-note:${studentId}`,
+    note,
+    note.trim().length > 0 && sent === null,
+  );
+  const { discard } = keptNote;
+  const cancel = useCallback(() => {
+    discard();
+    onClose();
+  }, [discard, onClose]);
   /** Whether the lesson that was sent carried a note, for the confirmation. */
   const [sentWithNote, setSentWithNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -255,7 +273,7 @@ export function LiveRecommendSheet({
   }
 
   return (
-    <Shell onClose={onClose}>
+    <Shell onClose={cancel}>
       {/* C08c's header: the title, and a close button beside it. */}
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[20px] font-semibold text-nevo-near-black xl:text-[22px]">
@@ -263,7 +281,7 @@ export function LiveRecommendSheet({
         </h2>
         <button
           type="button"
-          onClick={onClose}
+          onClick={cancel}
           aria-label="Close"
           className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/50 transition-colors hover:bg-nevo-near-black/5 xl:size-[34px]"
         >
@@ -371,6 +389,13 @@ export function LiveRecommendSheet({
           attached to nothing, exactly as the line above forbids. `live` is
           false for the whole in-flight window as well as after a failure, so
           it is the one condition both cases need. */}
+      {live && cards.length > 0 && keptNote.kept && (
+        <KeptDraftNotice
+          className="mt-5 xl:mt-[18px]"
+          onRestore={() => setNote(keptNote.restore() ?? "")}
+          onDiscard={keptNote.discard}
+        />
+      )}
       {live && cards.length > 0 && (
         <label className="mt-5 block text-[13px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-[18px]">
           {`Add a note for ${firstName} (optional)`}
@@ -387,7 +412,7 @@ export function LiveRecommendSheet({
       <div className="mt-[18px] flex gap-3 xl:mt-5">
         <button
           type="button"
-          onClick={onClose}
+          onClick={cancel}
           className="h-12 flex-1 cursor-pointer rounded-[10px] border border-nevo-near-black/15 text-[14.5px] font-medium text-nevo-near-black/72 xl:h-[50px] xl:text-[15px]"
         >
           Cancel

@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
-import { ageChecksApi } from "@/lib/api/ageChecks";
+import { ageChecksApi, type AgeCheckEdit } from "@/lib/api/ageChecks";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
+import { longDate } from "@/lib/dates";
 import {
   studentsApi,
   type AdminStudentDetail,
@@ -72,6 +74,31 @@ import { WriteFailed } from "../WriteFailed";
 
 type Phase = "loading" | "ready" | "failed" | "denied";
 
+/**
+ * A restore the server REFUSED for good, in its own words: the learner's
+ * records erased (410 `learner_retention_purged`), or a parent's processing
+ * consent withdrawn (409 `consent_withdrawn`). Neither changes on a retry, so
+ * "try again in a moment" would offer one that can't work (the 2 Nov audit).
+ * Null for anything else, which keeps the ordinary try-again line.
+ */
+function restoreRefusal(err: unknown): string | null {
+  if (!(err instanceof ApiError)) return null;
+  const code = apiErrorCode(err.detail);
+  if (code !== "learner_retention_purged" && code !== "consent_withdrawn") return null;
+  return apiErrorMessage(err.detail);
+}
+
+/** "14 March 2013" from a date-only "2013-03-14", with no timezone shift. */
+function birthDate(day: string | null): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(day ?? "");
+  if (!m) return day ?? "";
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export function StudentDetailView({
   studentId,
   back = null,
@@ -97,8 +124,8 @@ export function StudentDetailView({
   const [working, setWorking] = useState(false);
   /** The deactivate was refused. Hold the dialog and say so. */
   const [deactivateFailed, setDeactivateFailed] = useState(false);
-  /** A restore was refused - said, not swallowed. */
-  const [restoreFailed, setRestoreFailed] = useState(false);
+  /** A restore was refused - said, not swallowed, in the server's words when it gave them. */
+  const [restoreFailed, setRestoreFailed] = useState<false | { message: string | null }>(false);
   /** The add-a-guardian form is open. */
   const [addingGuardian, setAddingGuardian] = useState(false);
   /** What the request just sent to a new guardian said about delivery. */
@@ -109,15 +136,62 @@ export function StudentDetailView({
    * frame used to draw a held child as "Active, learning normally", which
    * contradicted the hold in production. On the server's `blocksAccess`, the
    * status reads "On hold" and points at the checks rather than describing
-   * the hold in its own words. Unread is not held.
+   * the hold in its own words.
+   *
+   * UNREAD IS NOT "ACTIVE" EITHER (Lydia, 4 Nov: "the product asserting a
+   * state that is not true ... is worse than any missing feature"). Null until
+   * the checks answer, and null when they can't be read - and then the Status
+   * line is left out rather than saying "Active" about a child who may be on
+   * hold. A deactivated child is deactivated whatever the checks say.
    */
-  const [held, setHeld] = useState(false);
+  const [held, setHeld] = useState<boolean | null>(null);
   useEffect(() => {
     let alive = true;
     ageChecksApi
       .held()
       .then((rows) => {
         if (alive) setHeld(rows.some((r) => r.studentId === studentId));
+      })
+      .catch(() => {
+        if (alive) setHeld(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [studentId]);
+
+  /*
+   * WHAT HAPPENED TO THE DATE (Lydia, 2 Nov, item 12): one line per school
+   * correction, from each of this child's checks' own history (c268404) -
+   * "a line on the child's record is there when someone is actually looking
+   * at that child". Only a real change: a confirm writes a row with the same
+   * date either side, and "changed from X to X" says nothing. No time window
+   * (rule 3). A parent's date taking over isn't in the history yet (Teslim);
+   * a read that fails, or a viewer the route refuses, shows no line.
+   */
+  const [dobChanges, setDobChanges] = useState<AgeCheckEdit[]>([]);
+  useEffect(() => {
+    let alive = true;
+    ageChecksApi
+      .list()
+      .then((rows) =>
+        Promise.all(
+          (Array.isArray(rows) ? rows : [])
+            .filter((r) => r.studentId === studentId)
+            .map((r) => ageChecksApi.history(r.id).catch(() => [] as AgeCheckEdit[])),
+        ),
+      )
+      .then((lists) => {
+        if (!alive) return;
+        setDobChanges(
+          lists
+            .flat()
+            .filter(
+              (e) =>
+                Boolean(e.previousSchoolDateOfBirth) &&
+                e.previousSchoolDateOfBirth !== e.newSchoolDateOfBirth,
+            ),
+        );
       })
       .catch(() => undefined);
     return () => {
@@ -279,6 +353,7 @@ export function StudentDetailView({
             label="Student ID / Admission Number"
             value={student.admissionNumber?.trim() || "Not set"}
           />
+          {held === null && !deactivated ? null : (
           <Field
             label="Status"
             value={
@@ -298,6 +373,7 @@ export function StudentDetailView({
               </span>
             }
           />
+          )}
           <Field label="Age band" value={student.ageBand ?? "Not set"} />
         </dl>
 
@@ -325,6 +401,21 @@ export function StudentDetailView({
           </div>
         ) : null}
 
+        {dobChanges.length > 0 ? (
+          <ul className="m-0 mt-[22px] flex list-none flex-col gap-1.5 p-0">
+            {dobChanges.map((e, i) => (
+              <li
+                key={`${e.changedAt}-${i}`}
+                className="text-[13.5px] leading-[1.6] text-nevo-near-black/66"
+              >
+                {e.actorName} changed this child&rsquo;s date of birth from{" "}
+                {birthDate(e.previousSchoolDateOfBirth)} to {birthDate(e.newSchoolDateOfBirth)} on{" "}
+                {longDate(e.changedAt)}.
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
         <div className="mt-[22px] border-t border-nevo-near-black/8 pt-4">
           <p className="m-0 flex items-start gap-2 text-[13px] leading-[1.55] text-nevo-near-black/60">
             <LockGlyph />
@@ -345,10 +436,10 @@ export function StudentDetailView({
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
             {/* NAMING A CHILD AS BLOCKED IS THE WORST PLACE TO GET THIS
-                WRONG, and this said "{name} can't begin lessons yet" for every
-                state but `confirmed`. Per SCRUM-80 only a withdrawal stops a
-                child; the rest describe the school's record, not the learner.
-                See `withoutRecordedConsent`. */}
+                WRONG. The line says what is recorded, which is true in every
+                state. (The consent gate is the product - Hub, 2 Nov - so an
+                unconfirmed consent does stop the child; the Overview's row
+                says so.) */}
             <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
               {student.consent?.status === "confirmed"
                 ? `Consent is recorded for ${firstName}`
@@ -582,7 +673,7 @@ export function StudentDetailView({
                   // Was `.catch(() => undefined)`: a refused restore left the
                   // page byte-identical, so it read as a dead button. The
                   // class page's restore was fixed the same way.
-                  .catch(() => setRestoreFailed(true))
+                  .catch((err: unknown) => setRestoreFailed({ message: restoreRefusal(err) }))
                   .finally(() => setWorking(false));
               }}
               className={TEXT_ACTION}
@@ -590,7 +681,11 @@ export function StudentDetailView({
               Restore this student
             </button>
             {restoreFailed ? (
-              <WriteFailed className="mt-2" what={`restore ${firstName}`} />
+              <WriteFailed
+                className="mt-2"
+                what={`restore ${firstName}`}
+                message={restoreFailed.message}
+              />
             ) : null}
             <p className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/55">
               They pick up exactly where they left off, in the same class unless

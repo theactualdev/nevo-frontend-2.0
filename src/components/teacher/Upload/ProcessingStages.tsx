@@ -106,12 +106,19 @@ export function stageOf(
   status: UploadStatus | null,
 ): StageKey {
   if (uploadId === null) return "receiving";
-  if (status === "ready" || status === "confirmed" || stage === "complete") {
+  if (
+    status === "ready" ||
+    status === "confirmed" ||
+    stage === "complete" ||
+    stage === "ready_to_assign"
+  ) {
     return "ready";
   }
-  if (stage === "adaptations") return "adapting";
-  if (stage === "structure") return "sections";
-  if (stage === "lessons") return "reading";
+  // Each rung by the server's current name and the one before it.
+  if (stage === "adaptations" || stage === "preparing_adaptations") return "adapting";
+  if (stage === "structure" || stage === "finding_sections") return "sections";
+  if (stage === "lessons" || stage === "reading_document") return "reading";
+  if (stage === "receiving_file") return "receiving";
   // No stage at all is the gap between the POST resolving and the first poll
   // answering, and there the file really has only been received.
   return stage === null ? "receiving" : "reading";
