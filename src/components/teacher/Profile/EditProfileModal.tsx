@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
+import { useKeptDraft } from "@/hooks/useKeptDraft";
+import { KeptDraftNotice } from "@/components/shared/KeptDraftNotice";
 import { AvatarDisc } from "@/components/shared/AvatarDisc";
 import type { TeacherProfile } from "@/lib/mocks/teacherProfile";
 
@@ -43,9 +45,26 @@ export function EditProfileModal({
   const [subjects, setSubjects] = useState(profile.subjects);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
+  /** Saved, so nothing here is unsaved any more, whether or not the panel has closed. */
+  const [saved, setSaved] = useState(false);
   // C17: a changed name or subjects line, not yet saved. The photo is not -
   // it uploads the moment it is picked.
   useUnsavedGuard(name !== profile.name || subjects !== profile.subjects);
+  /*
+   * A changed name or subjects line survives a lapse or leaving the page
+   * (SCRUM-246). Saving, or closing the panel on purpose, lets it go.
+   */
+  const edited = useMemo(() => ({ name, subjects }), [name, subjects]);
+  const keptEdit = useKeptDraft(
+    "profile-edit",
+    edited,
+    (name !== profile.name || subjects !== profile.subjects) && !saving && !saved,
+  );
+  const { discard } = keptEdit;
+  const cancel = useCallback(() => {
+    discard();
+    onCancel();
+  }, [discard, onCancel]);
   const fileInput = useRef<HTMLInputElement>(null);
   const [photo, setPhoto] = useState<string | null>(photoUrl ?? null);
   const [photoState, setPhotoState] = useState<"idle" | "sending" | "failed">(
@@ -83,15 +102,20 @@ export function EditProfileModal({
     });
     setSaving(false);
     if (!ok) setFailed(true);
+    else {
+      // Saved: the panel closes before "unsaved" could clear it.
+      setSaved(true);
+      discard();
+    }
   };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
+      if (e.key === "Escape") cancel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [cancel]);
 
   const field =
     "mt-1.5 h-12 w-full rounded-[10px] border border-nevo-near-black/14 bg-nevo-cream-elevated px-3.5 text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy";
@@ -103,7 +127,7 @@ export function EditProfileModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/50 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
-      onClick={onCancel}
+      onClick={cancel}
     >
       <div
         ref={dialogRef}
@@ -120,7 +144,7 @@ export function EditProfileModal({
           </h2>
           <button
             type="button"
-            onClick={onCancel}
+            onClick={cancel}
             aria-label="Close"
             className="flex cursor-pointer text-nevo-near-black/40 transition-colors hover:text-nevo-near-black/70"
           >
@@ -187,6 +211,19 @@ export function EditProfileModal({
             void submit();
           }}
         >
+        {keptEdit.kept && (
+          <KeptDraftNotice
+            className="mt-5"
+            onRestore={() => {
+              const back = keptEdit.restore();
+              if (back) {
+                setName(back.name);
+                setSubjects(back.subjects);
+              }
+            }}
+            onDiscard={keptEdit.discard}
+          />
+        )}
         <div className="mt-5 flex flex-col gap-4">
           <label className="block">
             <span className={label}>Full name</span>
@@ -232,7 +269,7 @@ export function EditProfileModal({
           </button>
           <button
             type="button"
-            onClick={onCancel}
+            onClick={cancel}
             className="h-12 shrink-0 cursor-pointer rounded-[10px] px-[22px] text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
           >
             Cancel

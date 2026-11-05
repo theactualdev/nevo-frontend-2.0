@@ -91,6 +91,9 @@ describe("reissuing a revoked invitation (ed123cb; Lydia, Q11a)", () => {
     fireEvent.click(within(row("Chidi Eze")).getByRole("button", { name: "Reissue invitation" }));
     await waitFor(() => expect(reissue).toHaveBeenCalledWith("Chidi Eze"));
     await waitFor(() => expect(within(row("Chidi Eze")).getByText("Pending")).toBeInTheDocument());
+    // "reissued is what happened" (Lydia, 2 Nov).
+    expect(screen.getByText("Invitation reissued to Chidi Eze@school.edu.ng")).toBeInTheDocument();
+    expect(screen.queryByText(/Invite resent to/)).toBeNull();
   });
 
   it("says so in her words when the account it was reserved for has changed", async () => {
@@ -109,14 +112,24 @@ describe("reissuing a revoked invitation (ed123cb; Lydia, Q11a)", () => {
     ).toBeInTheDocument();
   });
 
-  it("says it can't be reissued, without a reason it has no words for, on another refusal", async () => {
+  it.each([
+    [
+      "teacher_email_in_use",
+      "This email address is now used by another account, so the invitation cannot be reissued.",
+    ],
+    [
+      "teacher_assignment_conflict",
+      "The classes on this invitation are now assigned to someone else, so it cannot be reissued.",
+    ],
+    ["invitation_not_reissuable", "This invitation cannot be reissued."],
+  ])("says why, in her words, when refused with %s (Lydia, 2 Nov)", async (code, words) => {
     list.mockResolvedValue([invite("Chidi Eze", "revoked")]);
-    reissue.mockRejectedValue(new ApiError(409, "conflict", { detail: { code: "teacher_email_in_use" } }));
+    reissue.mockRejectedValue(new ApiError(409, "conflict", { detail: { code } }));
     render(<InvitationsView />);
     await waitFor(() => expect(screen.getByText("Chidi Eze")).toBeInTheDocument());
 
     fireEvent.click(within(row("Chidi Eze")).getByRole("button", { name: "Reissue invitation" }));
-    expect(await screen.findByText("This invitation cannot be reissued.")).toBeInTheDocument();
+    expect(await screen.findByText(words)).toBeInTheDocument();
     expect(screen.queryByText(/try again/)).toBeNull();
   });
 });

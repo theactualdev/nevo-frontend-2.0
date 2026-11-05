@@ -177,3 +177,18 @@ describe("a reading that stops (LU-05, 12 Oct)", () => {
     expect(container.querySelectorAll('[class*="animate-spin"]')).toHaveLength(1);
   });
 });
+
+/**
+ * THE SERVER'S CURRENT NAMES (live spec; the upload worker at 3901b87). Each
+ * fell through to "Reading the document" for the whole wait, so the long
+ * rung - and its line - never came.
+ */
+describe("stageOf, on the stage names the server sends now", () => {
+  it("walks the single ladder by them, as it did by the older names", () => {
+    expect(stageOf("u-1", "receiving_file", "processing")).toBe("receiving");
+    expect(stageOf("u-1", "reading_document", "processing")).toBe("reading");
+    expect(stageOf("u-1", "finding_sections", "processing")).toBe("sections");
+    expect(stageOf("u-1", "preparing_adaptations", "processing")).toBe("adapting");
+    expect(stageOf("u-1", "ready_to_assign", "processing")).toBe("ready");
+  });
+});

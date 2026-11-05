@@ -212,9 +212,8 @@ export function signInChosen(sso: SsoStatus | null | undefined): boolean {
  * achievement, on the exact screen a brand-new school sees first.
  *
  * `withdrawn` and `pending` both COUNT AS SENT, because the row asks whether
- * the requests went out, not how parents answered. Per SCRUM-80 the school is
- * not gating anything on the reply: `not_sent` is the only value meaning this
- * school still has work to do here.
+ * the requests went out, not how parents answered: `not_sent` is the only
+ * value meaning this school still has a request to send here.
  *
  * `null` is the read having failed, and leaves the row open like its siblings.
  */
