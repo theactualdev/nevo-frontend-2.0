@@ -3,12 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
-import { ApiError, apiErrorCode } from "@/lib/api/client";
-import {
-  RESERVED_TEACHER_STATE_CHANGED,
-  invitesApi,
-  type Invitation,
-} from "@/lib/api/invites";
+import { invitesApi, type Invitation } from "@/lib/api/invites";
 import { cn } from "@/lib/utils";
 import {
   CARD,
@@ -22,6 +17,7 @@ import {
 import { useSetupGate } from "@/hooks";
 import { BulkImportModal } from "./BulkImportModal";
 import { InviteStatusPill, normaliseStatus } from "./inviteStatus";
+import { reissueRefusal, reissuedLine } from "./reissueCopy";
 import { PAGE_SIZE, matchesStatus, pageWindow, statTiles } from "./inviteFilters";
 import { NewInviteModal } from "./NewInviteModal";
 import { LinkHandout } from "./LinkHandout";
@@ -285,23 +281,17 @@ export function InvitationsView() {
         }
         setResent((prev) => ({
           ...prev,
-          [updated.id]: `Invite resent to ${updated.email ?? inviteeName(updated)}`,
+          [updated.id]:
+            via === "reissue"
+              ? reissuedLine(updated.email ?? inviteeName(updated))
+              : `Invite resent to ${updated.email ?? inviteeName(updated)}`,
         }));
       })
       .catch((err: unknown) => {
         if (via === "reissue") {
           // A refusal is the server's answer, and trying again won't change
-          // it. Lydia's sentence for the account changing (31 Oct, Q11a);
-          // its first clause for the refusals she has no words for yet.
-          if (err instanceof ApiError && err.status === 409) {
-            say(
-              apiErrorCode(err.detail) === RESERVED_TEACHER_STATE_CHANGED
-                ? "This invitation cannot be reissued, because the account it was reserved for has changed."
-                : "This invitation cannot be reissued.",
-            );
-            return;
-          }
-          say("That didn't reissue. We're on it - try again in a moment.");
+          // it - in Lydia's words (see `reissueCopy`).
+          say(reissueRefusal(err) ?? "That didn't reissue. We're on it - try again in a moment.");
           return;
         }
         say("That didn't resend. We're on it - try again in a moment.");

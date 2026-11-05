@@ -148,6 +148,34 @@ describe("Billing's invoice list", () => {
     const link = await screen.findByRole("link", { name: "NEV-002" });
     expect(link.getAttribute("href")).toBe("/admin/billing/invoices/inv2");
   });
+
+  it("says an overdue invoice is past its due date, with no count or total worked out here (rule 3, L1)", async () => {
+    upcoming.mockResolvedValue(charge({ invoiceId: null, invoiceNumber: null, status: null }));
+    // Long overdue: the old page counted the days and raised a 60-day panel.
+    const overdue = (id: string, invoiceNumber: string): Invoice => ({
+      id,
+      invoiceNumber,
+      issuedAt: "2026-01-01T00:00:00Z",
+      amount: "54825000.00",
+      status: "overdue",
+      dueAt: "2026-02-01T00:00:00Z",
+      paidAt: null,
+      pdfUrl: `/api/v1/billing/invoices/sch1/${invoiceNumber}.pdf`,
+      currency: "NGN",
+      periodLabel: null,
+      studentCount: null,
+      perStudentRate: null,
+      totalBeforeVat: null,
+      vatAmount: null,
+    });
+    rows = [overdue("inv3", "NEV-003"), overdue("inv4", "NEV-004")];
+    const { container } = render(<BillingView />);
+    await screen.findByRole("link", { name: "NEV-003" });
+    expect(
+      screen.getAllByText("Past its due date. Nothing has changed for your students."),
+    ).toHaveLength(2);
+    expect(container.textContent).not.toMatch(/days? past its due date|outstanding/);
+  });
 });
 
 describe("D11's subscription card", () => {

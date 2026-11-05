@@ -122,11 +122,16 @@ export function ItHomeView() {
 
   const hero = (() => {
     if (!status) {
+      /*
+       * NEVER CONNECTED, so nothing "stays as it is" - that is D10b's line for
+       * a school that disconnected a provider, and it says something happened
+       * that didn't (the 2 Nov audit; Lydia, 4 Nov). D10's own line instead.
+       */
       return {
         title: "No sign-in provider is connected",
         body: school?.code
-          ? `Everyone signs in with your school code, ${school.code}. Every account, class and piece of work stays exactly as it is.`
-          : "Everyone signs in with your school code. Every account, class and piece of work stays exactly as it is.",
+          ? `Your school code ${school.code} works right now - no setup needed.`
+          : "Your school code works right now - no setup needed.",
       };
     }
     if (status.status === "needs_attention") {

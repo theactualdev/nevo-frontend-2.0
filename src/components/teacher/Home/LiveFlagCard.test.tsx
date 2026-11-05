@@ -85,6 +85,16 @@ describe("LiveFlagCard", () => {
     ).toHaveAttribute("href", "/teacher/students/student-9");
   });
 
+  // Backlog item 9: without the class, the profile had no roster to read
+  // "What Nevo has noticed" from, and no "{class} · Roster" way back.
+  it("carries the child's class into the profile when the directory knows it", () => {
+    render(<LiveFlagCard flag={flag({ classId: "c-2" })} />);
+
+    expect(
+      screen.getByRole("link", { name: /Open Amara Kalu/ }),
+    ).toHaveAttribute("href", "/teacher/students/student-9?class=c-2");
+  });
+
   it("says something true when the directory could not name the child", () => {
     // `name` is null when the student directory did not resolve. "One of your
     // students" is honest; rendering an empty heading would read as a bug, and

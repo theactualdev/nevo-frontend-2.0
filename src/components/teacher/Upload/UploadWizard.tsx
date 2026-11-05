@@ -15,7 +15,7 @@ import {
   type FallbackKind,
 } from "./ParseFallback";
 import { LiveModuleReview } from "./LiveModuleReview";
-import { lessonsOf } from "@/lib/api/uploads";
+import { lessonsOf, UNREADABLE_REASONS } from "@/lib/api/uploads";
 import { PARSE_STAGES, ParseProgress, rungFor } from "./ParseProgress";
 import { LONGEST_STAGE, ProcessingStages, stageOf } from "./ProcessingStages";
 import { SectionReview } from "./SectionReview";
@@ -344,8 +344,18 @@ export function UploadWizard() {
           // A refused file goes back to the file step (T65), not here.
           staged.failureKind !== "file"
         ? {
+            /*
+             * A parse that stopped because the file held nothing to read
+             * (`reasonCode` unreadable_file / no_readable_text) is C07f's
+             * unreadable state - another file, not this one again. It used
+             * to land on "Try this file again", which cannot help.
+             */
             kind:
-              staged.failureKind === "request" ? "unreachable" : "parseFailed",
+              staged.failureKind === "request"
+                ? "unreachable"
+                : staged.reasonCode && UNREADABLE_REASONS.has(staged.reasonCode)
+                  ? "unreadable"
+                  : "parseFailed",
           }
         : null;
   const stepTotal = scope === null ? "N" : scope === "single" ? 3 : 5;
@@ -443,9 +453,22 @@ export function UploadWizard() {
       void staged
         .start(file, scope === "single" ? "lesson" : scope, subject || undefined)
         .then((outcome) => {
-          // The server's answer about the file belongs where the file was
-          // chosen, as C07 draws it - not on the could-not-read screen.
-          if (outcome !== "refused" || isBlock) return;
+          if (isBlock) return;
+          /*
+           * READ, AND NOTHING IN IT (400). A scan, or a file with no text:
+           * C07f's "We couldn't read this file", with another file and the
+           * supported formats - not the file step's "larger than 25 MB, or
+           * not a format we read", offering this same file again.
+           */
+          if (outcome === "unreadable") {
+            staged.reset();
+            setFallbackKind("unreadable");
+            setPhase("fallback");
+            return;
+          }
+          // Any other refusal (too large, a bad request) belongs where the
+          // file was chosen, as C07 draws it.
+          if (outcome !== "refused") return;
           staged.reset();
           setRefused(true);
           setPhase("file");
