@@ -119,8 +119,8 @@ export function StepChecks({
     ? "This lesson has no checks, so there is nothing to accept here."
     : !signed
       ? hasGuided
-        ? "Each check shows the answer Nevo marks it against, and the guiding questions it asks a child who misses it. Read any you like - Accept keeps them all."
-        : "Each check shows the answer Nevo marks it against. Read any you like - Accept keeps them all."
+        ? `Each check shows the answer Nevo marks it against${view.hasLevels ? ", the level it asks for" : ""}, and the guiding questions it asks a child who misses it. Read any you like - Accept keeps them all.`
+        : `Each check shows the answer Nevo marks it against${view.hasLevels ? " and the level it asks for" : ""}. Read any you like - Accept keeps them all.`
       : view.signoff
         ? "Accepted. Open any to read it again."
         : "Every check here came with its answer in your file, so there is nothing to accept.";
@@ -149,7 +149,15 @@ export function StepChecks({
       )}
 
       {view.toSign.length > 0 && (
-        <CheckList label="Answers Nevo wrote - yours to accept" rows={view.toSign} />
+        <CheckList
+          label={
+            /* A check can carry its answer from the file and a level Nevo
+               inferred, and the press accepts that level (backend
+               _checks_material). "Answers Nevo wrote" is untrue for it. */
+            view.levelsToSign ? "What Nevo wrote - yours to accept" : "Answers Nevo wrote - yours to accept"
+          }
+          rows={view.toSign}
+        />
       )}
       {view.reviewed.length > 0 && (
         <CheckList
@@ -318,6 +326,16 @@ function CheckList({ label, rows }: { label: string; rows: CheckRow[] }) {
                     <p className={cn(ROW_TEXT, "mt-0.5 leading-[1.5]")}>{row.prompt}</p>
                   </div>
                   {row.type && <Answer type={row.type} options={row.options} answerKey={row.answerKey} />}
+                  {/* C24 (1397ec4): the level, under the answer. Shown only,
+                      not changed: no route writes a check's level, and the
+                      one press accepts it with the answer. Its own sign-off
+                      and "Change level" are held for Lydia (rule 10). */}
+                  {row.level && (
+                    <div>
+                      <span className={TAG}>The level</span>
+                      <p className={cn(DETAIL, "mt-1 font-semibold text-nevo-near-black")}>{row.level}</p>
+                    </div>
+                  )}
                   {row.guided && row.guided.steps.length > 0 && (
                     <div>
                       <span className={TAG}>If a child misses it, Nevo asks</span>
