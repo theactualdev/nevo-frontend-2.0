@@ -552,6 +552,12 @@ export interface AssessmentQuestion {
    * concept name beside a right-or-wrong mark is a finding about the child.
    */
   conceptId?: string;
+  /**
+   * The situation a transfer item puts the concept in (`transferContext`),
+   * shown above its question. What kind of item it is - two situations, what
+   * they share, what went wrong - is never shown, and nor is its level.
+   */
+  context?: string;
 }
 
 /** Low-stakes after-lesson assessment — growth framing, no score. */
