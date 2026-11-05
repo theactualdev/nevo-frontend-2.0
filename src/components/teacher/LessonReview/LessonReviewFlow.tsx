@@ -97,6 +97,7 @@ const REFUSED_WITHOUT_WORDS: Record<string, string> = {
   no_checks_to_approve: "There’s nothing here to accept any more.",
   visual_caption_review_changed:
     "A picture changed while you had it open, so its caption needs another look.",
+  no_calculation_parts_to_approve: "There’s nothing here to accept any more.",
   lesson_not_ready_for_review:
     "This lesson is still being prepared, so its checks can’t be accepted yet.",
 };
@@ -574,6 +575,10 @@ export function LessonReviewFlow({
               signed={!checksNeeded}
               readLeaks={readLeaks}
               onReadLeak={(key) => setReadLeaks((s) => new Set(s).add(key))}
+              parts={flow.review?.calculationParts ?? []}
+              onAcceptParts={() => void flow.approveParts()}
+              acceptingParts={flow.working === "parts"}
+              partsRefusal={refusedHere("parts")}
             />
           )}
 
