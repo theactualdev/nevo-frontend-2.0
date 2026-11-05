@@ -38,6 +38,10 @@ export interface AttentionFlag {
   description: string;
   generatedAt: string;
   acknowledged: boolean;
+  /** When learning support acknowledged it - their act, never the teacher's. */
+  acknowledgedAt?: string | null;
+  /** Who did, as the server names them (their chosen name, else their full name). */
+  acknowledgedByName?: string | null;
   /** Present on newer rows only - a small series behind the description. */
   evidenceSeries?: number[];
   /** Where an admin can act. Absent means the flag is informational. */
