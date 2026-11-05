@@ -176,6 +176,11 @@ export interface QuickCheck {
   /** Soft-violet (never red) note on a miss — always reassures continuity. */
   recoveryNote: string;
   /**
+   * The check's own explanation, as the server sends it (never rewritten -
+   * Lydia, 4 Nov). The re-teach box shows it only after a successful retry.
+   */
+  explanation?: string;
+  /**
    * WHETHER IT HOLDS THE CHILD (Lydia, 26 Oct): only a check whose answer key
    * a person wrote, or a teacher has reviewed - the server's
    * `teacherReviewed`. A generated, unreviewed key never gates: such a check

@@ -5,6 +5,7 @@ import {
   GIVES_WAY_AFTER_MS,
   QuickCheckSheet,
   RECOVERY_LINE,
+  RETEACH_COPY,
 } from "./QuickCheckSheet";
 import type { QuickCheck } from "@/lib/types";
 
@@ -604,5 +605,37 @@ describe("a miss, held and giving way (17d S1)", () => {
     expect(screen.getByRole("status").textContent).not.toBe(CHECK.recoveryNote);
     expect(document.body.textContent).not.toMatch(/not quite/i);
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+});
+
+describe("tapping out of the re-teach box", () => {
+  it("asks the check afresh when the sheet opens again", () => {
+    const onTapOut = vi.fn();
+    const props = {
+      check: { ...CHECK, id: "cp-1" },
+      onTapOut,
+      onAnswered: () => {},
+      onContinue: () => {},
+      onTakeBreak: () => {},
+      reteaching: {
+        questionId: "cp-1",
+        segmentId: "seg-1",
+        availableRoutes: [],
+        recommendedRoute: { action: "slower" as const, label: "Take it more slowly" },
+        screens: ["Picture a leaf in the sun."],
+      },
+    };
+    const { rerender } = render(<QuickCheckSheet {...props} open />);
+    fireEvent.click(screen.getByRole("button", { name: /Oxygen/ }));
+    expect(screen.getByText(RETEACH_COPY.title)).toBeInTheDocument();
+
+    act(() => content.root?.onOpenChange?.(false));
+    rerender(<QuickCheckSheet {...props} open={false} />);
+    rerender(<QuickCheckSheet {...props} open reteaching={null} />);
+
+    expect(onTapOut).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(RETEACH_COPY.title)).toBeNull();
+    expect(screen.queryByText(RECOVERY_LINE)).toBeNull();
+    expect(screen.getByRole("button", { name: /Oxygen/ })).toBeInTheDocument();
   });
 });
