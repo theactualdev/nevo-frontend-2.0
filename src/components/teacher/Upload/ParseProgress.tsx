@@ -64,7 +64,20 @@ export function rungFor(stage: UploadStage | null | undefined): number {
   if (stage === "adaptations") {
     return PARSE_STAGES.findIndex((s) => s.stage === "structure");
   }
-  return PARSE_STAGES.findIndex((s) => s.stage === stage);
+  /*
+   * THE SERVER'S CURRENT NAMES, onto the same three rungs. They are what a
+   * live upload reports, and each answered -1 - the whole ladder replaced by
+   * a spinner for the entire wait, the 23 Sep defect again.
+   */
+  const now: Partial<Record<UploadStage, UploadStage>> = {
+    receiving_file: "lessons",
+    reading_document: "lessons",
+    finding_sections: "structure",
+    preparing_adaptations: "structure",
+    ready_to_assign: "complete",
+  };
+  const known = stage ? (now[stage] ?? stage) : stage;
+  return PARSE_STAGES.findIndex((s) => s.stage === known);
 }
 
 export function ParseProgress({

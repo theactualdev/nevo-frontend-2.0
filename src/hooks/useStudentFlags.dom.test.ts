@@ -85,15 +85,16 @@ describe("scope", () => {
 });
 
 describe("what comes back", () => {
-  it("hands the banner the flags that are still open", async () => {
+  it("hands the banner every open flag, the ones learning support has seen included (C08)", async () => {
     getFlags.mockResolvedValue([flag(), flag({ id: "f-2", acknowledged: true })]);
 
     const { result } = renderHook(() => useStudentFlags("s-1"));
 
-    await waitFor(() => expect(result.current.noticed).toHaveLength(1));
+    await waitFor(() => expect(result.current.noticed).toHaveLength(2));
     expect(result.current.noticed[0].note).toBe(
       "Sessions have been getting shorter.",
     );
+    expect(result.current.noticed.find((n) => n.id === "f-2")?.seen).not.toBeNull();
     expect(result.current.failed).toBe(false);
   });
 
