@@ -9,6 +9,7 @@ import type {
 } from "@/lib/api/lessons";
 import { cn } from "@/lib/utils";
 import { answerText, type CheckRow, type ChecksView } from "./reviewModel";
+import { TransferSets } from "./TransferSets";
 
 /**
  * C07k step 3, the checks (SCRUM-291).
@@ -115,6 +116,11 @@ export function StepChecks({
   partsRefusal?: string | null;
 }) {
   const hasGuided = [...view.toSign, ...view.reviewed, ...view.guidedOnly].some((r) => r.guided);
+  // A transfer item is drawn in its set (C25), not again in the lists.
+  const listed = (rows: CheckRow[]) => rows.filter((r) => !r.transferKind);
+  const toSign = listed(view.toSign);
+  const reviewed = listed(view.reviewed);
+  const unmarkable = listed(view.unmarkable);
   const sub = !view.exists
     ? "This lesson has no checks, so there is nothing to accept here."
     : !signed
@@ -153,7 +159,7 @@ export function StepChecks({
         </div>
       )}
 
-      {view.toSign.length > 0 && (
+      {toSign.length > 0 && (
         <CheckList
           label={
             /* A check can carry its answer from the file and a level Nevo
@@ -162,24 +168,28 @@ export function StepChecks({
                Lydia's words, 5 Nov. */
             view.levelsToSign ? "What Nevo wrote, yours to accept" : "Answers Nevo wrote - yours to accept"
           }
-          rows={view.toSign}
+          rows={toSign}
         />
       )}
-      {view.reviewed.length > 0 && (
+      {reviewed.length > 0 && (
         <CheckList
           label={
             view.signoff?.kind === "checks" ? "The checks" : "Answers from your file - nothing to accept"
           }
-          rows={view.reviewed}
+          rows={reviewed}
         />
       )}
       {view.guidedOnly.length > 0 && <CheckList label="Guiding questions" rows={view.guidedOnly} />}
 
-      {view.unmarkable.length > 0 && (
+      {view.transferSets.length > 0 && (
+        <TransferSets sets={view.transferSets} renderOthers={(rows) => <CheckList label="Written with this set" rows={rows} />} />
+      )}
+
+      {unmarkable.length > 0 && (
         <div className="mt-6">
           <span className={SECTION_LABEL}>Nevo can&rsquo;t mark these</span>
           <div className="mt-3 flex flex-col gap-2.5">
-            {view.unmarkable.map((row) => (
+            {unmarkable.map((row) => (
               <div key={row.key} className={cn(CARD, "px-[17px] py-[15px]")}>
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
@@ -387,7 +397,7 @@ function CheckList({ label, rows }: { label: string; rows: CheckRow[] }) {
  * The answer a check is marked against: its choices with the right ones
  * ticked, or the answer itself where there are no choices.
  */
-function Answer({
+export function Answer({
   type,
   options,
   answerKey,

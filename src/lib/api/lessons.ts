@@ -248,6 +248,11 @@ export interface ActivityAvailability {
 
 export interface LessonSegment extends SegmentVariants {
   id: string;
+  /**
+   * The concept this section teaches, when the parser found one. A transfer
+   * set is written per concept, from the concept's sections (backend #8).
+   */
+  conceptId?: string | null;
   /** SCRUM-290: see `ActivityAvailability`. Teacher reads only. */
   activityAvailability?: ActivityAvailability | null;
   /** Shipped 1 Sep. 0 or absent means no estimate - see `LessonSummary`. */
@@ -1313,6 +1318,13 @@ export const lessonsApi = {
       `/api/v1/lessons/${lessonId}/checks/approve-all`,
       { expectedContentHash },
     ),
+
+  /**
+   * A concept's name, for the heading over its transfer set (C25). The
+   * review's items carry no concept, only the section the set came from.
+   */
+  concept: (conceptId: string) =>
+    api.get<{ id: string; name: string }>(`/api/concepts/${conceptId}`),
 
   /** The generated guiding questions, signed in the same step. */
   approveAllGuidedSteps: (lessonId: string, expectedContentHash: string) =>
