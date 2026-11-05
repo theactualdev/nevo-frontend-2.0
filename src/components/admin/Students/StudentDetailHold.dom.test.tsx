@@ -113,10 +113,12 @@ describe("a student held for a date of birth check", () => {
     expect(screen.queryByRole("link", { name: "Date of birth checks" })).toBeNull();
   });
 
-  it("asserts no hold when the checks can't be read", async () => {
+  it("claims neither hold nor Active when the checks can't be read (Lydia, 4 Nov)", async () => {
     held.mockRejectedValue(new Error("down"));
     render(<StudentDetailView studentId="s1" />);
-    expect(await screen.findByText("Active")).toBeInTheDocument();
+    // The page is there; only the Status line is left out.
+    expect(await screen.findByText("Tunde Adeyemi")).toBeInTheDocument();
+    expect(screen.queryByText("Active")).toBeNull();
     expect(screen.queryByText("On hold")).toBeNull();
   });
 });
