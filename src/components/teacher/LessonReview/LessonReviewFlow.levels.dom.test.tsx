@@ -216,7 +216,8 @@ describe("the level a check asks for", () => {
     await open(3);
 
     expect(
-      screen.getByText(/Each check shows the answer Nevo marks it against and the level it asks for\./),
+      // Lydia's words, 5 Nov.
+      screen.getByText(/^For each check, the answer Nevo will mark against and the level it asks for\./),
     ).toBeInTheDocument();
   });
 });
@@ -233,7 +234,7 @@ describe("what the one press accepts", () => {
     );
     await open(3);
 
-    expect(screen.getByText("What Nevo wrote - yours to accept")).toBeInTheDocument();
+    expect(screen.getByText("What Nevo wrote, yours to accept")).toBeInTheDocument();
     expect(screen.queryByText("Answers Nevo wrote - yours to accept")).toBeNull();
   });
 
@@ -246,7 +247,10 @@ describe("what the one press accepts", () => {
     expect(screen.getByText("Answers Nevo wrote - yours to accept")).toBeInTheDocument();
   });
 
-  /* Held (rule 10): no route writes a level, and no sign-off is its own. */
+  /*
+   * Lydia, 5 Nov: no separate level sign-off, ever. "Change level" is ruled
+   * in as an edit, and waits on Teslim's route.
+   */
   it("offers no way to change a level or accept it apart from its answer", async () => {
     api.review.mockResolvedValue(
       reviewOf({ checks: [check(1, { masteryLevel: "application", masteryLevelAuthoredBy: "nevo" })] }),

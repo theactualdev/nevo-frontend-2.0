@@ -119,8 +119,13 @@ export function StepChecks({
     ? "This lesson has no checks, so there is nothing to accept here."
     : !signed
       ? hasGuided
-        ? `Each check shows the answer Nevo marks it against${view.hasLevels ? ", the level it asks for" : ""}, and the guiding questions it asks a child who misses it. Read any you like - Accept keeps them all.`
-        : `Each check shows the answer Nevo marks it against${view.hasLevels ? " and the level it asks for" : ""}. Read any you like - Accept keeps them all.`
+        ? view.hasLevels
+          ? "For each check, the answer Nevo will mark against, the level it asks for, and the guiding questions it asks a child who misses it. Read any you like - Accept keeps them all."
+          : "Each check shows the answer Nevo marks it against, and the guiding questions it asks a child who misses it. Read any you like - Accept keeps them all."
+        : view.hasLevels
+          ? // Lydia, 5 Nov: "will mark against" tells the teacher what accepting does.
+            "For each check, the answer Nevo will mark against and the level it asks for. Read any you like - Accept keeps them all."
+          : "Each check shows the answer Nevo marks it against. Read any you like - Accept keeps them all."
       : view.signoff
         ? "Accepted. Open any to read it again."
         : "Every check here came with its answer in your file, so there is nothing to accept.";
@@ -153,8 +158,9 @@ export function StepChecks({
           label={
             /* A check can carry its answer from the file and a level Nevo
                inferred, and the press accepts that level (backend
-               _checks_material). "Answers Nevo wrote" is untrue for it. */
-            view.levelsToSign ? "What Nevo wrote - yours to accept" : "Answers Nevo wrote - yours to accept"
+               _checks_material). "Answers Nevo wrote" is untrue for it.
+               Lydia's words, 5 Nov. */
+            view.levelsToSign ? "What Nevo wrote, yours to accept" : "Answers Nevo wrote - yours to accept"
           }
           rows={view.toSign}
         />
@@ -328,8 +334,9 @@ function CheckList({ label, rows }: { label: string; rows: CheckRow[] }) {
                   {row.type && <Answer type={row.type} options={row.options} answerKey={row.answerKey} />}
                   {/* C24 (1397ec4): the level, under the answer. Shown only,
                       not changed: no route writes a check's level, and the
-                      one press accepts it with the answer. Its own sign-off
-                      and "Change level" are held for Lydia (rule 10). */}
+                      one press accepts it with the answer - and always will:
+                      Lydia, 5 Nov, no separate level sign-off. "Change level"
+                      is ruled in, as an edit, and waits on Teslim's route. */}
                   {row.level && (
                     <div>
                       <span className={TAG}>The level</span>
