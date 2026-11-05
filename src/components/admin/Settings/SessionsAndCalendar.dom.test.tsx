@@ -58,9 +58,10 @@ vi.mock("@/lib/api/users", async (importOriginal) => {
   };
 });
 
-const session = (id: string, current: boolean) => ({
+const session = (id: string, current: boolean, active = true) => ({
   id,
   current,
+  active,
   lastSeenAt: "2026-09-15T09:00:00Z",
 });
 
@@ -130,6 +131,16 @@ describe("a single session", () => {
     expect(button(container, "Sign out everywhere else")).toBeUndefined();
   });
 
+  it("leaves out a device that has been signed out (audit, 2 Nov)", async () => {
+    // The read returns revoked sessions too, as `active: false`.
+    sessions.mockResolvedValue([session("s1", true), session("s2", false, false)]);
+    const { container } = render(<AccountSettings />);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/only device signed in as you/),
+    );
+    expect(button(container, "End it")).toBeUndefined();
+  });
+
   it("still lists them once there is more than one", async () => {
     sessions.mockResolvedValue([session("s1", true), session("s2", false)]);
     const { container } = render(<AccountSettings />);
@@ -192,12 +203,16 @@ describe("when signing a device out does not go through", () => {
 
   it("says this device stayed signed in when everywhere else is done", async () => {
     sessions.mockResolvedValueOnce([session("s1", true), session("s2", false)]);
-    sessions.mockResolvedValue([session("s1", true)]);
+    // The re-read still returns the ended session, signed out.
+    sessions.mockResolvedValue([session("s1", true), session("s2", false, false)]);
     const { container } = render(<AccountSettings />);
     await waitFor(() => expect(button(container, "Sign out everywhere else")).toBeTruthy());
     fireEvent.click(button(container, "Sign out everywhere else")!);
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/Every other session is signed out. You.re still signed in here/),
     );
+    // And the ended row doesn't come back with its button.
+    expect(button(container, "Sign out everywhere else")).toBeUndefined();
+    expect(button(container, "End it")).toBeUndefined();
   });
 });

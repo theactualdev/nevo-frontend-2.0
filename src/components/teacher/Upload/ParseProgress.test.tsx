@@ -145,3 +145,17 @@ describe("open and steer", () => {
     ).toHaveLength(0);
   });
 });
+
+/**
+ * THE SERVER'S CURRENT NAMES (live spec; the upload worker at 3901b87). Each
+ * answered -1, so a live unit's ladder was a spinner for the whole wait.
+ */
+describe("rungFor, on the stage names the server sends now", () => {
+  it("places each on the rung its older name had", () => {
+    expect(rungFor("receiving_file")).toBe(0);
+    expect(rungFor("reading_document")).toBe(0);
+    expect(rungFor("finding_sections")).toBe(1);
+    expect(rungFor("preparing_adaptations")).toBe(1);
+    expect(rungFor("ready_to_assign")).toBe(2);
+  });
+});

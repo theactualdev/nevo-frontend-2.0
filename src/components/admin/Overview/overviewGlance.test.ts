@@ -104,11 +104,12 @@ describe("glanceRows", () => {
     );
   });
 
-  it("never says a waiting child is blocked from lessons", () => {
-    // SCRUM-80: the school warrants consent; the learner proceeds.
+  it("says a waiting child can't begin lessons yet - the gate is the backend's (Hub, 2 Nov)", () => {
+    // SCRUM-80 (the learner proceeds) is overtaken: entry answers 403
+    // `consent_pending` until consent is confirmed.
     const rows = glanceRows([student("a", "pending")], null);
-    expect(rows[0].sub).not.toMatch(/can't begin|cannot begin|blocked/i);
-    expect(rows[0].sub).toMatch(/learning as normal/i);
+    expect(rows[0].sub).toBe("They can't begin live lessons until it's confirmed.");
+    expect(rows[0].sub).not.toMatch(/learning as normal|look around/i);
   });
 
   it("names no child and characterises none", () => {
