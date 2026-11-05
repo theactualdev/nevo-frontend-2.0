@@ -57,6 +57,9 @@ const CONSOLE_HOME: Record<StaffDoor, string> = {
   admin: "/admin",
 };
 
+/** C01's steps after the password, for a teacher who has just joined. */
+const TEACHER_WELCOME = "/teacher/onboarding/welcome";
+
 const RESET_HREF: Record<StaffDoor, string> = {
   teacher: "/auth/teacher/reset",
   admin: "/auth/admin/reset",
@@ -236,6 +239,15 @@ export function SetPasswordForm({
 
   /** Where the success screen is heading - the console needs a live session. */
   const finish = (next: "console" | "signin", as: StaffDoor = door) => {
+    /*
+     * A TEACHER WHO HAS JUST JOINED goes on to C01's join confirmation and
+     * profile, not straight into the console - the frame's next beat, which
+     * carries its own "you're in" check, so this screen's hold is skipped.
+     */
+    if (activation && as === "teacher" && next === "console") {
+      router.push(TEACHER_WELCOME);
+      return;
+    }
     setLanding(next);
     setArrivedAs(as);
     setPhase("done");
