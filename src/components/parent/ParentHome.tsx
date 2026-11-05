@@ -264,12 +264,21 @@ function Shell({
           className="h-[15px] w-auto"
         />
         {dataHref ? (
-          <Link
-            href={dataHref}
-            className="text-[14px] font-semibold text-nevo-navy hover:opacity-75"
-          >
-            Your child&rsquo;s data
-          </Link>
+          <div className="flex items-center gap-5">
+            <Link
+              href={dataHref}
+              className="text-[14px] font-semibold text-nevo-navy hover:opacity-75"
+            >
+              Your child&rsquo;s data
+            </Link>
+            {/* D01f's way in: the bar's right, where D02 puts the parent. */}
+            <Link
+              href="/parent-portal/settings"
+              className="text-[14px] font-semibold text-nevo-navy hover:opacity-75"
+            >
+              Settings
+            </Link>
+          </div>
         ) : null}
       </div>
       <div className="px-4 pt-[22px] pb-7 md:px-12 md:pt-9 md:pb-10 lg:py-10">
