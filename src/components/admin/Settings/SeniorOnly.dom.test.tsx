@@ -96,8 +96,8 @@ describe("a refusal when the level wasn't known", () => {
     render(<SchoolSettings />);
     await screen.findByLabelText("School name");
     fireEvent.change(screen.getByLabelText(/Year starts/i), { target: { value: "2026-09-01" } });
-    // In page order: General, Data retention, Academic year.
-    fireEvent.click(screen.getAllByRole("button", { name: "Save changes" })[2]);
+    // In page order: General, Academic year.
+    fireEvent.click(screen.getAllByRole("button", { name: "Save changes" })[1]);
     expect(await screen.findByText(SENIOR_LINE)).toBeInTheDocument();
   });
 

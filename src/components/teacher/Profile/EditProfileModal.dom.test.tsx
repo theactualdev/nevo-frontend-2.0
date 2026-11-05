@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { EditProfileModal } from "./EditProfileModal";
+import { clearSession, setSession } from "@/lib/auth/session";
+import { readKeptDraft, writeKeptDraft } from "@/lib/drafts/keptDraft";
 import type { TeacherProfile } from "@/lib/mocks/teacherProfile";
 
 /**
@@ -218,5 +220,56 @@ describe("an edit not yet saved", () => {
     fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Amina Bello" } });
 
     expect(leavingAsks()).toBe(false);
+  });
+});
+
+/*
+ * SCRUM-246: a changed name or subjects line survives a lapse or leaving the
+ * page; saving it, or closing the panel on purpose, lets it go.
+ */
+describe("an edit not yet saved", () => {
+  beforeEach(() => {
+    clearSession();
+    window.localStorage.clear();
+    setSession({
+      token: "tok",
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      userId: "t-1",
+      role: "teacher",
+    });
+  });
+  const modal = (onSave = vi.fn().mockResolvedValue(true), onCancel = vi.fn()) =>
+    render(<EditProfileModal profile={PROFILE} onCancel={onCancel} onSave={onSave} />);
+  const name = () => screen.getByRole("textbox", { name: /Full name/ }) as HTMLInputElement;
+
+  it("is offered back, and put back on request", () => {
+    writeKeptDraft("profile-edit", { name: "Amina B. Bello", subjects: "Mathematics, Physics" });
+    modal();
+
+    expect(name().value).toBe("Amina Bello");
+    fireEvent.click(screen.getByRole("button", { name: "Put it back" }));
+    expect(name().value).toBe("Amina B. Bello");
+  });
+
+  it("is let go once saved", async () => {
+    const onSave = vi.fn().mockResolvedValue(true);
+    modal(onSave);
+    fireEvent.change(name(), { target: { value: "Amina B. Bello" } });
+    await waitFor(() => expect(readKeptDraft("profile-edit")).not.toBeNull());
+    fireEvent.submit(name().closest("form")!);
+
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    await waitFor(() => expect(readKeptDraft("profile-edit")).toBeNull());
+  });
+
+  it("is let go when the panel is closed on purpose", async () => {
+    const onCancel = vi.fn();
+    modal(undefined, onCancel);
+    fireEvent.change(name(), { target: { value: "Amina B. Bello" } });
+    await waitFor(() => expect(readKeptDraft("profile-edit")).not.toBeNull());
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(onCancel).toHaveBeenCalled();
+    expect(readKeptDraft("profile-edit")).toBeNull();
   });
 });

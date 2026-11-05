@@ -169,3 +169,48 @@ describe("the calm early note", () => {
     expect(screen.queryByText(EARLY)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * C08's "A flag Learning Support has acknowledged": the flag stays, with plain
+ * text under it - "Adaora from learning support saw this on 12 October." -
+ * and "Learning support saw this on 12 October." where no name is sent.
+ */
+describe("a flag learning support has seen", () => {
+  const SEEN_AT = "2026-10-12T09:00:00Z";
+
+  it("stays under What Nevo noticed, with who saw it and when", () => {
+    useStudentFlags.mockReturnValue({
+      noticed: [{ ...NOTICED, seen: { by: "Adaora Obi", on: SEEN_AT } }],
+      failed: false,
+      loading: false,
+    });
+    render(<LiveStudentProfile studentId="s-1" state={state()} />);
+
+    expect(screen.getByText(NOTICED.note)).toBeInTheDocument();
+    expect(
+      screen.getByText("Adaora Obi from learning support saw this on 12 October."),
+    ).toBeInTheDocument();
+  });
+
+  it("names learning support itself when the server sends no name", () => {
+    useStudentFlags.mockReturnValue({
+      noticed: [{ ...NOTICED, seen: { by: null, on: SEEN_AT } }],
+      failed: false,
+      loading: false,
+    });
+    render(<LiveStudentProfile studentId="s-1" state={state()} />);
+
+    expect(screen.getByText("Learning support saw this on 12 October.")).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind under a flag nobody has seen", () => {
+    useStudentFlags.mockReturnValue({
+      noticed: [{ ...NOTICED, seen: null }],
+      failed: false,
+      loading: false,
+    });
+    render(<LiveStudentProfile studentId="s-1" state={state()} />);
+
+    expect(screen.queryByText(/saw this on|has seen this/)).not.toBeInTheDocument();
+  });
+});

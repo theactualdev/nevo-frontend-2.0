@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { getSession } from "@/lib/auth/session";
 import { parentApi, type ParentChild } from "@/lib/api/parent";
+import { ageChecksApi, holdStage } from "@/lib/api/ageChecks";
 import { ChildWeek } from "./ChildWeek";
 
 /**
@@ -33,6 +34,13 @@ export function ParentHome() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [children, setChildren] = useState<ParentChild[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
+  /**
+   * Children whose date of birth the parent is being asked to give again
+   * (SCRUM-243, D01d): the school has re-checked and the parent hasn't yet.
+   * The route to D01d was left to us; this is it - one quiet line, only when
+   * there is something to do. Its own read: unread asks nothing.
+   */
+  const [asks, setAsks] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +57,19 @@ export function ParentHome() {
       })
       .then((kids) => {
         if (cancelled) return;
+        ageChecksApi
+          .parent()
+          .then((checks) => {
+            if (cancelled) return;
+            setAsks(
+              new Set(
+                checks
+                  .filter((c) => c.blocksAccess && holdStage(c) === "parent")
+                  .map((c) => c.studentId),
+              ),
+            );
+          })
+          .catch(() => undefined);
         setChildren(kids);
         // One child is the overwhelmingly common case; making a parent pick
         // from a list of one is a step that exists only for the code's benefit.
@@ -176,6 +197,16 @@ export function ParentHome() {
           })}
         </div>
       )}
+
+      {selectedChild && asks.has(selectedChild.studentId) ? (
+        <Link
+          href={`/parent-portal/date-check?child=${encodeURIComponent(selectedChild.studentId)}`}
+          className="mb-5 flex items-center justify-between gap-3 rounded-xl bg-nevo-cream-elevated px-5 py-4 text-[15px] font-semibold text-nevo-navy shadow-[0_2px_8px_rgba(0,0,0,0.05)] hover:bg-nevo-navy/[0.06]"
+        >
+          Can you confirm {selectedChild.firstName?.trim() || "your child"}&rsquo;s date of birth?
+          <span aria-hidden>&rarr;</span>
+        </Link>
+      ) : null}
 
       {selectedChild ? (
         <ChildWeek
