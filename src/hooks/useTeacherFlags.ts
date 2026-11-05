@@ -54,6 +54,12 @@ export interface TeacherFlag {
   name: string | null;
   /** Their class, when known. */
   context: string | null;
+  /**
+   * That class's id, when known, so the card's link can carry it - without
+   * it the profile has no roster to read "What Nevo has noticed" from, and
+   * no "{class} · Roster" way back (backlog item 9).
+   */
+  classId?: string | null;
   note: string;
   generatedAt: string;
   /** Navy accent and the drop glyph, as C03 uses for a sudden change. */
@@ -128,6 +134,7 @@ export function useTeacherFlags(): TeacherFlags {
           studentId: f.studentId,
           name: student?.name ?? null,
           context: student?.className ?? null,
+          classId: student?.classId ?? null,
           note: f.description,
           generatedAt: f.generatedAt,
           isSudden: suddenish(f.flagType),

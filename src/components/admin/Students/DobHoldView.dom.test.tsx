@@ -90,6 +90,28 @@ describe("a hold waiting on the school", () => {
     expect(screen.getByText(/Not active yet - waiting on the parent\. Record removed on 19 November 2026 if unresolved\./)).toBeInTheDocument();
   });
 
+  it("says the parent has been asked, in D30's words, when the server says so", async () => {
+    // The re-check asks every linked parent and stamps parentNotifiedAt (66be3b8).
+    schoolRecheck.mockResolvedValue(
+      check({ schoolRecheckedAt: "2026-10-21T09:00:00Z", parentNotifiedAt: "2026-10-21T09:00:01Z" }),
+    );
+    render(<DobHoldView />);
+    fireEvent.click(within(await card()).getByRole("button", { name: "This date is correct" }));
+    expect(
+      await screen.findByText(
+        /We’ve asked Tunde’s parent to enter it again\. If the two dates now agree, Tunde’s account activates on its own\. If they still differ, we’ll let you know - there’s nothing more for you to do here for now\./,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("doesn't say anyone was asked when no parent account was there to ask", async () => {
+    schoolRecheck.mockResolvedValue(check({ schoolRecheckedAt: "2026-10-21T09:00:00Z", parentNotifiedAt: null }));
+    render(<DobHoldView />);
+    fireEvent.click(within(await card()).getByRole("button", { name: "This date is correct" }));
+    expect(await screen.findByText(/Tunde’s parent now needs to enter the date again\./)).toBeInTheDocument();
+    expect(screen.queryByText(/We’ve asked/)).toBeNull();
+  });
+
   it("corrects it in place with the re-check, and says what the record now reads", async () => {
     schoolRecheck.mockResolvedValue(
       check({ schoolDateOfBirth: "2014-09-03", schoolRecheckedAt: "2026-10-21T09:00:00Z" }),
@@ -191,6 +213,18 @@ describe("both checks done and it still holds (S5, design cb527bf)", () => {
     // Held from the frame: no roster route sets the date, and no day count is ours to give.
     expect(screen.queryByRole("link", { name: /Set the agreed date/ })).toBeNull();
     expect(said).not.toMatch(/days from today/);
+  });
+
+  it("says no year group is recorded, when that's the server's reason (Lydia, 2 Nov)", async () => {
+    held.mockResolvedValue([
+      both({ differs: false, holdReasons: ["enrolled_age_band_unavailable"], enrolledAgeBand: null }),
+    ]);
+    render(<DobHoldView />);
+    const said = (await card()).textContent ?? "";
+    expect(said).toMatch(
+      /Tunde’s date of birth is confirmed, but no year group is recorded for them\. Check the enrolment on their record\./,
+    );
+    expect(said).not.toMatch(/does not match the year group|still differ|Who can move it/);
   });
 
   it("says what's true when the dates agree but fall outside the year group (Lydia, 31 Oct, Q12)", async () => {

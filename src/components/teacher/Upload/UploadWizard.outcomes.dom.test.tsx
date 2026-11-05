@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const { detail, useCurrentUser, start, staged } = vi.hoisted(() => ({
   detail: vi.fn(),
@@ -278,6 +278,56 @@ describe("a file the server refused", () => {
     expect(await screen.findByText(/That file didn’t come through/)).toBeInTheDocument();
     expect(screen.queryByText(/couldn’t reach Nevo/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/a scan saved in a format/i)).not.toBeInTheDocument();
+  });
+});
+
+/*
+ * A SCAN, OR A FILE WITH NO TEXT (backlog, launch-level). The server reads it
+ * and finds nothing - a 400 at upload, or a parse that fails with reasonCode
+ * unreadable_file / no_readable_text. Both are C07f's unreadable state: another
+ * file and the supported formats, never "larger than 25 MB, or not a format we
+ * read" and never this same file again.
+ */
+describe("a file with nothing Nevo could read", () => {
+  it("is C07f's unreadable state when the upload itself is refused for it", async () => {
+    start.mockResolvedValue("unreadable");
+    stagedState();
+
+    startSingleUpload();
+
+    expect(await screen.findByText("We couldn’t read this file")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Try another file/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "See supported formats" })).toBeInTheDocument();
+    expect(screen.queryByText(/larger than 25 MB/)).not.toBeInTheDocument();
+  });
+
+  it("is the same state when the parse stops because the file had no text", async () => {
+    stagedState({
+      uploadId: "u-1",
+      status: "failed",
+      failed: true,
+      failureKind: "parse",
+      reasonCode: "no_readable_text",
+    });
+
+    startSingleUpload();
+
+    expect(await screen.findByText("We couldn’t read this file")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Try this file again/ })).not.toBeInTheDocument();
+  });
+
+  it("leaves any other stopped parse on its own screen", async () => {
+    stagedState({
+      uploadId: "u-1",
+      status: "failed",
+      failed: true,
+      failureKind: "parse",
+      reasonCode: "preparation_timeout",
+    });
+
+    startSingleUpload();
+
+    await waitFor(() => expect(screen.queryByText("We couldn’t read this file")).not.toBeInTheDocument());
   });
 });
 

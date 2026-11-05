@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
+import { useKeptDraft } from "@/hooks/useKeptDraft";
+import { KeptDraftNotice } from "@/components/shared/KeptDraftNotice";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { lessonsApi, type LessonDetailResponse } from "@/lib/api/lessons";
 import {
@@ -17,6 +19,7 @@ import {
   moveSegment,
   moveSegmentAcross,
   segmentOrder,
+  segmentsFingerprint,
   startSectionAfter,
   toPayload,
   type StructureDraft,
@@ -85,11 +88,23 @@ export function LessonStructureEdit({ lesson }: { lesson: LessonDetailResponse }
   const [assigned, setAssigned] = useState((lesson.assignmentCount ?? 0) > 0);
   const [saving, setSaving] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+  /** Saved: nothing here is unsaved any more, though the page has yet to move on. */
+  const [saved, setSaved] = useState(false);
 
   const changed = hasChanges(draft, original);
   const structural = isStructural(draft, original);
   const unnamed = missingNames(draft);
   useUnsavedGuard(changed && !saving);
+  /*
+   * Unsaved edits survive a lapse or leaving the page (SCRUM-246), filed
+   * under this lesson AND its set of segments, so a draft from before the
+   * lesson changed is never offered against the lesson as it is now.
+   */
+  const kept = useKeptDraft(
+    `structure:${lesson.id}:${segmentsFingerprint(original)}`,
+    draft,
+    changed && !saving && !saved,
+  );
 
   const reviewHref = `/teacher/lessons/${lesson.id}/review?step=1`;
   const edit = (next: StructureDraft) => {
@@ -106,6 +121,9 @@ export function LessonStructureEdit({ lesson }: { lesson: LessonDetailResponse }
     setRefusal(null);
     try {
       await lessonsApi.editStructure(lesson.id, toPayload(draft));
+      // Saved: the page moves on before "unsaved" could clear it.
+      setSaved(true);
+      kept.discard();
       say.show({
         kind: "confirm",
         message: structural
@@ -221,6 +239,17 @@ export function LessonStructureEdit({ lesson }: { lesson: LessonDetailResponse }
               ? "This lesson is assigned, so its order can’t change while it is. You can still rename anything."
               : "Rename anything, or move things with the arrows. Nothing changes until you save."}
           </p>
+
+          {kept.kept && (
+            <KeptDraftNotice
+              className="mt-5"
+              onRestore={() => {
+                const back = kept.restore();
+                if (back) edit(back);
+              }}
+              onDiscard={kept.discard}
+            />
+          )}
 
           <label className="mt-6 block">
             <span className="block text-[12.5px] font-semibold text-nevo-near-black/55">Lesson title</span>
