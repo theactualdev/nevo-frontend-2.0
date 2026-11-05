@@ -17,7 +17,7 @@ import { LiveVariantReview } from "./LiveVariantReview";
  * threw, taking the whole review down. These pin both forms.
  */
 
-const open = (interactiveVariant: unknown) => {
+const open = (interactiveVariant: unknown, extra: Record<string, unknown> = {}) => {
   render(
     <LiveVariantReview
       lessonId="l-1"
@@ -41,6 +41,7 @@ const open = (interactiveVariant: unknown) => {
           audioVariant: null,
           interactiveVariant,
           calculationVariant: null,
+          ...extra,
         } as unknown as LessonSegment
       }
       sectionIndex={1}
@@ -152,5 +153,43 @@ describe("the activity's safety line", () => {
     expect(
       screen.getByText("Let an adult do the cutting, and do not taste the salt water."),
     ).toBeInTheDocument();
+  });
+});
+
+/*
+ * SCRUM-290: where the server says children can't reach the activity now, the
+ * teacher is told - calmly, and only then. Absent means reachable.
+ */
+describe("an activity withheld from children", () => {
+  const ACTIVITY = {
+    type: "activity",
+    title: "Find the light",
+    materials: ["A leaf", "A torch"],
+    steps: [{ id: "step-1", instruction: "Hold the leaf up to the torch." }],
+    outcome: "You can see the veins.",
+  };
+  const WITHHELD = {
+    activityAvailability: { reachableByStudents: false, reason: "safety_instruction_not_rendered" },
+  };
+
+  it("says children can't open it at the moment, and why, and that it comes back by itself", () => {
+    open(ACTIVITY, WITHHELD);
+
+    const line = screen.getByRole("status");
+    expect(line).toHaveTextContent("Children can’t open this activity at the moment.");
+    expect(line).toHaveTextContent("until its safety line can be shown with it");
+    expect(line).toHaveTextContent("It comes back on its own");
+  });
+
+  it("says nothing when the server sent no status", () => {
+    open(ACTIVITY);
+
+    expect(screen.queryByText(/can’t open this activity/)).toBeNull();
+  });
+
+  it("names no cause it was not given", () => {
+    open(ACTIVITY, { activityAvailability: { reachableByStudents: false, reason: "something_new" } });
+
+    expect(screen.getByRole("status")).not.toHaveTextContent("safety line");
   });
 });
