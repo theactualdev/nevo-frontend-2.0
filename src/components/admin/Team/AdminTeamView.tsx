@@ -820,6 +820,22 @@ function InvitePanel({
           return;
         }
         /*
+         * A REFUSAL IS NOT A FAULT TO RETRY (the 2 Nov audit). The server says
+         * why in plain words - "A user with this email already belongs to the
+         * platform." (409 `team_member_exists`), "Student accounts cannot be
+         * added to the admin team." (400 `invalid_admin_role`) - and trying
+         * again would be refused the same way, so it says that instead.
+         */
+        if (
+          err instanceof ApiError &&
+          (err.status === 400 || err.status === 409) &&
+          apiErrorCode(err.detail) &&
+          apiErrorMessage(err.detail)
+        ) {
+          setError(apiErrorMessage(err.detail) as string);
+          return;
+        }
+        /*
          * THE SYSTEM OWNS THE FAULT. "Check the address and try again" reads
          * as a correction to the admin, on a failure we have no reason to
          * attribute to them - the response that produced it says nothing about
