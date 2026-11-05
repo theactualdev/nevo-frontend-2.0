@@ -90,16 +90,10 @@ export interface ConsentCoverage {
 }
 
 export type ConsentInput = ConsentCoverage | "unreadable";
-export interface RetentionPosition {
-  policy: string;
-  days: number;
-}
-export type RetentionInput = RetentionPosition | "unreadable";
 
 export interface NdpaInputs {
   labels: number;
   consent: ConsentInput;
-  retention: RetentionInput;
 }
 
 /**
@@ -270,52 +264,6 @@ function consentClaim(input: ConsentInput): NdpaClaim {
   };
 }
 
-/**
- * The retention row.
- *
- * `retentionPolicy` and `retentionDays` are BOTH required on `GET
- * /api/v1/school`, so this is a measurement rather than an architectural claim
- * - which is why the row moved off `unverified`, where it sat because an
- * earlier note said no endpoint reported it.
- *
- * The title lost "within counsel limits": this reports the school's configured
- * position, and whether that position satisfies counsel is counsel's judgement,
- * not a thing this screen can check.
- *
- * AND IT LOST "Learning signals, being ephemeral, have no retention period at
- * all." That was the sibling of the "Ephemeral processing" row pulled on 14
- * Sep, and false for the same reason: `GET /api/admin/adaptation-log` keeps a
- * row per adaptation with the learner's first name, trigger and timestamp,
- * filterable by student. The pull removed the row and missed the sentence.
- */
-function retentionClaim(input: RetentionInput): NdpaClaim {
-  const base = {
-    title: "Records retention",
-    evidence: "Retention policy, deletion jobs",
-    mechanism:
-      "Account and enrolment records are kept only for the period set with counsel; nothing is retained beyond it.",
-  };
-  if (input === "unreadable") {
-    return {
-      ...base,
-      verification: "unverified",
-      note: "Your school record didn\u2019t come back when this page loaded, so the configured period isn\u2019t shown here.",
-    };
-  }
-  return {
-    ...base,
-    state: `${input.days} days`,
-    mechanism: `${base.mechanism} Your school is set to ${POLICY_LABEL[input.policy] ?? input.policy}, which is ${input.days} days.`,
-    verification: "school",
-  };
-}
-
-/** The three values the contract's `retentionPolicy` pattern allows. */
-const POLICY_LABEL: Record<string, string> = {
-  contract: "the contract term",
-  contract_plus_3_years: "the contract term plus three years",
-  contract_plus_7_years: "the contract term plus seven years",
-};
 
 /** The claims table. */
 export function ndpaClaims(inputs: NdpaInputs): NdpaClaim[] {
@@ -362,7 +310,15 @@ export function ndpaClaims(inputs: NdpaInputs): NdpaClaim[] {
       evidence: "Data-flow map, DPA schedule 2",
       verification: "product",
     },
-    retentionClaim(inputs.retention),
+    /*
+     * PULLED 4 NOV: "Records retention". It said account and enrolment records
+     * are "kept only for the period set with counsel; nothing is retained
+     * beyond it" and "Your school is set to {policy}, which is N days" - but
+     * the server purges a deactivated child's records on its own clock,
+     * whatever the setting says (the 2 Nov audit), and Lydia took the setting
+     * off Settings. A compliance screen making a false statement is worse
+     * than a missing one. It returns with the setting.
+     */
     /*
      * PULLED 14 SEP, PENDING A REWRITE BY DESIGN AND COUNSEL.
      *
