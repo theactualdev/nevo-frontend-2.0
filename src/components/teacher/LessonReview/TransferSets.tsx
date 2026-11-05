@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useConceptNames } from "@/hooks/useConceptNames";
 import { cn } from "@/lib/utils";
 import type { CheckRow, TransferSet } from "./reviewModel";
@@ -17,12 +17,15 @@ import { Answer } from "./StepChecks";
  * questions, and signed by the checks step's ONE press with every other
  * check. So:
  *  - each part shows its question, with the answer one tap away;
- *  - the fourth item the server writes, \`diagnosis\`, has no place in the
- *    frame and is shown as an ordinary check under the set (Hub, 5 Nov);
- *  - "These work as a set" and "Change one" are HELD (rule 10): no route
- *    approves a set apart from the other checks, and none changes a part.
- *    The frame's line that the parts "stand or change together" is held
- *    with them - nothing here changes.
+ *  - the fourth item the server writes, `diagnosis`, is HELD and not drawn
+ *    (Lydia, 5 Nov: "Draw the three and leave the fourth") until Teslim says
+ *    what it is for. The one press would still sign it, so this whole view
+ *    is held with it: a teacher must never accept a question they were not
+ *    shown (her 2 Nov rule);
+ *  - no "These work as a set": a set signs off with the checks (Lydia,
+ *    5 Nov). Replacing one part is ruled in and waits on Teslim's route, so
+ *    "Change one" and the line that the parts "stand or change together"
+ *    are not drawn yet.
  */
 
 const PART =
@@ -30,13 +33,7 @@ const PART =
 const PART_TAG =
   "inline-flex items-center gap-[7px] text-[11px] font-semibold tracking-[0.05em] uppercase";
 
-export function TransferSets({
-  sets,
-  renderOthers,
-}: {
-  sets: TransferSet[];
-  renderOthers: (rows: CheckRow[]) => ReactNode;
-}) {
+export function TransferSets({ sets }: { sets: TransferSet[] }) {
   const names = useConceptNames(sets.map((s) => s.conceptId));
   return (
     <div className="mt-6 flex flex-col gap-8">
@@ -78,7 +75,6 @@ export function TransferSets({
                 </div>
               )}
             </div>
-            {set.others.length > 0 && renderOthers(set.others)}
           </section>
         );
       })}

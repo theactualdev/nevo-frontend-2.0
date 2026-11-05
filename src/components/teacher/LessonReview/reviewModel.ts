@@ -491,8 +491,8 @@ export function checksView(review: LessonReview, segments: LessonSegment[]): Che
 /**
  * One concept's transfer set, as C25 draws it (1397ec4): two situations and
  * the question that asks what they share. The server writes four items; the
- * fourth, `diagnosis`, has no place in the frame, so it is shown as an
- * ordinary check under the set (Hub, 5 Nov).
+ * fourth, `diagnosis`, is HELD (Lydia, 5 Nov: "Draw the three and leave the
+ * fourth" until Teslim says what it is for).
  */
 export interface TransferSet {
   /** The section the set was written from - its concept's first. */
@@ -503,8 +503,11 @@ export interface TransferSet {
   one: CheckRow | null;
   two: CheckRow | null;
   question: CheckRow | null;
-  /** `diagnosis`, and any kind the frame does not draw. */
-  others: CheckRow[];
+  /**
+   * `diagnosis`, and any kind the frame does not draw: NOT DRAWN. The one
+   * press still signs them, which is why this view is held (see the PR).
+   */
+  held: CheckRow[];
 }
 
 /**
@@ -531,14 +534,14 @@ function transferSets(
         one: null,
         two: null,
         question: null,
-        others: [],
+        held: [],
       };
       sets.set(source, set);
     }
     if (row.transferKind === "application_a" && !set.one) set.one = row;
     else if (row.transferKind === "application_b" && !set.two) set.two = row;
     else if (row.transferKind === "comparison" && !set.question) set.question = row;
-    else set.others.push(row);
+    else set.held.push(row);
   }
   return [...sets.values()];
 }

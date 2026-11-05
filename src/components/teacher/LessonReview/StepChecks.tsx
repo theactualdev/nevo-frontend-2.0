@@ -182,7 +182,7 @@ export function StepChecks({
       {view.guidedOnly.length > 0 && <CheckList label="Guiding questions" rows={view.guidedOnly} />}
 
       {view.transferSets.length > 0 && (
-        <TransferSets sets={view.transferSets} renderOthers={(rows) => <CheckList label="Written with this set" rows={rows} />} />
+        <TransferSets sets={view.transferSets} />
       )}
 
       {unmarkable.length > 0 && (

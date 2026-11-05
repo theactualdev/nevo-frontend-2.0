@@ -39,12 +39,15 @@ import { clearSession, setSession } from "@/lib/auth/session";
  * C25, Transfer Question Review (1397ec4; Lydia's test 5), as far as the
  * server goes on 5 Nov (backend #8).
  *
- * What is pinned: a concept's four transfer items are drawn as the frame's
- * set - situation one, situation two, the question - under the concept's
- * name, with the fourth (diagnosis) as an ordinary check under it; they are
- * not drawn twice, and the one press still counts them; each part's answer
- * is a tap away; the heading never shows an id; and nothing approves a set
- * apart or changes a part, because no route does (rule 10, held).
+ * What is pinned: a concept's transfer items are drawn as the frame's set -
+ * situation one, situation two, the question - under the concept's name;
+ * the fourth (diagnosis) is held and not drawn (Lydia, 5 Nov); none is drawn
+ * twice; each part's answer is a tap away; the heading never shows an id;
+ * and nothing approves a set apart (a set signs off with the checks) or
+ * replaces a part (ruled in, no route yet).
+ *
+ * The one press still counts - and signs - the held diagnosis item, which is
+ * why this PR is HELD: a teacher must not accept a question they never saw.
  */
 
 const HASH_K = "a".repeat(64);
@@ -214,12 +217,12 @@ describe("a transfer set", () => {
     expect(api.concept).toHaveBeenCalledWith("c-prop");
   });
 
-  it("puts the fourth item, which the frame does not draw, under the set as an ordinary check", async () => {
+  /* Lydia, 5 Nov: "Draw the three and leave the fourth." */
+  it("holds the fourth item back - drawn neither in the set nor in the lists", async () => {
     await open(3);
 
-    const set = await screen.findByRole("region", { name: "Proportion · transfer question" });
-    expect(within(set).getByText("Written with this set")).toBeInTheDocument();
-    expect(within(set).getByRole("button", { name: /Which step went wrong/ })).toBeInTheDocument();
+    await screen.findByRole("region", { name: "Proportion · transfer question" });
+    expect(screen.queryByText(/Which step went wrong/)).toBeNull();
   });
 
   it("is not drawn a second time in the lists", async () => {
@@ -227,10 +230,12 @@ describe("a transfer set", () => {
 
     await screen.findByRole("region", { name: "Proportion · transfer question" });
     expect(screen.getAllByText("A recipe for 4 uses 200 g of rice. How much for 6?")).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: /Which step went wrong/ })).toHaveLength(1);
   });
 
-  /* The one press still accepts them with every other check: the count is true. */
+  /*
+   * The server's count, held item included: the press signs all six. That is
+   * the catch this PR is held on, pinned so it cannot pass unnoticed.
+   */
   it("is counted in what the one press accepts", async () => {
     await open(3);
 
