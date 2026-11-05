@@ -288,12 +288,13 @@ describe("a transfer set's heading", () => {
 });
 
 describe("a lesson with no transfer set", () => {
-  it("draws no set and asks for no concept", async () => {
+  // The concepts are read now, to name the press that asks for a set
+  // (LessonReviewFlow.transferwrite) - but no set is drawn.
+  it("draws no set", async () => {
     withConcepts();
     await open(3);
 
     await screen.findAllByRole("button", { name: /question \d\?/ });
     expect(screen.queryByText("One idea, two unlike situations")).toBeNull();
-    expect(api.concept).not.toHaveBeenCalled();
   });
 });

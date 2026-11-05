@@ -393,6 +393,8 @@ export interface ChecksView {
    * check - but they are drawn as their set, not in the lists.
    */
   transferSets: TransferSet[];
+  /** The lesson's concepts with no transfer set yet, each by its first section. */
+  unwrittenConcepts: { conceptId: string; label: string }[];
   /**
    * A check waiting on the sign-off carries a level Nevo inferred. Its answer
    * may have come from the file, so "Answers Nevo wrote" would be untrue.
@@ -472,6 +474,7 @@ export function checksView(review: LessonReview, segments: LessonSegment[]): Che
       ? review.guidedStepsApproval
       : null;
   const toSign = sorted.filter((r) => r.check.markable && !r.check.teacherReviewed);
+  const sets = transferSets(sorted, segments, labelOf);
   return {
     exists: rows.length > 0 || guidedOnly.length > 0,
     toSign,
@@ -481,7 +484,8 @@ export function checksView(review: LessonReview, segments: LessonSegment[]): Che
     leaks,
     checksPending,
     hasLevels: rows.some((r) => !!r.level),
-    transferSets: transferSets(sorted, segments, labelOf),
+    transferSets: sets,
+    unwrittenConcepts: unwrittenConcepts(sets, segments, labelOf),
     levelsToSign: toSign.some((r) => r.levelByNevo),
     guidedPending,
     signoff,
@@ -550,6 +554,21 @@ function transferSets(
     else set.others.push(row);
   }
   return [...sets.values()];
+}
+
+function unwrittenConcepts(
+  sets: TransferSet[],
+  segments: LessonSegment[],
+  labelOf: (segmentId: string, title: string | null) => string,
+): { conceptId: string; label: string }[] {
+  const written = new Set(sets.map((s) => s.conceptId).filter(Boolean));
+  const out: { conceptId: string; label: string }[] = [];
+  for (const s of segments) {
+    const id = s.conceptId;
+    if (!id || written.has(id) || out.some((c) => c.conceptId === id)) continue;
+    out.push({ conceptId: id, label: labelOf(s.id, s.title) });
+  }
+  return out;
 }
 
 /**
