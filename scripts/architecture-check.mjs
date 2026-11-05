@@ -454,6 +454,11 @@ const CLASSIFIER_ALLOWED = new Map([
     "src/components/teacher/LessonReview/StepMedia.tsx:coverNote",
     "`flagged > 0` and `without > 0` ask whether the teacher has flagged any of a lesson's generated PICTURES or RECORDINGS, or whether any SECTION has none - the teacher's own flags and the server's own media list counted, nothing measured about anyone - and `without === 1` is \"section has\"/\"sections have\" grammar. About a lesson's media, not a child. Permanent: there is no cutoff to own.",
   ],
+  // Teacher console, 3 Nov (backlog items 5-6): the class card's summary dot.
+  [
+    "src/components/teacher/shared/ClassSummary.tsx:summaryTone",
+    "`flagged > 0`, `glance > 0` and `cantSignIn > 0` ask whether ANY child in a class is in a state the engine raised (an open attention flag) or the server reports (a switched-off account, an uncleared PIN request) - absence, rule 5 - and the word is the chip system's own name for that state, picking which state's dot to draw. The same counts the class page's header shows, nothing measured or thresholded here. About a class card, not a verdict on a child. Permanent: there is no cutoff to own.",
+  ],
 ]);
 const allowlistHits = new Set();
 

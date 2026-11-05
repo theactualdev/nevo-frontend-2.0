@@ -137,6 +137,8 @@ export function ParentConsent({
    * finishing it - not "set up an account" from nothing.
    */
   const [accountCreated, setAccountCreated] = useState(false);
+  /** Whether the server says nothing holds the child now (`ageCheck`). */
+  const [startsNow, setStartsNow] = useState(false);
 
   // The API sends the LITERAL string "your child" when the school entered no
   // first name - it is a real row, not a hypothetical - so the name has to be
@@ -198,6 +200,9 @@ export function ParentConsent({
       const res = await parentApi.completeConsent(token, invitation.consentTypes);
       setReceipt(res.receiptSentTo);
       setAccountCreated(res.parentAccountCreated === true);
+      // "Can start learning" only on the server's word that nothing holds
+      // the child (Lydia, 4 Nov: an untrue state is worse than a missing one).
+      setStartsNow(res.ageCheck === "matched" || res.ageCheck === "resolved");
       setPhase("done");
     } catch (e) {
       // 404 covers unknown, revoked and expired - the same dead end, and the
@@ -281,17 +286,16 @@ export function ParentConsent({
           <p className="mt-3 max-w-[320px] text-[15px] leading-[1.6] text-nevo-near-black/68">
             {/* D01b "Consent given · account created", without the frame's
                 "she": no gender is sent. */}
+            {startsNow ? <>{childLead} can start learning with their class. </> : null}
             {accountCreated ? (
               <>
-                {childLead} can start learning with their class. We&rsquo;ve set
-                up a parent account so you can follow how they&rsquo;re getting
-                on, whenever you like.
+                We&rsquo;ve set up a parent account so you can follow how
+                they&rsquo;re getting on, whenever you like.
               </>
             ) : (
               <>
-                {childLead} can start learning with their class. Set up an
-                account and you can follow how they&rsquo;re getting on,
-                whenever you like.
+                Set up an account and you can follow how they&rsquo;re getting
+                on, whenever you like.
               </>
             )}
           </p>
@@ -323,12 +327,15 @@ export function ParentConsent({
           <h1 className="text-[23px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black">
             All done. Thank you.
           </h1>
-          <p className="mt-3 max-w-[320px] text-[15px] leading-[1.6] text-nevo-near-black/68">
-            {childLead} can start learning with their class.{" "}
-            {accountCreated
-              ? "You can finish setting up your account later from the same link."
-              : "You can set up an account later from the same link."}
-          </p>
+          {/* NO PROMISE OF "LATER FROM THE SAME LINK": re-opening it shows the
+              data page, which offers no account setup, so the promise was a
+              dead end (2 Nov audit). Words for a real way back are Lydia's to
+              give. And "can start learning" only on the server's word. */}
+          {startsNow ? (
+            <p className="mt-3 max-w-[320px] text-[15px] leading-[1.6] text-nevo-near-black/68">
+              {childLead} can start learning with their class.
+            </p>
+          ) : null}
           {receipt && (
             <p className="mt-6 text-[12px] leading-[1.5] text-nevo-near-black/50">
               A copy of your consent has been sent to you.

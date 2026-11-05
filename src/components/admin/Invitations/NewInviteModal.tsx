@@ -5,9 +5,12 @@ import type { AdminClass } from "@/lib/api/classes";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import {
   INVITATION_ALREADY_PENDING,
+  INVITATION_REISSUE_AVAILABLE,
   invitesApi,
+  refusedInvitationId,
   type Invitation,
 } from "@/lib/api/invites";
+import { reissueRefusal, reissuedLine } from "./reissueCopy";
 import { cn } from "@/lib/utils";
 import { deliveryLine } from "./deliveryCopy";
 import {
@@ -44,7 +47,7 @@ const FIELD =
 
 const HINT = "mt-2 text-[12.5px] leading-[1.5] text-nevo-near-black/55";
 
-type Phase = "idle" | "sending" | "sent" | "failed" | "waiting";
+type Phase = "idle" | "sending" | "sent" | "failed" | "waiting" | "revoked";
 
 export function NewInviteModal({
   classes,
@@ -61,6 +64,12 @@ export function NewInviteModal({
   const [phase, setPhase] = useState<Phase>("idle");
   const [sent, setSent] = useState<Invitation | null>(null);
   const [copied, setCopied] = useState(false);
+  /** The revoked invitation the server pointed at, to reissue instead (ed123cb). */
+  const [revokedId, setRevokedId] = useState<string | null>(null);
+  const [reissuing, setReissuing] = useState(false);
+  const [reissueFailed, setReissueFailed] = useState<string | null>(null);
+  /** Whether `sent` came back from a reissue rather than a new invitation. */
+  const [reissued, setReissued] = useState(false);
 
   // A teacher needs a way to be reached or a link to be handed.
   const ready = name.trim().length > 0 || email.trim().length > 0;
@@ -71,6 +80,9 @@ export function NewInviteModal({
     setClassId("");
     setSent(null);
     setCopied(false);
+    setRevokedId(null);
+    setReissueFailed(null);
+    setReissued(false);
     setPhase("idle");
   };
 
@@ -91,16 +103,43 @@ export function NewInviteModal({
         onSent();
       })
       .catch((err: unknown) => {
-        // Not a fault, and trying again would be refused the same way: this
-        // teacher's invitation is already in the list (ed123cb).
-        setPhase(
-          err instanceof ApiError &&
-            err.status === 409 &&
-            apiErrorCode(err.detail) === INVITATION_ALREADY_PENDING
-            ? "waiting"
-            : "failed",
-        );
+        // Not faults, and trying again would be refused the same way
+        // (ed123cb): this teacher's invitation is already in the list, or it
+        // was revoked and the way back is reissuing that one.
+        const code =
+          err instanceof ApiError && err.status === 409 ? apiErrorCode(err.detail) : null;
+        const pointedAt = refusedInvitationId(err);
+        if (code === INVITATION_ALREADY_PENDING) {
+          setPhase("waiting");
+        } else if (code === INVITATION_REISSUE_AVAILABLE && pointedAt) {
+          setRevokedId(pointedAt);
+          setReissueFailed(null);
+          setPhase("revoked");
+        } else {
+          setPhase("failed");
+        }
       });
+  };
+
+  /** Reissue the revoked invitation the server pointed at (Lydia, 2 Nov, 14). */
+  const reissue = () => {
+    if (!revokedId || reissuing) return;
+    setReissuing(true);
+    setReissueFailed(null);
+    invitesApi
+      .reissue(revokedId)
+      .then((invite) => {
+        setSent(invite);
+        setReissued(true);
+        setPhase("sent");
+        onSent();
+      })
+      .catch((err: unknown) => {
+        setReissueFailed(
+          reissueRefusal(err) ?? "That didn't reissue. We're on it - try again in a moment.",
+        );
+      })
+      .finally(() => setReissuing(false));
   };
 
   const joinLink = sent?.token
@@ -111,7 +150,7 @@ export function NewInviteModal({
   if (phase === "sent" && sent) {
     return (
       <Modal
-        title="Invite sent"
+        title={reissued ? reissuedLine(sent.email ?? sent.name ?? "them") : "Invite sent"}
         subtitle={sent.name ?? sent.email ?? null}
         onClose={() => {
           reset();
@@ -173,6 +212,46 @@ export function NewInviteModal({
               {deliveryLine(sent.deliveryStatus)}
             </p>
           </div>
+        ) : null}
+      </Modal>
+    );
+  }
+
+  // ------------------------------------------------------------ REVOKED ---
+  // Lydia's words, 2 Nov (14), with Reissue invitation offered here.
+  if (phase === "revoked") {
+    return (
+      <Modal
+        title="This teacher&rsquo;s invitation was revoked."
+        onClose={onClose}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setPhase("idle")}
+              disabled={reissuing}
+              className={cn(GHOST_BTN, "flex-1")}
+            >
+              Go back
+            </button>
+            <button
+              type="button"
+              onClick={reissue}
+              disabled={reissuing}
+              className={cn(PRIMARY_BTN, "flex-1 justify-center")}
+            >
+              {reissuing ? "Reissuing…" : "Reissue invitation"}
+            </button>
+          </>
+        }
+      >
+        <p className="m-0 text-[14.5px] leading-[1.6] text-nevo-near-black/72">
+          Reissue it instead.
+        </p>
+        {reissueFailed ? (
+          <p role="status" className="m-0 mt-3 text-[14px] leading-[1.5] text-nevo-navy">
+            {reissueFailed}
+          </p>
         ) : null}
       </Modal>
     );
