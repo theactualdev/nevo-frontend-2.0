@@ -2,6 +2,7 @@
 
 import { useCallback } from "react";
 import { classesApi, type AssignedClass } from "@/lib/api";
+import { classesOnce } from "@/lib/classes/classesOnce";
 import { TEACHER_CLASSES, type TeacherClass } from "@/lib/mocks/teacherClasses";
 import { useLiveQuery } from "./useLiveQuery";
 
@@ -44,9 +45,13 @@ export interface ClassOption {
 export interface TeacherClasses {
   /** Fixture classes, for the designed screens. Empty once live data lands. */
   classes: TeacherClass[];
-  /** The teacher's real assignments. Empty until they do. */
+  /**
+   * The teacher's real assignments. Empty until they do. One per class AND
+   * SUBJECT, so a class can appear more than once - anything that lists
+   * classes folds them with `classesOnce`.
+   */
   liveClasses: AssignedClass[];
-  /** Whichever of the two is real right now, flattened for pickers. */
+  /** Whichever of the two is real right now, one row per class, for pickers. */
   options: ClassOption[];
   /** Live data is in hand. */
   live: boolean;
@@ -86,7 +91,8 @@ export function useTeacherClasses(): TeacherClasses {
   return {
     classes: [],
     liveClasses: data,
-    options: data.map((c) => ({
+    // One row per class: a class taught for two subjects was in every picker twice.
+    options: classesOnce(data).map((c) => ({
       id: c.classId,
       name: c.className,
       joinCode: c.classCode,

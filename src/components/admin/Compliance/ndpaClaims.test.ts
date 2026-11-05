@@ -30,7 +30,7 @@ const claim = (
   consent: Parameters<typeof ndpaClaims>[0]["consent"],
   title: string,
 ) =>
-  ndpaClaims({ labels: 0, consent, retention: "unreadable" }).find(
+  ndpaClaims({ labels: 0, consent }).find(
     (c) => c.title === title,
   )!;
 
@@ -105,40 +105,12 @@ describe("the parental consent row", () => {
   });
 });
 
-describe("the retention row", () => {
-  const retentionClaimFor = (retention: Parameters<typeof ndpaClaims>[0]["retention"]) =>
-    ndpaClaims({ labels: 0, consent: "unreadable", retention }).find(
-      (c) => c.title === "Records retention",
-    )!;
-
-  it("reports the school's configured position in days and in words", () => {
-    const c = retentionClaimFor({ policy: "contract_plus_3_years", days: 1095 });
-    expect(c.verification).toBe("school");
-    expect(c.state).toBe("1095 days");
-    expect(c.mechanism).toMatch(/the contract term plus three years/);
-  });
-
-  it("falls back to the raw policy rather than dropping an unknown one", () => {
-    const c = retentionClaimFor({ policy: "contract_plus_99_years", days: 40 });
-    expect(c.mechanism).toMatch(/contract_plus_99_years/);
-  });
-
-  it("shows nothing when the school record would not load", () => {
-    const c = retentionClaimFor("unreadable");
-    expect(c.verification).toBe("unverified");
-    expect(c.state).toBeUndefined();
-  });
-
-  it("no longer claims counsel's judgement in its title", () => {
-    // Was "Retention within counsel limits" - a verdict this screen cannot
-    // reach. It reports the configured period; counsel judges it.
-    const titles = ndpaClaims({
-      labels: 0,
-      consent: "unreadable",
-      retention: "unreadable",
-    }).map((c) => c.title);
-    expect(titles).toContain("Records retention");
-    expect(titles).not.toContain("Retention within counsel limits");
+describe("the retention row (pulled 4 Nov)", () => {
+  it("is gone - it promised a period the server doesn't keep to", () => {
+    const all = ndpaClaims({ labels: 0, consent: "unreadable" });
+    expect(all.map((c) => c.title)).not.toContain("Records retention");
+    const text = all.map((c) => `${c.title} ${c.mechanism} ${c.state ?? ""}`).join(" ");
+    expect(text).not.toMatch(/retained beyond|Your school is set to|contract term/i);
   });
 });
 
@@ -151,7 +123,7 @@ describe("the retention row", () => {
  */
 describe("the two claims that were pulled", () => {
   const all = () =>
-    ndpaClaims({ labels: 0, consent: "unreadable", retention: "unreadable" });
+    ndpaClaims({ labels: 0, consent: "unreadable" });
 
   it("makes no claim that nothing is written to long-term storage", () => {
     // `GET /api/admin/adaptation-log` returns studentFirstName with trigger

@@ -16,12 +16,7 @@ import {
 } from "@/lib/api/billing";
 import { formatMoney } from "@/lib/money";
 import { NextCharge } from "./NextCharge";
-import {
-  daysPastDue,
-  overdueHeadline,
-  overduePanel,
-  overdueLine,
-} from "./overdue";
+import { OVERDUE_LINE } from "./overdue";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
 import { BillingContactSheet } from "./BillingContactSheet";
@@ -109,13 +104,6 @@ export function BillingView() {
   const [invoicesFailed, setInvoicesFailed] = useState(false);
   const [upcoming, setUpcoming] = useState<UpcomingCharge | null>(null);
   const [upcomingFailed, setUpcomingFailed] = useState(false);
-  /**
-   * The instant every due date is judged against, captured once when the read
-   * lands. Not `Date.now()` during render - React purity, and the better
-   * reason underneath it: every row on this page should be measured against
-   * the same moment, not against whenever each happened to be evaluated.
-   */
-  const [now, setNow] = useState(0);
   const [contact, setContact] = useState<BillingContact | null>(null);
   const [editing, setEditing] = useState(false);
   const [account, setAccount] = useState<ReceivingAccount | null>(null);
@@ -142,7 +130,6 @@ export function BillingView() {
       .then((s) => {
         setSubscription(s);
         setContact(s.billingContact);
-        setNow(Date.now());
         setPhase("ready");
 
         setInvoicesFailed(false);
@@ -288,56 +275,11 @@ export function BillingView() {
           </div>
 
           {/*
-            * D11.8's page-level panel, past 60 days only. Everything about its
-            * treatment is fixed by the spec and none of it is decoration:
-            * violet tint, not alarm; the bank details inline "so paying needs
-            * no navigation"; and NOTHING about access, ever - "no red, no
-            * warning glyph, no 'account at risk', no countdown to suspension,
-            * and no automated dunning tone". Several overdue invoices
-            * aggregate into ONE panel rather than repeating it per invoice.
+            * D11.8's page-level panel ("past 60 days", with a total) is not
+            * drawn: its threshold, day counts and total were all worked out
+            * on this device (rule 3, L1). It comes back when the invoice read
+            * carries them - asked of the backend, 2 Nov. See `overdue.ts`.
             */}
-          {(() => {
-            const panel = overduePanel(invoices, now);
-            if (!panel) return null;
-            return (
-              <div className="mt-8 rounded-xl bg-nevo-violet/[0.18] px-6 py-5">
-                <p className="m-0 text-sm leading-[1.6] text-nevo-navy">
-                  {overdueHeadline(
-                    panel,
-                    (amount) =>
-                      formatMoney(amount, subscription.pricing.currency),
-                    longDate,
-                  )}{" "}
-                  Our bank details are below, and our billing team can help if
-                  something needs sorting out.
-                </p>
-                {account ? (
-                  <dl className="m-0 mt-4 grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 text-[13.5px]">
-                    <dt className="text-nevo-near-black/60">Bank</dt>
-                    <dd className="m-0 font-medium text-nevo-near-black">
-                      {account.bankName}
-                    </dd>
-                    <dt className="text-nevo-near-black/60">Account name</dt>
-                    <dd className="m-0 font-medium text-nevo-near-black">
-                      {account.accountName}
-                    </dd>
-                    <dt className="text-nevo-near-black/60">Account number</dt>
-                    <dd className="m-0 font-mono font-medium text-nevo-near-black">
-                      {account.accountNumber}
-                    </dd>
-                  </dl>
-                ) : (
-                  /* The account read is its own absence. An account number we
-                     do not have must never be approximated on the one panel a
-                     school would pay against. */
-                  <p className="m-0 mt-3 text-[13px] leading-[1.5] text-nevo-near-black/62">
-                    We couldn&rsquo;t load our bank details just now &ndash;
-                    our billing team has them.
-                  </p>
-                )}
-              </div>
-            );
-          })()}
 
           <h2 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
             Invoices
@@ -407,7 +349,7 @@ export function BillingView() {
                         : `due ${longDate(inv.dueAt)}`}
                     </span>
                   </span>
-                  {inv.status === "overdue" && daysPastDue(inv.dueAt, now) ? (
+                  {inv.status === "overdue" ? (
                     /* D11.8's row line, and the whole of it. "How many days,
                        and that nothing has changed for the school's students.
                        No consequence threats, because there are none at this
@@ -415,7 +357,7 @@ export function BillingView() {
                        affected by non-payment, at any number of days - so
                        there is deliberately nothing further to say. */
                     <span className="order-last w-full text-[13px] leading-[1.5] text-nevo-near-black/66">
-                      {overdueLine(daysPastDue(inv.dueAt, now)!)}
+                      {OVERDUE_LINE}
                     </span>
                   ) : null}
                   {reports[inv.id] && inv.status !== "paid" ? (

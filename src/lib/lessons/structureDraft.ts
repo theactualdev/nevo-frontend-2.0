@@ -42,7 +42,13 @@ export interface StructureDraft {
 }
 
 let newKey = 0;
-const keyFor = () => `new-${(newKey += 1)}`;
+/*
+ * Unique across page loads, not only within one: a kept draft (SCRUM-246)
+ * brings its new sections' keys back into a fresh page, whose counter starts
+ * again - so "new-1" would be minted a second time beside the restored one.
+ */
+const LOAD = Math.random().toString(36).slice(2, 7);
+const keyFor = () => `new-${LOAD}-${(newKey += 1)}`;
 
 /**
  * The module's segments, by record id where the read carries them, else by
@@ -86,6 +92,20 @@ export function draftFrom(lesson: LessonDetailResponse): StructureDraft {
 /** Every segment, in the order the draft has them. */
 export function segmentOrder(draft: StructureDraft): string[] {
   return draft.sections.length > 0 ? draft.sections.flatMap((s) => s.segmentIds) : draft.order;
+}
+
+/**
+ * Which segments a draft is OF, whatever their order: a short fingerprint of
+ * the set. A kept draft is filed under it (SCRUM-246), so one written against
+ * a lesson whose segments have since changed is never offered back - the
+ * server would refuse it (`structure_segments_mismatch`), and putting it back
+ * would only lose the teacher's place.
+ */
+export function segmentsFingerprint(draft: StructureDraft): string {
+  const ids = [...segmentOrder(draft)].sort().join("|");
+  let hash = 5381;
+  for (let i = 0; i < ids.length; i += 1) hash = ((hash * 33) ^ ids.charCodeAt(i)) >>> 0;
+  return hash.toString(36);
 }
 
 const swap = <T,>(list: T[], i: number, j: number): T[] => {

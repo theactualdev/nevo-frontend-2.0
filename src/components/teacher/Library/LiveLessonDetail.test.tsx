@@ -229,3 +229,33 @@ describe("where this lesson went", () => {
     ).toBeInTheDocument();
   });
 });
+
+/*
+ * SCRUM-290: a section whose activity children can't reach now says so on
+ * the lesson page - from the server's status only, and nothing otherwise.
+ */
+describe("an activity withheld from children", () => {
+  const renderWith = (over: Partial<LessonSegment>) =>
+    render(
+      <LiveLessonDetail
+        lesson={lesson([seg({ id: "s-1", sequenceOrder: 1, title: "First", ...over })])}
+        modules={[]}
+        assignments={[]}
+        progress={null}
+      />,
+    );
+
+  it("is marked on its section", () => {
+    renderWith({
+      activityAvailability: { reachableByStudents: false, reason: "safety_instruction_not_rendered" },
+    });
+
+    expect(screen.getByText("Its activity is held back from children for now.")).toBeInTheDocument();
+  });
+
+  it("says nothing where the server sent no status", () => {
+    renderWith({});
+
+    expect(screen.queryByText(/held back from children/)).toBeNull();
+  });
+});

@@ -12,10 +12,8 @@ import {
   labelHero,
   ndpaClaims,
   type ConsentInput,
-  type RetentionInput,
 } from "./ndpaClaims";
 import { studentsApi } from "@/lib/api/students";
-import { schoolApi } from "@/lib/api/school";
 import { NoAccess, failureKind } from "../NoAccess";
 import { BackLink } from "../BackLink";
 import type { Back } from "../back";
@@ -77,7 +75,6 @@ export function ComplianceView({ back = null }: { back?: Back | null } = {}) {
    * call that can set `phase`.
    */
   const [consent, setConsent] = useState<ConsentInput>("unreadable");
-  const [retention, setRetention] = useState<RetentionInput>("unreadable");
 
   const load = useCallback(() => {
     schoolIntelligenceApi
@@ -92,17 +89,6 @@ export function ComplianceView({ back = null }: { back?: Back | null } = {}) {
       .list()
       .then((rows) => setConsent(consentCoverage(rows)))
       .catch(() => setConsent("unreadable"));
-
-    schoolApi
-      .get()
-      .then((school) =>
-        setRetention(
-          typeof school.retentionDays === "number" && school.retentionPolicy
-            ? { policy: school.retentionPolicy, days: school.retentionDays }
-            : "unreadable",
-        ),
-      )
-      .catch(() => setRetention("unreadable"));
   }, []);
 
   useEffect(() => {
@@ -133,7 +119,7 @@ export function ComplianceView({ back = null }: { back?: Back | null } = {}) {
 
   const labels = audit?.diagnosticLabelsStored ?? 0;
   const hero = labelHero(labels, "audit");
-  const claims = ndpaClaims({ labels, consent, retention });
+  const claims = ndpaClaims({ labels, consent });
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
