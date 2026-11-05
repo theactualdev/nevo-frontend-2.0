@@ -839,8 +839,12 @@ export function LiveStudentProfile({
             onCancel={() => setSharing(false)}
             /* C14 B5, and every part of it waits on a stored escalation: the
                sheet dismisses, the bar confirms, the quiet note settles. */
-            onSent={() => {
+            onSent={(sent) => {
               setSharing(false);
+              // SCRUM-305: one that went to an administrator was confirmed in
+              // the sheet, by name ("Sent to {name}, {date}"). Neither the bar
+              // nor the quiet note may call that Learning Support.
+              if (sent.to === "school_admin") return;
               setShared(true);
               say.show({
                 kind: "confirm",
