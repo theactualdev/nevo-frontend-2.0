@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { classesApi, type ClassStudent } from "@/lib/api/classes";
 import { getToken } from "@/lib/auth/session";
+import { classesOnce } from "@/lib/classes/classesOnce";
 import { useHasSession } from "./useHasSession";
 import { studentName } from "./useClassRoster";
 
@@ -25,6 +26,8 @@ export interface DirectoryStudent {
   studentId: string;
   name: string;
   initials: string;
+  /** The class this child was read from, so a link can carry it (C08's back link). */
+  classId: string;
   className: string;
 }
 
@@ -47,13 +50,14 @@ function initialsOf(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
-function toDirectory(className: string, roster: ClassStudent[]) {
+function toDirectory(classId: string, className: string, roster: ClassStudent[]) {
   return roster.map((s) => {
     const name = studentName(s);
     return {
       studentId: s.studentId,
       name,
       initials: initialsOf(name),
+      classId,
       className,
     };
   });
@@ -70,7 +74,9 @@ export function useStudentDirectory(): StudentDirectory {
     let cancelled = false;
     void (async () => {
       try {
-        const classes = await classesApi.myClasses();
+        // Once per CLASS: a class taught for two subjects is two assignments,
+        // and reading it twice listed each of its children twice.
+        const classes = classesOnce(await classesApi.myClasses());
         const settled = await Promise.allSettled(
           /*
            * EVERY CLASS. This took the first 12 and dropped the rest without
@@ -82,7 +88,7 @@ export function useStudentDirectory(): StudentDirectory {
             .map((c) =>
               classesApi
                 .classStudents(c.classId)
-                .then((roster) => toDirectory(c.className, roster)),
+                .then((roster) => toDirectory(c.classId, c.className, roster)),
             ),
         );
         if (cancelled) return;

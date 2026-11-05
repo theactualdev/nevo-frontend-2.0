@@ -1,17 +1,26 @@
 "use client";
 
 import Link from "next/link";
+import { useClassSummaries } from "@/hooks/useClassSummaries";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
+import {
+  homeSummary,
+  SummaryDot,
+  summaryTone,
+} from "@/components/teacher/shared/ClassSummary";
 import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
+import { classesOnce } from "@/lib/classes/classesOnce";
 import { HOME_CLASSES } from "@/lib/mocks/teacherHome";
-import { cn } from "@/lib/utils";
 
 /**
- * Home's class trio, driven by the teacher's real assignments when a session
- * has them. The per-class status line stays fixture copy (the backend serves
- * no summary yet), but the SET of classes is live, so a teacher never sees
- * three classes that aren't theirs. Assignments with no fixture behind them
- * render as quiet cards rather than being dropped or dressed up.
+ * Home's class trio (C03), driven by the teacher's real classes when a
+ * session has them: one card per class, its subjects, and the status line the
+ * class page's own counts give (`useClassSummaries`). A class that couldn't be
+ * counted keeps a quiet line rather than a status nobody read.
+ *
+ * ONE CARD PER CLASS. Since SCRUM-194 an assignment is per subject, so a
+ * teacher who takes a class for two subjects saw it twice, as two identical
+ * cards. `classesOnce` folds them, and the subjects line names both.
  *
  * "Never sees three classes that aren't theirs" was not true while the read
  * was IN FLIGHT. The hook returns fixtures for `data === null`, which covers
@@ -22,6 +31,8 @@ import { cn } from "@/lib/utils";
  */
 export function HomeClasses() {
   const { classes, liveClasses, sample, loading } = useTeacherClasses();
+  const byClass = classesOnce(liveClasses);
+  const summaries = useClassSummaries(byClass.map((c) => c.classId));
 
   if (loading) {
     return (
@@ -68,14 +79,8 @@ export function HomeClasses() {
               {c.subjects}
             </div>
             <div className="mt-3 flex items-center gap-2 xl:mt-3.5 xl:gap-[9px]">
-              <span
-                className={cn(
-                  "size-[9px] shrink-0 rounded-full",
-                  // Worth a glance is an outline (design, 12 Oct).
-                  (copy?.glance ?? c.summaryTone === "glance")
-                    ? "border-2 border-nevo-violet"
-                    : "bg-nevo-navy/30",
-                )}
+              <SummaryDot
+                tone={(copy?.glance ?? c.summaryTone === "glance") ? "glance" : "ok"}
               />
               <span className="text-[12.5px] text-nevo-near-black/70 xl:text-[13.5px]">
                 <span className="xl:hidden">
@@ -90,26 +95,42 @@ export function HomeClasses() {
         );
       })}
 
-      {liveClasses.map((a) => (
-        <Link
-          key={a.assignmentId}
-          href={`/teacher/classes/${a.classId}`}
-          className="min-w-[180px] flex-1 cursor-pointer rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-elevation-1 transition-[filter] hover:brightness-[0.985] xl:px-[22px] xl:py-5"
-        >
-          <span className="text-[15.5px] font-semibold text-nevo-near-black xl:text-[17px]">
-            {a.className}
-          </span>
-          <div className="mt-[3px] text-[12px] text-nevo-near-black/55 xl:mt-1 xl:text-[13px]">
-            {/* No class code anywhere (design reference, 30 Sep): a child
-                joins with the school code and their own ID, so a class code
-                here names something no one can use. */}
-            Assigned to you
-          </div>
-          <div className="mt-3 text-[12.5px] text-nevo-near-black/50 xl:mt-3.5 xl:text-[13.5px]">
-            Synced from your school
-          </div>
-        </Link>
-      ))}
+      {byClass.map((c) => {
+        const counts = summaries.counts.get(c.classId);
+        return (
+          <Link
+            key={c.classId}
+            href={`/teacher/classes/${c.classId}`}
+            className="min-w-[180px] flex-1 cursor-pointer rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-elevation-1 transition-[filter] hover:brightness-[0.985] xl:px-[22px] xl:py-5"
+          >
+            <span className="text-[15.5px] font-semibold text-nevo-near-black xl:text-[17px]">
+              {c.className}
+            </span>
+            <div className="mt-[3px] text-[12px] text-nevo-near-black/55 xl:mt-1 xl:text-[13px]">
+              {/* No class code anywhere (design reference, 30 Sep): a child
+                  joins with the school code and their own ID, so a class code
+                  here names something no one can use. An assignment made
+                  before subjects has none to name. */}
+              {c.subjects.length > 0 ? c.subjects.join(" · ") : "Assigned to you"}
+            </div>
+            {counts ? (
+              <div className="mt-3 flex items-center gap-2 xl:mt-3.5 xl:gap-[9px]">
+                <SummaryDot tone={summaryTone(counts, false)} />
+                <span className="text-[12.5px] text-nevo-near-black/70 xl:text-[13.5px]">
+                  <span className="xl:hidden">{homeSummary(counts, true)}</span>
+                  <span className="hidden xl:inline">{homeSummary(counts)}</span>
+                </span>
+              </div>
+            ) : summaries.loading ? (
+              <div className="mt-3 h-3 w-24 animate-pulse rounded bg-nevo-cream-inset xl:mt-3.5" />
+            ) : (
+              <div className="mt-3 text-[12.5px] text-nevo-near-black/50 xl:mt-3.5 xl:text-[13.5px]">
+                Synced from your school
+              </div>
+            )}
+          </Link>
+        );
+      })}
     </div>
   );
 }

@@ -394,9 +394,18 @@ function RecheckCard({
   );
 }
 
-/** After the school's re-check: waiting on the parent, said plainly. */
+/**
+ * After the school's re-check: waiting on the parent, said plainly.
+ *
+ * D30's own words when the server says a parent was asked (`parentNotifiedAt`,
+ * set on the re-check since 66be3b8): "We've asked {first}'s parent to enter
+ * it again… If they still differ, we'll let you know" - and since ed123cb the
+ * school IS told when they still differ. With no parent account to ask,
+ * nobody has been, so it keeps saying what has to happen instead.
+ */
 function WaitingCard({ check, person, done }: { check: AgeCheck; person: Person; done: Done | null }) {
   const removal = longDay(check.deletionDueAt);
+  const asked = Boolean(check.parentNotifiedAt);
   return (
     <li className="rounded-xl bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-lg:px-5 max-lg:py-[18px]">
       <span className="block text-[13.5px] font-semibold text-nevo-near-black/58">{person.name}</span>
@@ -409,8 +418,18 @@ function WaitingCard({ check, person, done }: { check: AgeCheck; person: Person;
         {done?.kind === "corrected" && longDate(done.to)
           ? `Your record now reads ${longDate(done.to)}. `
           : ""}
-        {person.first}&rsquo;s parent now needs to enter the date again. If the two dates agree,{" "}
-        {person.first}&rsquo;s account activates on its own.
+        {asked ? (
+          <>
+            We&rsquo;ve asked {person.first}&rsquo;s parent to enter it again. If the two dates now
+            agree, {person.first}&rsquo;s account activates on its own. If they still differ,
+            we&rsquo;ll let you know - there&rsquo;s nothing more for you to do here for now.
+          </>
+        ) : (
+          <>
+            {person.first}&rsquo;s parent now needs to enter the date again. If the two dates agree,{" "}
+            {person.first}&rsquo;s account activates on its own.
+          </>
+        )}
       </p>
       <p className="m-0 mt-3 text-[13px] leading-[1.5] text-nevo-near-black/58">
         Not active yet - waiting on the parent.
@@ -433,6 +452,9 @@ function WaitingCard({ check, person, done }: { check: AgeCheck; person: Person;
  */
 function BothCheckedCard({ check, person }: { check: AgeCheck; person: Person }) {
   const agree = !check.differs;
+  // The server's own reason, when it says no year group is recorded at all
+  // (Lydia, 2 Nov): a different thing to check from a year group that's wrong.
+  const noYearGroup = agree && check.holdReasons.includes("enrolled_age_band_unavailable");
   const schoolDate = longDate(check.schoolDateOfBirth);
   const removal = longDay(check.deletionDueAt);
   const parentName = check.parentName?.trim() || null;
@@ -459,7 +481,13 @@ function BothCheckedCard({ check, person }: { check: AgeCheck; person: Person })
         </span>
       </div>
 
-      {agree ? (
+      {noYearGroup ? (
+        <p className="m-0 mt-4 text-[14px] leading-[1.6] text-nevo-near-black/72">
+          You&rsquo;ve checked the date on your record, and we&rsquo;ve heard back from {parent}.{" "}
+          {person.first}&rsquo;s date of birth is confirmed, but no year group is recorded for them.
+          Check the enrolment on their record.
+        </p>
+      ) : agree ? (
         <p className="m-0 mt-4 text-[14px] leading-[1.6] text-nevo-near-black/72">
           You&rsquo;ve checked the date on your record, and we&rsquo;ve heard back from {parent}. The
           dates now agree, but the date of birth does not match the year group {person.first} is
