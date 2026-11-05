@@ -18,7 +18,7 @@ import {
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { SENIOR_ADMIN_REQUIRED, type AdminAccessLevel } from "@/lib/api/permissions";
 import { cn } from "@/lib/utils";
-import { CARD } from "../Roster/primitives";
+import { CARD, PRIMARY_BTN } from "../Roster/primitives";
 import {
   termIssues,
   TERM_STARTS_STORED,
@@ -105,6 +105,8 @@ export function SchoolSettings({
   accessLevel?: AdminAccessLevel | null;
 } = {}) {
   const [load, setLoad] = useState<Load>("loading");
+  /** Bumped by "Try again" on a failed first read, to ask again. */
+  const [attempt, setAttempt] = useState(0);
   /** A save the server refused for want of a senior admin. Nothing moved. */
   const [seniorRefused, setSeniorRefused] = useState(false);
   const readOnly = accessLevel === "standard" || seniorRefused;
@@ -183,7 +185,7 @@ export function SchoolSettings({
 
   useEffect(() => {
     schoolApi.get().then(hydrate).catch(() => setLoad("failed"));
-  }, [hydrate]);
+  }, [hydrate, attempt]);
 
   if (load === "loading") {
     return <div className={cn(CARD, "mt-5 h-[420px] animate-pulse")} />;
@@ -196,6 +198,18 @@ export function SchoolSettings({
           Nothing has changed - this is only about showing them to you. Try
           again in a moment.
         </p>
+        {/* A "Try again" with nothing to press sent people to reload the
+            page (the 2 Nov audit). It asks the read again, here. */}
+        <button
+          type="button"
+          onClick={() => {
+            setLoad("loading");
+            setAttempt((n) => n + 1);
+          }}
+          className={cn(PRIMARY_BTN, "mt-4")}
+        >
+          Try again
+        </button>
       </SettingsSection>
     );
   }
