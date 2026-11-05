@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-const { held } = vi.hoisted(() => ({ held: vi.fn() }));
+const { held, list, history } = vi.hoisted(() => ({
+  held: vi.fn(),
+  list: vi.fn(),
+  history: vi.fn(),
+}));
 
 vi.mock("@/lib/api/students", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/students")>();
@@ -27,7 +31,7 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
   };
 });
 vi.mock("@/lib/api/classes", () => ({ classesApi: { list: async () => [] } }));
-vi.mock("@/lib/api/ageChecks", () => ({ ageChecksApi: { held } }));
+vi.mock("@/lib/api/ageChecks", () => ({ ageChecksApi: { held, list, history } }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
@@ -43,6 +47,49 @@ import { StudentDetailView } from "./StudentDetailView";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  list.mockResolvedValue([]);
+  history.mockResolvedValue([]);
+});
+
+describe("what happened to the date (Lydia, 2 Nov, item 12)", () => {
+  const edit = (previous: string | null, next: string) => ({
+    previousSchoolDateOfBirth: previous,
+    newSchoolDateOfBirth: next,
+    actorUserId: "u-grace",
+    actorName: "Grace Eze",
+    changedAt: "2026-10-21T09:00:00Z",
+  });
+
+  it("says who changed the date on the record, from what to what, and when", async () => {
+    held.mockResolvedValue([]);
+    list.mockResolvedValue([{ id: "ac1", studentId: "s1", blocksAccess: false }]);
+    history.mockResolvedValue([edit("2013-03-14", "2014-09-03")]);
+    const { container } = render(<StudentDetailView studentId="s1" />);
+    expect(
+      await screen.findByText(
+        "Grace Eze changed this child’s date of birth from 14 March 2013 to 3 September 2014 on 21 October 2026.",
+      ),
+    ).toBeInTheDocument();
+    expect(history).toHaveBeenCalledWith("ac1");
+    expect(container.textContent).not.toMatch(/parent’s date/);
+  });
+
+  it("says nothing for a re-check that kept the same date", async () => {
+    held.mockResolvedValue([]);
+    list.mockResolvedValue([{ id: "ac1", studentId: "s1", blocksAccess: false }]);
+    history.mockResolvedValue([edit("2013-03-14", "2013-03-14")]);
+    render(<StudentDetailView studentId="s1" />);
+    expect(await screen.findByText("Active")).toBeInTheDocument();
+    expect(screen.queryByText(/changed this child’s date of birth/)).toBeNull();
+  });
+
+  it("reads only this child's checks", async () => {
+    held.mockResolvedValue([]);
+    list.mockResolvedValue([{ id: "ac9", studentId: "s-other", blocksAccess: false }]);
+    render(<StudentDetailView studentId="s1" />);
+    expect(await screen.findByText("Active")).toBeInTheDocument();
+    expect(history).not.toHaveBeenCalled();
+  });
 });
 
 describe("a student held for a date of birth check", () => {
@@ -66,10 +113,12 @@ describe("a student held for a date of birth check", () => {
     expect(screen.queryByRole("link", { name: "Date of birth checks" })).toBeNull();
   });
 
-  it("asserts no hold when the checks can't be read", async () => {
+  it("claims neither hold nor Active when the checks can't be read (Lydia, 4 Nov)", async () => {
     held.mockRejectedValue(new Error("down"));
     render(<StudentDetailView studentId="s1" />);
-    expect(await screen.findByText("Active")).toBeInTheDocument();
+    // The page is there; only the Status line is left out.
+    expect(await screen.findByText("Tunde Adeyemi")).toBeInTheDocument();
+    expect(screen.queryByText("Active")).toBeNull();
     expect(screen.queryByText("On hold")).toBeNull();
   });
 });

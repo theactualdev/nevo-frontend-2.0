@@ -277,12 +277,19 @@ export function useStudentProfile(studentId: string): StudentProfileState {
   }, [studentId]);
 
   /*
-   * ADAPTATION HISTORY IS LEARNING SUPPORT MATERIAL (C20, design 12 Oct): read
-   * only when the viewer holds the role, and the server refuses anyone else
-   * since ab78139. It used to be read for every teacher and drawn as C16c.
+   * ADAPTATION HISTORY, FOR EVERY TEACHER OF THE CHILD (Lydia, 14 Oct, P1:
+   * "Learning Support widens WHICH children someone sees … never a gate
+   * between a teacher and their own pupils. A class teacher reaches their own
+   * pupils' profile, adaptation history and flags with no role.").
+   *
+   * It was read only for a holder, on design's C20 note of 12 Oct, which P1
+   * overtook. The server agrees with P1: the route checks access to the child
+   * and asks an ADMIN for the role, not a teacher (3901b87,
+   * `require_learning_support_if_admin`). Drawn as C16c for a class teacher,
+   * and inside C20's section for a holder.
    */
   useEffect(() => {
-    if (!getToken() || !learningSupport) return;
+    if (!getToken()) return;
     let cancelled = false;
     const settle = (to: ReadState) => {
       if (!cancelled) setReads((r) => ({ ...r, adaptations: to }));
@@ -299,7 +306,7 @@ export function useStudentProfile(studentId: string): StudentProfileState {
     return () => {
       cancelled = true;
     };
-  }, [studentId, learningSupport]);
+  }, [studentId]);
 
   return {
     learningSupport,

@@ -13,6 +13,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { LessonStructureEdit } from "./LessonStructureEdit";
+import { clearSession, setSession } from "@/lib/auth/session";
 
 /**
  * C07d for a lesson already in the library (Teslim d78756b), shipped reduced
@@ -134,5 +135,72 @@ describe("an assigned lesson", () => {
     expect(titles).toEqual(["Water in", "Water out", "Inside cells"]);
     expect(screen.queryByRole("button", { name: /Move .* up/ })).not.toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * SCRUM-246: unsaved edits survive a lapse or leaving the page, offered back
+ * and never laid over the lesson as it is now. Filed under the lesson's set
+ * of segments, so a draft from before the lesson changed is never offered.
+ */
+describe("edits not yet saved", () => {
+  beforeEach(() => {
+    clearSession();
+    window.localStorage.clear();
+    setSession({
+      token: "tok",
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      userId: "t-1",
+      role: "teacher",
+    });
+  });
+  const kept = () =>
+    Object.keys(window.localStorage).filter((k) => k.startsWith("nevo.draft.t-1.structure:l-1:"));
+  const rename = () =>
+    fireEvent.change(screen.getByRole("textbox", { name: "Segment 1 title" }), {
+      target: { value: "Water goes in" },
+    });
+
+  it("are kept, and offered back when the page is opened again", async () => {
+    const first = render(<LessonStructureEdit lesson={lesson()} />);
+    rename();
+    await waitFor(() => expect(kept()).toHaveLength(1));
+    first.unmount();
+
+    render(<LessonStructureEdit lesson={lesson()} />);
+    expect((screen.getByRole("textbox", { name: "Segment 1 title" }) as HTMLInputElement).value).toBe("Water in");
+    fireEvent.click(screen.getByRole("button", { name: "Put it back" }));
+
+    expect((screen.getByRole("textbox", { name: "Segment 1 title" }) as HTMLInputElement).value).toBe("Water goes in");
+  });
+
+  it("are let go once saved", async () => {
+    render(<LessonStructureEdit lesson={lesson()} />);
+    rename();
+    await waitFor(() => expect(kept()).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(push).toHaveBeenCalled());
+    expect(kept()).toHaveLength(0);
+  });
+
+  it("are not offered against a lesson whose segments have changed since", async () => {
+    const first = render(<LessonStructureEdit lesson={lesson()} />);
+    rename();
+    await waitFor(() => expect(kept()).toHaveLength(1));
+    first.unmount();
+
+    const changed = lesson({
+      segments: [
+        { id: "s-1", segmentKey: "k-1", sequenceOrder: 1, title: "Water in" },
+        { id: "s-4", segmentKey: "k-4", sequenceOrder: 2, title: "Something new" },
+      ],
+      modules: [
+        { id: "m-1", title: "Water", recap: null, preview: null, sequenceOrder: 1, segmentIds: [], segmentRecordIds: ["s-1", "s-4"] },
+      ],
+    });
+    render(<LessonStructureEdit lesson={changed} />);
+
+    expect(screen.queryByRole("button", { name: "Put it back" })).not.toBeInTheDocument();
   });
 });

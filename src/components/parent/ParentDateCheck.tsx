@@ -185,10 +185,17 @@ export function ParentDateCheck() {
         <h1 className="m-0 mt-3 text-[26px] font-semibold leading-[1.25] tracking-[-0.015em] text-nevo-near-black md:text-[30px]">
           Can you confirm {first}&rsquo;s date of birth?
         </h1>
-        <p className="m-0 mt-3 text-[15.5px] leading-[1.6] text-nevo-near-black/70">
-          The date of birth on {first}&rsquo;s school record and the one we have don&rsquo;t quite
-          match. It&rsquo;s a common mix-up. Entering it again lets us line the two up.
-        </p>
+        {/* NOT WHEN NO DATE WAS GIVEN. "Don't quite match" is false when the
+            server's own reason is `date_missing` - the parent never gave a
+            date at consent, so there's nothing to match. No words are drawn
+            for that case yet (asked of Lydia), so it says nothing rather than
+            something false (rule 5; the Hub, 2 Nov). The ask itself stands. */}
+        {check?.holdReasons?.includes("date_missing") ? null : (
+          <p className="m-0 mt-3 text-[15.5px] leading-[1.6] text-nevo-near-black/70">
+            The date of birth on {first}&rsquo;s school record and the one we have don&rsquo;t quite
+            match. It&rsquo;s a common mix-up. Entering it again lets us line the two up.
+          </p>
+        )}
         <form
           className="mt-6"
           onSubmit={(e) => {

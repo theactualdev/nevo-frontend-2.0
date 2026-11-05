@@ -113,7 +113,8 @@ describe("activating on a device someone else is signed into", () => {
     render(<SetPasswordForm mode="activation" />);
     fillAndSubmit(true);
 
-    expect(await pushedTo()).toBe("/teacher/dashboard");
+    // A teacher who has just joined goes on to C01's join confirmation.
+    expect(await pushedTo()).toBe("/teacher/onboarding/welcome");
     expect(getSession()?.userId).toBe("t-new");
   });
 
@@ -187,14 +188,15 @@ describe("an invited admin", () => {
 });
 
 describe("an invited teacher", () => {
-  it("is still taken to the teacher console, in the drawn words", async () => {
+  it("goes on to C01's join confirmation and profile, not straight into the console", async () => {
     params.value = new URLSearchParams("token=inv-1&email=new@school.ng");
     logsInAs("t-new", "teacher");
     render(<SetPasswordForm mode="activation" />);
     fillAndSubmit(true);
 
-    expect(await screen.findByText("Your teacher account is active.")).toBeInTheDocument();
-    expect(await pushedTo()).toBe("/teacher/dashboard");
+    expect(await pushedTo()).toBe("/teacher/onboarding/welcome");
+    // The join confirmation carries the frame's own check; no hold here first.
+    expect(screen.queryByText("Your teacher account is active.")).not.toBeInTheDocument();
   });
 });
 

@@ -72,6 +72,37 @@ describe("an upload the server refused", () => {
   });
 });
 
+/*
+ * POST /uploads answers 400 only for a file it read and found nothing in
+ * ("Could not read lesson file", "No readable lesson text was found"); 413 is
+ * too large and 422 a bad request (backend c268404). The 400 is its own
+ * outcome, because trying the same file again cannot help it.
+ */
+describe("what the refusal says about the file", () => {
+  const outcomeOf = async (err: ApiError) => {
+    create.mockRejectedValue(err);
+    const { result } = renderHook(() => useStagedUpload());
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.start(new File(["x"], "lesson.pdf"), "lesson");
+    });
+    return outcome;
+  };
+
+  it("is unreadable on a 400: nothing in the file could be read", async () => {
+    expect(await outcomeOf(new ApiError(400, "No readable lesson text was found"))).toBe("unreadable");
+  });
+
+  it("is a plain refusal on a 413 or a 422", async () => {
+    expect(await outcomeOf(new ApiError(413, "Lesson file exceeds 50 MB"))).toBe("refused");
+    expect(await outcomeOf(new ApiError(422, "bad request"))).toBe("refused");
+  });
+
+  it("is ours on a 5xx", async () => {
+    expect(await outcomeOf(new ApiError(503, "busy"))).toBe("failed");
+  });
+});
+
 describe("the reference for a failure nobody planned for", () => {
   it("keeps the incident id off an unhandled error", async () => {
     /*
