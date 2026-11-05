@@ -282,12 +282,18 @@ describe("pictures and narration in step 1", () => {
   });
 });
 
-describe("the key-point press, which also signs media", () => {
-  it("is held while a picture or recording is still waiting", async () => {
+/*
+ * cdba131 took media out of the key points (Lydia, 24 Oct). The press was held
+ * while media waited, and said accepting the key points approved it too -
+ * both outlived the behaviour that justified them.
+ */
+describe("the key-point press, which signs no media", () => {
+  it("is not held while a picture or recording is still waiting, and claims nothing about media", async () => {
     await open(2);
 
-    expect(screen.getByRole("button", { name: /Accept/ })).toBeDisabled();
-    expect(screen.getByText(/Approve the pictures and narration in step 1 first/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Accept/ })).toBeEnabled();
+    expect(screen.queryByText(/approves them too/)).toBeNull();
+    expect(screen.queryByText(/Approve the pictures and narration in step 1 first/)).toBeNull();
   });
 
   it("is offered once nothing is waiting", async () => {
