@@ -35,6 +35,7 @@ import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { LEARNING_SUPPORT_REQUIRED } from "@/lib/api/learningSupport";
 import { useLearningSupport } from "../LearningSupport/useLearningSupport";
 import { NEEDS_LEARNING_SUPPORT, UnavailableAction } from "../LearningSupport/Unavailable";
+import { SafeguardingRecord } from "../Safeguarding/SafeguardingRecord";
 
 /**
  * D8b Learner Profile - the SENCo's plain-language view of one learner.
@@ -376,6 +377,10 @@ export function LearnerProfileView({
           </div>
         </div>
       </div>
+
+      {/* D08b (96cd4b4): a Learning Support holder's dated safeguarding
+          line, when there is one - above the profile's own sections. */}
+      <SafeguardingRecord studentId={studentId} firstName={firstName} holders={ls} />
 
       <SectionLabel>Current accommodations</SectionLabel>
       <div className={cn(CARD, "mt-2.5 px-6 py-[22px]")}>

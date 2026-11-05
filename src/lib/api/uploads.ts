@@ -50,12 +50,29 @@ export type UploadStatus =
  * ladder back to "Receiving the file" - both for the longest part of the
  * wait, which is the exact reading of "the product has hung" that LU-01
  * exists to prevent. Observed on a live upload, not reasoned about.
+ *
+ * The four older names are kept for a deployment that still sends them, and
+ * `scripts/enum-check.mjs` reports them as that rather than as drift.
+ * @legacy lessons structure adaptations complete
  */
 export type UploadStage =
   | "lessons"
   | "structure"
   | "adaptations"
-  | "complete";
+  | "complete"
+  /*
+   * THE SERVER'S NAMES NOW (live spec and the upload worker at 3901b87: "The
+   * five real processing phases shown by the upload console"). The four
+   * above are kept for a deployment that still sends them - the client works
+   * with both (deploy order, Lydia 31 Oct). Every one of these fell through
+   * to "Reading the document" on the single ladder, and off the block ladder
+   * altogether, for the whole wait.
+   */
+  | "receiving_file"
+  | "reading_document"
+  | "finding_sections"
+  | "preparing_adaptations"
+  | "ready_to_assign";
 
 export interface StructureModule {
   title: string;
@@ -137,6 +154,26 @@ export interface UploadSegment {
   needsReview: boolean;
 }
 
+/** `UploadReasonCode`, the server's closed list of why an upload stopped. */
+export type UploadReasonCode =
+  | "file_too_large"
+  | "unsupported_file_type"
+  | "unreadable_file"
+  | "no_readable_text"
+  | "preparation_timeout"
+  | "service_busy"
+  | "save_failed"
+  | "output_limit"
+  | "partial_reading"
+  | "unclassifiable_question"
+  | "unknown";
+
+/** The two that mean the file held nothing Nevo could read. */
+export const UNREADABLE_REASONS: ReadonlySet<UploadReasonCode> = new Set([
+  "unreadable_file",
+  "no_readable_text",
+]);
+
 export interface UploadStatusResponse {
   id: string;
   status: UploadStatus;
@@ -189,6 +226,13 @@ export interface UploadStatusResponse {
    * quote. They are different fields because they are different promises.
    */
   failureReason?: string | null;
+  /**
+   * WHY, AS A CODE (`UploadReasonCode`), for a failed parse - or
+   * `partial_reading` for one that finished with pages unread. The two that
+   * mean "there was nothing in this file to read" are `unreadable_file` and
+   * `no_readable_text`; trying the same file again cannot change either.
+   */
+  reasonCode?: UploadReasonCode | null;
   /**
    * The backend's reference for this failure, now on the JOB rather than only
    * on a 500's body.

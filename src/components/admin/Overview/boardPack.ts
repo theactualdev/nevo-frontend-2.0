@@ -32,8 +32,14 @@ export interface BoardPackInput {
   narrative: SchoolNarrative | null;
   /** `audit.diagnosticLabelsStored`, or null when the audit failed. */
   labels: number | null;
-  /** The adaptation total, or null when we have not got one. */
+  /** This term's adaptation count - the tile's - or null when we have not got one. */
   adaptations: number | null;
+  /**
+   * The period that count covers, as the tile words it ("in First term").
+   * Null when there is no term to name - and then the line is left out, as the
+   * tile is: an unnamed total is the "since setup" figure Lydia ruled out.
+   */
+  adaptationPeriod: string | null;
 }
 
 function onDate(iso: string): string | null {
@@ -59,6 +65,7 @@ export function boardPackText({
   narrative,
   labels,
   adaptations,
+  adaptationPeriod,
 }: BoardPackInput): string | null {
   if (!narrative) return null;
 
@@ -83,9 +90,13 @@ export function boardPackText({
     );
   }
 
-  if (typeof adaptations === "number") {
+  // THE TILE'S FIGURE, IN THE TILE'S WORDS. This copied the ALL-TIME total
+  // "across all students so far" while the screen showed this term's count -
+  // the pack and the screen disagreeing about the same figure (2 Nov audit;
+  // Lydia, 7 Oct: this term's, named).
+  if (typeof adaptations === "number" && adaptationPeriod) {
     parts.push(
-      `Adaptations made: ${adaptations.toLocaleString("en-GB")} across all students so far.`,
+      `Adaptations made: ${adaptations.toLocaleString("en-GB")} across all students ${adaptationPeriod}.`,
     );
   }
 

@@ -440,7 +440,10 @@ export function OverviewView() {
     // Null, not zero: the pack must not put a compliance figure on a
     // governor's desk on the strength of a read that did not return.
     labels: audit ? audit.diagnosticLabelsStored : null,
-    adaptations: adaptationTotal,
+    // The tile's own figure and period (Lydia, 7 Oct) - never the total
+    // since setup.
+    adaptations: termAdaptations?.count ?? null,
+    adaptationPeriod: termAdaptations?.period ?? null,
   });
 
   /*

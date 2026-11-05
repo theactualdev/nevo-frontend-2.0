@@ -117,6 +117,7 @@ import {
 } from "@/lib/lessons/reviewOutcome";
 import { getSession, getToken } from "@/lib/auth/session";
 import { openBusyWindow } from "@/lib/signals/busy";
+import { useAttentionReports } from "@/hooks/useAttentionReports";
 import { useLessonProgress } from "@/hooks/useLessonProgress";
 import { AudioSegment } from "./AudioSegment";
 import { BreakOfferPill } from "./BreakOfferPill";
@@ -1728,6 +1729,20 @@ export function LessonPlayer({
     return () =>
       document.removeEventListener("visibilitychange", onVisibility, true);
   }, [lessonUnderWay, trackEvent]);
+
+  /*
+   * FOCUS EVENTS (Teslim, 8ab10c5; Lydia's rollout order, 1 Nov): the section
+   * on screen as the browser reports it, to the sitting it belongs to - not
+   * the engagement signals above, which stay as they are. A live first-time
+   * sitting only: not a review, not a finished lesson looked at again, whose
+   * sitting has ended. And only while a section is on screen: the
+   * after-lesson questions name no section. See `useAttentionReports`.
+   */
+  useAttentionReports({
+    on: live && !review && !finished,
+    sessionId: progress.sessionId,
+    segmentId: phase === "segments" ? segment.id : null,
+  });
 
   // Auto-clear the feedback note.
   useEffect(() => {
