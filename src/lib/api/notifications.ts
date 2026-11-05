@@ -54,7 +54,14 @@ export type NotificationType =
   | "teacher_replied"
   | "sign_in_changed"
   // In the deployed enum (found by scripts/enum-check.mjs, 5 Nov).
-  | "concept_support_needed";
+  | "concept_support_needed"
+  /** "Payment received", to billing admins (category billing). */
+  | "payment_cleared"
+  /**
+   * "A teacher needs help with a learner account", to every active admin,
+   * linking to the deactivated child's record (category account).
+   */
+  | "deactivated_student_support_requested";
 
 export interface Notification {
   notificationId: string;
