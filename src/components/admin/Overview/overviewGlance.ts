@@ -101,9 +101,13 @@ export function glanceRows(
       rows.push({
         key: "consent",
         title: `${n} ${n === 1 ? "student is" : "students are"} waiting on parent consent`,
-        // NOT "they can't begin lessons" - SCRUM-80 ruled the school warrants
-        // consent through the DSA and the learner proceeds.
-        sub: "They're learning as normal; your school's consent record is what's outstanding.",
+        // D04's line, its true half. It said "They're learning as normal", on
+        // SCRUM-80 (7 Sep), which is overtaken: the backend refuses a child at
+        // entry until consent is confirmed (403 `consent_pending`), design drew
+        // the child's Waiting on Consent screen, and Lydia ruled its words
+        // (Hub, 2 Nov). D04's "They can look around, but" is dropped - entry
+        // itself is refused, so there is nothing to look around.
+        sub: "They can't begin live lessons until it's confirmed.",
         action: "Review in Students",
         href: "/admin/students",
       });

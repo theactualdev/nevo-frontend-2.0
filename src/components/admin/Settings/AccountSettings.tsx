@@ -7,7 +7,7 @@ import { permissionsApi } from "@/lib/api/permissions";
 import { usersApi, type CurrentUser } from "@/lib/api/users";
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
-import { Avatar, CARD } from "../Roster/primitives";
+import { Avatar, CARD, PRIMARY_BTN } from "../Roster/primitives";
 import { ReadFailed } from "../ReadFailed";
 import { scopeName } from "../Team/adminScopes";
 import {
@@ -66,6 +66,8 @@ function when(iso: string): string {
 
 export function AccountSettings() {
   const [load, setLoad] = useState<Load>("loading");
+  /** Bumped by "Try again" on a failed first read, to ask again. */
+  const [attempt, setAttempt] = useState(0);
   const [me, setMe] = useState<CurrentUser | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -125,7 +127,7 @@ export function AccountSettings() {
         loadSessions();
       })
       .catch(() => setLoad("failed"));
-  }, [loadSessions]);
+  }, [loadSessions, attempt]);
 
   if (load === "loading") {
     return <div className={cn(CARD, "mt-5 h-[380px] animate-pulse")} />;
@@ -138,6 +140,18 @@ export function AccountSettings() {
           Nothing has changed - this is only about showing it to you. Try again
           in a moment.
         </p>
+        {/* A "Try again" with nothing to press sent people to reload the
+            page (the 2 Nov audit). It asks the read again, here. */}
+        <button
+          type="button"
+          onClick={() => {
+            setLoad("loading");
+            setAttempt((n) => n + 1);
+          }}
+          className={cn(PRIMARY_BTN, "mt-4")}
+        >
+          Try again
+        </button>
       </SettingsSection>
     );
   }
@@ -177,7 +191,16 @@ export function AccountSettings() {
       );
   };
 
-  const others = sessions.filter((s) => !s.current);
+  /*
+   * ONLY WHERE YOU'RE STILL SIGNED IN. `GET /auth/sessions` returns signed-out
+   * sessions too (`active: false`, the server's word for revoked), so every
+   * device ever signed out stayed on the list with "End it", and a sign-out
+   * looked like nothing happened - the row came straight back. Expiry is the
+   * server's to judge and `active` doesn't cover it yet (asked).
+   */
+  const live = sessions.filter((s) => s.active);
+  const others = live.filter((s) => !s.current);
+  const here = live.find((s) => s.current) ?? live[0] ?? null;
 
   const nameChanged =
     firstName.trim() !== (me?.firstName ?? "") ||
@@ -493,7 +516,7 @@ export function AccountSettings() {
       >
         {/* Empty is not "only this device": the device asking is always in
             the list, so none at all means we could not tell. */}
-        {sessionsRead === "loading" ? null : sessionsRead === "failed" || sessions.length === 0 ? (
+        {sessionsRead === "loading" ? null : sessionsRead === "failed" || live.length === 0 ? (
           <ReadFailed
             what="where you're signed in"
             onRetry={() => {
@@ -511,12 +534,12 @@ export function AccountSettings() {
            */
           <p className="m-0 max-w-[58ch] text-sm leading-[1.6] text-nevo-near-black/70">
             This is the only device signed in as you
-            {sessions[0] ? `, last active ${when(sessions[0].lastSeenAt)}` : ""}.
+            {here ? `, last active ${when(here.lastSeenAt)}` : ""}.
             If you sign in somewhere else, it will appear here.
           </p>
         ) : (
           <div className="flex flex-col gap-3">
-            {sessions.map((s) => (
+            {live.map((s) => (
               <div
                 key={s.id}
                 className="rounded-[10px] border border-nevo-near-black/12 px-4 py-3.5"

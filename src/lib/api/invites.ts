@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { ApiError, api } from "./client";
 import type { ConsentStatus } from "./consents";
 
 /**
@@ -131,6 +131,23 @@ export interface JoinAccepted {
 export const INVITATION_ALREADY_PENDING = "invitation_already_pending";
 /** The reserved teacher account changed since the revoke (409, on reissue). */
 export const RESERVED_TEACHER_STATE_CHANGED = "reserved_teacher_state_changed";
+/** The teacher's invitation was revoked; reissue that one (409, on create). */
+export const INVITATION_REISSUE_AVAILABLE = "invitation_reissue_available";
+/** The invitation's email now belongs to another account (409, on reissue). */
+export const TEACHER_EMAIL_IN_USE = "teacher_email_in_use";
+/** The invitation's classes are now someone else's (409, on reissue). */
+export const TEACHER_ASSIGNMENT_CONFLICT = "teacher_assignment_conflict";
+
+/**
+ * The invitation a 409 on create points at (`invitationId`, ed123cb): the one
+ * already waiting, or the revoked one to reissue. Null when it isn't there.
+ */
+export function refusedInvitationId(err: unknown): string | null {
+  if (!(err instanceof ApiError)) return null;
+  const inner = (err.detail as { detail?: { invitationId?: unknown } } | null)?.detail;
+  const id = inner?.invitationId;
+  return typeof id === "string" && id ? id : null;
+}
 
 export const invitesApi = {
   /** Every invitation, newest handling first. `status` narrows server-side. */

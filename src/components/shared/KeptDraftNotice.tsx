@@ -21,8 +21,11 @@ export function KeptDraftNotice({
       role="status"
       className={`rounded-[12px] bg-nevo-violet/16 px-[17px] py-3.5 ${className ?? ""}`}
     >
+      {/* TRUE WHATEVER TOOK THEM AWAY. This said "You were signed out", and
+          a draft is kept when a teacher leaves the page too - so it said a
+          sign-out that never happened to everyone who just navigated away. */}
       <p className="text-[13.5px] leading-[1.55] text-nevo-near-black/80 xl:text-[14px]">
-        You were signed out before this was saved, so Nevo kept what you had.
+        This wasn&rsquo;t saved before you left it, so Nevo kept what you had.
         It isn&rsquo;t saved yet.
       </p>
       <div className="mt-2.5 flex flex-wrap gap-2.5">

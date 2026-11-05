@@ -99,8 +99,8 @@ describe("the term cap", () => {
     );
 
     const saves = screen.getAllByRole("button", { name: "Save changes" });
-    // General, Data retention, Academic year: the calendar's is the third.
-    fireEvent.click(saves[2]);
+    // General, Academic year: the calendar's is the second.
+    fireEvent.click(saves[1]);
 
     await waitFor(() => expect(saveAcademic).toHaveBeenCalled());
     const sent = saveAcademic.mock.calls[0][0] as { termStartDates: string[] };
@@ -125,7 +125,8 @@ describe("the term cap", () => {
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/4 terms in your year/i),
     );
-    fireEvent.click(screen.getAllByRole("button", { name: "Save changes" })[2]);
+    // General, Academic year: the calendar's Save is the second.
+    fireEvent.click(screen.getAllByRole("button", { name: "Save changes" })[1]);
 
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/one invoice per term start/i),
@@ -142,7 +143,8 @@ describe("the term cap", () => {
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/3 terms in your year/i),
     );
-    fireEvent.click(screen.getAllByRole("button", { name: "Save changes" })[2]);
+    // General, Academic year: the calendar's Save is the second.
+    fireEvent.click(screen.getAllByRole("button", { name: "Save changes" })[1]);
 
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/that didn.t save/i),

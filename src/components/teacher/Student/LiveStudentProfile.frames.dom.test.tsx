@@ -174,15 +174,29 @@ describe("the learning support section", () => {
     expect(screen.queryByText(/After noticing/)).not.toBeInTheDocument();
   });
 
-  it("is absent - no heading, no history, no line - without the role", () => {
+  it("is absent without the role - and the history is C16c's instead (P1)", () => {
     render(
       <LiveStudentProfile studentId="s-1" state={{ ...ADAPTED, learningSupport: false }} />,
     );
 
     expect(screen.queryByRole("region", { name: "Learning support" })).not.toBeInTheDocument();
     expect(screen.queryByText(/Learning support/i)).not.toBeInTheDocument();
-    expect(screen.queryByText("Offered the spoken version of the worked example.")).not.toBeInTheDocument();
-    expect(screen.queryByText("How Nevo has adapted for this student")).not.toBeInTheDocument();
+    // Lydia, 14 Oct, P1: a class teacher reaches their own pupil's adaptation
+    // history with no role.
+    const c16c = screen.getByRole("region", { name: "How Nevo has adapted for this student" });
+    expect(c16c).toHaveTextContent("Offered the spoken version of the worked example.");
+    expect(c16c).toHaveTextContent("You do not need to act on any of these.");
+    // Not the frame's learning-styles sentence (SCRUM-253; rule 1).
+    expect(screen.queryByText(/how each student learns/)).not.toBeInTheDocument();
+  });
+
+  it("draws the history once for a holder - in their section, not C16c too", () => {
+    render(<LiveStudentProfile studentId="s-1" state={ADAPTED} />);
+
+    expect(screen.getAllByText("Offered the spoken version of the worked example.")).toHaveLength(1);
+    expect(
+      screen.queryByRole("region", { name: "How Nevo has adapted for this student" }),
+    ).not.toBeInTheDocument();
   });
 
   it("says plainly when Nevo has changed nothing yet", () => {

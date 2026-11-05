@@ -7,6 +7,7 @@ import { asSentence } from "@/lib/lessons/asSentence";
 import { AudioVariantPlayer } from "./AudioVariantPlayer";
 import { IllustrationWrapper } from "@/components/shared/IllustrationWrapper";
 import type { LessonSegment } from "@/lib/api/lessons";
+import { activityWithheld, withheldDetail } from "@/lib/lessons/activityWithheld";
 import {
   VARIANT_ORIENTATION,
   VARIANT_TABS,
@@ -314,6 +315,16 @@ function VariantBody({
     const safety = typeof v.safety === "string" ? v.safety.trim() : "";
     return (
       <div className="flex flex-col gap-2.5">
+        {/* SCRUM-290: the server's word that children can't reach it now -
+            calm, not an error, and absent once they can. */}
+        {segment.activityAvailability && activityWithheld(segment) && (
+          <p
+            role="status"
+            className="rounded-[10px] bg-nevo-violet/14 px-3.5 py-2.5 text-[13.5px] leading-[1.55] text-nevo-near-black/75"
+          >
+            {withheldDetail(segment.activityAvailability)}
+          </p>
+        )}
         {v.title && (
           <p className="text-[14.5px] font-semibold text-nevo-near-black">{v.title}</p>
         )}
