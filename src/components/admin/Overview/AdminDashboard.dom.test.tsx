@@ -187,10 +187,14 @@ describe("AdminDashboard", () => {
     expect(await screen.findByText(/Sent\. It may take a minute to arrive\./)).toBeInTheDocument();
   });
 
-  it("fails open to the Overview when the onboarding read failed", () => {
-    open(null, "not_active");
-    render(<AdminDashboard />);
-    expect(screen.getByRole("heading", { name: "Overview" })).toBeInTheDocument();
+  it("says the setup couldn't be read, and asks again - never 'live' on no evidence (audit, Lydia 4 Nov)", () => {
+    const refresh = vi.fn();
+    gate.mockReturnValue({ loading: false, pause: null, onboarding: null, refresh });
+    const { container } = render(<AdminDashboard />);
+    expect(visibleText(container)).toMatch(/We couldn.t read your school.s setup just now/);
+    expect(visibleText(container)).not.toMatch(/live on Nevo|Welcome to Nevo|active yet/i);
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it("says nothing either way until the gate has read", () => {
