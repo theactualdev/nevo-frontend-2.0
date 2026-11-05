@@ -205,12 +205,15 @@ describe("what Nevo adjusted", () => {
  * for a holder only, and refused to everyone else by the server since ab78139.
  */
 describe("adaptation history and Learning Support", () => {
-  it("is not read for a teacher who does not hold the role", async () => {
+  // Lydia, 14 Oct, P1: "A class teacher reaches their own pupils' profile,
+  // adaptation history and flags with no role." The server asks the role of
+  // an admin only (require_learning_support_if_admin).
+  it("is read for a teacher of the child who does not hold the role", async () => {
     holds.value = false;
     const { result } = renderHook(() => useStudentProfile("s-1"));
 
-    await waitFor(() => expect(result.current.reads?.mastery).toBe("ready"));
-    expect(api.adaptations).not.toHaveBeenCalled();
+    await waitFor(() => expect(result.current.reads?.adaptations).toBe("ready"));
+    expect(api.adaptations).toHaveBeenCalledWith("s-1");
     expect(result.current.learningSupport).toBe(false);
   });
 

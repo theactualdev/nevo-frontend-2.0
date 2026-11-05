@@ -80,10 +80,8 @@ describe("joining by link", () => {
     render(<SetPasswordForm mode="activation" />);
     activate();
 
-    expect(await screen.findByText("Taking you to your console…")).toBeInTheDocument();
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/teacher/dashboard"), {
-      timeout: 2500,
-    });
+    // On to C01's join confirmation and profile, signed in by the join.
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/teacher/onboarding/welcome"));
   });
 
   it("still sends them to sign in when the join carried no session", async () => {

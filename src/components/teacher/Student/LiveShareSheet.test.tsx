@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const { create } = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock("@/lib/api/escalations", () => ({ escalationsApi: { create } }));
@@ -268,7 +268,7 @@ describe("a note from before the session lapsed", () => {
   it("is offered, not laid over the empty box", () => {
     show();
 
-    expect(screen.getByText(/You were signed out before this was saved/)).toBeInTheDocument();
+    expect(screen.getByText(/This wasn.t saved before you left it/)).toBeInTheDocument();
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
   });
 
@@ -277,7 +277,7 @@ describe("a note from before the session lapsed", () => {
     fireEvent.click(screen.getByRole("button", { name: "Put it back" }));
 
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("Quieter than usual since Monday.");
-    expect(screen.queryByText(/You were signed out before this was saved/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/This wasn.t saved before you left it/)).not.toBeInTheDocument();
   });
 
   it("is gone when the teacher discards it", () => {
@@ -286,5 +286,49 @@ describe("a note from before the session lapsed", () => {
 
     expect(readKeptDraft("share:s-1")).toBeNull();
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
+  });
+});
+
+/*
+ * A note kept only while the teacher is taken from it. Sent, or closed on
+ * purpose, it is not offered back next time as if it were still unsaved.
+ */
+describe("a note that is sent, or closed on purpose", () => {
+  beforeEach(() => {
+    clearSession();
+    window.localStorage.clear();
+    setSession({
+      token: "tok",
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      userId: "t-1",
+      role: "teacher",
+    });
+  });
+
+  it("is kept while it is being written", async () => {
+    show();
+    type("Quieter than usual since Monday.");
+
+    await waitFor(() => expect(readKeptDraft("share:s-1")?.value).toBe("Quieter than usual since Monday."));
+  });
+
+  it("is not kept once it is sent", async () => {
+    const { onSent } = show();
+    type("Quieter than usual since Monday.");
+    await waitFor(() => expect(readKeptDraft("share:s-1")).not.toBeNull());
+    send();
+
+    await waitFor(() => expect(onSent).toHaveBeenCalled());
+    expect(readKeptDraft("share:s-1")).toBeNull();
+  });
+
+  it("is not kept once the sheet is cancelled", async () => {
+    const { onCancel } = show();
+    type("Half a thought.");
+    await waitFor(() => expect(readKeptDraft("share:s-1")).not.toBeNull());
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(onCancel).toHaveBeenCalled();
+    expect(readKeptDraft("share:s-1")).toBeNull();
   });
 });
