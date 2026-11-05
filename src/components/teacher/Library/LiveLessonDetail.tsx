@@ -12,6 +12,7 @@ import type {
   LessonSegment,
   SegmentProgress,
 } from "@/lib/api/lessons";
+import { activityWithheld, WITHHELD_ROW } from "@/lib/lessons/activityWithheld";
 import { cn } from "@/lib/utils";
 import { LessonDetailActions } from "./LessonDetailActions";
 import { SplitSourceNotice } from "./SplitSourceNotice";
@@ -170,6 +171,14 @@ function SegmentRow({
         {segment.body && (
           <p className="mt-1.5 line-clamp-2 max-w-[62ch] text-[13.5px] leading-[1.5] text-nevo-near-black/62">
             {segment.body}
+          </p>
+        )}
+        {/* SCRUM-290: only what the server sent, calm, and gone once the
+            activity is reachable again. Otherwise a teacher plans a class
+            around an activity no child can open. */}
+        {activityWithheld(segment) && (
+          <p className="mt-1.5 max-w-[62ch] text-[13px] leading-[1.5] text-nevo-near-black/60">
+            {WITHHELD_ROW}
           </p>
         )}
         {/* The engine's own words about how the class moved through this

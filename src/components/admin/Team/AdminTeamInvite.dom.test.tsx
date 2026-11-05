@@ -187,3 +187,37 @@ describe("at the seat allowance (the server's, 8 Oct)", () => {
     expect(visibleText(container)).not.toMatch(/we.re on it/);
   });
 });
+
+/**
+ * A coded refusal got "That didn't send, and we're on it ... try again" - a
+ * retry that is refused the same way (the 2 Nov audit). The server's own words
+ * say why.
+ */
+describe("a refusal the server explains", () => {
+  it("says the address already belongs to someone, in the server's words, with no retry", async () => {
+    list.mockResolvedValue({ members: [], seatLimit: 5, seatsUsed: 1, seatsRemaining: 4 });
+    invite.mockRejectedValue(
+      new ApiError(409, "conflict", {
+        detail: {
+          code: "team_member_exists",
+          message: "A user with this email already belongs to the platform.",
+        },
+      }),
+    );
+    const { container } = render(<AdminTeamView />);
+    await sendInvite(container);
+
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/A user with this email already belongs to the platform\./),
+    );
+    expect(visibleText(container)).not.toMatch(/we.re on it|try again in a moment/);
+  });
+
+  it("keeps the try-again line for a failure a retry could fix", async () => {
+    list.mockResolvedValue({ members: [], seatLimit: 5, seatsUsed: 1, seatsRemaining: 4 });
+    invite.mockRejectedValue(new ApiError(503, "down"));
+    const { container } = render(<AdminTeamView />);
+    await sendInvite(container);
+    await waitFor(() => expect(visibleText(container)).toMatch(/we.re on it/));
+  });
+});

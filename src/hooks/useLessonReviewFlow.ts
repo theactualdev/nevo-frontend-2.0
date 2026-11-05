@@ -32,6 +32,7 @@ import { getToken } from "@/lib/auth/session";
 export type ReviewWork =
   | "keyPoints"
   | "checks"
+  | "parts"
   | "rewrites"
   | `point:${string}`
   | `missing:${string}`
@@ -63,6 +64,11 @@ export interface LessonReviewFlowState {
    * review), and each with the hash of the review the teacher was shown.
    */
   approveChecks: (parts: { checks: boolean; guided: boolean }) => Promise<boolean>;
+  /**
+   * Every waiting calculation reveal part, in one press (8c4ccef). Its own,
+   * not the checks': the parts never hold back Assign.
+   */
+  approveParts: () => Promise<boolean>;
   approveRewrites: () => Promise<boolean>;
   amendPoint: (keyPointId: string, text: string) => Promise<boolean>;
   resolveMissing: (segmentId: string, write: MissingKeyPointWrite) => Promise<boolean>;
@@ -236,6 +242,27 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
     [working, review, lessonId, fail],
   );
 
+  const approveParts = useCallback(async () => {
+    if (working || !review) return false;
+    setWorking("parts");
+    setRefused(null);
+    try {
+      setReview(
+        await lessonsApi.approveAllCalculationParts(
+          lessonId,
+          review.calculationPartsContentHash ?? "",
+        ),
+      );
+      setChanged(false);
+      return true;
+    } catch (err: unknown) {
+      await fail("parts", err);
+      return false;
+    } finally {
+      setWorking(null);
+    }
+  }, [working, review, lessonId, fail]);
+
   const approveRewrites = useCallback(
     () =>
       // The segments carry each rewrite's review stamp, so they are re-read
@@ -367,6 +394,7 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
     changed,
     approveKeyPoints,
     approveChecks,
+    approveParts,
     approveRewrites,
     amendPoint,
     resolveMissing,
