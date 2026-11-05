@@ -229,7 +229,8 @@ export function AddStudentSheet({
     <Sheet
       busy={phase === "saving"}
       title="Add a student"
-      subtitle="One student joining your school now. You'll see what it adds to your next invoice before you confirm."
+      // D24b as redrawn in 1397ec4 (Lydia's item 9): no card is ever charged.
+      subtitle="One student joining your school now. Adding them never charges a card - Nevo bills by invoice. You'll see what it adds before you confirm."
       onClose={onClose}
       footer={
         phase === "saving" ? (
@@ -270,16 +271,12 @@ export function AddStudentSheet({
               className={cn(PRIMARY_BTN, "flex-1 justify-center")}
             >
               {/*
-                * "Add Zainab - ₦59,125 on your next invoice", never "& charge".
-                * The amount only appears once there is one to state; without
-                * a quote the button still works, because adding charges
-                * nothing and the next invoice will say what it costs.
+                * D24b's button (1397ec4): "Add Zainab to the roster" - what
+                * happens now - with the amount in the panel above, never on
+                * the button and never "& charge". It works without a quote,
+                * because adding charges nothing.
                 */}
-              {first && total
-                ? `Add ${first} — ${total} on your next invoice`
-                : first
-                  ? `Add ${first}`
-                  : "Add student"}
+              {first ? `Add ${first} to the roster` : "Add to the roster"}
             </button>
             <button type="button" onClick={onClose} className={GHOST_BTN}>
               Cancel
@@ -421,7 +418,7 @@ export function AddStudentSheet({
         ) : null}
       </div>
 
-      <CostPanel quote={quote} failed={quoteFailed} total={total} />
+      <CostPanel quote={quote} failed={quoteFailed} total={total} first={first} />
     </Sheet>
   );
 }
@@ -437,10 +434,13 @@ function CostPanel({
   quote,
   failed,
   total,
+  first,
 }: {
   quote: AdditionQuote | null;
   failed: boolean;
   total: string | null;
+  /** The name typed so far, for "{first} joins the roster now." */
+  first: string;
 }) {
   const currency = billingCurrency(quote?.currency);
 
@@ -476,9 +476,11 @@ function CostPanel({
         {quote.appliesTo ? `Joins in ${quote.appliesTo}` : "Cost"}
       </p>
       <dl className="m-0 mt-2.5 space-y-1.5 text-[14px]">
-        <Line label={`1 student × ${money(quote.perStudentRate)}`} value={money(quote.totalBeforeVat)} />
+        {/* "term price": the quote is the full per-student rate - what one
+            student costs for a whole term (the route's own docstring). */}
+        <Line label={`1 student × ${money(quote.perStudentRate)} term price`} value={money(quote.totalBeforeVat)} />
         <Line label={vat ? `VAT at ${vat}` : "VAT"} value={money(quote.vatAmount)} />
-        <Line label="Added to your next invoice" value={total ?? money(quote.totalWithVat)} strong />
+        <Line label="Added to your invoice" value={total ?? money(quote.totalWithVat)} strong />
       </dl>
       <p className="m-0 mt-3 text-[12.5px] leading-[1.55] text-nevo-near-black/55">
         {/*
@@ -488,8 +490,16 @@ function CostPanel({
           * clever enough to let "Charged now £X" back in when somebody edits
           * the "Nothing" out. So the sentence says when instead of what not.
           */}
-        The full term price, with no reduction for weeks already passed.
-        It&rsquo;s added to your next invoice rather than taken now.
+        {/*
+          * D24b's line, less its last clause. "...and becomes active once that
+          * invoice is paid" isn't reliable today: first sign-in activates any
+          * student who isn't deactivated, invite-link joins are created
+          * active, and a school with no invoice yet gets them active at once
+          * (5 Nov check; raised to Teslim). Until that holds, it isn't said.
+          */}
+        The full term price goes on your next invoice, with no reduction for
+        weeks already passed.
+        {first ? ` ${first} joins the roster now.` : ""}
       </p>
     </div>
   );
