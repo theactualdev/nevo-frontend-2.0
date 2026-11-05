@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { useKeptDraft } from "@/hooks/useKeptDraft";
@@ -63,6 +63,13 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
   useUnsavedGuard(text.trim().length > 0 && !sent);
   // Feedback being written survives the session lapsing (SCRUM-246).
   const keptText = useKeptDraft("feedback", text, text.trim().length > 0 && !sent);
+  // Closing it is throwing the words away, so the kept copy goes too; only
+  // being taken from it (a lapse, leaving the page) keeps it.
+  const { discard } = keptText;
+  const cancel = useCallback(() => {
+    discard();
+    onClose();
+  }, [discard, onClose]);
   const [sending, setSending] = useState(false);
   /**
    * Which KIND of failure, not just that there was one.
@@ -87,11 +94,11 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") cancel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [cancel]);
 
   const ready = text.trim().length > 0;
 
@@ -134,7 +141,7 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
     <>
       <div
         aria-hidden
-        onClick={onClose}
+        onClick={cancel}
         className="fixed inset-0 z-40 bg-nevo-near-black/28 backdrop-blur-[1.5px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       />
 
@@ -184,7 +191,7 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
             </div>
             <button
               type="button"
-              onClick={onClose}
+              onClick={cancel}
               aria-label="Close"
               className="mt-0.5 shrink-0 cursor-pointer text-nevo-near-black/40 transition-colors hover:text-nevo-near-black/70 active:scale-[0.98]"
             >

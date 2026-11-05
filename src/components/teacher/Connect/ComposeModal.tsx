@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { useKeptDraft } from "@/hooks/useKeptDraft";
@@ -94,6 +94,13 @@ export function ComposeModal({
   // The words of a new message survive the session lapsing (SCRUM-246). The
   // recipient is chosen again: it is read from the roster each time.
   const keptText = useKeptDraft("connect-compose", text, text.trim().length > 0 && phase !== "sent");
+  // Closing the unsent form is throwing it away, so the kept copy goes too;
+  // only being taken from it (a lapse, leaving the page) keeps it.
+  const { discard } = keptText;
+  const cancel = useCallback(() => {
+    discard();
+    onClose();
+  }, [discard, onClose]);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
@@ -104,11 +111,11 @@ export function ComposeModal({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // Escape belongs to the form; a send in flight owns the screen.
-      if (e.key === "Escape" && phase === "form") onClose();
+      if (e.key === "Escape" && phase === "form") cancel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, phase]);
+  }, [cancel, phase]);
 
   // Real students when we have them; the fixtures only back the designed
   // screens. A compose list of invented children on a screen that sends
@@ -209,7 +216,7 @@ export function ComposeModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
-      onClick={() => phase === "form" && onClose()}
+      onClick={() => phase === "form" && cancel()}
     >
       <div
         ref={dialogRef}
@@ -315,7 +322,7 @@ export function ComposeModal({
               </h2>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={cancel}
                 aria-label="Close"
                 className="flex size-8 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/50 transition-colors hover:bg-nevo-near-black/5 xl:size-[34px]"
               >

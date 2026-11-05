@@ -151,6 +151,28 @@ describe("a child held for a date of birth check", () => {
     expect(link.getAttribute("href")).toMatch(/^\/admin\/students\/date-of-birth\?back=%2Fadmin%2Fstudents/);
   });
 
+  it("says the held child is On hold, not Active (Lydia, 4 Nov)", async () => {
+    render(<StudentsView />);
+    await waitFor(() => expect(screen.getByText(NOTE)).toBeInTheDocument());
+    const held = screen.getByText("Tunde Bello").closest("button") as HTMLElement;
+    const other = screen.getByText("Chisom Eze").closest("button") as HTMLElement;
+    expect(held).toHaveTextContent("On hold");
+    expect(held).not.toHaveTextContent("Active");
+    expect(other).toHaveTextContent("Active");
+  });
+
+  it("puts no Active pill on anyone when the held list can't be read", async () => {
+    mismatches.mockRejectedValue(new Error("403"));
+    render(<StudentsView />);
+    await screen.findByText("Tunde Bello");
+    await waitFor(() => expect(mismatches).toHaveBeenCalled());
+    for (const name of ["Tunde Bello", "Chisom Eze"]) {
+      const row = screen.getByText(name).closest("button") as HTMLElement;
+      expect(row).not.toHaveTextContent("Active");
+      expect(row).not.toHaveTextContent("On hold");
+    }
+  });
+
   it("leaves the roster without notes when the list cannot be read", async () => {
     mismatches.mockRejectedValue(new Error("403"));
     render(<StudentsView />);

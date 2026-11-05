@@ -137,8 +137,12 @@ export function ClassFormSheet({
     };
 
     if (existing) {
+      // PATCH /classes/{id} stores the name and year group (and subjects, from
+      // the class page) - nothing else. Section, session and capacity were
+      // sent here and dropped while the sheet said it saved (2 Nov audit), so
+      // edit sends only what is kept and doesn't offer the rest.
       classesApi
-        .update(existing.id, payload)
+        .update(existing.id, { name: payload.name, yearGroup: payload.yearGroup })
         .then(() => onSaved(existing.id))
         .catch(() => setPhase("failed"));
       return;
@@ -242,6 +246,11 @@ export function ClassFormSheet({
         </select>
       </div>
 
+      {/* CREATE ONLY. The update route doesn't store these, so on Edit they
+          would be controls that store nothing (Lydia, D1, 14 Oct) - and the
+          sheet would say "saved" over a change that vanished. */}
+      {editing ? null : (
+      <>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="class-section" className={LABEL}>
@@ -282,6 +291,8 @@ export function ClassFormSheet({
           className={FIELD}
         />
       </div>
+      </>
+      )}
 
       {!editing ? (
         <div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { escalationsApi } from "@/lib/api/escalations";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
@@ -62,14 +62,24 @@ export function LiveShareSheet({
   // A note about a child survives the session lapsing (SCRUM-246), kept for
   // this child and offered back when the sheet is next opened.
   const keptNote = useKeptDraft(`share:${studentId}`, note, note.trim().length > 0);
+  /*
+   * A deliberate close throws the note away, as it always did; only being
+   * taken away from it - a lapse, or leaving the page - keeps it. The kept
+   * copy goes with it, or it would be offered back as unsaved next time.
+   */
+  const { discard } = keptNote;
+  const cancel = useCallback(() => {
+    discard();
+    onCancel();
+  }, [discard, onCancel]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
+      if (e.key === "Escape") cancel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [cancel]);
 
   // `note` is required by the contract, and an empty referral tells the SENCo
   // nothing. Whitespace is not a note.
@@ -87,6 +97,9 @@ export function LiveShareSheet({
     setError(null);
     try {
       await escalationsApi.create({ studentId, note: note.trim() });
+      // Sent: the sheet closes at once, before "unsaved" could clear it, and
+      // a sent note about a child must not come back as one that wasn't.
+      discard();
       onSent();
     } catch {
       // Back to the form: the error says the note "is still here", so it is.
@@ -104,7 +117,7 @@ export function LiveShareSheet({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
-      onClick={onCancel}
+      onClick={cancel}
     >
       <div
         ref={dialogRef}
@@ -178,7 +191,7 @@ export function LiveShareSheet({
         <div className="mt-[18px] flex gap-3 xl:mt-5">
           <button
             type="button"
-            onClick={onCancel}
+            onClick={cancel}
             className="flex h-[50px] flex-1 cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-navy/30 text-[14.5px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 xl:h-[52px] xl:text-[15px]"
           >
             Cancel
