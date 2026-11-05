@@ -3,15 +3,18 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { ApiError } from "@/lib/api/client";
 import type { ChildSubjectProgress, ParentChild } from "@/lib/api/parent";
 
-const { myChildren, subjectProgress, getSession } = vi.hoisted(() => ({
+const { myChildren, subjectProgress, getSession, learningEvidence } = vi.hoisted(() => ({
   myChildren: vi.fn(),
   subjectProgress: vi.fn(),
   getSession: vi.fn(),
+  learningEvidence: vi.fn(),
 }));
 
 // Replaced wholesale - see ParentDataManagement.test.tsx for why importOriginal
 // deadlocks the jsdom worker here.
-vi.mock("@/lib/api/parent", () => ({ parentApi: { myChildren, subjectProgress } }));
+vi.mock("@/lib/api/parent", () => ({
+  parentApi: { myChildren, subjectProgress, learningEvidence },
+}));
 vi.mock("@/lib/auth/session", () => ({ getSession }));
 
 import { ParentHome } from "./ParentHome";
@@ -65,6 +68,13 @@ beforeEach(() => {
     role: "parent_guardian",
   });
   myChildren.mockResolvedValue([CHILD]);
+  learningEvidence.mockReset();
+  learningEvidence.mockResolvedValue({
+    studentId: "s-1",
+    strengthenedConcepts: [],
+    scheduledReturns: [],
+    outOfSchoolLearning: [],
+  });
   subjectProgress.mockImplementation(async (id: string) =>
     weekFor(id, id === "s-2" ? "Tunde's topic" : "Amara's topic"),
   );
@@ -238,5 +248,33 @@ describe("edges", () => {
     render(<ParentHome />);
 
     expect(await screen.findByText(/couldn’t load this just now/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * D02b's way in (no frame draws one): the screen's own heading as a line on
+ * the home, only when the server has strengthened something for this child.
+ */
+describe("the way to what a child has strengthened", () => {
+  it("appears when the server has something to show", async () => {
+    learningEvidence.mockResolvedValue({
+      studentId: "s-1",
+      strengthenedConcepts: [
+        { conceptId: "c1", conceptName: "Equivalent fractions", recordedAt: "2026-11-01T10:00:00Z" },
+      ],
+      scheduledReturns: [],
+      outOfSchoolLearning: [],
+    });
+    render(<ParentHome />);
+    expect(await screen.findByRole("link", { name: /What Amara.s strengthened/ })).toHaveAttribute(
+      "href",
+      "/parent-portal/changes?child=s-1",
+    );
+  });
+
+  it("is absent when nothing is strengthened, or the read fails", async () => {
+    render(<ParentHome />);
+    await screen.findByText("Amara's topic");
+    expect(screen.queryByRole("link", { name: /strengthened/ })).toBeNull();
   });
 });

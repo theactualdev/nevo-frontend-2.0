@@ -269,6 +269,31 @@ export interface ParentRightReceipt {
   reasonRecorded: boolean;
 }
 
+/**
+ * `GET /parents/me/children/{id}/learning-evidence`. A concept is
+ * "strengthened" when the server's own marking of the child's practice
+ * crossed its mastery line - a fact about this child against themself, with
+ * no number exposed. `scheduledReturns` and `outOfSchoolLearning` are read
+ * but not drawn yet (D02b doesn't use them).
+ */
+export interface ParentLearningEvidence {
+  studentId: string;
+  strengthenedConcepts: {
+    conceptId: string;
+    conceptName: string;
+    recordedAt: string;
+    source?: "server_marked_practice";
+  }[];
+  scheduledReturns: { conceptId: string; conceptName: string; dueAt: string }[];
+  outOfSchoolLearning: {
+    conceptId: string;
+    conceptName: string;
+    activityKind: string;
+    recordedAt: string;
+    source?: "learner_report";
+  }[];
+}
+
 export const parentApi = {
   /**
    * Resolve the token to the child, the school and the current decision.
@@ -391,6 +416,16 @@ export const parentApi = {
   subjectProgress: (studentId: string) =>
     api.get<ChildSubjectProgress>(
       `/api/v1/parents/me/children/${encodeURIComponent(studentId)}/subject-progress`,
+    ),
+
+  /**
+   * D02b's read (live since the levels migration, 5 Nov): what this child has
+   * strengthened, by the server's own marking - all-time, the latest 100. No
+   * window, no subject per concept and no number on any of it.
+   */
+  learningEvidence: (studentId: string) =>
+    api.get<ParentLearningEvidence>(
+      `/api/v1/parents/me/children/${encodeURIComponent(studentId)}/learning-evidence`,
     ),
 
   /**

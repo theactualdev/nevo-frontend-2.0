@@ -41,6 +41,12 @@ export function ParentHome() {
    * there is something to do. Its own read: unread asks nothing.
    */
   const [asks, setAsks] = useState<Set<string>>(() => new Set());
+  /**
+   * D02b's way in: how many concepts the server says each child has
+   * strengthened, read for the child on screen. Used only to decide whether
+   * the line shows - never displayed. Unread is none: no line.
+   */
+  const [strengthened, setStrengthened] = useState<Map<string, number>>(() => new Map());
 
   useEffect(() => {
     let cancelled = false;
@@ -86,6 +92,21 @@ export function ParentHome() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!selected) return;
+    let alive = true;
+    // Its own read, and its own failure: an unread child shows no line.
+    Promise.resolve()
+      .then(() => parentApi.learningEvidence(selected))
+      .then((e) => {
+        if (alive) setStrengthened((m) => new Map(m).set(selected, e.strengthenedConcepts.length));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [selected]);
 
   if (phase === "loading") {
     return (
@@ -172,6 +193,8 @@ export function ParentHome() {
   }
 
   const selectedChild = children.find((c) => c.studentId === selected) ?? null;
+  const strengthenedHere =
+    selectedChild !== null && (strengthened.get(selectedChild.studentId) ?? 0) > 0;
 
   return (
     <Shell dataHref={`/parent-portal/data${selected ? `?child=${encodeURIComponent(selected)}` : ""}`}>
@@ -204,6 +227,22 @@ export function ParentHome() {
           className="mb-5 flex items-center justify-between gap-3 rounded-xl bg-nevo-cream-elevated px-5 py-4 text-[15px] font-semibold text-nevo-navy shadow-[0_2px_8px_rgba(0,0,0,0.05)] hover:bg-nevo-navy/[0.06]"
         >
           Can you confirm {selectedChild.firstName?.trim() || "your child"}&rsquo;s date of birth?
+          <span aria-hidden>&rarr;</span>
+        </Link>
+      ) : null}
+
+      {/*
+        * D02b's way in. No frame draws one, so it takes the screen's own
+        * heading and sits where the date-check line does - and only when the
+        * server has strengthened something for this child. Nothing to show,
+        * no line (rule 5).
+        */}
+      {selectedChild && strengthenedHere ? (
+        <Link
+          href={`/parent-portal/changes?child=${encodeURIComponent(selectedChild.studentId)}`}
+          className="mb-5 flex items-center justify-between gap-3 rounded-xl bg-nevo-cream-elevated px-5 py-4 text-[15px] font-semibold text-nevo-navy shadow-[0_2px_8px_rgba(0,0,0,0.05)] hover:bg-nevo-navy/[0.06]"
+        >
+          What {selectedChild.firstName?.trim() || "your child"}&rsquo;s strengthened
           <span aria-hidden>&rarr;</span>
         </Link>
       ) : null}
