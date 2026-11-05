@@ -90,9 +90,15 @@ export function BillingContactSheet({
         <h2 className="m-0 text-xl font-semibold text-nevo-near-black">
           Billing contact
         </h2>
-        <p className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-          Where invoices and payment reminders go.
-        </p>
+        {/*
+          * NO "Where invoices and payment reminders go." Nothing goes there:
+          * an issued invoice is an in-app notice to the school's active admins
+          * (billing/issuance.py `_notify_billing_contacts`), and no reminder
+          * or invoice email uses this address anywhere on the server (checked
+          * 5 Nov). A line promising delivery to an address nothing writes to
+          * is an untrue state (Lydia, 4 Nov). Raised to the hub; the words
+          * come back when the server sends to it.
+          */}
 
         <div className="mt-5 grid grid-cols-2 gap-4">
           <label className="col-span-2 block">
