@@ -12,7 +12,6 @@ import {
   Avatar,
   CARD,
   CheckIcon,
-  GHOST_BTN,
   PausedNote,
   PRIMARY_BTN,
   PlusIcon,
@@ -542,24 +541,28 @@ function EmptyState() {
           priority
         />
         <h3 className="m-0 text-xl font-semibold text-nevo-near-black">No teachers yet</h3>
+        {/*
+          * D06's empty state as redrawn in 1397ec4 (Lydia's item 7, no SSO):
+          * the whole sentence on desktop, the first half on tablet. It was
+          * "...or upload your staff file and Nevo adds them all" with an
+          * "Import a roster" button - but the setup upload refuses a school
+          * that is already running (`/onboarding/imports` 409
+          * `school_already_active`), so for a live school it was a way in
+          * that led nowhere. An invitation is how a teacher gets an email to
+          * set a password and join (`POST /invites`, checked 5 Nov).
+          */}
         <p className="mt-2.5 text-[15px] leading-[1.6] text-nevo-near-black/64">
-          Invite your teachers one at a time, or upload your staff file and
-          Nevo adds them all. Each one gets their own console, and nothing is
-          sent until you invite them.
+          Invite your teachers and each one gets their own console.
+          <span className="hidden xl:inline">
+            {" "}
+            Everyone you invite gets an email to set a password and join their
+            classes - nothing goes out until you invite them.
+          </span>
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <Link href="/admin/invitations" className={PRIMARY_BTN}>
             <PlusIcon />
             Invite a teacher
-          </Link>
-          {/*
-            * WAS "Import from SSO" -> the IT surface, which came off the
-            * sidebar on 24 Sep. Provider sign-in is deferred and every school
-            * is manual, so the route that brings staff in is the roster
-            * upload, which takes a teacher file alongside the student one.
-            */}
-          <Link href="/admin/roster" className={GHOST_BTN}>
-            Import a roster
           </Link>
         </div>
       </div>
