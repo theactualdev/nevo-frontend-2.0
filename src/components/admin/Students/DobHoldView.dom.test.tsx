@@ -3,16 +3,17 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { ApiError } from "@/lib/api/client";
 import type { AgeCheck } from "@/lib/api/ageChecks";
 
-const { held, schoolRecheck, getStudent, listClasses } = vi.hoisted(() => ({
+const { held, schoolRecheck, resendParentNotice, getStudent, listClasses } = vi.hoisted(() => ({
   held: vi.fn(),
   schoolRecheck: vi.fn(),
+  resendParentNotice: vi.fn(),
   getStudent: vi.fn(),
   listClasses: vi.fn(),
 }));
 
 vi.mock("@/lib/api/ageChecks", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/ageChecks")>();
-  return { ...actual, ageChecksApi: { held, schoolRecheck } };
+  return { ...actual, ageChecksApi: { held, schoolRecheck, resendParentNotice } };
 });
 vi.mock("@/lib/api/students", () => ({ studentsApi: { get: getStudent } }));
 vi.mock("@/lib/api/classes", () => ({ classesApi: { list: listClasses } }));
@@ -99,7 +100,7 @@ describe("a hold waiting on the school", () => {
     fireEvent.click(within(await card()).getByRole("button", { name: "This date is correct" }));
     expect(
       await screen.findByText(
-        /We’ve asked Tunde’s parent to enter it again\. If the two dates now agree, Tunde’s account activates on its own\. If they still differ, we’ll let you know - there’s nothing more for you to do here for now\./,
+        /We’ve asked Tunde’s parent to enter it again, sent 21 October 2026\. If the two dates now agree, Tunde’s account activates on its own\. If they still differ, we’ll let you know - there’s nothing more for you to do here for now\./,
       ),
     ).toBeInTheDocument();
   });
@@ -172,6 +173,80 @@ describe("waiting on the parent", () => {
     render(<DobHoldView />);
     expect(await screen.findByText(/You’ve done your part on these\./)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "This date is correct" })).toBeNull();
+  });
+
+  /*
+   * D30b (design 1397ec4), reduced to what the server makes true: when it was
+   * sent, and a resend. No parent named - the notice goes to every linked
+   * parent with an active account - and no count of days to removal.
+   */
+  const asked = (over: Partial<AgeCheck> = {}) =>
+    check({
+      schoolRecheckedAt: "2026-10-21T09:00:00Z",
+      parentNotifiedAt: "2026-10-21T09:00:01Z",
+      ...over,
+    });
+
+  it("says when the request went, and resends it, with the new date (D30b)", async () => {
+    held.mockResolvedValue([asked()]);
+    resendParentNotice.mockResolvedValue(asked({ parentNotifiedAt: "2026-11-04T12:00:00Z" }));
+    render(<DobHoldView />);
+    const c = await card();
+    expect(c).toHaveTextContent("sent 21 October 2026");
+    fireEvent.click(within(c).getByRole("button", { name: "Resend the request" }));
+    expect(await within(c).findByText("Request resent")).toBeInTheDocument();
+    expect(resendParentNotice).toHaveBeenCalledWith("ac-tunde");
+    expect(c).toHaveTextContent("sent 4 November 2026");
+    // The removal date stays the date the server sends - a resend doesn't move it.
+    expect(c).toHaveTextContent("Record removed on 19 November 2026 if unresolved.");
+    expect(c.textContent).not.toMatch(/days from today|Mr\./);
+  });
+
+  it("says plainly when it went in the last few minutes, and keeps the button", async () => {
+    held.mockResolvedValue([asked()]);
+    resendParentNotice.mockRejectedValue(
+      new ApiError(429, "Too Many Requests", { detail: { code: "parent_notice_recently_sent" } }),
+    );
+    render(<DobHoldView />);
+    const c = await card();
+    fireEvent.click(within(c).getByRole("button", { name: "Resend the request" }));
+    expect(
+      await within(c).findByText("It went in the last few minutes, so it hasn't been sent again."),
+    ).toBeInTheDocument();
+    expect(within(c).getByRole("button", { name: "Resend the request" })).toBeInTheDocument();
+  });
+
+  it("says when no linked parent has an account to send it to", async () => {
+    held.mockResolvedValue([asked()]);
+    resendParentNotice.mockRejectedValue(
+      new ApiError(409, "Conflict", { detail: { code: "parent_account_unavailable" } }),
+    );
+    render(<DobHoldView />);
+    const c = await card();
+    fireEvent.click(within(c).getByRole("button", { name: "Resend the request" }));
+    expect(
+      await within(c).findByText(
+        "No parent linked to Tunde has an active Nevo account, so there's no one to send it to.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("reads the list again when the hold has already gone", async () => {
+    held.mockResolvedValue([asked()]);
+    resendParentNotice.mockRejectedValue(
+      new ApiError(409, "Conflict", { detail: { code: "age_check_not_pending" } }),
+    );
+    render(<DobHoldView />);
+    fireEvent.click(within(await card()).getByRole("button", { name: "Resend the request" }));
+    await waitFor(() => expect(held).toHaveBeenCalledTimes(2));
+  });
+
+  it("offers no resend when nobody was asked in the first place", async () => {
+    held.mockResolvedValue([asked({ parentNotifiedAt: null })]);
+    render(<DobHoldView />);
+    const c = await card();
+    expect(within(c).queryByRole("button", { name: "Resend the request" })).toBeNull();
+    expect(c.textContent).not.toMatch(/sent \d/);
   });
 
 });
