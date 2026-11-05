@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
-import { ageChecksApi } from "@/lib/api/ageChecks";
+import { ageChecksApi, type AgeCheckEdit } from "@/lib/api/ageChecks";
+import { longDate } from "@/lib/dates";
 import {
   studentsApi,
   type AdminStudentDetail,
@@ -72,6 +73,17 @@ import { WriteFailed } from "../WriteFailed";
 
 type Phase = "loading" | "ready" | "failed" | "denied";
 
+/** "14 March 2013" from a date-only "2013-03-14", with no timezone shift. */
+function birthDate(day: string | null): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(day ?? "");
+  if (!m) return day ?? "";
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export function StudentDetailView({
   studentId,
   back = null,
@@ -118,6 +130,45 @@ export function StudentDetailView({
       .held()
       .then((rows) => {
         if (alive) setHeld(rows.some((r) => r.studentId === studentId));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [studentId]);
+
+  /*
+   * WHAT HAPPENED TO THE DATE (Lydia, 2 Nov, item 12): one line per school
+   * correction, from each of this child's checks' own history (c268404) -
+   * "a line on the child's record is there when someone is actually looking
+   * at that child". Only a real change: a confirm writes a row with the same
+   * date either side, and "changed from X to X" says nothing. No time window
+   * (rule 3). A parent's date taking over isn't in the history yet (Teslim);
+   * a read that fails, or a viewer the route refuses, shows no line.
+   */
+  const [dobChanges, setDobChanges] = useState<AgeCheckEdit[]>([]);
+  useEffect(() => {
+    let alive = true;
+    ageChecksApi
+      .list()
+      .then((rows) =>
+        Promise.all(
+          (Array.isArray(rows) ? rows : [])
+            .filter((r) => r.studentId === studentId)
+            .map((r) => ageChecksApi.history(r.id).catch(() => [] as AgeCheckEdit[])),
+        ),
+      )
+      .then((lists) => {
+        if (!alive) return;
+        setDobChanges(
+          lists
+            .flat()
+            .filter(
+              (e) =>
+                Boolean(e.previousSchoolDateOfBirth) &&
+                e.previousSchoolDateOfBirth !== e.newSchoolDateOfBirth,
+            ),
+        );
       })
       .catch(() => undefined);
     return () => {
@@ -323,6 +374,21 @@ export function StudentDetailView({
               .
             </span>
           </div>
+        ) : null}
+
+        {dobChanges.length > 0 ? (
+          <ul className="m-0 mt-[22px] flex list-none flex-col gap-1.5 p-0">
+            {dobChanges.map((e, i) => (
+              <li
+                key={`${e.changedAt}-${i}`}
+                className="text-[13.5px] leading-[1.6] text-nevo-near-black/66"
+              >
+                {e.actorName} changed this child&rsquo;s date of birth from{" "}
+                {birthDate(e.previousSchoolDateOfBirth)} to {birthDate(e.newSchoolDateOfBirth)} on{" "}
+                {longDate(e.changedAt)}.
+              </li>
+            ))}
+          </ul>
         ) : null}
 
         <div className="mt-[22px] border-t border-nevo-near-black/8 pt-4">

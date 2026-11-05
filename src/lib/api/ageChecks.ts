@@ -85,6 +85,19 @@ export function ageCheckRefusal(err: unknown): string | null {
   return err instanceof ApiError ? apiErrorCode(err.detail) : null;
 }
 
+/**
+ * One school re-check of a child's date of birth (c268404): who made it, the
+ * date the school held before, the date it set, and when. A confirm writes a
+ * row too, with the same date either side.
+ */
+export interface AgeCheckEdit {
+  previousSchoolDateOfBirth: string | null;
+  newSchoolDateOfBirth: string;
+  actorUserId: string | null;
+  actorName: string;
+  changedAt: string;
+}
+
 export const ageChecksApi = {
   /** GET /api/v1/age-checks - every check at this school, newest first. */
   list: () => api.get<AgeCheck[]>("/api/v1/age-checks"),
@@ -104,6 +117,10 @@ export const ageChecksApi = {
     api.post<AgeCheck>(`/api/v1/age-checks/${encodeURIComponent(ageCheckId)}/school-recheck`, {
       dateOfBirth,
     }),
+
+  /** GET /api/v1/age-checks/{id}/history - the school's re-checks, oldest first. School roles only. */
+  history: (ageCheckId: string) =>
+    api.get<AgeCheckEdit[]>(`/api/v1/age-checks/${encodeURIComponent(ageCheckId)}/history`),
 
   /** GET /api/v1/age-checks/parent - a signed-in parent's own children's checks. */
   parent: () => api.get<AgeCheck[]>("/api/v1/age-checks/parent"),
