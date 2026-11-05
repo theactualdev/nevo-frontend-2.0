@@ -496,7 +496,8 @@ describe("setting up a parent account", () => {
     fireEvent.click(screen.getByRole("button", { name: /Maybe later/i }));
 
     expect(screen.getByText(/All done/i)).toBeInTheDocument();
-    expect(screen.getByText(/set up an account later from the same link/i)).toBeInTheDocument();
+    // Re-opening the link offers no setup, so this was a dead-end promise.
+    expect(screen.queryByText(/later from the same link/i)).toBeNull();
     expect(requestCode).not.toHaveBeenCalled();
   });
 });
@@ -528,14 +529,46 @@ describe("an account the consent created", () => {
     expect(screen.queryByText(/Set up an account and you can follow/)).toBeNull();
   });
 
-  it("says it can be finished later, not set up", async () => {
+  it("promises no 'later from the same link' it can't keep (2 Nov audit)", async () => {
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
     fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
     await screen.findByText(/that[’']s all we needed/i);
     fireEvent.click(screen.getByRole("button", { name: /Maybe later/i }));
-    expect(
-      screen.getByText(/finish setting up your account later from the same link/i),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/later from the same link/i)).toBeNull();
+  });
+});
+
+/**
+ * "{child} can start learning with their class" was said after every consent,
+ * including when the server's date-of-birth check holds the child (Lydia,
+ * 4 Nov: asserting an untrue state is worse than a missing feature).
+ */
+describe("whether the child can start", () => {
+  const done = (ageCheck: string) =>
+    completeConsent.mockResolvedValue({
+      invitationId: "inv-1",
+      parentLinkId: "pl-1",
+      parentId: "p-1",
+      studentId: "s-1",
+      confirmedTypes: ["data_processing"],
+      completedAt: "2026-09-08T10:00:00Z",
+      receiptSentTo: null,
+      ageCheck,
+    });
+
+  it("says so when the server says nothing holds them", async () => {
+    done("matched");
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    expect(await screen.findByText(/Amara can start learning with their class/)).toBeInTheDocument();
+  });
+
+  it("doesn't say so when the date-of-birth check holds them", async () => {
+    done("mismatch");
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    await screen.findByText(/that[’']s all we needed/i);
+    expect(screen.queryByText(/can start learning/)).toBeNull();
   });
 });
 

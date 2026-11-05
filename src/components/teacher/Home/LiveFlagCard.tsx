@@ -102,7 +102,9 @@ export function LiveFlagCard({ flag }: { flag: TeacherFlag }) {
           * anchor and an anchor may not contain another one.
           */}
         <Link
-          href={`/teacher/students/${flag.studentId}`}
+          /* With the child's class, so the profile can show what Nevo has
+             noticed and its "{class} · Roster" way back (backlog item 9). */
+          href={`/teacher/students/${flag.studentId}${flag.classId ? `?class=${flag.classId}` : ""}`}
           onClick={read}
           className="text-[13.5px] font-semibold text-nevo-navy after:absolute after:inset-0 after:rounded-[12px] after:content-[''] focus-visible:outline-none xl:text-[14.5px]"
         >

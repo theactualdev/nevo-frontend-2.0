@@ -237,7 +237,8 @@ export function LiveClassInsights({
                  live ones were plain boxes a teacher could only read. */
               <Link
                 key={f.id}
-                href={`/teacher/students/${f.studentId}`}
+                /* With this class, as the roster's own rows link (backlog item 9). */
+                href={`/teacher/students/${f.studentId}?class=${classId}`}
                 className={cn(
                   "relative flex cursor-pointer gap-3.5 rounded-[12px] bg-nevo-cream-elevated py-4 pr-[18px] pl-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-[filter] hover:brightness-[0.985] xl:gap-4 xl:py-5 xl:pr-[22px] xl:pl-[26px]",
                 )}

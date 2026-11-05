@@ -56,7 +56,6 @@ import { SchoolSettings } from "./SchoolSettings";
  */
 export const SETTINGS_INDEX: { href: string; label: string; school: boolean }[] = [
   { href: "#settings-general", label: "General", school: true },
-  { href: "#settings-retention", label: "Data retention", school: true },
   { href: "#settings-academic-year", label: "Academic year", school: true },
   { href: "#settings-year-groups", label: "Year groups", school: true },
   { href: "#settings-promotion", label: "Moving up a year", school: true },

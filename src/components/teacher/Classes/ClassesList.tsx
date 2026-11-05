@@ -1,13 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { useClassSummaries } from "@/hooks/useClassSummaries";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { useTeacherHome } from "@/hooks/useTeacherHome";
 import { SampleRegion } from "@/components/shared/SampleRegion";
+import {
+  listSummary,
+  SummaryDot,
+  summaryTone,
+} from "@/components/teacher/shared/ClassSummary";
 import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
+import { classesOnce, type MyClass } from "@/lib/classes/classesOnce";
 import { SCHOOL_LINE } from "@/lib/mocks/teacherClasses";
-import { cn } from "@/lib/utils";
 
 /**
  * My Classes list (C05 / `Nevo Teacher Classes` frame). Desktop: a 3-column
@@ -17,27 +23,31 @@ import { cn } from "@/lib/utils";
  * never a dead end.
  *
  * Data is live-first via useTeacherClasses, and a real class is never
- * dressed in a fixture: live classes render as their own cards (name + class
- * code) linking to their real id, and the fixture cards appear only when
- * there is no live list at all - in which case the page says so.
+ * dressed in a fixture: live classes render as their own cards linking to
+ * their real id, and the fixture cards appear only when there is no live list
+ * at all - in which case the page says so.
+ *
+ * A live card is C05's: the name, the subjects, the headcount, and the summary
+ * line the class page's own header counts give (`useClassSummaries`). One card
+ * per CLASS - a class taught for two subjects is two assignments, and showed
+ * twice. A class that couldn't be counted has no summary row rather than an
+ * "Everyone on track" nobody read.
  */
 
-function SummaryDot({ tone }: { tone: "glance" | "ok" }) {
-  return (
-    <span
-      className={cn(
-        "size-[9px] shrink-0 rounded-full",
-        // Worth a glance is an outline (design, 12 Oct).
-        tone === "glance"
-          ? "border-2 border-nevo-violet"
-          : "bg-nevo-navy/30",
-      )}
-    />
-  );
+/** "Mathematics · English", "16 students", or both - whichever are known. */
+function metaParts(c: MyClass, headcount: number | undefined): string[] {
+  const parts: string[] = [];
+  if (c.subjects.length > 0) parts.push(c.subjects.join(" · "));
+  if (headcount !== undefined) {
+    parts.push(`${headcount} ${headcount === 1 ? "student" : "students"}`);
+  }
+  return parts;
 }
 
 export function ClassesList() {
   const { classes, liveClasses, sample, live, loading } = useTeacherClasses();
+  const byClass = classesOnce(liveClasses);
+  const summaries = useClassSummaries(byClass.map((c) => c.classId));
   /**
    * HEADCOUNT, from the one read that carries it.
    *
@@ -157,22 +167,51 @@ export function ClassesList() {
               ))}
             </SampleRegion>
           )}
-          {liveClasses.map((a) => (
-            <Link
-              key={a.assignmentId}
-              href={`/teacher/classes/${a.classId}`}
-              className="flex cursor-pointer flex-col rounded-[12px] bg-nevo-cream-elevated p-6 shadow-elevation-1 transition-[filter,transform] hover:brightness-[0.985] active:scale-[0.99]"
-            >
-              <span className="text-[19px] font-semibold tracking-[-0.01em] text-nevo-near-black">
-                {a.className}
-              </span>
-              <span className="mt-[5px] text-[13.5px] text-nevo-near-black/60">
-                {headcounts.has(a.classId)
-                  ? `${headcounts.get(a.classId)} ${headcounts.get(a.classId) === 1 ? "student" : "students"}`
-                  : "Synced from your school"}
-              </span>
-            </Link>
-          ))}
+          {byClass.map((c) => {
+            const counts = summaries.counts.get(c.classId);
+            const headcount = headcounts.get(c.classId);
+            return (
+              <Link
+                key={c.classId}
+                href={`/teacher/classes/${c.classId}`}
+                className="flex cursor-pointer flex-col rounded-[12px] bg-nevo-cream-elevated p-6 shadow-elevation-1 transition-[filter,transform] hover:brightness-[0.985] active:scale-[0.99]"
+              >
+                <span className="text-[19px] font-semibold tracking-[-0.01em] text-nevo-near-black">
+                  {c.className}
+                </span>
+                {c.subjects.length > 0 && (
+                  <span className="mt-[5px] text-[13.5px] text-nevo-near-black/60">
+                    {c.subjects.join(" · ")}
+                  </span>
+                )}
+                <span
+                  className={
+                    c.subjects.length > 0
+                      ? "mt-0.5 text-[13.5px] text-nevo-near-black/50"
+                      : "mt-[5px] text-[13.5px] text-nevo-near-black/60"
+                  }
+                >
+                  {headcount !== undefined
+                    ? `${headcount} ${headcount === 1 ? "student" : "students"}`
+                    : "Synced from your school"}
+                </span>
+                {counts ? (
+                  <div className="mt-[18px] flex items-center gap-[9px] border-t border-nevo-near-black/8 pt-4">
+                    <SummaryDot tone={summaryTone(counts, true)} />
+                    <span className="text-sm text-nevo-near-black/72">
+                      {listSummary(counts)}
+                    </span>
+                  </div>
+                ) : (
+                  summaries.loading && (
+                    <div className="mt-[18px] border-t border-nevo-near-black/8 pt-4">
+                      <div className="h-3.5 w-32 animate-pulse rounded bg-nevo-cream-inset" />
+                    </div>
+                  )
+                )}
+              </Link>
+            );
+          })}
         </div>
 
         {/* Tablet: stacked horizontal cards */}
@@ -203,25 +242,39 @@ export function ClassesList() {
               ))}
             </SampleRegion>
           )}
-          {liveClasses.map((a) => (
-            <Link
-              key={a.assignmentId}
-              href={`/teacher/classes/${a.classId}`}
-              className="flex cursor-pointer items-center justify-between gap-4 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-elevation-1 transition-[filter,transform] hover:brightness-[0.985] active:scale-[0.99]"
-            >
-              <div className="min-w-0">
-                <span className="text-[17px] font-semibold text-nevo-near-black">
-                  {a.className}
-                </span>
-                {/* C05 tablet: the count sits on the line under the name. */}
-                <div className="mt-1 text-[13px] text-nevo-near-black/60">
-                  {headcounts.has(a.classId)
-                    ? `${headcounts.get(a.classId)} ${headcounts.get(a.classId) === 1 ? "student" : "students"}`
-                    : "Synced from your school"}
+          {byClass.map((c) => {
+            const counts = summaries.counts.get(c.classId);
+            const meta = metaParts(c, headcounts.get(c.classId));
+            return (
+              <Link
+                key={c.classId}
+                href={`/teacher/classes/${c.classId}`}
+                className="flex cursor-pointer items-center justify-between gap-4 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-elevation-1 transition-[filter,transform] hover:brightness-[0.985] active:scale-[0.99]"
+              >
+                <div className="min-w-0">
+                  <span className="text-[17px] font-semibold text-nevo-near-black">
+                    {c.className}
+                  </span>
+                  {/* C05 tablet: subjects and count share the line under the name. */}
+                  <div className="mt-1 text-[13px] text-nevo-near-black/60">
+                    {meta.length > 0 ? meta.join(" · ") : "Synced from your school"}
+                  </div>
                 </div>
-              </div>
-            </Link>
-          ))}
+                {counts ? (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <SummaryDot tone={summaryTone(counts, true)} />
+                    <span className="text-[13.5px] text-nevo-near-black/70">
+                      {listSummary(counts)}
+                    </span>
+                  </div>
+                ) : (
+                  summaries.loading && (
+                    <div className="h-3.5 w-28 shrink-0 animate-pulse rounded bg-nevo-cream-inset" />
+                  )
+                )}
+              </Link>
+            );
+          })}
         </div>
       </div>
     </div>
