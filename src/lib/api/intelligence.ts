@@ -38,6 +38,10 @@ export interface AttentionFlag {
   description: string;
   generatedAt: string;
   acknowledged: boolean;
+  /** When learning support acknowledged it - their act, never the teacher's. */
+  acknowledgedAt?: string | null;
+  /** Who did, as the server names them (their chosen name, else their full name). */
+  acknowledgedByName?: string | null;
   /** Present on newer rows only - a small series behind the description. */
   evidenceSeries?: number[];
   /** Where an admin can act. Absent means the flag is informational. */
@@ -529,7 +533,8 @@ export const intelligenceApi = {
    */
   allFlags: async (
     maxPages = 10,
-    filter: { openOnly?: boolean } = {},
+    /** `classId` is the server's own filter: one class's children only. */
+    filter: { openOnly?: boolean; classId?: string } = {},
   ): Promise<{ flags: AttentionFlag[]; complete: boolean }> => {
     const PAGE = 200;
     const flags: AttentionFlag[] = [];
