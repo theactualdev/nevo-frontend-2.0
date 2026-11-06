@@ -35,6 +35,8 @@ describe("Invitations while the address is unconfirmed", () => {
     expect(screen.getByRole("button", { name: /New invite/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Bulk import" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Revoke" })).toBeDisabled();
-    expect(visibleText(container)).toMatch(/Paused until your email is confirmed\./);
+    // D01c: the line under the paused action, with its own Resend.
+    expect(visibleText(container)).toMatch(/Confirm your email first - we.ve sent you a link\./);
+    expect(screen.getByRole("button", { name: "Resend it" })).toBeEnabled();
   });
 });
