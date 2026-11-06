@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { setSession } from "@/lib/auth/session";
+import { cn } from "@/lib/utils";
 import {
   parentApi,
   type ParentContactMethod,
@@ -124,6 +125,27 @@ const POINTS = [
   },
 ];
 
+/**
+ * "2013-03-12" from three typed boxes, or null while they don't make a real
+ * calendar date. Built and read back, so 31 February fails rather than rolling
+ * over into March. Nothing about the child's age is judged here - whether the
+ * date fits is the server's check against the school's record.
+ */
+export function childBirthDate(day: string, month: string, year: string): string | null {
+  if (!/^\d{1,2}$/.test(day) || !/^\d{1,2}$/.test(month) || !/^\d{4}$/.test(year)) return null;
+  const d = Number(day);
+  const m = Number(month);
+  const y = Number(year);
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${y}-${pad(m)}-${pad(d)}`;
+}
+
+/** D01b's date boxes: DD / MM / YYYY. */
+const DOB_BOX =
+  "h-[52px] rounded-[10px] border-[1.5px] border-nevo-near-black/18 bg-nevo-cream-elevated px-3 text-center text-[16px] text-nevo-near-black outline-none focus:border-nevo-navy";
+
 export function ParentConsent({
   token,
   invitation,
@@ -143,6 +165,18 @@ export function ParentConsent({
   const [accountCreated, setAccountCreated] = useState(false);
   /** Whether the server says nothing holds the child now (`ageCheck`). */
   const [startsNow, setStartsNow] = useState(false);
+  /*
+   * THE CHILD'S DATE OF BIRTH, before consent (D01b R1-R4). Empty, the consent
+   * waits on it (R1). Started, pressing Yes answers in place rather than
+   * sitting greyed out: a missing year gets R4's line, anything that isn't a
+   * real date R3's. The words are the frame's, with the child's name for
+   * "her" - this page uses no pronouns.
+   */
+  const [dobDay, setDobDay] = useState("");
+  const [dobMonth, setDobMonth] = useState("");
+  const [dobYear, setDobYear] = useState("");
+  const [dobNote, setDobNote] = useState<"year" | "impossible" | null>(null);
+  const dobEmpty = !dobDay.trim() && !dobMonth.trim() && !dobYear.trim();
 
   // The API sends the LITERAL string "your child" when the school entered no
   // first name - it is a real row, not a hypothetical - so the name has to be
@@ -177,7 +211,18 @@ export function ParentConsent({
    */
   const asksTooMuch = invitation.consentTypes.length > 1;
 
-  async function consent() {
+  /** "Yes": the date first, then the consent itself. */
+  function pressYes() {
+    const iso = childBirthDate(dobDay.trim(), dobMonth.trim(), dobYear.trim());
+    if (iso) {
+      setDobNote(null);
+      void consent(iso);
+      return;
+    }
+    setDobNote(dobDay.trim() && dobMonth.trim() && !dobYear.trim() ? "year" : "impossible");
+  }
+
+  async function consent(childDateOfBirth: string) {
     setPhase("sending");
     try {
       /*
@@ -201,7 +246,7 @@ export function ParentConsent({
        * separately asked for. Needs a design ruling before that happens, not
        * after.
        */
-      const res = await parentApi.completeConsent(token, invitation.consentTypes);
+      const res = await parentApi.completeConsent(token, invitation.consentTypes, childDateOfBirth);
       setReceipt(res.receiptSentTo);
       setAccountCreated(res.parentAccountCreated === true);
       // "Can start learning" only on the server's word that nothing holds
@@ -496,11 +541,58 @@ export function ParentConsent({
         ))}
       </div>
 
+      <fieldset className="mt-[22px] flex min-w-0 flex-col border-0 p-0">
+        <legend className="p-0 text-[14.5px] font-semibold text-nevo-near-black">
+          {childLead}&rsquo;s date of birth
+        </legend>
+        <div className="mt-2.5 grid grid-cols-[1fr_1fr_1.6fr] gap-2.5">
+          {(
+            [
+              ["Day", "DD", dobDay, setDobDay, 2],
+              ["Month", "MM", dobMonth, setDobMonth, 2],
+              ["Year", "YYYY", dobYear, setDobYear, 4],
+            ] as const
+          ).map(([label, hint, value, set, max]) => (
+            <input
+              key={label}
+              aria-label={label}
+              placeholder={hint}
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={max}
+              value={value}
+              disabled={phase === "sending"}
+              aria-invalid={dobNote !== null || undefined}
+              aria-describedby="dob-line"
+              onChange={(e) => {
+                set(e.target.value.replace(/\D/g, ""));
+                setDobNote(null);
+              }}
+              className={DOB_BOX}
+            />
+          ))}
+        </div>
+        <p
+          id="dob-line"
+          role={dobNote ? "alert" : undefined}
+          className={cn(
+            "mt-2 mb-0 text-[13px] leading-[1.5]",
+            dobNote ? "text-nevo-navy" : "text-nevo-near-black/58",
+          )}
+        >
+          {dobNote === "year"
+            ? `Add ${child}’s year of birth, then you can give your consent.`
+            : dobNote === "impossible"
+              ? "That date doesn’t look right. Please check the day and month."
+              : `Day, month and year. We ask this so Nevo stays right for ${child}’s age.`}
+        </p>
+      </fieldset>
+
       <button
         type="button"
         className={PRIMARY}
-        disabled={phase === "sending"}
-        onClick={() => void consent()}
+        disabled={phase === "sending" || dobEmpty}
+        onClick={pressYes}
       >
         {phase === "sending" ? "Recording…" : "Yes, I give my consent"}
       </button>

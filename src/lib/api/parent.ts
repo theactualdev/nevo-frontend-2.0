@@ -312,10 +312,18 @@ export const parentApi = {
    * `data_processing`, so one tap grants one thing. It WILL bite the first
    * time an invitation carries two. See the raise in `ParentConsent.tsx`.
    */
-  completeConsent: (token: string, grantedTypes: ConsentType[]) =>
+  /*
+   * THE CHILD'S DATE OF BIRTH (D01b, design 1397ec4; Lydia 4 Nov): asked
+   * before consent and checked by the server against the school's record. An
+   * ISO "YYYY-MM-DD", optional in the contract and sent whenever given. A
+   * missing date never holds a child (Teslim ef7745c); what the check found
+   * comes back as `ageCheck`.
+   */
+  completeConsent: (token: string, grantedTypes: ConsentType[], childDateOfBirth?: string) =>
     api.post<ParentConsentCompletion>("/api/v1/consents/parent/complete", {
       token,
       grantedTypes,
+      ...(childDateOfBirth ? { childDateOfBirth } : {}),
     }),
 
   /**

@@ -30,6 +30,17 @@ vi.mock("@/lib/auth/session", () => ({ setSession }));
 import { ParentConsent } from "./ParentConsent";
 
 /**
+ * D01b asks the child's date of birth BEFORE consent (design 1397ec4), so
+ * "Yes" waits on it. Every test that consents types one first.
+ */
+function giveConsent(day = "12", month = "03", year = "2013") {
+  fireEvent.change(screen.getByLabelText("Day"), { target: { value: day } });
+  fireEvent.change(screen.getByLabelText("Month"), { target: { value: month } });
+  fireEvent.change(screen.getByLabelText("Year"), { target: { value: year } });
+  fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+}
+
+/**
  * D01b Parent Consent (SCRUM-80).
  *
  * The screen that actually collects consent, so the assertions are about two
@@ -173,9 +184,9 @@ describe("giving consent", () => {
    */
   it("sends the token AND the invitation's own consent types", async () => {
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
 
-    expect(completeConsent).toHaveBeenCalledWith(TOKEN, ["data_processing"]);
+    expect(completeConsent).toHaveBeenCalledWith(TOKEN, ["data_processing"], "2013-03-12");
     expect(await screen.findByText(/that[’']s all we needed/i)).toBeInTheDocument();
   });
 
@@ -185,7 +196,7 @@ describe("giving consent", () => {
     // now says each type is "asked and answered on its own", with
     // cross-border transfer named as the reason why.
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
 
     const sent = completeConsent.mock.calls[0][1] as string[];
     expect(sent).toEqual(["data_processing"]);
@@ -199,7 +210,7 @@ describe("giving consent", () => {
     completeConsent.mockRejectedValueOnce(new Error("network"));
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/couldn’t record/i);
     expect(screen.queryByText(/that’s all we needed/i)).not.toBeInTheDocument();
@@ -221,7 +232,7 @@ describe("giving consent", () => {
     );
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/already used for a different kind of Nevo account/);
@@ -234,7 +245,7 @@ describe("giving consent", () => {
     completeConsent.mockRejectedValueOnce(new ApiError(404, "gone"));
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
 
     expect(await screen.findByText(/no longer active/i)).toBeInTheDocument();
     expect(
@@ -259,7 +270,7 @@ describe("the receipt line", () => {
       receiptSentTo: receipt,
     });
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
     await screen.findByText(/that[’']s all we needed/i);
   }
 
@@ -315,7 +326,7 @@ describe("setting up a parent account", () => {
     // success copy already says what this is for, and D02 - which this is -
     // opens on confirming the contact rather than on a second invitation.
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
     await screen.findByText(/that[’']s all we needed/i);
 
     expect(screen.getByRole("button", { name: /^Continue$/ })).toBeInTheDocument();
@@ -335,7 +346,7 @@ describe("setting up a parent account", () => {
 
   const reachCodeStep = async () => {
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
     await screen.findByText(/that[’']s all we needed/i);
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/ }));
     return screen.findByLabelText("Digit 1 of 4");
@@ -362,7 +373,7 @@ describe("setting up a parent account", () => {
     // D02 draws it editable. It cannot be, on this path: backend binds the code
     // to the contact the school entered. Shown, not offered.
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
     await screen.findByText(/that[’']s all we needed/i);
 
     expect(screen.getByText("ada.okoro@example.com")).toBeInTheDocument();
@@ -386,7 +397,7 @@ describe("setting up a parent account", () => {
         invitation={inv({ parentContact: "+2348012345678" })}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
     await screen.findByText(/that[’']s all we needed/i);
 
     expect(screen.queryByText("Your phone number")).not.toBeInTheDocument();
@@ -476,7 +487,7 @@ describe("setting up a parent account", () => {
     // one would leak exactly what the 202 exists to hide.
     requestCode.mockRejectedValueOnce(new ApiError(500, "boom", {}));
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
     await screen.findByText(/that[’']s all we needed/i);
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/ }));
 
@@ -497,7 +508,7 @@ describe("setting up a parent account", () => {
 
   it("lets a parent decline without losing the consent they just gave", async () => {
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
     await screen.findByText(/that[’']s all we needed/i);
 
     fireEvent.click(screen.getByRole("button", { name: /Maybe later/i }));
@@ -531,14 +542,14 @@ describe("an account the consent created", () => {
 
   it("says one has been set up", async () => {
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
     expect(await screen.findByText(/We.ve set up a parent account so you can follow/)).toBeInTheDocument();
     expect(screen.queryByText(/Set up an account and you can follow/)).toBeNull();
   });
 
   it("promises no 'later from the same link' it can't keep (2 Nov audit)", async () => {
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
     await screen.findByText(/that[’']s all we needed/i);
     fireEvent.click(screen.getByRole("button", { name: /Maybe later/i }));
     expect(screen.queryByText(/later from the same link/i)).toBeNull();
@@ -566,14 +577,14 @@ describe("whether the child can start", () => {
   it("says so when the server says nothing holds them", async () => {
     done("matched");
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
     expect(await screen.findByText(/Amara can start learning with their class/)).toBeInTheDocument();
   });
 
   it("doesn't say so when the date-of-birth check holds them", async () => {
     done("mismatch");
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    giveConsent();
     await screen.findByText(/that[’']s all we needed/i);
     expect(screen.queryByText(/can start learning/)).toBeNull();
   });
@@ -715,8 +726,84 @@ describe("an invitation that asks for more than one thing", () => {
   it("leaves the ordinary one-type invitation exactly as it was", async () => {
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
 
+    // Its button waits only on the child's date of birth (D01b R1).
+    const yes = screen.getByRole("button", { name: /Yes, I give my consent/ });
+    expect(yes).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Day"), { target: { value: "12" } });
+    expect(yes).toBeEnabled();
+  });
+});
+
+/**
+ * THE CHILD'S DATE OF BIRTH, before consent (D01b R1-R4, design 1397ec4;
+ * Lydia 4 Nov). Sent as `childDateOfBirth`; the server checks it against the
+ * school's record and says what it found in `ageCheck`. The page judges only
+ * whether it is a real calendar date - never the child's age.
+ */
+describe("the child's date of birth", () => {
+  const field = (label: "Day" | "Month" | "Year", value: string) =>
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  const yes = () => screen.getByRole("button", { name: /Yes, I give my consent/ });
+
+  it("is asked before consent, in the frame's words, with the child's name for 'her' (R1)", () => {
+    const { container } = render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    expect(visibleText(container)).toMatch(/Amara ?'s date of birth/);
+    expect(visibleText(container)).toMatch(
+      /Day, month and year\. We ask this so Nevo stays right for Amara's age\./,
+    );
+    expect(yes()).toBeDisabled();
+  });
+
+  it("is sent as an ISO date with the consent (R2)", async () => {
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    giveConsent("5", "9", "2013");
+    expect(completeConsent).toHaveBeenCalledWith(TOKEN, ["data_processing"], "2013-09-05");
+  });
+
+  it("says a date that can't exist doesn't look right, and sends nothing (R3)", () => {
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    giveConsent("31", "02", "2013");
     expect(
-      screen.getByRole("button", { name: /Yes, I give my consent/ }),
-    ).toBeEnabled();
+      screen.getByText("That date doesn’t look right. Please check the day and month."),
+    ).toBeInTheDocument();
+    expect(completeConsent).not.toHaveBeenCalled();
+  });
+
+  it("asks for the year when only the year is missing - answering in place, not greyed out (R4)", () => {
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    field("Day", "12");
+    field("Month", "03");
+    expect(yes()).toBeEnabled();
+    fireEvent.click(yes());
+    expect(
+      screen.getByText("Add Amara’s year of birth, then you can give your consent."),
+    ).toBeInTheDocument();
+    expect(completeConsent).not.toHaveBeenCalled();
+  });
+
+  it("clears the line once the date is changed", () => {
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    giveConsent("31", "02", "2013");
+    field("Day", "28");
+    expect(screen.queryByText(/doesn.t look right/)).toBeNull();
+  });
+
+  it("never says the child can start when the server's check holds them", async () => {
+    completeConsent.mockResolvedValue({
+      invitationId: "i",
+      parentLinkId: "l",
+      parentId: "p",
+      studentId: "s",
+      confirmedTypes: ["data_processing"],
+      declinedTypes: [],
+      ageCheck: "mismatch",
+      completedAt: "2026-11-05T10:00:00Z",
+      receiptSentTo: null,
+      parentAccountCreated: false,
+    });
+    const { container } = render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    giveConsent();
+    await screen.findByText(/that[’']s all we needed/i);
+    expect(visibleText(container)).not.toMatch(/can start learning/);
   });
 });
