@@ -480,7 +480,12 @@ function CostPanel({
             student costs for a whole term (the route's own docstring). */}
         <Line label={`1 student × ${money(quote.perStudentRate)} term price`} value={money(quote.totalBeforeVat)} />
         <Line label={vat ? `VAT at ${vat}` : "VAT"} value={money(quote.vatAmount)} />
-        <Line label="Added to your invoice" value={total ?? money(quote.totalWithVat)} strong />
+        {/* "Total", not D24b's "Added to your invoice": adding a student
+            creates no invoice line (enrolment has no billing side effect), and
+            the next invoice is the whole-school one for the NEXT period,
+            which counts them. A label saying it was added would be untrue
+            (Lydia, 4 Nov; the hub's check, 6 Nov). */}
+        <Line label="Total" value={total ?? money(quote.totalWithVat)} strong />
       </dl>
       <p className="m-0 mt-3 text-[12.5px] leading-[1.55] text-nevo-near-black/55">
         {/*
@@ -491,15 +496,15 @@ function CostPanel({
           * the "Nothing" out. So the sentence says when instead of what not.
           */}
         {/*
-          * D24b's line, less its last clause. "...and becomes active once that
-          * invoice is paid" isn't reliable today: first sign-in activates any
-          * student who isn't deactivated, invite-link joins are created
-          * active, and a school with no invoice yet gets them active at once
-          * (5 Nov check; raised to Teslim). Until that holds, it isn't said.
+          * D24b's line, reduced to its true part (6 Nov). "The full term price
+          * goes on your next invoice, with no reduction for weeks already
+          * passed" read as billing THIS term - but nothing bills the rest of
+          * this term: the next invoice is the next period's, counting the
+          * student then. "...and becomes active once that invoice is paid"
+          * isn't reliable either (first sign-in activates; raised to Teslim).
+          * What is true is that they're on the roster now.
           */}
-        The full term price goes on your next invoice, with no reduction for
-        weeks already passed.
-        {first ? ` ${first} joins the roster now.` : ""}
+        {first ? `${first} joins the roster now.` : null}
       </p>
     </div>
   );

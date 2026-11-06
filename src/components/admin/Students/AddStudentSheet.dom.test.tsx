@@ -150,7 +150,7 @@ describe("AddStudentSheet", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /^Add Zainab to the roster$/ })).toBeEnabled(),
     );
-    expect(visibleText(container)).toMatch(/Added to your invoice\s*₦59,125/);
+    expect(visibleText(container)).toMatch(/Total\s*₦59,125/);
   });
 
   it("says no card is charged, and promises no activation on payment (D24b, 1397ec4)", async () => {
@@ -159,10 +159,10 @@ describe("AddStudentSheet", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/₦59,125/));
     const text = visibleText(container);
     expect(text).toMatch(/Adding them never charges a card - Nevo bills by invoice\./);
-    expect(text).toMatch(
-      /The full term price goes on your next invoice, with no reduction for weeks already passed\. Zainab joins the roster now\./,
-    );
+    expect(text).toMatch(/Zainab joins the roster now\./);
+    // Nothing bills the rest of this term, and no invoice line is created.
     expect(text).not.toMatch(/active once|once that invoice is paid/i);
+    expect(text).not.toMatch(/Added to your invoice|goes on your next invoice|weeks already passed/i);
   });
 
   it("shows the server's VAT split without computing any of it", async () => {
@@ -172,7 +172,7 @@ describe("AddStudentSheet", () => {
 
     expect(text).toMatch(/1 student × ₦55,000 term price/);
     expect(text).toMatch(/VAT at 7\.5%/);
-    expect(text).toMatch(/Added to your invoice/);
+    expect(text).toMatch(/Total/);
   });
 
   it("names the term in full, and names none when there is none", async () => {
