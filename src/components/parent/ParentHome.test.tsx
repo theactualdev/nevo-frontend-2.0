@@ -240,3 +240,27 @@ describe("edges", () => {
     expect(await screen.findByText(/couldn’t load this just now/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * Backlog 57: both of the home's failed reads said "try again in a moment"
+ * and offered nothing to press. Each now reads again in place.
+ */
+describe("when a read fails", () => {
+  it("offers Try again for the parent's children, and reads them again", async () => {
+    myChildren.mockRejectedValueOnce(new ApiError(500, "boom"));
+    render(<ParentHome />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Amara's topic")).toBeInTheDocument();
+    expect(myChildren).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers Try again for this week's subjects, and reads them again", async () => {
+    subjectProgress.mockRejectedValueOnce(new ApiError(500, "boom"));
+    render(<ParentHome />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Amara's topic")).toBeInTheDocument();
+    expect(subjectProgress).toHaveBeenCalledTimes(2);
+  });
+});

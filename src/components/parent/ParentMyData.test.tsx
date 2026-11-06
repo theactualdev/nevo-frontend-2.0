@@ -146,3 +146,37 @@ describe("subjectFor", () => {
     expect(subjectFor(AMARA, null).parentName).toBeNull();
   });
 });
+
+/**
+ * Backlog 59: the signed-in data page's failure had no Try again and no way
+ * back to the home - a dead end on a page about a parent's rights.
+ */
+describe("when the page can't be read", () => {
+  it("offers Try again, and reads it again when pressed", async () => {
+    myConsents.mockRejectedValueOnce(new Error("down"));
+    render(<ParentMyData />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(await screen.findByText(/Amara[’']s data on Nevo/i)).toBeInTheDocument();
+    expect(myConsents).toHaveBeenCalledTimes(2);
+  });
+
+  it("leads back to the home", async () => {
+    myConsents.mockRejectedValue(new Error("down"));
+    render(<ParentMyData />);
+
+    expect(await screen.findByRole("link", { name: "Back to home" })).toHaveAttribute(
+      "href",
+      "/parent-portal",
+    );
+  });
+
+  it("offers no Try again when nothing failed - an unlinked account isn't a fault", async () => {
+    myChildren.mockResolvedValue([]);
+    render(<ParentMyData />);
+
+    expect(await screen.findByText(/isn’t linked to a child yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Back to home" })).toHaveAttribute("href", "/parent-portal");
+  });
+});

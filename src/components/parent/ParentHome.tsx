@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { TryAgain } from "./TryAgain";
 import { ApiError } from "@/lib/api/client";
 import { getSession } from "@/lib/auth/session";
 import { parentApi, type ParentChild } from "@/lib/api/parent";
@@ -32,6 +33,8 @@ type Phase = "loading" | "ready" | "signed-out" | "not-parent" | "failed";
 
 export function ParentHome() {
   const [phase, setPhase] = useState<Phase>("loading");
+  /** Bumped by Try again, to read this parent's children again. */
+  const [attempt, setAttempt] = useState(0);
   const [children, setChildren] = useState<ParentChild[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   /**
@@ -85,7 +88,12 @@ export function ParentHome() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
+
+  const retry = () => {
+    setPhase("loading");
+    setAttempt((a) => a + 1);
+  };
 
   if (phase === "loading") {
     return (
@@ -150,6 +158,7 @@ export function ParentHome() {
           <p className={BODY}>
             Something went wrong at our end. Please try again in a moment.
           </p>
+          <TryAgain onClick={retry} />
         </Card>
       </Shell>
     );
