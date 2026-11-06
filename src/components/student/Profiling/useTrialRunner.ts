@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { tapPoint, type BaselineCapture } from "@/lib/profiling/capture";
+import type { BaselineCapture } from "@/lib/profiling/capture";
 
 /**
  * The frames' commit beat: a tapped control presses violet, then the next
@@ -10,18 +10,22 @@ import { tapPoint, type BaselineCapture } from "@/lib/profiling/capture";
  * 1 Oct (D14).
  */
 const PICK_BEAT_MS = 440;
+/**
+ * How long a practice trial's feedback stays before the next trial: Lydia's
+ * own measure for one short line, "long enough to land, short enough not to
+ * feel like a penalty" (D1, 26 Oct). No frame says; raised with the build.
+ */
+export const PRACTICE_FEEDBACK_MS = 1800;
 /** Every module ends on the shared "That's it." settle (D136). */
 const SETTLE_MS = 1700;
-
-/** What a tap handler hands over so the pick knows where the finger was. */
-type TapEvent = { clientX: number; clientY: number; detail: number };
 
 /**
  * Shared trial engine for Modules 2-3: a fixed list of trials across one or two
  * activities, tap-to-answer with a brief pressed beat, no feedback of any kind,
  * a settle at the end. Each pick is captured with its response time
- * (`performance.now()` from trial presentation to tap) and where the tap
- * landed.
+ * (`performance.now()` from trial presentation to tap). Where the tap landed
+ * is not taken (Lydia, 4 Nov: the engine works from response patterns and
+ * timing, not touch coordinates).
  *
  * WHERE A TRIAL HAS A STIMULUS PHASE, the response time starts when it ends.
  * The dot arrays show for a fixed time before the buttons arm, and the P1-3
@@ -103,7 +107,8 @@ export function useTrialRunner({
   const pick = (
     choice: number,
     detail?: Record<string, unknown>,
-    e?: TapEvent,
+    /** The trial is a practice one, whose feedback is read before moving on. */
+    { practice = false }: { practice?: boolean } = {},
   ) => {
     if (settling || picked !== -1) return;
     const now = performance.now();
@@ -120,7 +125,6 @@ export function useTrialRunner({
         ? { openAfterMs: Math.round(opened - shownAt.current) }
         : {}),
       ...(early ? { beforeOpen: true } : {}),
-      ...tapPoint(e),
       ...detail,
     });
     setPicked(choice);
@@ -142,7 +146,7 @@ export function useTrialRunner({
         setActIdx(a);
         setTrial(t);
         setPicked(-1);
-      }, PICK_BEAT_MS),
+      }, practice ? PRACTICE_FEEDBACK_MS : PICK_BEAT_MS),
     );
   };
 

@@ -32,6 +32,7 @@ import { MODALITY, type Modality } from "@/lib/constants";
 import type {
   Assessment,
   CalcHighlight,
+  CalcMiniStep,
   CalcNarration,
   CalcScaffold,
   CalcToken,
@@ -856,6 +857,49 @@ function storedAnswers(
  * answer at all, or a choice whose stored answers name none of its own
  * options. A tap step is right when its `tapCount` is built.
  */
+/**
+ * A STEP'S MINI-STEPS, AS FEWER STEPS CAN ASK THEM (8c67353), in order, at most
+ * eight. ALL OR NONE: a choice or a number, each with the `questionId` its
+ * answer goes up under, a prompt, and an answer to tick against. One that is
+ * a tap (no frame draws a tray for a mini-step - the Hub, 4 Nov: absent until
+ * design draws one), free text (this screen has no field for it), or missing
+ * any of those leaves the step with none: half a breakdown would be a step
+ * with a piece left out.
+ */
+function miniStepsFor(step: WireCalculationStep): CalcMiniStep[] {
+  const given = Array.isArray(step.miniSteps) ? step.miniSteps.slice(0, 8) : [];
+  const out: CalcMiniStep[] = [];
+  for (const mini of given) {
+    const questionId =
+      typeof mini?.questionId === "string" ? mini.questionId.trim() : "";
+    const prompt = typeof mini?.prompt === "string" ? mini.prompt.trim() : "";
+    const id = typeof mini?.id === "string" ? mini.id : "";
+    if (!questionId || !prompt || !id) return [];
+    const answer =
+      mini.answer === undefined || mini.answer === null
+        ? ""
+        : String(mini.answer).trim();
+    if (!answer) return [];
+    if (mini.input === "choice") {
+      const options = (mini.options ?? []).map((o) => ({
+        value: String(o.value).trim(),
+        label: o.label,
+      }));
+      if (options.length < 2) return [];
+      if (!options.some((o) => isStoredAnswer(o.value, [answer]))) return [];
+      out.push({ id, questionId, prompt, input: "choice", options, accepted: [answer] });
+    } else if (mini.input === "number") {
+      const others = (mini.acceptedAnswers ?? [])
+        .map((a) => String(a).trim())
+        .filter((a) => a !== "" && a !== answer);
+      out.push({ id, questionId, prompt, input: "number", accepted: [answer, ...others] });
+    } else {
+      return [];
+    }
+  }
+  return out;
+}
+
 function calcStepFor(
   step: WireCalculationStep,
   manipulative: CalculationSegment["manipulative"],
@@ -865,6 +909,18 @@ function calcStepFor(
   });
   const narration = narrationFor(step);
   const tokens = tokensFor(step);
+  // As sent, in order: the server keeps back any a teacher has not approved.
+  const parts = Array.isArray(step.parts)
+    ? step.parts
+        .filter((p): p is string => typeof p === "string" && p.trim() !== "")
+        .map((p) => p.trim())
+        .slice(0, 8)
+    : [];
+  const explanation =
+    typeof step.conceptExplanation === "string"
+      ? step.conceptExplanation.trim()
+      : "";
+  const miniSteps = miniStepsFor(step);
   const base = {
     stepId: step.stepId,
     prompt: step.prompt,
@@ -874,6 +930,9 @@ function calcStepFor(
     ...(tokens ? { tokens } : {}),
     highlights: highlightsFor(step),
     ...(narration ? { narration } : {}),
+    ...(parts.length > 0 ? { parts } : {}),
+    ...(explanation ? { explanation } : {}),
+    ...(miniSteps.length > 0 ? { miniSteps } : {}),
   };
 
   if (step.input === "choice") {
@@ -1302,20 +1361,38 @@ function segmentFor(
  * so they are passed in rather than fetched here. A module whose segments did
  * not survive the mapping is dropped: the player indexes segments by id and a
  * module pointing at nothing would draw an empty boundary screen.
+ *
+ * BY THE SEGMENTS' RECORD IDS (audit, 2 Nov). `segmentIds` carries the
+ * sections' KEYS ("fallback-1", "chunk-2-1-segment-3") on live lessons, so
+ * every member was filtered out against the player's ids, every module was
+ * dropped, and a lesson of several modules played as one flat list: no
+ * boundary, no recap, no "Module 2 of 3". `segmentRecordIds` (Teslim 58b1a55,
+ * in the live spec) are the ids themselves, in order - the teacher's
+ * structure editor reads them the same way (`structureDraft`). A payload
+ * without them, an older stored one, has its keys read as the server matches
+ * them: a section's key or its id.
  */
 function modulesFor(
   modules: ContentModule[],
   segments: LessonSegment[],
+  raw: ContentSegment[],
 ): LessonModule[] | undefined {
   if (modules.length === 0) return undefined;
   const known = new Set(segments.map((s) => s.id));
+  const byKey = new Map(raw.map((s) => [s.segmentKey, s.id]));
+  const members = (m: ContentModule) =>
+    m.segmentRecordIds && m.segmentRecordIds.length > 0
+      ? m.segmentRecordIds
+      : m.segmentIds.map((key) => (known.has(key) ? key : byKey.get(key)));
   const mapped = modules
     .slice()
     .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
     .map((m) => ({
       id: m.id,
       title: m.title,
-      segmentIds: m.segmentIds.filter((id) => known.has(id)),
+      segmentIds: members(m).filter(
+        (id): id is string => id !== undefined && known.has(id),
+      ),
       ...(m.preview ? { preview: m.preview } : {}),
       ...(m.recap ? { recap: m.recap } : {}),
     }))
@@ -1348,7 +1425,7 @@ export function lessonFromContent(
     id: res.id,
     title: res.title,
     segments,
-    modules: modulesFor(modules, segments),
+    modules: modulesFor(modules, segments, ordered),
     // Omitted rather than set undefined, the same way the segment channels
     // are: the player tests `lesson.assessment` and `lesson.summary` for
     // PRESENCE, and an empty object would light a button that opens nothing.
@@ -1415,6 +1492,10 @@ function assessmentFor(res: LessonDetailResponse): Assessment | undefined {
       ...(checkpoint.conceptId ? { conceptId: checkpoint.conceptId } : {}),
       // A spoken question (B16), only where the server made it one.
       ...(quick.promptAudio ? { promptAudio: quick.promptAudio } : {}),
+      // A transfer item's situation, as the server wrote it (test 5).
+      ...(checkpoint.transferContext?.trim()
+        ? { context: checkpoint.transferContext.trim() }
+        : {}),
     }));
 
   return questions.length > 0 ? { questions } : undefined;

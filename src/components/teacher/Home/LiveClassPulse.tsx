@@ -1,5 +1,12 @@
 import type { ClassPulse } from "@/hooks/useTeacherHome";
-import { PULSE_LABEL, PULSE_SUBTITLE } from "@/lib/mocks/teacherIntelligence";
+import { PULSE_LABEL } from "@/lib/mocks/teacherIntelligence";
+
+/**
+ * The frame's subtitle without its "this week" (4 Nov sweep). The pulse read
+ * declares no window, and dating a reading the contract does not date is the
+ * rule `lib/constants/observations.ts` already keeps for the roster.
+ */
+const LIVE_PULSE_SUBTITLE = "How your class is engaging with lessons.";
 
 /**
  * C16a Class Learning Pulse, from `GET /api/v1/teachers/me/home`.
@@ -31,7 +38,7 @@ export function LiveClassPulse({ pulse }: { pulse: ClassPulse }) {
         {`${PULSE_LABEL} · ${pulse.className}`}
       </h3>
       <p className="mt-2 text-[13px] text-nevo-near-black/60">
-        {PULSE_SUBTITLE}
+        {LIVE_PULSE_SUBTITLE}
       </p>
 
       <div className="mt-[18px] flex flex-col gap-2.5 xl:mt-5 xl:flex-row xl:gap-3">

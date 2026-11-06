@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { TryAgain } from "./TryAgain";
 import {
   AGE_CHECK_EXPIRED,
   AGE_CHECK_NOT_PENDING,
@@ -84,6 +85,8 @@ export function ParentDateCheck() {
   const [sending, setSending] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [waiting, setWaiting] = useState(false);
+  /** Bumped by Try again, to read the child and the check again. */
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -100,7 +103,7 @@ export function ParentDateCheck() {
     return () => {
       alive = false;
     };
-  }, [wanted]);
+  }, [wanted, attempt]);
 
   if (read.kind === "loading") {
     return <main className="min-h-dvh bg-nevo-cream" aria-busy="true" />;
@@ -134,7 +137,15 @@ export function ParentDateCheck() {
   let body: React.ReactNode;
   if (read.kind === "failed") {
     body = (
-      <Message title="We couldn’t load this just now" text="Nothing has changed. Try again in a moment." />
+      <>
+        <Message title="We couldn’t load this just now" text="Nothing has changed. Try again in a moment." />
+        <TryAgain
+          onClick={() => {
+            setRead({ kind: "loading" });
+            setAttempt((a) => a + 1);
+          }}
+        />
+      </>
     );
   } else if (outcome === "closed") {
     body = (

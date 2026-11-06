@@ -6,6 +6,7 @@ import { useHydrated } from "@/hooks/useHydrated";
 import { useLessonReviewFlow } from "@/hooks/useLessonReviewFlow";
 import { getToken } from "@/lib/auth/session";
 import { LessonReviewFlow } from "./LessonReviewFlow";
+import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * Resolves C07k for one lesson, live only.
@@ -46,10 +47,18 @@ export function LessonReviewRoute({
   }
 
   if (flow.failed) {
+    /* With Try again beside the way back (backlog item 21): the one screen
+       every lesson passes through before it can be assigned had no retry. */
     return (
-      <Message title="We couldn’t load this review" back={lessonId}>
-        It hasn&rsquo;t gone anywhere, and nothing you did is lost. Try again in a moment.
-      </Message>
+      <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
+        <ReadFailed
+          as="h1"
+          title="We couldn’t load this review"
+          body="It hasn’t gone anywhere, and nothing you did is lost. Try again in a moment."
+          back={{ href: `/teacher/lessons/${lessonId}`, label: "Back to the lesson" }}
+          className="mx-auto"
+        />
+      </div>
     );
   }
 

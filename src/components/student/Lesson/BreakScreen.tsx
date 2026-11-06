@@ -1,9 +1,56 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
+import { Leaf } from "lucide-react";
 import { IllustrationWrapper } from "@/components/shared";
 import { BREAK_TYPES, type BreakType } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+
+/**
+ * A BREAK'S PICTURE THAT WILL NOT LOAD: ASKED FOR AGAIN, THEN THE TILE (Lydia,
+ * 4 Nov: "reuse the lesson picture's behaviour, retry and then the tile").
+ * It was left out, so the break's words stood alone where its picture had
+ * been. Now it is asked for once more - its own address, so nothing to
+ * re-issue, just a fresh request - and if that fails too, the lesson
+ * picture's quiet tile takes its place (`VisualSegment`): cream-elevated,
+ * the leaf, at the picture's own size, so nothing on the screen moves.
+ */
+function BreakArt({
+  className,
+  width,
+  height,
+  ...art
+}: Omit<ComponentProps<typeof IllustrationWrapper>, "onError">) {
+  const [tries, setTries] = useState(0);
+  if (tries > 1) {
+    return (
+      <div
+        data-break-tile
+        style={{ aspectRatio: `${width} / ${height}` }}
+        className={cn(
+          className,
+          "flex items-center justify-center rounded-[12px] bg-nevo-cream-elevated",
+        )}
+      >
+        <Leaf
+          aria-hidden
+          className="size-[46px] text-nevo-violet"
+          strokeWidth={1.6}
+        />
+      </div>
+    );
+  }
+  return (
+    <IllustrationWrapper
+      key={tries}
+      {...art}
+      width={width}
+      height={height}
+      className={className}
+      onError={() => setTries((t) => t + 1)}
+    />
+  );
+}
 
 /** Micro break: a brief button-less pause - two breathe cycles, then back. */
 const MICRO_HOLD_MS = 8_000;
@@ -57,7 +104,6 @@ export function BreakScreen({
   const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set());
   // A picture that will not load - a break taken offline - is left out,
   // never drawn as a broken box with its alt text in it.
-  const [artFailed, setArtFailed] = useState(false);
   // Stamped in the mount effect (render must stay pure).
   const startedAt = useRef(0);
   const started = useRef(false);
@@ -109,18 +155,15 @@ export function BreakScreen({
     <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500">
       {type === BREAK_TYPES.MICRO && (
         <>
-          {!artFailed && (
-            <IllustrationWrapper
-              src="/illustrations/break-micro.png"
-              alt="A figure sitting calmly with eyes closed"
-              width={1254}
-              height={1254}
-              priority
-              motion="breathe"
-              className="w-[200px] sm:w-[250px]"
-              onError={() => setArtFailed(true)}
-            />
-          )}
+          <BreakArt
+            src="/illustrations/break-micro.png"
+            alt="A figure sitting calmly with eyes closed"
+            width={1254}
+            height={1254}
+            priority
+            motion="breathe"
+            className="w-[200px] sm:w-[250px]"
+          />
           <h2 className="mt-8 text-xl font-medium sm:mt-9 sm:text-2xl">
             Take a breath
           </h2>
@@ -129,17 +172,14 @@ export function BreakScreen({
 
       {type === BREAK_TYPES.MOVEMENT && (
         <>
-          {!artFailed && (
-            <IllustrationWrapper
-              src="/illustrations/break-movement.png"
-              alt="A figure stretching arms overhead"
-              width={1024}
-              height={1536}
-              priority
-              className="h-[250px] w-auto sm:h-[300px]"
-              onError={() => setArtFailed(true)}
-            />
-          )}
+          <BreakArt
+            src="/illustrations/break-movement.png"
+            alt="A figure stretching arms overhead"
+            width={1024}
+            height={1536}
+            priority
+            className="h-[250px] w-auto sm:h-[300px]"
+          />
           <p className="mt-7 max-w-[280px] text-base leading-[1.5] sm:mt-9 sm:max-w-[360px] sm:text-[17px]">
             Stand up and stretch your arms up high, then reach for your toes.
           </p>
@@ -160,17 +200,14 @@ export function BreakScreen({
 
       {type === BREAK_TYPES.CONSOLIDATION && (
         <>
-          {!artFailed && (
-            <IllustrationWrapper
-              src="/illustrations/break-consolidation.png"
-              alt="A figure thinking, hand resting on chin"
-              width={1024}
-              height={1536}
-              priority
-              className="mb-6 h-[150px] w-auto sm:mb-7 sm:h-[190px]"
-              onError={() => setArtFailed(true)}
-            />
-          )}
+          <BreakArt
+            src="/illustrations/break-consolidation.png"
+            alt="A figure thinking, hand resting on chin"
+            width={1024}
+            height={1536}
+            priority
+            className="mb-6 h-[150px] w-auto sm:mb-7 sm:h-[190px]"
+          />
           <h2 className="max-w-[300px] text-xl leading-[1.4] font-medium sm:max-w-[440px] sm:text-2xl">
             How are you feeling right now?
           </h2>
@@ -213,17 +250,14 @@ export function BreakScreen({
 
       {type === BREAK_TYPES.FULL && (
         <>
-          {!artFailed && (
-            <IllustrationWrapper
-              src="/illustrations/break-full.png"
-              alt="A figure lying down resting"
-              width={1536}
-              height={1024}
-              priority
-              className="w-[280px] sm:w-[340px]"
-              onError={() => setArtFailed(true)}
-            />
-          )}
+          <BreakArt
+            src="/illustrations/break-full.png"
+            alt="A figure lying down resting"
+            width={1536}
+            height={1024}
+            priority
+            className="w-[280px] sm:w-[340px]"
+          />
           <p className="mt-8 max-w-[280px] text-base leading-[1.55] sm:mt-9 sm:max-w-[380px] sm:text-[17px]">
             Go and take a proper rest. Have a drink of water. We&apos;ll be
             right here when you&apos;re ready.

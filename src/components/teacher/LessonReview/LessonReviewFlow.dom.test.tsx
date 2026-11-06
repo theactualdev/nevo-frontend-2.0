@@ -172,16 +172,37 @@ describe("four screens, not one page", () => {
     ).toBeInTheDocument();
   });
 
-  it("says nothing needs the teacher when nothing is flagged", async () => {
+  /*
+   * NOTHING FLAGGED IS NOT NOTHING TO DO (4 Nov sweep). With the key points,
+   * checks or rewrites still unsigned, "Nothing needs you" was untrue; it is
+   * said only once the review is complete.
+   */
+  it("says only the approval is left when nothing is flagged but sign-offs wait", async () => {
     api.review.mockResolvedValue(
       reviewOf({ keyPoints: [point("kp-2", "s-2")], missingKeyPointSegmentIds: [] }),
     );
     await open();
 
     expect(
+      screen.getByRole("heading", { name: "Nothing needs a look, just your approval." }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("This looks ready. Nothing needs you.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Continue to key points" })).toBeInTheDocument();
+  });
+
+  it("says nothing needs the teacher once the review is complete", async () => {
+    api.review.mockResolvedValue(
+      reviewOf({
+        keyPoints: [point("kp-2", "s-2")],
+        missingKeyPointSegmentIds: [],
+        reviewComplete: true,
+      }),
+    );
+    await open(1);
+
+    expect(
       screen.getByRole("heading", { name: "This looks ready. Nothing needs you." }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Continue to key points" })).toBeInTheDocument();
   });
 
   it("takes the teacher to the flagged ones in one press", async () => {
@@ -499,6 +520,26 @@ describe("the way to change how it is broken up", () => {
     expect(screen.getByRole("link", { name: "Change something" })).toHaveAttribute(
       "href",
       "/teacher/lessons/l-1/structure",
+    );
+  });
+});
+
+/**
+ * Backlog item 21: the review every lesson passes through before it can be
+ * assigned had no Try again when its read failed - only "Back to the lesson".
+ */
+describe("a review that could not be read", () => {
+  it("offers Try again beside the way back to the lesson", async () => {
+    api.review.mockRejectedValue(new Error("offline"));
+    render(<LessonReviewRoute lessonId="l-1" />);
+
+    expect(
+      await screen.findByRole("heading", { name: "We couldn’t load this review" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to the lesson" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1",
     );
   });
 });

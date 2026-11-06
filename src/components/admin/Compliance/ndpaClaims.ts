@@ -320,6 +320,22 @@ export function ndpaClaims(inputs: NdpaInputs): NdpaClaim[] {
      * than a missing one. It returns with the setting.
      */
     /*
+     * LYDIA, 4 NOV (her answer 27): the D16c indicator "Ephemeral processing
+     * active" is false - accepted events and answer records are written to the
+     * database and retained - and is replaced with the one thing the server
+     * does keep to, whatever any setting says: it purges within 180 days
+     * (Teslim, confirmed 4 Nov). Her words, verbatim. A property of the
+     * product, true of every school, so it carries no chip: nothing here was
+     * measured. The period itself is Oladayo's to decide; the school's own
+     * setting stays off Settings until he does.
+     */
+    {
+      title: "Records retention",
+      mechanism: "Records purged 180 days after the recorded purpose ends.",
+      evidence: "Retention policy, deletion jobs",
+      verification: "product",
+    },
+    /*
      * PULLED 14 SEP, PENDING A REWRITE BY DESIGN AND COUNSEL.
      *
      * It read: "A parent or guardian can request erasure of their child's

@@ -226,6 +226,18 @@ describe("assigning from the finish screen", () => {
 
     expect(await screen.findByText("Review this lesson to assign it.")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Assign to a class" })).not.toBeInTheDocument();
+    // Backlog item 19: and the way in, rather than a line with nothing to press.
+    expect(screen.getByRole("link", { name: "Review in five steps" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1/review",
+    );
+  });
+
+  it("offers no way into the review while the verdict is still on its way", () => {
+    review.mockReturnValue(new Promise(() => {}));
+    render(<UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} />);
+
+    expect(screen.queryByRole("link", { name: "Review in five steps" })).not.toBeInTheDocument();
   });
 
   it("says nothing while the verdict is still on its way", () => {

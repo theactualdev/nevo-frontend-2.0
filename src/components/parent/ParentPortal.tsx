@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TryAgain } from "./TryAgain";
 import { ApiError } from "@/lib/api/client";
 import { parentApi, type ParentInvitation } from "@/lib/api/parent";
 import { ParentConsent } from "./ParentConsent";
@@ -34,6 +35,8 @@ type Phase = "loading" | "ready" | "gone" | "failed";
 export function ParentPortal({ token }: { token: string }) {
   const [invitation, setInvitation] = useState<ParentInvitation | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
+  /** Bumped by Try again, to read the link again. */
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,7 +56,12 @@ export function ParentPortal({ token }: { token: string }) {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, attempt]);
+
+  const retry = () => {
+    setPhase("loading");
+    setAttempt((a) => a + 1);
+  };
 
   if (phase === "loading") {
     return (
@@ -81,6 +89,7 @@ export function ParentPortal({ token }: { token: string }) {
               ? "Something went wrong at our end. Please try the link again in a moment."
               : "It may have expired, been replaced by a newer one, or the school may have updated your details. Contact your child’s school and they can send you a fresh link."}
           </p>
+          {phase === "failed" ? <TryAgain onClick={retry} /> : null}
         </div>
       </Shell>
     );

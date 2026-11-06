@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { baselineApi, type RecalibratePrompt } from "@/lib/api/baseline";
 import { getSession } from "@/lib/auth/session";
 import {
@@ -49,6 +49,13 @@ export interface WarmUpItem {
  */
 export type WarmUpPrompt =
   | { state: "waiting" }
+  /**
+   * The read failed: no task was named, and nothing was said about the day.
+   * Not "none", which is the engine's answer (Lydia, 4 Nov: "the product
+   * asserting a state that is not true ... is worse than any missing
+   * feature"). `retry` asks again.
+   */
+  | { state: "failed"; retry: () => void }
   | { state: "none"; doneToday?: boolean; cannotPresent?: UnpresentableTask }
   | { state: "motor"; sampleCount: number; doneToday?: boolean }
   | {
@@ -76,6 +83,12 @@ export function useWarmUpPrompt(visitor: BaselineDimension): WarmUpPrompt {
   const hydrated = useHydrated();
   const signedIn = useHasSession();
   const [answer, setAnswer] = useState<WarmUpPrompt | null>(null);
+  /** Bumped by `retry`, to ask again after a read that failed. */
+  const [asked, setAsked] = useState(0);
+  const retry = useCallback(() => {
+    setAnswer(null);
+    setAsked((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -90,18 +103,20 @@ export function useWarmUpPrompt(visitor: BaselineDimension): WarmUpPrompt {
         if (!cancelled) setAnswer(toPrompt(res));
       })
       .catch(() => {
-        // A failed read names no task. It is not a reason to invent one.
-        if (!cancelled) setAnswer({ state: "none" });
+        // A failed read names no task. It is not a reason to invent one, and
+        // it is not the engine saying there is none either.
+        if (!cancelled) setAnswer({ state: "failed", retry: () => {} });
       });
     return () => {
       cancelled = true;
     };
-  }, [signedIn]);
+  }, [signedIn, asked]);
 
   if (!hydrated) return { state: "waiting" };
   if (!signedIn) {
     return { state: "ready", dimension: visitor, item: null, live: false };
   }
+  if (answer?.state === "failed") return { state: "failed", retry };
   return answer ?? { state: "waiting" };
 }
 

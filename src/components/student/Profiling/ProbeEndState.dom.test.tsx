@@ -62,9 +62,10 @@ describe("nothing to do", () => {
     expect(screen.getByRole("heading").textContent).toBe(
       "Nothing to do here right now",
     );
+    // Lydia, 2 Nov: first under the heading, where home is named.
     expect(
       screen.getByText(
-        "You can go on to Nevo and come back any time.",
+        "If something needs doing here, it will appear on your home screen. You can go on to Nevo and come back any time.",
       ),
     ).toBeInTheDocument();
     // Lydia, 31 Oct: it names no warm-up, which lives somewhere else.

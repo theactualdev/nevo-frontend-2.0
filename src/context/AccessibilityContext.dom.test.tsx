@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import {
+  ACCOUNT_WAIT_MS,
   AccessibilityProvider,
   accountPrefs,
   useAccessibility,
@@ -81,6 +82,8 @@ afterEach(() => {
   cleanup();
   window.localStorage.clear();
   clearSession();
+  vi.useRealTimers();
+  delete document.documentElement.dataset.a11yPending;
 });
 
 describe("accessibility settings on a shared tablet", () => {
@@ -338,5 +341,171 @@ describe("a child's settings, kept on their account", () => {
     expect(personalGet).not.toHaveBeenCalled();
     expect(personalUpdate).not.toHaveBeenCalled();
     expect(kept).toEqual([true]);
+  });
+});
+
+/*
+ * A TABLET THAT HOLDS NOTHING OF THE CHILD'S (SCRUM-228, rule 6). With no
+ * device copy to paint first, the child's first screen after signing in drew
+ * at the defaults and then snapped to their own. A sign-in on the page now
+ * holds it unseen until the account answers, with their settings already on
+ * `<html>` when it shows - and never past `ACCOUNT_WAIT_MS`.
+ */
+describe("a child's first screen on a tablet that holds nothing of theirs", () => {
+  const renderProbe = () =>
+    render(
+      <AccessibilityProvider>
+        <Probe />
+      </AccessibilityProvider>,
+    );
+  const held = () => document.documentElement.dataset.a11yPending;
+  const xl = {
+    userId: "new",
+    preferences: {
+      accessibility: { textSize: "xl", highContrast: true, reducedMotion: true },
+    },
+  };
+
+  it("is held unseen until the account answers, and shown with their settings on", async () => {
+    let answer: (v: unknown) => void = () => {};
+    personalGet.mockReturnValue(new Promise((r) => (answer = r)));
+    renderProbe();
+    await settle();
+
+    await act(async () => signInAs("new-1"));
+    expect(held()).toBe("true");
+
+    // The order <html> changed in: the size goes on, then the screen shows.
+    const changes: string[] = [];
+    const watch = new MutationObserver((records) => {
+      for (const r of records) changes.push(r.attributeName ?? "");
+    });
+    watch.observe(document.documentElement, { attributes: true });
+    await act(async () => answer(xl));
+    await settle();
+    watch.disconnect();
+
+    expect(held()).toBeUndefined();
+    expect(document.documentElement.dataset.textSize).toBe("xl");
+    expect(document.documentElement.dataset.contrast).toBe("high");
+    expect(changes.indexOf("data-text-size")).toBeGreaterThanOrEqual(0);
+    expect(changes.indexOf("data-text-size")).toBeLessThan(
+      changes.indexOf("data-a11y-pending"),
+    );
+    expect(size()).toBe("xl");
+  });
+
+  it("is shown at once when the account cannot be read", async () => {
+    renderProbe();
+    await settle();
+    personalGet.mockRejectedValue(new Error("offline"));
+
+    await act(async () => signInAs("new-2"));
+    await settle();
+
+    expect(held()).toBeUndefined();
+    expect(document.documentElement.dataset.textSize).toBe("m");
+  });
+
+  it("is shown with the defaults when the account has none", async () => {
+    renderProbe();
+    await settle();
+
+    await act(async () => signInAs("new-3"));
+    await settle();
+
+    expect(held()).toBeUndefined();
+    expect(size()).toBe("m");
+  });
+
+  it("is never held past the wait, and the account's late answer still lands", async () => {
+    vi.useFakeTimers();
+    let answer: (v: unknown) => void = () => {};
+    personalGet.mockReturnValue(new Promise((r) => (answer = r)));
+    renderProbe();
+    await act(async () => {});
+
+    await act(async () => signInAs("new-4"));
+    expect(held()).toBe("true");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ACCOUNT_WAIT_MS);
+    });
+    expect(held()).toBeUndefined();
+
+    await act(async () => answer(xl));
+    expect(size()).toBe("xl");
+  });
+
+  it("stays held through a token refresh while the account is out", async () => {
+    let answer: (v: unknown) => void = () => {};
+    personalGet.mockReturnValue(new Promise((r) => (answer = r)));
+    renderProbe();
+    await settle();
+    await act(async () => signInAs("refreshed"));
+
+    // The same child, a new token: the session store announces it again.
+    await act(async () => signInAs("refreshed"));
+    expect(held()).toBe("true");
+
+    await act(async () => answer(xl));
+    await settle();
+    expect(held()).toBeUndefined();
+    expect(personalGet).toHaveBeenCalledOnce();
+  });
+
+  it("is not held when the tablet has the child's own copy", async () => {
+    window.localStorage.setItem(
+      "nevo:a11y:back-again",
+      JSON.stringify({ reducedMotion: false, highContrast: false, textSize: "l" }),
+    );
+    personalGet.mockReturnValue(new Promise(() => {}));
+    renderProbe();
+    await settle();
+
+    await act(async () => signInAs("back-again"));
+
+    expect(held()).toBeUndefined();
+    expect(size()).toBe("l");
+  });
+
+  it("does not cover a page that opened already signed in", async () => {
+    // It painted before React ran; hiding it now would be a change after.
+    signInAs("reloaded");
+    personalGet.mockReturnValue(new Promise(() => {}));
+    renderProbe();
+    await settle();
+
+    expect(held()).toBeUndefined();
+  });
+
+  it("is never held for a staff sign-in", async () => {
+    renderProbe();
+    await settle();
+
+    await act(async () => signInAs("teacher-2", "teacher"));
+
+    expect(held()).toBeUndefined();
+    expect(personalGet).not.toHaveBeenCalled();
+  });
+
+  it("is let go when the child signs out first, and their late answer touches nobody else", async () => {
+    let answer: (v: unknown) => void = () => {};
+    personalGet.mockReturnValueOnce(new Promise((r) => (answer = r)));
+    renderProbe();
+    await settle();
+    await act(async () => signInAs("leaver"));
+    expect(held()).toBe("true");
+
+    await act(async () => clearSession());
+    expect(held()).toBeUndefined();
+
+    // The next child's own read is still out; the leaver's lands late.
+    personalGet.mockReturnValue(new Promise(() => {}));
+    await act(async () => signInAs("next-child"));
+    expect(held()).toBe("true");
+    await act(async () => answer(xl));
+
+    expect(held()).toBe("true");
+    expect(size()).toBe("m");
   });
 });

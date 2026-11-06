@@ -257,6 +257,25 @@ describe("what the list says when there is nothing to say", () => {
     expect(screen.queryByText(/will appear here/i)).toBeNull();
   });
 
+  it("offers Try again on a failed read, which asks for the list once more", async () => {
+    // Audit, 2 Nov, backlog 40: reopening the clock re-read, but nothing on
+    // screen said so.
+    threadsCall.mockRejectedValue(new Error("offline"));
+
+    await openHistory();
+    await screen.findByText(/couldn.t load these just now/i);
+    threadsCall.mockResolvedValue([summary()]);
+    const before = threadsCall.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    await waitFor(() =>
+      expect(threadsCall.mock.calls.length).toBe(before + 1),
+    );
+    expect(
+      await screen.findByRole("button", { name: /Why do plants need light/ }),
+    ).toBeInTheDocument();
+  });
+
   it("says so when one conversation will not open", async () => {
     threadCall.mockRejectedValue(new Error("offline"));
 

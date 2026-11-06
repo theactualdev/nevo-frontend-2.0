@@ -173,3 +173,33 @@ describe("Record written consent", () => {
     expect(screen.queryByRole("button", { name: "Save consent record" })).toBeNull();
   });
 });
+
+/**
+ * Teslim 37961c4: a written form no longer lifts a parent's withdrawal - the
+ * server refuses with 409 `consent_withdrawn`. The page read the child before
+ * the parent withdrew, so it offered the form; the refusal must land on the
+ * withdrawn state, with nothing left to press and no way back promised.
+ */
+describe("a form refused because the parent has since withdrawn", () => {
+  it("shows the withdrawn state, with no Save left to press", async () => {
+    record.mockRejectedValue(
+      new ApiError(409, "Conflict", {
+        detail: {
+          code: "consent_withdrawn",
+          message:
+            "This parent has withdrawn consent for this learner. Only they can give it again, from their own Nevo account. A form cannot restore it.",
+          consentType: "data_processing",
+        },
+      }),
+    );
+    render(<WrittenConsentView studentId="s-1" />);
+    await fillValid();
+    fireEvent.click(screen.getByRole("button", { name: "Save consent record" }));
+    expect(
+      await screen.findByRole("heading", { name: "A parent has withdrawn consent for Amara Okafor" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Only the parent who withdrew can restore it/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save consent record" })).toBeNull();
+    expect(screen.queryByText(/Try again/)).toBeNull();
+  });
+});

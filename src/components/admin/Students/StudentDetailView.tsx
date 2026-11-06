@@ -166,8 +166,14 @@ export function StudentDetailView({
    * "a line on the child's record is there when someone is actually looking
    * at that child". Only a real change: a confirm writes a row with the same
    * date either side, and "changed from X to X" says nothing. No time window
-   * (rule 3). A parent's date taking over isn't in the history yet (Teslim);
-   * a read that fails, or a viewer the route refuses, shows no line.
+   * (rule 3). A read that fails, or a viewer the route refuses, shows no line.
+   *
+   * A PARENT'S DATE TAKING OVER is on the same history since ef7745c
+   * (`source: "parent_confirmation"`), and gets Lydia's other line: "A parent's
+   * date of birth was confirmed and now applies, from {date}" - the day it
+   * took effect. Never the date itself: `dateInForce` on that row IS the
+   * parent's date, and a school is never shown it. Nor the parent's name -
+   * her line doesn't carry one. One account of what happened, in order.
    */
   const [dobChanges, setDobChanges] = useState<AgeCheckEdit[]>([]);
   useEffect(() => {
@@ -188,9 +194,12 @@ export function StudentDetailView({
             .flat()
             .filter(
               (e) =>
-                Boolean(e.previousSchoolDateOfBirth) &&
-                e.previousSchoolDateOfBirth !== e.newSchoolDateOfBirth,
-            ),
+                e.source === "parent_confirmation" ||
+                (Boolean(e.previousSchoolDateOfBirth) &&
+                  Boolean(e.newSchoolDateOfBirth) &&
+                  e.previousSchoolDateOfBirth !== e.newSchoolDateOfBirth),
+            )
+            .sort((a, b) => Date.parse(a.changedAt) - Date.parse(b.changedAt)),
         );
       })
       .catch(() => undefined);
@@ -408,9 +417,18 @@ export function StudentDetailView({
                 key={`${e.changedAt}-${i}`}
                 className="text-[13.5px] leading-[1.6] text-nevo-near-black/66"
               >
-                {e.actorName} changed this child&rsquo;s date of birth from{" "}
-                {birthDate(e.previousSchoolDateOfBirth)} to {birthDate(e.newSchoolDateOfBirth)} on{" "}
-                {longDate(e.changedAt)}.
+                {e.source === "parent_confirmation" ? (
+                  <>
+                    A parent&rsquo;s date of birth was confirmed and now applies, from{" "}
+                    {longDate(e.changedAt)}.
+                  </>
+                ) : (
+                  <>
+                    {e.actorName} changed this child&rsquo;s date of birth from{" "}
+                    {birthDate(e.previousSchoolDateOfBirth)} to{" "}
+                    {birthDate(e.newSchoolDateOfBirth)} on {longDate(e.changedAt)}.
+                  </>
+                )}
               </li>
             ))}
           </ul>

@@ -16,7 +16,7 @@ import {
 } from "@/lib/api/billing";
 import { formatMoney } from "@/lib/money";
 import { NextCharge } from "./NextCharge";
-import { OVERDUE_LINE } from "./overdue";
+import { overdueHeadline, overdueLine, overduePanel } from "./overdue";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
 import { BillingContactSheet } from "./BillingContactSheet";
@@ -275,11 +275,54 @@ export function BillingView() {
           </div>
 
           {/*
-            * D11.8's page-level panel ("past 60 days", with a total) is not
-            * drawn: its threshold, day counts and total were all worked out
-            * on this device (rule 3, L1). It comes back when the invoice read
-            * carries them - asked of the backend, 2 Nov. See `overdue.ts`.
+            * D11.8's page-level panel, back on the server's own figures (4
+            * Nov): whether it shows, the count and the total are all the
+            * invoice read's - nothing is worked out here (rule 3, L1). Its
+            * treatment is fixed by the spec and none of it is decoration:
+            * violet tint, not alarm; the bank details inline "so paying needs
+            * no navigation"; and NOTHING about access, ever.
             */}
+          {(() => {
+            const panel = overduePanel(invoices);
+            if (!panel) return null;
+            return (
+              <div className="mt-8 rounded-xl bg-nevo-violet/[0.18] px-6 py-5">
+                <p className="m-0 text-sm leading-[1.6] text-nevo-navy">
+                  {overdueHeadline(
+                    panel,
+                    (amount) => formatMoney(amount, subscription.pricing.currency),
+                    longDate,
+                  )}{" "}
+                  Our bank details are below, and our billing team can help if
+                  something needs sorting out.
+                </p>
+                {account ? (
+                  <dl className="m-0 mt-4 grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 text-[13.5px]">
+                    <dt className="text-nevo-near-black/60">Bank</dt>
+                    <dd className="m-0 font-medium text-nevo-near-black">
+                      {account.bankName}
+                    </dd>
+                    <dt className="text-nevo-near-black/60">Account name</dt>
+                    <dd className="m-0 font-medium text-nevo-near-black">
+                      {account.accountName}
+                    </dd>
+                    <dt className="text-nevo-near-black/60">Account number</dt>
+                    <dd className="m-0 font-mono font-medium text-nevo-near-black">
+                      {account.accountNumber}
+                    </dd>
+                  </dl>
+                ) : (
+                  /* The account read is its own absence. An account number we
+                     do not have must never be approximated on the one panel a
+                     school would pay against. */
+                  <p className="m-0 mt-3 text-[13px] leading-[1.5] text-nevo-near-black/62">
+                    We couldn&rsquo;t load our bank details just now &ndash;
+                    our billing team has them.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
 
           <h2 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
             Invoices
@@ -357,7 +400,7 @@ export function BillingView() {
                        affected by non-payment, at any number of days - so
                        there is deliberately nothing further to say. */
                     <span className="order-last w-full text-[13px] leading-[1.5] text-nevo-near-black/66">
-                      {OVERDUE_LINE}
+                      {overdueLine(inv.daysOverdue)}
                     </span>
                   ) : null}
                   {reports[inv.id] && inv.status !== "paid" ? (

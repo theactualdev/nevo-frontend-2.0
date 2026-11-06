@@ -19,6 +19,7 @@ import { SplitSourceNotice } from "./SplitSourceNotice";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useLessonReview } from "@/hooks/useLessonReview";
 import { useSegmentReview } from "@/hooks/useSegmentReview";
+import { TryAgain } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * Lesson detail for a real lesson (C06b), built from what
@@ -467,6 +468,9 @@ export function LiveLessonDetail({
                   is left to look at. */}
               {assignable &&
                 settled &&
+                // `ready` defaults to true over a review that never came,
+                // which is right for the gate and wrong for a pill.
+                !review.failed &&
                 waiting === 0 &&
                 review.ready &&
                 !toReview &&
@@ -519,6 +523,9 @@ export function LiveLessonDetail({
                 ? `/teacher/lessons/${lesson.id}/media`
                 : undefined
             }
+            /* C06b's "Edit the lesson" (backlog item 15): the committed
+               lesson's structure page, which renames and reorders it. */
+            editHref={`/teacher/lessons/${lesson.id}/structure`}
             /* THE GATE IS `readyToAssign`, and the count is only what the
                line says. Backend asked for the split by name: a client that
                decides "ready" for itself is how this ticket started. */
@@ -602,6 +609,10 @@ export function LiveLessonDetail({
           waiting === 0 &&
           assignable &&
           settled &&
+          // "Ready when you are" is the server's yes, never our guess over a
+          // review that failed (4 Nov sweep) or one that said no.
+          !review.failed &&
+          review.ready &&
           assignments.length === 0 &&
           // Not "never assigned" - we could not find out. Said below.
           !assignmentsFailed && (
@@ -634,9 +645,10 @@ export function LiveLessonDetail({
           /* Not "nothing to review" - we could not find out. Assign stays
              open, because refusing a teacher over our own outage is worse
              than letting the server refuse with a reason. */
+          /* Without "Nothing is wrong with the lesson": the review is how we
+             would know, and it is the read that failed. */
           <p className="mt-4 max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
-            We couldn&rsquo;t load the review just now. Nothing is wrong with
-            the lesson - try again in a moment.
+            We couldn&rsquo;t load the review just now. Try again in a moment.
           </p>
         )}
 
@@ -661,7 +673,9 @@ export function LiveLessonDetail({
              rather than left to look like a lesson nobody has. */
           <p className="mt-6 max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
             We couldn&rsquo;t load who has this lesson just now. Nothing is
-            wrong with the lesson - try again in a moment.
+            wrong with the lesson - try again in a moment.{" "}
+            {/* Backlog item 34. */}
+            <TryAgain />
           </p>
         ) : (
           <AssignmentSchedule assignments={assignments} classes={classes} />

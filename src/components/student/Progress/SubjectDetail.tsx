@@ -322,6 +322,15 @@ function LiveSubjectDetail({
           We couldn&apos;t load this just now. Nothing is lost. Give it a
           moment and try again.
         </p>
+        {/* The line asks them to try again, so the way to is here, as it is
+            on this screen's lessons read (audit, 2 Nov, backlog 12). */}
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="mt-4 flex h-11 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-6 text-[15px] font-medium text-nevo-cream"
+        >
+          Try again
+        </button>
       </DetailFrame>
     );
   }

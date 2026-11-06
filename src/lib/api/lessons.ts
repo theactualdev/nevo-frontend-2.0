@@ -122,6 +122,13 @@ export interface LessonSummary {
  * `studentCount` is distinct children rather than assignment rows, so a child
  * assigned twice is one child.
  */
+/** `GET /api/content/lessons/totals` (LibraryTotalsResponse). */
+export interface LibraryTotals {
+  lessonsUploaded: number;
+  liveToClasses: number;
+  inReview: number;
+}
+
 export interface LessonClass {
   id: string;
   name: string;
@@ -191,7 +198,10 @@ export type SegmentReviewReason =
   // doesn't recognise yet" until then (Osmosis section 4, the hub).
   | "unmarkable_question"
   | "depth_variant_review_required"
-  | "optional_media_pending_review";
+  | "optional_media_pending_review"
+  // In the deployed enum (found by scripts/enum-check.mjs, 5 Nov) and read as
+  // "a reason this console doesn't recognise yet" until now.
+  | "guided_steps_review_required";
 
 /**
  * "A stable, ordered reading boundary generated from approved lesson text."
@@ -333,6 +343,8 @@ export interface SegmentChoice {
   modality?: ContentModality | null;
   depth?: ChoiceDepth | null;
   slower?: boolean | null;
+  /** The sitting's More support on a calculation (8c67353). */
+  moreSupport?: boolean | null;
   /** The server's, never ours. */
   updatedAt?: string | null;
 }
@@ -347,6 +359,8 @@ export interface SegmentChoice {
 export interface LessonChoice {
   depth?: ChoiceDepth | null;
   slower?: boolean | null;
+  /** More support on a calculation, for the whole sitting (8c67353). */
+  moreSupport?: boolean | null;
   /** The server's, never ours. */
   updatedAt?: string | null;
 }
@@ -371,6 +385,7 @@ export interface SegmentChoiceWrite {
   modality?: ContentModality | null;
   depth?: ChoiceDepth | null;
   slower?: boolean | null;
+  moreSupport?: boolean | null;
 }
 
 /**
@@ -565,15 +580,44 @@ export type CheckAnswerKey =
   | (string | number | boolean)[]
   | null;
 
+/**
+ * The curriculum level a check asks for (backend #8, 5 Nov). A property of
+ * the CHECK, never of a child: it is shown to the teacher reviewing the
+ * check and nowhere a child can see (Lydia's test 4).
+ */
+export type MasteryLevel = "knowledge" | "application" | "analysis";
+
+/** Which of the four parts of a transfer set an item is. */
+export type TransferKind = "application_a" | "application_b" | "comparison" | "diagnosis";
+
 /** One in-lesson check, as the review shows it (`CheckReviewItem`). */
 export interface CheckReviewItem {
   segmentId: string;
   segmentTitle: string | null;
+  /** A section's check, or one of the end-of-lesson questions. */
+  scope?: "checkpoint" | "assessment";
   questionId: string;
   questionPrompt: string;
   questionAnswerType: string;
   questionOptions: CheckOption[];
   questionAnswerKey: CheckAnswerKey;
+  /**
+   * The level the check asks for. Null or absent means unestablished, and
+   * nothing is shown (rule 5). A lesson uploaded before 5 Nov 20:52Z has none.
+   */
+  masteryLevel?: MasteryLevel | null;
+  /**
+   * `person` when the level came with the lesson, `nevo` when Nevo inferred
+   * it. An inferred level is part of what the checks sign-off accepts, even
+   * on a check whose answer came from the file.
+   */
+  masteryLevelAuthoredBy?: "person" | "nevo" | null;
+  /** Set only on a transfer item: which part of its set it is. */
+  transferKind?: TransferKind | null;
+  /** The situation a transfer item sets the concept in. */
+  transferContext?: string | null;
+  /** The section a transfer set was written from - its concept's first. */
+  sourceSegmentId?: string | null;
   teacherReviewed: boolean;
   markable: boolean;
 }
@@ -1097,6 +1141,10 @@ export interface LessonQuestionAttempt {
 export interface SocraticHandoffPrompt {
   id: string;
   prompt: string;
+  /** How it is answered. The contract's default is `single_choice`. */
+  answerType?: "single_choice" | "multiple_choice" | "numeric" | "boolean" | "text";
+  /** Its choices, each marked by its `value`. */
+  options?: { label: string; value: string | number | boolean }[];
 }
 
 export const lessonsApi = {
@@ -1144,6 +1192,13 @@ export const lessonsApi = {
             }
           : undefined,
     }),
+
+  /**
+   * C06's three stat cards, counted BY THE SERVER across the whole library
+   * (SCRUM-245: the numbers are the server's, never summed from a page). The
+   * same default scope as `list` - a teacher's own lessons.
+   */
+  totals: () => api.get<LibraryTotals>("/api/content/lessons/totals"),
 
   /**
    * One lesson with its ordered segments AND its review flags. Deliberately

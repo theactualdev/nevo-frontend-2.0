@@ -1,8 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
-const { create } = vi.hoisted(() => ({ create: vi.fn() }));
-vi.mock("@/lib/api/escalations", () => ({ escalationsApi: { create } }));
+const { create, holders } = vi.hoisted(() => ({ create: vi.fn(), holders: vi.fn() }));
+vi.mock("@/lib/api/escalations", () => ({
+  escalationsApi: { create },
+  CONCERN_RECIPIENT_UNAVAILABLE: "concern_recipient_unavailable",
+}));
+// SCRUM-305: the sheet asks who would receive it. Someone holds learning
+// support unless a test says otherwise - the sheet as it always was.
+vi.mock("@/lib/api/learningSupport", async (actual) => {
+  const real = await actual<typeof import("@/lib/api/learningSupport")>();
+  return { ...real, learningSupportApi: { ...real.learningSupportApi, holders } };
+});
 // Added when the session panel gave this profile its first navigation. Without
 // it every test here dies on "invariant expected app router to be mounted".
 vi.mock("next/navigation", () => ({
@@ -70,6 +79,12 @@ const SHARED = /Shared with Learning Support/;
 
 beforeEach(() => {
   create.mockReset();
+  holders.mockReset();
+  holders.mockResolvedValue({
+    holders: [{ userId: "u-ls", name: "Mrs. Okafor", role: "teacher", grantedAt: "2026-10-01T00:00:00Z", grantedBy: "u-a" }],
+    viewerHoldsIt: false,
+    fallbackRecipient: null,
+  });
   create.mockResolvedValue({ id: "e-1" });
 });
 
@@ -96,7 +111,9 @@ describe("the quiet note", () => {
     send();
 
     expect(await screen.findByText(SHARED)).toBeInTheDocument();
-    expect(screen.getByText("Sent to Learning Support. They’ll take it from here.")).toBeInTheDocument();
+    expect(screen.getByText("Sent to Learning Support.")).toBeInTheDocument();
+    // No promise nothing confirms (Hub, 4 Nov; Teslim item 26).
+    expect(screen.queryByText(/take it from here|follow up with you|stays between you/)).toBeNull();
     // C14 B5: it dismisses.
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
@@ -113,6 +130,38 @@ describe("the quiet note", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     // The sheet stays open, holding the teacher's words.
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  /*
+   * SCRUM-305: with nobody holding learning support it went to an
+   * administrator, confirmed in the sheet by name. Neither the bar nor the
+   * quiet note may then say Learning Support.
+   */
+  it("is NOT shown when the concern went to an administrator instead", async () => {
+    holders.mockResolvedValue({
+      holders: [],
+      viewerHoldsIt: false,
+      fallbackRecipient: { userId: "u-adm", name: "Mrs. Adebayo" },
+    });
+    create.mockResolvedValueOnce({
+      id: "e-1",
+      routedTo: "school_admin",
+      recipientName: "Mrs. Adebayo",
+      receivedAt: "2026-11-04T09:30:00Z",
+    });
+    render(
+      <SystemMessagesProvider>
+        <LiveStudentProfile studentId="s-1" state={STATE} />
+      </SystemMessagesProvider>,
+    );
+    openSheet();
+    note("Please take a look.");
+    fireEvent.click(await screen.findByRole("button", { name: "Send to Mrs. Adebayo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Done" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByText(SHARED)).not.toBeInTheDocument();
+    expect(screen.queryByText("Sent to Learning Support.")).not.toBeInTheDocument();
   });
 
   it("carries no dash, per the 15 Sep copy ruling", async () => {
