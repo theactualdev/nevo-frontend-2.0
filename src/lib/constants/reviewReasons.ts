@@ -80,6 +80,10 @@ export const REVIEW_REASON_COPY: Record<SegmentReviewReason, string> = {
     "Nevo wrote a simpler and a longer version of this section. Children don't get them until they're approved.",
   optional_media_pending_review:
     "Nevo made a picture or narration for this section. Children don't get it until it's approved.",
+  // Ours (5 Nov). Says only what the reason says - they wait for approval -
+  // and makes no claim about what a child gets meanwhile.
+  guided_steps_review_required:
+    "Nevo wrote guiding questions for a check in this section, and they're waiting for your approval.",
 };
 
 /**

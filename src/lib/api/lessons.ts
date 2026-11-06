@@ -198,7 +198,10 @@ export type SegmentReviewReason =
   // doesn't recognise yet" until then (Osmosis section 4, the hub).
   | "unmarkable_question"
   | "depth_variant_review_required"
-  | "optional_media_pending_review";
+  | "optional_media_pending_review"
+  // In the deployed enum (found by scripts/enum-check.mjs, 5 Nov) and read as
+  // "a reason this console doesn't recognise yet" until now.
+  | "guided_steps_review_required";
 
 /**
  * "A stable, ordered reading boundary generated from approved lesson text."
