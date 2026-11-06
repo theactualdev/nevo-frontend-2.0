@@ -51,7 +51,12 @@ export interface Escalation {
   studentId: string;
   /** Nullable on the wire, so never render it without a fallback. */
   studentFirstName: string | null;
+  /** Live 4 Nov, with the class and teacher names. Optional: older rows lack them. */
+  studentName?: string | null;
+  classId?: string | null;
+  className?: string | null;
   teacherId: string;
+  teacherName?: string | null;
   note: string;
   /** Server-derived summary of the child. Read-only; see the note above. */
   recentPicture: string;
@@ -84,11 +89,20 @@ export const escalationsApi = {
    * when the pages ran out before a short one came back - then the list is a
    * floor, and neither a count nor the all-clear may be said on it.
    */
-  allOpen: async (maxPages = 10): Promise<{ open: Escalation[]; complete: boolean }> => {
+  /**
+   * `filter` is the SERVER'S own (live 4 Nov): one child's or one class's open
+   * escalations. A teacher who holds Learning Support otherwise gets the whole
+   * school's list, and matching that against a roster on the device is the
+   * line the T2/L9 ruling draws (Hub, 3 Nov).
+   */
+  allOpen: async (
+    maxPages = 10,
+    filter: { studentId?: string; classId?: string } = {},
+  ): Promise<{ open: Escalation[]; complete: boolean }> => {
     const open: Escalation[] = [];
     for (let page = 0; page < maxPages; page += 1) {
       const batch = await api.get<Escalation[]>("/api/v1/escalations", {
-        params: { openOnly: true, limit: OPEN_PAGE, offset: page * OPEN_PAGE },
+        params: { ...filter, openOnly: true, limit: OPEN_PAGE, offset: page * OPEN_PAGE },
       });
       if (!Array.isArray(batch)) return { open, complete: false };
       open.push(...batch);

@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-const { useStudentFlags, useStudentSessions, useStudentSession } = vi.hoisted(() => ({
+const { useStudentFlags, useStudentSessions, useStudentSession, useEscalated } = vi.hoisted(() => ({
   useStudentFlags: vi.fn(),
   useStudentSessions: vi.fn(),
   useStudentSession: vi.fn(),
+  useEscalated: vi.fn(),
 }));
 vi.mock("@/hooks/useStudentFlags", () => ({ useStudentFlags }));
+vi.mock("@/hooks/useEscalated", () => ({ useEscalated }));
 vi.mock("@/hooks/useStudentSessions", () => ({
   useStudentSessions,
   useStudentSession,
@@ -54,6 +56,7 @@ const nameRow = () =>
   screen.getByRole("heading", { level: 1, name: "Amara Okafor" }).parentElement!;
 
 beforeEach(() => {
+  useEscalated.mockReturnValue({ students: new Set<string>(), known: true });
   useStudentSessions.mockReturnValue({ sessions: [], total: 0, loading: false, failed: false });
   useStudentSession.mockReturnValue({ detail: null, loading: false, failed: false });
 });
@@ -86,5 +89,26 @@ describe("the profile chip", () => {
 
     expect(screen.queryByText("Worth a glance")).not.toBeInTheDocument();
     expect(screen.queryByText("Sudden change")).not.toBeInTheDocument();
+  });
+
+  // Backlog item 7: someone raised this child for learning support and it is
+  // still open. Flagged outranks worth a glance; a sudden change outranks it.
+  it("is Flagged over worth a glance when an escalation is open", () => {
+    useStudentFlags.mockReturnValue({ noticed: [open(false)], failed: false, loading: false });
+    useEscalated.mockReturnValue({ students: new Set(["s-42"]), known: true });
+    render(<LiveStudentProfile studentId="s-42" state={STATE} />);
+
+    expect(nameRow()).toContainElement(screen.getByText("Flagged"));
+    expect(screen.queryByText("Worth a glance")).not.toBeInTheDocument();
+    expect(useEscalated).toHaveBeenCalledWith({ studentId: "s-42" });
+  });
+
+  it("is still the sudden change over Flagged", () => {
+    useStudentFlags.mockReturnValue({ noticed: [open(true)], failed: false, loading: false });
+    useEscalated.mockReturnValue({ students: new Set(["s-42"]), known: true });
+    render(<LiveStudentProfile studentId="s-42" state={STATE} />);
+
+    expect(nameRow()).toContainElement(screen.getByText("Sudden change"));
+    expect(screen.queryByText("Flagged")).not.toBeInTheDocument();
   });
 });

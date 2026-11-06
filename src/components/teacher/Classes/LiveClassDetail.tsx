@@ -7,6 +7,7 @@ import {
 } from "@/lib/constants/observations";
 import { accountStatus, rosterMarker } from "@/lib/constants/accountStatus";
 import { useTeacherFlags } from "@/hooks/useTeacherFlags";
+import { useEscalated } from "@/hooks/useEscalated";
 import { useCallback, useState } from "react";
 import { AskAdminDialog, PinClearedDialog, RosterRowMenu } from "./RosterRowMenu";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
@@ -116,7 +117,10 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
    * does not match, which is the behaviour we want.
    */
   const { flags, failed: flagsFailed, complete: flagsComplete } = useTeacherFlags();
-  const attention = attentionByStudent(flags);
+  /* And Flagged, the person-raised kind: this class's OPEN escalations, the
+     server's own filter (backlog item 7). */
+  const escalated = useEscalated({ classId: klass.classId });
+  const attention = attentionByStudent(flags, escalated.students);
   /*
    * C05's header counts, one per state and never summed (design, 12 Oct).
    * The two read off the flags are left out when that read failed or stopped
@@ -125,6 +129,8 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
    */
   const counts = rosterCounts(students, attention, cleared);
   const flagCountsKnown = !flagsFailed && flagsComplete;
+  // "Flagged" counts escalations too, so it waits for that read as well.
+  const flaggedKnown = flagCountsKnown && escalated.known;
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
@@ -165,7 +171,7 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
               {flagCountsKnown && counts.glance > 0 && (
                 <SummaryCount state="glance" count={counts.glance} />
               )}
-              {flagCountsKnown && counts.flagged > 0 && (
+              {flaggedKnown && counts.flagged > 0 && (
                 <SummaryCount state="flagged" count={counts.flagged} />
               )}
               {counts.cantSignIn > 0 && (
