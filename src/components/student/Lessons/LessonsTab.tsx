@@ -179,7 +179,11 @@ export function LessonsTab() {
   }
 
   if (nothingAssigned) {
-    // 29 Empty States, "Lessons (No lessons)": one line, no more.
+    // 29 Empty States, "Lessons (No lessons)": the figure and one line. The
+    // line is the Home frame's (52e3ae3), not 29's "Your lessons will show up
+    // here soon": "soon" is a promise nobody made, and nothing set is all the
+    // server says (Lydia, 4 Nov: a state that is not true is worse than any
+    // missing feature). The same state, in the same words, on both tabs.
     return shell(
       <TabEmpty
         art={
@@ -188,7 +192,7 @@ export function LessonsTab() {
             className="h-[200px] md:h-[240px] lg:h-[250px]"
           />
         }
-        line="Your lessons will show up here soon"
+        line="When your teacher sets your first lesson, you'll find it right here."
       />,
       true,
     );

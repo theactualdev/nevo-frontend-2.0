@@ -358,7 +358,6 @@ export function HeardPictures({
   onPick: (
     index: number,
     detail: { correct: boolean } | { notSure: true },
-    e: React.MouseEvent,
   ) => void;
 }) {
   return (
@@ -381,7 +380,7 @@ export function HeardPictures({
             key={p.key}
             type="button"
             aria-label={p.label}
-            onClick={(e) => onPick(i, { correct: p.key === answer }, e)}
+            onClick={() => onPick(i, { correct: p.key === answer })}
             className={cn(
               "flex h-[120px] w-full cursor-pointer items-center justify-center rounded-[12px] bg-nevo-cream transition-transform active:scale-[0.97] sm:aspect-square sm:h-auto sm:w-[160px] sm:min-w-0",
               picked === i
@@ -407,7 +406,7 @@ export function HeardPictures({
       */}
       <button
         type="button"
-        onClick={(e) => onPick(AUDIO_PICS.length, { notSure: true }, e)}
+        onClick={() => onPick(AUDIO_PICS.length, { notSure: true })}
         className={cn(
           "flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-[10px] border-2 border-nevo-violet text-sm font-medium transition-transform active:scale-[0.97] sm:w-[220px]",
           picked === AUDIO_PICS.length
@@ -590,7 +589,7 @@ export function SentenceDotModule({
                 capture?.record("replay", { module: "sentence_dot", trial });
                 speak(heard.sentence, open);
               }}
-              onPick={(i, detail, e) => pick(i, { mode, ...detail }, e)}
+              onPick={(i, detail) => pick(i, { mode, ...detail })}
             />
           ) : mode === "passage" ? (
             <div className="flex w-full max-w-[600px] flex-col gap-4">
@@ -605,11 +604,10 @@ export function SentenceDotModule({
                   <button
                     key={o}
                     type="button"
-                    onClick={(e) =>
+                    onClick={() =>
                       pick(
                         i,
                         { ...passageRead, correct: i === PASSAGE_ANSWER },
-                        e,
                       )
                     }
                     className={cn(
@@ -624,11 +622,10 @@ export function SentenceDotModule({
                 ))}
                 <button
                   type="button"
-                  onClick={(e) =>
+                  onClick={() =>
                     pick(
                       PASSAGE_OPTIONS.length,
                       { ...passageRead, notSure: true },
-                      e,
                     )
                   }
                   className="flex min-h-12 w-full cursor-pointer items-center rounded-[10px] border-2 border-nevo-violet bg-nevo-cream px-4 py-3.5 text-left text-sm font-medium text-nevo-violet"
@@ -655,11 +652,10 @@ export function SentenceDotModule({
                   label="True"
                   className={TF_BUTTON}
                   pressed={picked === 0}
-                  onClick={(e) =>
+                  onClick={() =>
                     pick(
                       0,
                       { ...sentenceRead, correct: sentence.isTrue === true },
-                      e,
                     )
                   }
                 />
@@ -667,11 +663,10 @@ export function SentenceDotModule({
                   label="False"
                   className={TF_BUTTON}
                   pressed={picked === 1}
-                  onClick={(e) =>
+                  onClick={() =>
                     pick(
                       1,
                       { ...sentenceRead, correct: sentence.isTrue === false },
-                      e,
                     )
                   }
                 />
@@ -680,8 +675,8 @@ export function SentenceDotModule({
                   className={TF_BUTTON}
                   soft
                   pressed={picked === 2}
-                  onClick={(e) =>
-                    pick(2, { ...sentenceRead, notSure: true }, e)
+                  onClick={() =>
+                    pick(2, { ...sentenceRead, notSure: true })
                   }
                 />
               </div>
@@ -718,12 +713,11 @@ export function SentenceDotModule({
               <DotButton
                 label="Top"
                 wide={left}
-                onClick={(e) =>
+                onClick={() =>
                   masked &&
                   pick(
                     0,
                     { a: left, b: right, ratio, correct: left > right },
-                    e,
                   )
                 }
                 pressed={picked === 0}
@@ -733,12 +727,11 @@ export function SentenceDotModule({
               <DotButton
                 label="Bottom"
                 wide={right}
-                onClick={(e) =>
+                onClick={() =>
                   masked &&
                   pick(
                     1,
                     { a: left, b: right, ratio, correct: right > left },
-                    e,
                   )
                 }
                 pressed={picked === 1}

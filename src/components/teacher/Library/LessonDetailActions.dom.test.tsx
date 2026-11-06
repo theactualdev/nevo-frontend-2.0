@@ -118,22 +118,25 @@ describe("what is left to check", () => {
 });
 
 describe("Edit", () => {
-  it("is absent until there is a lesson editor to open", () => {
-    /*
-     * LR-06 wants Edit to open the lesson itself - title, key points, how
-     * Nevo should treat it - and no endpoint edits any of those. What the
-     * button did instead was route into the upload flow and ask for a
-     * different file, which is item 4 of the bug.
-     *
-     * Still true on 21 Sep after the key-point routes landed: those amend a
-     * key point, not the lesson. Design owes the field list.
-     *
-     * This test is here so that putting it back is a decision with a failing
-     * test attached, rather than a quiet restoration of the defect.
-     */
+  /*
+   * PUT BACK DELIBERATELY (backlog item 15, 4 Nov). It was withdrawn because
+   * it routed into the upload flow and asked for a different file - item 4 of
+   * SCRUM-153. It returns as C06b draws it, beside Assign, opening the
+   * committed lesson's structure page (C07d), which edits this lesson's title
+   * and sections. These tests are what stop it drifting back to the upload.
+   */
+  it("opens this lesson's structure page, never the upload flow", () => {
+    render(<LessonDetailActions lessonId="l-1" ready editHref="/teacher/lessons/l-1/structure" />);
+
+    const edit = screen.getByRole("link", { name: "Edit the lesson" });
+    expect(edit).toHaveAttribute("href", "/teacher/lessons/l-1/structure");
+    expect(edit.getAttribute("href")).not.toMatch(/upload/);
+  });
+
+  it("is absent where a caller has nowhere for it to go", () => {
     render(<LessonDetailActions lessonId="l-1" ready />);
 
-    expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^Edit/ })).not.toBeInTheDocument();
   });
 });
 

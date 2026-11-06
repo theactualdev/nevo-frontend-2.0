@@ -71,7 +71,8 @@ const DEMO_BEATS = [
 type DemoBeat = "target" | (typeof DEMO_BEATS)[number][0];
 
 /** 08a's one line. No speed words: a comfortable pace is the comparator. */
-const LINE = "Tap the square each time you see it.";
+export const MOTOR_LINE = "Tap the square each time you see it.";
+const LINE = MOTOR_LINE;
 
 /**
  * Where the line sits: 72px down at 17px on a phone, 96px down at 20px from

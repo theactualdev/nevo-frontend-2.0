@@ -289,7 +289,7 @@ export function PatternFlankerModule({
             trial={conflictTrials[Math.min(trial, conflictTrials.length - 1)]}
             at={trial}
             picked={picked}
-            onPick={(i, t, e) =>
+            onPick={(i, t) =>
               pick(
                 i,
                 {
@@ -311,7 +311,8 @@ export function PatternFlankerModule({
                   arrow: t.arrow,
                   chosenOption: i === 0 ? "left" : "right",
                 },
-                e,
+                // A practice trial's feedback is read before the next trial.
+                { practice: t.practice },
               )
             }
           />
@@ -340,7 +341,7 @@ export function PatternFlankerModule({
                 label="Same"
                 className={size.button}
                 pressed={picked === 0}
-                onClick={(e) =>
+                onClick={() =>
                   pick(
                     0,
                     {
@@ -349,7 +350,6 @@ export function PatternFlankerModule({
                       // when the pair IS the same. The reducer had only speed.
                       correct: patternTrial.same === true,
                     },
-                    e,
                   )
                 }
               />
@@ -357,14 +357,13 @@ export function PatternFlankerModule({
                 label="Different"
                 className={size.button}
                 pressed={picked === 1}
-                onClick={(e) =>
+                onClick={() =>
                   pick(
                     1,
                     {
                       pair: patternTrial.same ? "same" : "different",
                       correct: patternTrial.same === false,
                     },
-                    e,
                   )
                 }
               />
@@ -394,7 +393,7 @@ export function PatternFlankerModule({
             <FlankerButtons
               band={band}
               picked={picked}
-              onPick={(i, e) =>
+              onPick={(i) =>
                 pick(
                   i,
                   {
@@ -407,7 +406,6 @@ export function PatternFlankerModule({
                     // the finding.
                     correct: flankerTrial.target === (i === 0 ? "left" : "right"),
                   },
-                  e,
                 )
               }
             />
@@ -435,7 +433,7 @@ export function FlankerButtons({
   band: AgeBand;
   /** The index already picked (Left 0, Right 1), or -1. */
   picked: number;
-  onPick: (index: 0 | 1, e: React.MouseEvent) => void;
+  onPick: (index: 0 | 1) => void;
 }) {
   const size = SIZE[band] ?? SIZE.p46;
   return (
@@ -451,7 +449,7 @@ export function FlankerButtons({
         iconOnly
         className={size.arrowButton}
         pressed={picked === 0}
-        onClick={(e) => onPick(0, e)}
+        onClick={() => onPick(0)}
       />
       <TrialButton
         icon={
@@ -464,7 +462,7 @@ export function FlankerButtons({
         iconOnly
         className={size.arrowButton}
         pressed={picked === 1}
-        onClick={(e) => onPick(1, e)}
+        onClick={() => onPick(1)}
       />
     </div>
   );
@@ -480,6 +478,29 @@ export function FlankerButtons({
  * says which, and nothing says whether a tap matched (no score, no
  * right/wrong, as every module here).
  */
+/**
+ * WORD CONFLICT'S PRACTICE, WHICH HELPS AS IT GOES (Lydia, 4 Nov: "Practice
+ * trials give feedback, scored trials do not. The frame is wrong, not the
+ * list"; 5 Nov: GO; the Word Conflict frame, design 1397ec4). On the eight
+ * practice trials only:
+ *  - the frame's label, "Practice - we help as you go";
+ *  - after a tap, its feedback: the word followed, a tick and "Yes - you went
+ *    with the word. That's the one."; the arrow followed, "That's the way the
+ *    arrow points. This time, go by the word - it says Left." (the word the
+ *    trial showed), so it says how to do the task, never how the child did.
+ * THE DEVICE JUDGES ONLY A PRACTICE TAP, to say which line - practice is a
+ * fixed set never used for scoring, and the trial still goes up as it did,
+ * marked practice, with its word as the target and no `correct` (the server
+ * marks the scored thirty-two itself). Nothing scored, sent or kept follows
+ * from it. The scored trials stay silent, and there is no score anywhere.
+ */
+export const PRACTICE_COPY = {
+  label: "Practice - we help as you go",
+  right: "Yes - you went with the word. That's the one.",
+  redirect: (word: "left" | "right") =>
+    `That's the way the arrow points. This time, go by the word - it says ${word === "left" ? "Left" : "Right"}.`,
+} as const;
+
 function WordConflict({
   trial,
   at,
@@ -493,11 +514,26 @@ function WordConflict({
   onPick: (
     index: 0 | 1,
     trial: WordConflictTrial,
-    e: React.MouseEvent,
   ) => void;
 }) {
+  // The practice line for the tap just made: whether it followed the word.
+  const tapped = picked === 0 ? "left" : picked === 1 ? "right" : null;
+  const feedback =
+    trial.practice && tapped
+      ? tapped === trial.word
+        ? PRACTICE_COPY.right
+        : PRACTICE_COPY.redirect(trial.word)
+      : null;
   return (
     <>
+      {trial.practice && (
+        <p
+          data-practice-label
+          className="-mt-2 text-center text-[13.5px] font-medium text-nevo-violet-text sm:text-sm"
+        >
+          {PRACTICE_COPY.label}
+        </p>
+      )}
       <div
         key={at}
         data-testid="word-conflict"
@@ -538,10 +574,42 @@ function WordConflict({
             }
             className="w-full sm:h-16 sm:text-lg"
             pressed={picked === i}
-            onClick={(e) => onPick(i as 0 | 1, trial, e)}
+            onClick={() => onPick(i as 0 | 1, trial)}
           />
         ))}
       </div>
+      {feedback && (
+        <div
+          role="status"
+          data-practice-feedback
+          className="flex max-w-[300px] items-start gap-[11px] rounded-[12px] bg-nevo-violet/18 px-4 py-3.5 sm:max-w-[440px]"
+        >
+          <svg
+            aria-hidden
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={feedback === PRACTICE_COPY.right ? 2.4 : 2.2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="mt-px shrink-0 text-nevo-navy"
+          >
+            {feedback === PRACTICE_COPY.right ? (
+              <path d="M20 6L9 17l-5-5" />
+            ) : (
+              <>
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                <path d="M3 4v4h4" />
+              </>
+            )}
+          </svg>
+          <p className="text-[14px] leading-[1.5] text-nevo-near-black sm:text-[15px]">
+            {feedback}
+          </p>
+        </div>
+      )}
     </>
   );
 }

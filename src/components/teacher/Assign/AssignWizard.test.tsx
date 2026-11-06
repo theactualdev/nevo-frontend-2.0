@@ -487,6 +487,8 @@ describe("the lessons a teacher is offered", () => {
     expect(
       screen.getByText(/We couldn.t load your lessons, so we can.t assign them/),
     ).toBeInTheDocument();
+    // Backlog item 45: and something to press, not only advice to reopen.
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
   it("says nothing of the kind to a visitor with no session", () => {

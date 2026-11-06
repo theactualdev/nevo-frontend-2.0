@@ -2,11 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ClassStudent } from "@/lib/api/classes";
 
-const { useClassRoster, useTeacherFlags, useClassLessons, clearPin } = vi.hoisted(() => ({
+const { useClassRoster, useTeacherFlags, useClassLessons, clearPin, useEscalated } = vi.hoisted(() => ({
   useClassRoster: vi.fn(),
   useTeacherFlags: vi.fn(),
   useClassLessons: vi.fn(),
   clearPin: vi.fn(),
+  // Flagged, the person-raised kind (backlog item 7). Read and empty unless
+  // a test says otherwise.
+  useEscalated: vi.fn(() => ({ students: new Set<string>(), known: true })),
 }));
 
 vi.mock("@/lib/api/students", async (importOriginal) => {
@@ -22,6 +25,7 @@ vi.mock("@/hooks/useClassRoster", async (importOriginal) => ({
 }));
 vi.mock("@/hooks/useTeacherFlags", () => ({ useTeacherFlags }));
 vi.mock("@/hooks/useClassLessons", () => ({ useClassLessons }));
+vi.mock("@/hooks/useEscalated", () => ({ useEscalated }));
 
 import { LiveClassDetail } from "./LiveClassDetail";
 
@@ -69,6 +73,7 @@ const klass = {
 beforeEach(() => {
   useClassRoster.mockReset();
   useTeacherFlags.mockReset();
+  useEscalated.mockReset().mockReturnValue({ students: new Set<string>(), known: true });
   useTeacherFlags.mockReturnValue({ flags: [], live: true, failed: false });
   useClassLessons.mockReset();
   useClassLessons.mockReturnValue({ lessons: [], loading: false, failed: false });
@@ -285,6 +290,31 @@ describe("the class header's counts", () => {
     expect(screen.getByText("2 worth a glance")).toBeInTheDocument();
     expect(screen.getByText("1 flagged")).toBeInTheDocument();
     expect(screen.getByText("2 can’t sign in")).toBeInTheDocument();
+  });
+
+  // Backlog item 7: someone raised the child for learning support and it is
+  // still open - Flagged, on the row and in the header's count.
+  it("marks and counts a child with an open escalation as Flagged", () => {
+    useClassRoster.mockReturnValue({
+      students: [seg({ studentId: "s-1" }), seg({ studentId: "s-2" })],
+      loading: false,
+      failed: false,
+    });
+    useTeacherFlags.mockReturnValue({ flags: [flag("s-2", false)], live: true, failed: false, complete: true });
+    useEscalated.mockReturnValue({ students: new Set(["s-1"]), known: true });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByText("1 flagged")).toBeInTheDocument();
+    expect(screen.getByText("1 worth a glance")).toBeInTheDocument();
+    expect(screen.getByText("Flagged")).toBeInTheDocument();
+  });
+
+  it("says no flagged count until the escalations read has answered", () => {
+    useTeacherFlags.mockReturnValue({ flags: [flag("s-1", true)], live: true, failed: false, complete: true });
+    useEscalated.mockReturnValue({ students: new Set<string>(), known: false });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.queryByText(/flagged$/)).not.toBeInTheDocument();
   });
 
   it("leaves out a state with nobody in it", () => {

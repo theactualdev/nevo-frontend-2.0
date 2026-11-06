@@ -414,10 +414,13 @@ export function ComposeModal({
                     ) : (
                       <p className="px-2 py-4 text-[13px] leading-[1.5] text-nevo-near-black/50">
                         {/* A roster we could not READ is not a class with no
-                            students in it. */}
-                        {live && !directoryFailed
-                          ? "Nobody has joined your classes yet, so there’s nobody to message."
-                          : "We couldn’t load your students just now, so there’s nobody to choose. Try again in a moment."}
+                            students in it. And one class with nobody in it
+                            is not all of them (4 Nov sweep). */}
+                        {!(live && !directoryFailed)
+                          ? "We couldn’t load your students just now, so there’s nobody to choose. Try again in a moment."
+                          : roster.length > 0 && filter !== "All classes"
+                            ? `No students in ${filter} yet.`
+                            : "Nobody has joined your classes yet, so there’s nobody to message."}
                       </p>
                     ))}
                 </div>

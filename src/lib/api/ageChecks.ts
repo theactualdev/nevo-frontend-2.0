@@ -92,10 +92,22 @@ export function ageCheckRefusal(err: unknown): string | null {
  */
 export interface AgeCheckEdit {
   previousSchoolDateOfBirth: string | null;
-  newSchoolDateOfBirth: string;
+  /** Null on a parent's confirmation, which changes no school date. */
+  newSchoolDateOfBirth: string | null;
   actorUserId: string | null;
   actorName: string;
   changedAt: string;
+  /**
+   * Which kind of entry (ef7745c): the school's own re-check, or the parent's
+   * confirmation taking over. The server defaults it to `school_recheck`.
+   */
+  source?: "school_recheck" | "parent_confirmation" | (string & {});
+  /**
+   * The date that now applies. On a parent's confirmation this IS the
+   * parent's date - which a school is never shown (D07b, D30). Typed so
+   * nobody mistakes it for something to render.
+   */
+  dateInForce?: string | null;
 }
 
 export const ageChecksApi = {
@@ -118,7 +130,10 @@ export const ageChecksApi = {
       dateOfBirth,
     }),
 
-  /** GET /api/v1/age-checks/{id}/history - the school's re-checks, oldest first. School roles only. */
+  /**
+   * GET /api/v1/age-checks/{id}/history - the school's re-checks and, since
+   * ef7745c, the parent's confirmation taking over, oldest first. School roles only.
+   */
   history: (ageCheckId: string) =>
     api.get<AgeCheckEdit[]>(`/api/v1/age-checks/${encodeURIComponent(ageCheckId)}/history`),
 

@@ -328,7 +328,46 @@ interface CalcStepBase {
   /** What this step's answer does to the drawing. Empty means nothing. */
   highlights: CalcHighlight[];
   narration?: CalcNarration;
+  /**
+   * The step's approved pieces (8c4ccef), which Slower shows one at a time.
+   * Absent where the step has none: Slower then paces the step itself.
+   */
+  parts?: string[];
+  /**
+   * The idea behind the step (`conceptExplanation`, 8c67353), which More
+   * support shows. Absent where the step has none: no More support there.
+   */
+  explanation?: string;
+  /**
+   * The step in smaller answerable steps (`miniSteps`, 8c67353), which Fewer
+   * steps asks one at a time. Absent where the step has none - or has one the
+   * solver cannot ask: no Fewer steps there at all.
+   */
+  miniSteps?: CalcMiniStep[];
 }
+
+/**
+ * One mini-step, as Fewer steps asks it: a choice or a number, the two this
+ * screen draws for one. `questionId` is what its answer goes up under, and
+ * `accepted` what the device's tick and nudge read - never the mark, which is
+ * the server's.
+ */
+export type CalcMiniStep =
+  | {
+      id: string;
+      questionId: string;
+      prompt: string;
+      input: "choice";
+      options: { value: string; label: string }[];
+      accepted: string[];
+    }
+  | {
+      id: string;
+      questionId: string;
+      prompt: string;
+      input: "number";
+      accepted: string[];
+    };
 
 /**
  * A step the child answers by picking.
@@ -463,6 +502,8 @@ export interface CalculationSegment {
 export interface ChosenVersion {
   modality?: Modality;
   density?: Density | null;
+  /** More support on a calculation - the sitting's, as this section shows it. */
+  moreSupport?: boolean;
 }
 
 export interface LessonSegment {

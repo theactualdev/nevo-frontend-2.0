@@ -10,8 +10,16 @@ import {
   PinRow,
   pinReducer,
 } from "@/components/student/Onboarding/PinCreationScreen";
+import {
+  HeldPinBoxes,
+  THROTTLED_PAUSE_COPY,
+  ThrottleNote,
+  useThrottleRelease,
+} from "@/components/student/Auth/ThrottledPause";
 import { authApi } from "@/lib/api";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { isCurrentPinRejected } from "@/lib/auth/currentPinFailure";
+import { throttleEndsAt } from "@/lib/auth/loginFailure";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 
 const PROFILE_HREF = "/student/profile";
@@ -52,6 +60,16 @@ type Step = "current" | "new" | "updated";
  * tap after the four, which frame 27 does not draw and steps 2 and 3 never
  * had - so the step is read from how many digits there are, as 2 and 3 are.
  * Back from step 2 is step 1, emptied, as Back from 3 is an empty 2.
+ *
+ * TOO MANY TRIES IS D154'S PAUSE, as at every screen where a child enters a
+ * PIN (audit, 2 Nov, backlog 14). It was "That didn't save" and "That's on
+ * us, not you. Try again." - an instruction that extends the throttle. The
+ * server's 429 `too_many_attempts` (Teslim 8a7199b, SCRUM-251: "the PIN
+ * door, PIN creation and Change PIN. One pause, one contract") puts the
+ * screen on pause: the heading's slot says "Let's take a moment", the boxes
+ * are held, D156's note sits under them, and there is no pad. Back still
+ * goes to Profile. It lifts at the server's `retryAt`, here, back on step 1,
+ * since the next try proves the current PIN again. Nothing says when.
  */
 export function ChangePinScreen() {
   const router = useRouter();
@@ -60,6 +78,13 @@ export function ChangePinScreen() {
   const [currentPin, setCurrentPin] = useState("");
   const [wrongCurrent, setWrongCurrent] = useState(false);
   const [updated, setUpdated] = useState(false);
+  /**
+   * D154's pause: undefined is none; a time is when the server lifts it;
+   * null is a throttle that named no end.
+   */
+  const [pause, setPause] = useState<number | null | undefined>(undefined);
+  const endPause = useCallback(() => setPause(undefined), []);
+  useThrottleRelease(pause ?? null, endPause);
   const step: Step = updated
     ? "updated"
     : currentPin.length === STUDENT_PIN_LENGTH
@@ -85,6 +110,8 @@ export function ChangePinScreen() {
 
   if (step === "updated") return <Updated />;
 
+  if (pause !== undefined) return <PausedStep onBack={back} />;
+
   if (step === "new") {
     return (
       <NewPinStep
@@ -93,6 +120,11 @@ export function ChangePinScreen() {
         onWrongCurrent={() => {
           setCurrentPin("");
           setWrongCurrent(true);
+        }}
+        onThrottled={(until) => {
+          setCurrentPin("");
+          setWrongCurrent(false);
+          setPause(until);
         }}
         onUpdated={() => setUpdated(true)}
       />
@@ -184,11 +216,14 @@ function NewPinStep({
   currentPin,
   onBack,
   onWrongCurrent,
+  onThrottled,
   onUpdated,
 }: {
   currentPin: string;
   onBack: () => void;
   onWrongCurrent: () => void;
+  /** Too many tries: when the server lifts the pause, or null for no end. */
+  onThrottled: (until: number | null) => void;
   onUpdated: () => void;
 }) {
   const [{ digits, error, done }, dispatch] = useReducer(pinReducer, {
@@ -227,6 +262,10 @@ function NewPinStep({
           if (cancelled) return;
           if (isCurrentPinRejected(cause)) {
             onWrongCurrent();
+            return;
+          }
+          if (isThrottled(cause)) {
+            onThrottled(throttleEndsAt(cause));
             return;
           }
           setSaveFailed(true);
@@ -289,6 +328,33 @@ function NewPinStep({
           className="mb-8 shrink-0"
         />
       )}
+    </PinFrame>
+  );
+}
+
+/** The server's throttle: a 429, or `too_many_attempts` on any status. */
+function isThrottled(cause: unknown): boolean {
+  return (
+    cause instanceof ApiError &&
+    (cause.status === 429 || apiErrorCode(cause.detail) === "too_many_attempts")
+  );
+}
+
+/**
+ * D154 on Change PIN: the same screen, paused. The heading's slot, the four
+ * boxes held where step 1's are, the note, and no pad - nothing to type into
+ * until the server lifts it. Back to Profile, as on step 1.
+ */
+function PausedStep({ onBack }: { onBack: () => void }) {
+  return (
+    <PinFrame onBack={onBack}>
+      <div className="flex flex-1 flex-col items-center justify-center px-10 pb-6 text-center">
+        <h2 className="text-[22px] font-semibold sm:text-[25px]">
+          {THROTTLED_PAUSE_COPY.heading}
+        </h2>
+        <HeldPinBoxes boxClassName="size-12 sm:size-[58px]" className="mt-9" />
+        <ThrottleNote />
+      </div>
     </PinFrame>
   );
 }

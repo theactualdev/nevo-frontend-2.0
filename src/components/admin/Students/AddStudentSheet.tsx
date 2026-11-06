@@ -10,6 +10,7 @@ import { studentsApi } from "@/lib/api/students";
 import { formatMoney, formatVatRate } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { billingCurrency } from "../Roster/activation";
+import { ReadFailed } from "../ReadFailed";
 import { isEmail, refusal } from "./useConsentRequests";
 import { CANNOT_SEND_LINE, useMaySendConsent } from "./consentRole";
 import {
@@ -89,6 +90,14 @@ export function AddStudentSheet({
   const [classId, setClassId] = useState("");
   const [dob, setDob] = useState("");
   const [classes, setClasses] = useState<AdminClass[]>([]);
+  /**
+   * The class read failed - which is not "this school has no classes"
+   * (backlog 39). It used to be swallowed into an empty list, so the Class
+   * select sat empty with no word on why, and the admin couldn't add anyone.
+   */
+  const [classesFailed, setClassesFailed] = useState(false);
+  /** Bumped by Try again, to read the classes again. */
+  const [classesAttempt, setClassesAttempt] = useState(0);
   const [quote, setQuote] = useState<AdditionQuote | null>(null);
   const [quoteFailed, setQuoteFailed] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -105,9 +114,14 @@ export function AddStudentSheet({
   useEffect(() => {
     classesApi
       .list()
-      .then(setClasses)
-      .catch(() => setClasses([]));
+      .then((list) => {
+        setClasses(list);
+        setClassesFailed(false);
+      })
+      .catch(() => setClassesFailed(true));
+  }, [classesAttempt]);
 
+  useEffect(() => {
     /*
      * ONE STUDENT, QUOTED ONCE. What one child costs does not depend on which
      * child, so this is asked on open rather than on every keystroke - and the
@@ -338,6 +352,13 @@ export function AddStudentSheet({
             </option>
           ))}
         </select>
+        {classesFailed ? (
+          <ReadFailed
+            className="mt-2"
+            what="your school's classes"
+            onRetry={() => setClassesAttempt((a) => a + 1)}
+          />
+        ) : null}
       </div>
 
       <div>

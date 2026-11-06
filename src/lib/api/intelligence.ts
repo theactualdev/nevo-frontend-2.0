@@ -294,22 +294,50 @@ export interface AdaptResponse {
 /**
  * `GuidedAnswerRequest` - a child's reply to one guided prompt.
  *
- * THEIR WORDS ARE NOT IN IT, by the contract's design: "the panel sends the
- * option they picked, or how much they wrote, and the words stay where they
- * were typed." So `responseLength` is a count and there is no text field to
- * fill, even by mistake.
+ * THE PROMPT'S ANSWER, AND NEVER THE CHILD'S WORDS. The server marks a guided
+ * step against its stored key (backend `guided_panel.py`, c268404), and
+ * refuses a reply with no answer (422 `guided_answer_required`: "Response
+ * length is not an answer"). So a choice goes as the option's value
+ * (`option` for a word, `answer` for a number or true/false), and a number
+ * the child entered for a numeric step as `answer` - answers to a markable
+ * question, as a check's and a calculation's are (Hub, 2 Nov). Free writing
+ * never leaves the device: it goes as `responseLength`, a count, and is not
+ * marked.
  */
 export interface GuidedAnswerRequest {
   studentId: string;
   sessionId?: string | null;
   promptId: string;
   conceptId?: string | null;
-  /** The option picked, for a prompt that offers options. */
+  /** The option picked, by its value, where that value is a word. */
   option?: string | null;
-  /** How much the child wrote, for a prompt that has none. 0 to 10000. */
+  /** The answer itself: a picked number or true/false, or a numeric entry. */
+  answer?: string | number | boolean | null;
+  /** How much the child wrote, for free writing. 0 to 10000. */
   responseLength?: number | null;
   /** The contract's default is `moved_on`; sent explicitly all the same. */
   outcome: "moved_on" | "asked_again" | "abandoned";
+}
+
+/**
+ * `GuidedAnswerResponse`: what the server made of the answer.
+ *
+ * `canAdvance` is always false - a guided step never moves a child on - and
+ * `retryCheck` is true once every step is passed: back to the check.
+ * `feedback` is the step's explanation after a miss, withheld where it would
+ * give the answer away. `prompt` is the step to answer next (the same one
+ * again after a miss), or null when there is none.
+ */
+export interface GuidedAnswerResponse {
+  recorded: boolean;
+  promptId: string;
+  correct?: boolean | null;
+  panelComplete?: boolean;
+  canAdvance?: false;
+  retryCheck?: boolean;
+  questionId?: string | null;
+  prompt?: { id: string; prompt: string } | null;
+  feedback?: string | null;
 }
 
 /**
@@ -552,7 +580,7 @@ export const intelligenceApi = {
    * one reply as two.
    */
   answerGuidedQuestion: (body: GuidedAnswerRequest) =>
-    api.post<{ recorded: boolean; promptId: string }>(
+    api.post<GuidedAnswerResponse>(
       "/api/intelligence/guided-questions/answer",
       body,
     ),

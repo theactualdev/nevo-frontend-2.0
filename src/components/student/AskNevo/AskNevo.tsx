@@ -476,6 +476,7 @@ export function AskNevo() {
                   loading={history.loading}
                   failed={history.failed}
                   onOpen={history.openThread}
+                  onTryAgain={history.refresh}
                 />
               )}
             </div>
@@ -714,11 +715,14 @@ function ThreadList({
   loading,
   failed,
   onOpen,
+  onTryAgain,
 }: {
   threads: ThreadSummary[];
   loading: boolean;
   failed: boolean;
   onOpen: (threadId: string) => void;
+  /** Read the list again, after a read that failed. */
+  onTryAgain: () => void;
 }) {
   if (loading) {
     return (
@@ -733,11 +737,25 @@ function ThreadList({
    * talked to Nevo every day should never be told they have never talked to
    * it because a request failed.
    */
+  /*
+   * AND IT OFFERS THE WAY BACK (audit, 2 Nov, backlog 40). Closing and
+   * reopening the clock reads the list again, but nothing on screen said so,
+   * so a child read the line as the end of it. Try again reads it once more.
+   */
   if (failed) {
     return (
-      <p className="pt-6 text-center text-sm leading-[1.5] text-nevo-near-black/60">
-        We couldn&rsquo;t load these just now.
-      </p>
+      <div className="flex flex-col items-center pt-6">
+        <p className="text-center text-sm leading-[1.5] text-nevo-near-black/60">
+          We couldn&rsquo;t load these just now.
+        </p>
+        <button
+          type="button"
+          onClick={onTryAgain}
+          className="mt-4 flex h-11 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-6 text-[15px] font-medium text-nevo-cream"
+        >
+          Try again
+        </button>
+      </div>
     );
   }
 

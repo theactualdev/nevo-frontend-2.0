@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { classesApi } from "@/lib/api/classes";
-import { ApiError, apiErrorMessage } from "@/lib/api/client";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { consentsApi, type WrittenConsentRecord } from "@/lib/api/consents";
 import { studentsApi, type AdminStudentDetail } from "@/lib/api/students";
 import { yearGroupLabel } from "@/lib/constants/yearGroups";
@@ -89,6 +89,14 @@ export function WrittenConsentView({
 
   const [save, setSave] = useState<"idle" | "saving" | "failed">("idle");
   const [note, setNote] = useState<string | null>(null);
+  /**
+   * The server refused the form because a parent has withdrawn (409
+   * `consent_withdrawn`, Teslim 37961c4): "A withdrawal a school can overrule
+   * is not a withdrawal." The page then shows the same withdrawn state it
+   * shows when it knew up front - no Save left to press, since asking again
+   * can't succeed, and nothing that suggests the school has a way back.
+   */
+  const [withdrawnNow, setWithdrawnNow] = useState(false);
   const [saved, setSaved] = useState<WrittenConsentRecord | null>(null);
   const [max] = useState(today);
 
@@ -150,6 +158,11 @@ export function WrittenConsentView({
         setSave("idle");
       })
       .catch((err: unknown) => {
+        if (err instanceof ApiError && apiErrorCode(err.detail) === "consent_withdrawn") {
+          setWithdrawnNow(true);
+          setSave("idle");
+          return;
+        }
         setNote(err instanceof ApiError ? apiErrorMessage(err.detail) : null);
         setSave("failed");
       });
@@ -193,7 +206,7 @@ export function WrittenConsentView({
               Back to {firstName}
             </Link>
           </div>
-        ) : student.consent?.status === "withdrawn" ? (
+        ) : student.consent?.status === "withdrawn" || withdrawnNow ? (
           <div className={cn(CARD, "px-[26px] py-7")}>
             <h2 className="m-0 text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black">
               A parent has withdrawn consent for {name}

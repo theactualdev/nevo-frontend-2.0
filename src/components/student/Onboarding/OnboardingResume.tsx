@@ -30,6 +30,7 @@ import {
 } from "@/components/student/Profiling/DomainProbeModule";
 import { ProfilingFlow } from "@/components/student/Profiling/ProfilingFlow";
 import { ProbeEndState } from "@/components/student/Profiling/ProbeEndState";
+import { ErrorScreen } from "@/components/shared/SystemScreens";
 import { QuestSegments } from "@/components/student/Profiling/QuestMap";
 import { Letterbox } from "@/components/student/Shell/Letterbox";
 
@@ -46,7 +47,7 @@ const BASELINE_MODULES = ONBOARDING_MODULES.filter((m) => m !== DOMAIN_PROBE);
  * `done` is Module 4 already held by the server, said before the child goes
  * on; `nothing` is the nothing-state (`ProbeEndState`).
  */
-type Step = "baseline" | "probe" | "nothing" | "done";
+type Step = "baseline" | "probe" | "nothing" | "done" | "unread";
 
 /** Any of the first three is still to do, as the server holds them. */
 function baselineLeft(readiness: LearningReadiness): boolean {
@@ -58,8 +59,9 @@ function baselineLeft(readiness: LearningReadiness): boolean {
  * left, or null while they are still being read - and for a Module 4 with no
  * question bank, which is not a place to start but a move on (`moveOn`).
  * Nothing to ask while readiness still holds Module 4 owed (`nothingToAsk`)
- * is the nothing-state, as a failed read is: only the server's `unavailable`
- * moves a child on (Teslim, 21 Oct).
+ * is the nothing-state - the server's own answer - and a read that failed is
+ * `unread`, which says so: only the server's `unavailable` moves a child on
+ * (Teslim, 21 Oct).
  */
 function firstStep(
   readiness: LearningReadiness,
@@ -81,6 +83,7 @@ function firstStep(
     case "ask":
       return "probe";
     case "failed":
+      return "unread";
     case "nothingToAsk":
       return "nothing";
     case "unavailable":
@@ -101,10 +104,15 @@ function moveOn(): "home" | "nothing" {
   return claimMoveOn(getSession()?.userId) ? "home" : "nothing";
 }
 
-/** Where a child goes once Module 4 has ended, as it ended. */
-function afterModuleFour(outcome: DomainProbeOutcome): "home" | "nothing" {
+/**
+ * Where a child goes once Module 4 has ended, as it ended. One that ended on
+ * a read that failed says so (`unread`), never "nothing to do".
+ */
+function afterModuleFour(
+  outcome: DomainProbeOutcome,
+): "home" | "nothing" | "unread" {
   if (outcome === "sat") return "home";
-  return outcome === "absent" ? moveOn() : "nothing";
+  return outcome === "absent" ? moveOn() : "unread";
 }
 
 /**
@@ -178,11 +186,15 @@ function afterModuleFour(outcome: DomainProbeOutcome): "home" | "nothing" {
  * the child gets the nothing-state - not a move on, and not the one-time
  * claim spent on it: Olayinka's order on those answers.
  *
- * A READ THAT FAILS IS NOT "NO BANK": it is the nothing-state - the frame's
- * "Nothing to do here right now" (5bb9ee2), which says no more than that
- * nothing can be done here now, with its one way out, "Go to my lessons",
- * offered rather than taken - so a broken read is never passed off as a move
- * on. Not "already done" either, which this device cannot know.
+ * A READ THAT FAILS IS NOT "NO BANK", AND NOT "NOTHING TO DO" EITHER. It was
+ * the nothing-state, "Nothing to do here right now" - a state the server had
+ * not said, which Lydia ruled worse than any missing feature (4 Nov: "the
+ * product asserting a state that is not true"; audit, 2 Nov, backlog 6). A
+ * failed read now says so, in the house's words (frame 28's Generic Error,
+ * `ErrorScreen`): "Something went wrong", with Try again, which reads
+ * readiness once more, and Go back, to the lessons the nothing-state led to.
+ * Never passed off as a move on, and never "already done", which this device
+ * cannot know.
  *
  * NO NOTICE, PIN OR YOU'RE IN. Those make an account, and this child has one.
  */
@@ -214,7 +226,7 @@ export function OnboardingResume({
   /** Where the child has got to, once something here has moved them on. */
   const [moved, setMoved] = useState<Step | "home" | null>(null);
   const from = data ? firstStep(data, plan) : null;
-  const step = moved ?? (readiness.failed ? "nothing" : from);
+  const step = moved ?? (readiness.failed && !data ? "unread" : from);
   /** Module 4 follows a module the child has just done, so it stretches first. */
   const [afterBaseline, setAfterBaseline] = useState(false);
 
@@ -232,6 +244,15 @@ export function OnboardingResume({
     };
   }, []);
 
+  /** Bumped by Try again, so the plan is read again even on the same answer. */
+  const [planRun, setPlanRun] = useState(0);
+  /** Try again on a read that failed: readiness, and what Module 4 will ask. */
+  const readAgain = () => {
+    setMoved(null);
+    setPlan(null);
+    setPlanRun((n) => n + 1);
+    readiness.refresh();
+  };
   useEffect(() => {
     if (!data || data.complete) return;
     let cancelled = false;
@@ -244,7 +265,7 @@ export function OnboardingResume({
     return () => {
       cancelled = true;
     };
-  }, [data, lessonId]);
+  }, [data, lessonId, planRun]);
 
   /** The way back Module 4's finish named, as sent - checked on the way out. */
   const finishedTo = useRef<string | null>(null);
@@ -274,6 +295,12 @@ export function OnboardingResume({
   if (signedOut || step === null || step === "home") {
     // Reading, or on the way out: nothing to show for a moment.
     return null;
+  }
+
+  if (step === "unread") {
+    return (
+      <ErrorScreen retry={readAgain} onBack={() => router.replace(LESSONS)} />
+    );
   }
 
   if (step === "nothing" || step === "done") {

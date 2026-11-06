@@ -342,6 +342,134 @@ describe("a calculation from the payload", () => {
     expect(calc).toBeUndefined();
   });
 
+  /*
+   * 8c4ccef: a step's approved `parts`, which Slower shows one at a time. As
+   * sent and in order - the server keeps back any a teacher has not approved -
+   * trimmed, blanks dropped, eight at most; absent where there are none.
+   */
+  it("keeps a step's approved parts, in order, and none where it has none", () => {
+    const calc = calculationFromVariant(
+      algebra({
+        steps: [
+          step({ parts: ["  Take 2x away.  ", "", "From both sides.", 7] }),
+          step({ stepId: "st-2", stepNumber: 2, prompt: "Add 4.", answer: "3x" }),
+        ],
+      }),
+    );
+
+    expect(calc?.steps[0].parts).toEqual(["Take 2x away.", "From both sides."]);
+    expect(calc?.steps[1]).not.toHaveProperty("parts");
+  });
+
+  it("keeps eight parts at most", () => {
+    const calc = calculationFromVariant(
+      algebra({
+        steps: [step({ parts: Array.from({ length: 10 }, (_, i) => `Part ${i + 1}.`) })],
+      }),
+    );
+
+    expect(calc?.steps[0].parts).toHaveLength(8);
+    expect(calc?.steps[0].parts?.[7]).toBe("Part 8.");
+  });
+
+  /*
+   * 8c67353: the idea behind a step (`conceptExplanation`), which More support
+   * shows. A child's read carries it only once a teacher approved the step's
+   * support; trimmed, and absent where it is missing, null or blank.
+   */
+  it("keeps a step's concept explanation, and none where it has none", () => {
+    const calc = calculationFromVariant(
+      algebra({
+        steps: [
+          step({ conceptExplanation: "  Both sides stay balanced.  " }),
+          step({ stepId: "st-2", stepNumber: 2, prompt: "Add 4.", answer: "3x", conceptExplanation: "   " }),
+          step({ stepId: "st-3", stepNumber: 3, prompt: "Add 5.", answer: "4x", conceptExplanation: null }),
+        ],
+      }),
+    );
+
+    expect(calc?.steps[0].explanation).toBe("Both sides stay balanced.");
+    expect(calc?.steps[1]).not.toHaveProperty("explanation");
+    expect(calc?.steps[2]).not.toHaveProperty("explanation");
+  });
+
+  /*
+   * 8c67353: a step's answerable mini-steps, which Fewer steps asks one at a
+   * time. All or none: a choice or a number, each with its `questionId`, a
+   * prompt and an answer. A tap (no frame draws one for a mini-step) or free
+   * text (no field for it here) leaves the step with none.
+   */
+  describe("a step's mini-steps", () => {
+    const CHOICE = {
+      id: "m1",
+      questionId: "mini-aaa",
+      prompt: "  Which side has the 2x?  ",
+      input: "choice",
+      answer: "left",
+      options: [
+        { value: "left", label: "The left" },
+        { value: "right", label: "The right" },
+      ],
+      acceptedAnswers: [],
+    };
+    const NUMBER = {
+      id: "m2",
+      questionId: "mini-bbb",
+      prompt: "What is 15 - 4?",
+      input: "number",
+      answer: 11,
+      acceptedAnswers: ["11.0", 11],
+    };
+    const built = (miniSteps: unknown) =>
+      calculationFromVariant(algebra({ steps: [step({ miniSteps })] }))?.steps[0];
+
+    it("keeps choices and numbers, in order, with what each goes up as", () => {
+      expect(built([CHOICE, NUMBER])?.miniSteps).toEqual([
+        {
+          id: "m1",
+          questionId: "mini-aaa",
+          prompt: "Which side has the 2x?",
+          input: "choice",
+          options: [
+            { value: "left", label: "The left" },
+            { value: "right", label: "The right" },
+          ],
+          accepted: ["left"],
+        },
+        {
+          id: "m2",
+          questionId: "mini-bbb",
+          prompt: "What is 15 - 4?",
+          input: "number",
+          accepted: ["11", "11.0"],
+        },
+      ]);
+    });
+
+    it.each([
+      ["a tap", { ...NUMBER, input: "tap", answer: 3 }],
+      ["free text", { ...NUMBER, input: "text", answer: "x" }],
+      ["no questionId (a teacher's read)", { ...NUMBER, questionId: null }],
+      ["no prompt", { ...NUMBER, prompt: "  " }],
+      ["no answer", { ...NUMBER, answer: "" }],
+      ["a choice whose answer is none of its options", { ...CHOICE, answer: "middle" }],
+      ["a choice with one option", { ...CHOICE, options: [CHOICE.options[0]] }],
+    ])("gives the step none when one is %s", (_, bad) => {
+      expect(built([CHOICE, bad])).not.toHaveProperty("miniSteps");
+    });
+
+    it("gives none where the step has none, and eight at most", () => {
+      expect(built(undefined)).not.toHaveProperty("miniSteps");
+      expect(built([])).not.toHaveProperty("miniSteps");
+      const ten = Array.from({ length: 10 }, (_, i) => ({
+        ...NUMBER,
+        id: `m${i}`,
+        questionId: `mini-${i}`,
+      }));
+      expect(built(ten)?.miniSteps).toHaveLength(8);
+    });
+  });
+
   it("builds the signed-out walkthrough's calculation through this same path", () => {
     const calc = ADDING_FRACTIONS.segments.find((s) => s.calculation)?.calculation;
 

@@ -16,7 +16,7 @@ import { clearSession, setSession } from "@/lib/auth/session";
  *
  * Amina finished Osmosis, its only assignment. The dashboard leaves completed
  * assignments out, and this tab was built from the dashboard's alone - so her
- * Lessons tab said "Your lessons will show up here soon" while her progress
+ * Lessons tab said "When your teacher sets your first lesson, you'll find it right here." while her progress
  * row said `completed` with a `completedAt`, and `GET /api/v1/assignments`
  * listed the assignment `completed`.
  *
@@ -124,7 +124,7 @@ describe("a lesson the child finished, which the dashboard leaves out", () => {
     render(<LessonsTab />);
 
     await waitFor(() => expect(card(/Osmosis/)).toBeInTheDocument());
-    expect(body()).not.toMatch(/Your lessons will show up here soon/);
+    expect(body()).not.toMatch(/When your teacher sets your first lesson/);
     // Under the Completed chip, with the card's own check.
     fireEvent.click(screen.getByRole("button", { name: "Completed" }));
     expect(
@@ -164,7 +164,7 @@ describe("a lesson the child finished, which the dashboard leaves out", () => {
     render(<LessonsTab />);
     await settleReads();
 
-    expect(body()).toMatch(/Your lessons will show up here soon/);
+    expect(body()).toMatch(/When your teacher sets your first lesson/);
   });
 
   it("keeps a cancelled lesson out when only its finished row could say otherwise", async () => {
@@ -176,7 +176,7 @@ describe("a lesson the child finished, which the dashboard leaves out", () => {
     render(<LessonsTab />);
     await settleReads();
 
-    expect(body()).toMatch(/Your lessons will show up here soon/);
+    expect(body()).toMatch(/When your teacher sets your first lesson/);
   });
 
   it("is not made up from a row with no title", async () => {
@@ -186,7 +186,7 @@ describe("a lesson the child finished, which the dashboard leaves out", () => {
     render(<LessonsTab />);
     await settleReads();
 
-    expect(body()).toMatch(/Your lessons will show up here soon/);
+    expect(body()).toMatch(/When your teacher sets your first lesson/);
   });
 });
 
@@ -198,7 +198,7 @@ describe("what the full list must not change", () => {
     render(<LessonsTab />);
     await settleReads();
 
-    expect(body()).toMatch(/Your lessons will show up here soon/);
+    expect(body()).toMatch(/When your teacher sets your first lesson/);
     expect(screen.queryByRole("button", { name: /Osmosis/ })).toBeNull();
   });
 
@@ -213,7 +213,7 @@ describe("what the full list must not change", () => {
     render(<LessonsTab />);
     await settleReads();
 
-    expect(body()).toMatch(/Your lessons will show up here soon/);
+    expect(body()).toMatch(/When your teacher sets your first lesson/);
   });
 
   it("shows a lesson once when both reads carry it", async () => {

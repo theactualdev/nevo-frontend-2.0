@@ -76,3 +76,38 @@ describe("profileChip", () => {
     expect(profileChip([])).toBeNull();
   });
 });
+
+/**
+ * FLAGGED, the person-raised kind (backlog item 7): an OPEN escalation, read
+ * with the server's own filter. Design's precedence puts it between a sudden
+ * change and worth a glance.
+ */
+describe("Flagged", () => {
+  it("is a child with an open escalation, below a sudden change and above a glance", () => {
+    const states = attentionByStudent(
+      [flag("glance-too", false), flag("sudden-too", true)],
+      new Set(["only", "glance-too", "sudden-too"]),
+    );
+
+    expect(states.get("only")).toBe("flagged");
+    expect(states.get("glance-too")).toBe("flagged");
+    expect(states.get("sudden-too")).toBe("sudden");
+  });
+
+  it("counts in the header's flagged, with the sudden changes", () => {
+    const students = ["a", "b", "c"].map((studentId) => ({ studentId, status: "active" }));
+    const counts = rosterCounts(
+      students,
+      attentionByStudent([flag("a", true), flag("c", false)], new Set(["b"])),
+    );
+
+    expect(counts).toEqual({ glance: 1, flagged: 2, cantSignIn: 0 });
+  });
+
+  it("is the profile's one chip unless a sudden change outranks it", () => {
+    expect(profileChip([{ isSudden: false }], true)).toBe("flagged");
+    expect(profileChip([], true)).toBe("flagged");
+    expect(profileChip([{ isSudden: true }], true)).toBe("sudden");
+    expect(profileChip([{ isSudden: false }], false)).toBe("glance");
+  });
+});

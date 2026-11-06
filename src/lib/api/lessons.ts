@@ -122,6 +122,13 @@ export interface LessonSummary {
  * `studentCount` is distinct children rather than assignment rows, so a child
  * assigned twice is one child.
  */
+/** `GET /api/content/lessons/totals` (LibraryTotalsResponse). */
+export interface LibraryTotals {
+  lessonsUploaded: number;
+  liveToClasses: number;
+  inReview: number;
+}
+
 export interface LessonClass {
   id: string;
   name: string;
@@ -191,7 +198,10 @@ export type SegmentReviewReason =
   // doesn't recognise yet" until then (Osmosis section 4, the hub).
   | "unmarkable_question"
   | "depth_variant_review_required"
-  | "optional_media_pending_review";
+  | "optional_media_pending_review"
+  // In the deployed enum (found by scripts/enum-check.mjs, 5 Nov) and read as
+  // "a reason this console doesn't recognise yet" until now.
+  | "guided_steps_review_required";
 
 /**
  * "A stable, ordered reading boundary generated from approved lesson text."
@@ -333,6 +343,8 @@ export interface SegmentChoice {
   modality?: ContentModality | null;
   depth?: ChoiceDepth | null;
   slower?: boolean | null;
+  /** The sitting's More support on a calculation (8c67353). */
+  moreSupport?: boolean | null;
   /** The server's, never ours. */
   updatedAt?: string | null;
 }
@@ -347,6 +359,8 @@ export interface SegmentChoice {
 export interface LessonChoice {
   depth?: ChoiceDepth | null;
   slower?: boolean | null;
+  /** More support on a calculation, for the whole sitting (8c67353). */
+  moreSupport?: boolean | null;
   /** The server's, never ours. */
   updatedAt?: string | null;
 }
@@ -371,6 +385,7 @@ export interface SegmentChoiceWrite {
   modality?: ContentModality | null;
   depth?: ChoiceDepth | null;
   slower?: boolean | null;
+  moreSupport?: boolean | null;
 }
 
 /**
@@ -1126,6 +1141,10 @@ export interface LessonQuestionAttempt {
 export interface SocraticHandoffPrompt {
   id: string;
   prompt: string;
+  /** How it is answered. The contract's default is `single_choice`. */
+  answerType?: "single_choice" | "multiple_choice" | "numeric" | "boolean" | "text";
+  /** Its choices, each marked by its `value`. */
+  options?: { label: string; value: string | number | boolean }[];
 }
 
 export const lessonsApi = {
@@ -1173,6 +1192,13 @@ export const lessonsApi = {
             }
           : undefined,
     }),
+
+  /**
+   * C06's three stat cards, counted BY THE SERVER across the whole library
+   * (SCRUM-245: the numbers are the server's, never summed from a page). The
+   * same default scope as `list` - a teacher's own lessons.
+   */
+  totals: () => api.get<LibraryTotals>("/api/content/lessons/totals"),
 
   /**
    * One lesson with its ordered segments AND its review flags. Deliberately

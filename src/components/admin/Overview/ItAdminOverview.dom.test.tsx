@@ -61,13 +61,32 @@ vi.mock("@/lib/api/school", async (importOriginal) => {
         Promise.resolve({
           counts: { students: 240, studentsActive: 240, studentsInvited: 0, teachers: 18, classes: 12 },
         }),
-      get: () => Promise.reject(new Error("unread")),
+      // The school record reads, with no code and no current term. Its own
+      // failure now says so on the cards it feeds (backlog 33), and that is
+      // not what these tests are about.
+      get: () =>
+        Promise.resolve({
+          id: "sch1",
+          name: "Brightgate Academy",
+          code: null,
+          slug: null,
+          profile: {},
+          academicConfig: {},
+          retentionPolicy: "contract",
+          retentionDays: 365,
+        }),
     },
   };
 });
 vi.mock("@/lib/api/invites", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/invites")>();
   return { ...actual, invitesApi: { ...actual.invitesApi, list: () => Promise.resolve([]) } };
+});
+// The holds read resolves. Unmocked it fails in jsdom, and a failed read now
+// says so on its card (backlog 33) - which is not what these tests are about.
+vi.mock("@/lib/api/ageChecks", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/ageChecks")>();
+  return { ...actual, ageChecksApi: { ...actual.ageChecksApi, held: () => Promise.resolve([]) } };
 });
 vi.mock("@/lib/api/students", () => ({
   studentsApi: { list: () => Promise.resolve([]) },

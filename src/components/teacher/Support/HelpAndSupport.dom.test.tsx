@@ -96,6 +96,8 @@ describe("when the read fails", () => {
 
     expect(screen.getByText(/couldn’t load our contact details/i)).toBeInTheDocument();
     expect(screen.getByText(/our end, not yours/i)).toBeInTheDocument();
+    // Backlog item 31: and something to press.
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.queryByText(/@nevolearning/)).not.toBeInTheDocument();
     expect(screen.queryByText(/wa\.me/)).not.toBeInTheDocument();
   });

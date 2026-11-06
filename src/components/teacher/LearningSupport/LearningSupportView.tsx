@@ -4,30 +4,80 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { useCallback } from "react";
 import { useLiveQuery } from "@/hooks/useLiveQuery";
+import { escalationsApi, type Escalation } from "@/lib/api/escalations";
 import { learningSupportApi, type LearningSupportHolders } from "@/lib/api/learningSupport";
+import { SummaryChip } from "@/components/teacher/shared/SummaryChip";
+import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * C20's Learning Support page (design, 12 Oct): "children with an open
  * flagged concern, from every class in the school", each row opening that
  * child's profile.
  *
- * THE LIST IS NOT BUILT YET, AND THE PAGE SAYS SO RATHER THAN DRAWING C20's
- * EMPTY STATE. "Nothing open right now" is a claim about the school that this
- * console cannot make: `GET /api/v1/escalations` sends a first name and no
- * class, and a teacher's own flags cover their own classes only. The
- * school-wide read is SCRUM-248's, with Teslim. Until it lands the page names
- * what it cannot show yet and offers the way that works today - a child's
- * profile, from their class - which carries the learning support record.
+ * THE LIST IS THE SERVER'S. For a holder, `GET /api/v1/escalations` returns the
+ * whole school's open escalations, and since 4 Nov each one carries the
+ * child's name, their class and who raised it. So the rows are read, never
+ * assembled: nothing here filters by class or matches against a roster.
  *
- * Holders only. A teacher without the role is never offered the item; one
- * who arrives by address finds nothing here, as C20 has it for every absent
- * piece of this role.
+ * OPEN MEANS NOT YET ACKNOWLEDGED (Hub, 3 Nov, for the Flagged chip, and
+ * `openOnly` is that). Two of C20's drawn rows are not that, and wait on
+ * Lydia: one acknowledged concern carrying its "saw this" line, and one
+ * sudden change, which is Nevo's flag rather than a concern a teacher raised.
+ *
+ * "Nothing open right now" is said only over a read that reached its end. A
+ * list that stopped short says so instead of being counted.
+ *
+ * Holders only. A teacher without the role is never offered the item; one who
+ * arrives by address finds nothing here, as C20 has it for every absent piece
+ * of this role.
  */
-export function LearningSupportView() {
-  const run = useCallback(() => learningSupportApi.holders(), []);
-  const { data, failed, loading } = useLiveQuery<LearningSupportHolders>(run, []);
 
-  if (data && !data.viewerHoldsIt) notFound();
+interface ConcernsRead {
+  holders: LearningSupportHolders;
+  /** Null for a viewer without the role - their list is never asked for. */
+  concerns: { open: Escalation[]; complete: boolean } | null;
+}
+
+/** One row per child, their most recent open concern. */
+function byChild(open: readonly Escalation[]): Escalation[] {
+  const latest = new Map<string, Escalation>();
+  for (const e of open) {
+    const seen = latest.get(e.studentId);
+    if (!seen || Date.parse(e.generatedAt) > Date.parse(seen.generatedAt)) {
+      latest.set(e.studentId, e);
+    }
+  }
+  return [...latest.values()].sort(
+    (a, b) => Date.parse(b.generatedAt) - Date.parse(a.generatedAt),
+  );
+}
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";
+}
+
+function dayOf(iso: string): string | null {
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime())
+    ? null
+    : at.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
+}
+
+export function LearningSupportView() {
+  const run = useCallback(async (): Promise<ConcernsRead> => {
+    const holders = await learningSupportApi.holders();
+    return {
+      holders,
+      concerns: holders.viewerHoldsIt ? await escalationsApi.allOpen(10) : null,
+    };
+  }, []);
+  const { data, failed, loading } = useLiveQuery<ConcernsRead>(run, []);
+
+  if (data && !data.holders.viewerHoldsIt) notFound();
+
+  const rows = data?.concerns ? byChild(data.concerns.open) : [];
+  const complete = data?.concerns?.complete === true;
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
@@ -37,6 +87,8 @@ export function LearningSupportView() {
         </h1>
         <p className="mt-2 max-w-[620px] text-[14.5px] leading-[1.55] text-nevo-near-black/62 xl:text-[15px]">
           Children with an open flagged concern, from every class in the school.
+          {rows.length > 0 &&
+            " Open any profile to see their adaptation history and read the concern in full."}
         </p>
 
         {loading && (
@@ -44,31 +96,86 @@ export function LearningSupportView() {
         )}
 
         {failed && !data && (
-          <p className="mt-8 text-[14.5px] leading-[1.55] text-nevo-near-black/68">
-            We couldn&rsquo;t load this just now. Try again in a moment.
-          </p>
+          <ReadFailed title="We couldn’t load the open concerns just now" className="mt-8" />
         )}
 
-        {data?.viewerHoldsIt && (
+        {data?.concerns && rows.length > 0 && (
+          <>
+            <div className="mt-8 flex items-center gap-2.5">
+              <h2 className="text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:text-sm">
+                Open concerns
+              </h2>
+              {/* A count only of a list read to its end. */}
+              {complete && (
+                <span className="rounded-full bg-nevo-near-black/10 px-2 py-0.5 text-[12px] text-nevo-near-black/70 xl:px-[9px] xl:text-[12.5px]">
+                  {rows.length}
+                </span>
+              )}
+            </div>
+            {!complete && (
+              <p className="mt-2 text-[13.5px] leading-[1.55] text-nevo-near-black/60">
+                Not every concern could be loaded just now, so this list may be missing some.
+              </p>
+            )}
+            <ul className="mt-3.5 flex flex-col gap-3 xl:mt-4">
+              {rows.map((e) => {
+                const name = e.studentName?.trim() || e.studentFirstName?.trim() || "One of your school’s students";
+                const day = dayOf(e.generatedAt);
+                return (
+                  <li key={e.studentId}>
+                    <Link
+                      href={`/teacher/students/${e.studentId}${e.classId ? `?class=${e.classId}` : ""}`}
+                      className="flex cursor-pointer items-start gap-4 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-[18px] shadow-elevation-1 transition-[filter] hover:brightness-[0.985] xl:pl-[26px]"
+                    >
+                      <span
+                        aria-hidden
+                        className="flex size-10 shrink-0 items-center justify-center rounded-full bg-nevo-violet/24 text-[14px] font-semibold text-nevo-navy"
+                      >
+                        {initialsOf(name)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                          <span className="text-[15.5px] font-semibold text-nevo-near-black xl:text-base">
+                            {name}
+                          </span>
+                          {e.className && (
+                            <span className="text-[13.5px] text-nevo-near-black/55">{e.className}</span>
+                          )}
+                          <SummaryChip state="flagged" />
+                        </span>
+                        {e.teacherName && (
+                          <span className="mt-1.5 block text-[14px] leading-[1.5] text-nevo-near-black/72">
+                            {`Raised by ${e.teacherName}`}
+                          </span>
+                        )}
+                        {/* The teacher's own words, as C20's profile quotes them. */}
+                        <span className="mt-1 line-clamp-2 block text-[14px] leading-[1.5] text-nevo-near-black/72">
+                          {`“${e.note}”`}
+                        </span>
+                      </span>
+                      {day && (
+                        <span className="shrink-0 pt-0.5 text-[13px] whitespace-nowrap text-nevo-near-black/55">
+                          {day}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+
+        {/* C20's own empty state, and only over a read that reached its end. */}
+        {data?.concerns && rows.length === 0 && complete && (
           <div className="mx-auto mt-16 max-w-[420px] text-center xl:mt-24">
-            <span className="inline-flex size-[60px] items-center justify-center rounded-full bg-nevo-violet/20 text-nevo-navy">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M12 20s-6.5-4.2-9-8.5A5 5 0 0 1 12 6a5 5 0 0 1 9 6.5C18.5 15.8 12 20 12 20z" />
-              </svg>
-            </span>
-            <h2 className="mt-5 text-[19px] font-semibold text-nevo-near-black">
-              The school-wide list isn&rsquo;t ready yet
+            <h2 className="text-[19px] font-semibold text-nevo-near-black">
+              Nothing open right now
             </h2>
             <p className="mt-2 text-[14.5px] leading-[1.55] text-nevo-near-black/60">
-              Until it is, open a child&rsquo;s profile from their class. As
-              you hold Learning Support, their record is at the foot of it.
+              No child in the school has an open flagged concern. When a teacher
+              raises one, they&rsquo;ll appear here.
             </p>
-            <Link
-              href="/teacher/classes"
-              className="mt-6 inline-flex h-11 cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-5 text-[14.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-            >
-              Go to My Classes
-            </Link>
           </div>
         )}
       </div>

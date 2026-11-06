@@ -7,8 +7,14 @@ import { contractAgeBand, type BaselineDimension } from "./bands";
  * are held ephemerally (IndexedDB, in-memory fallback), turned into one trial
  * per answer on completion (`baselineTrials`), sent to `/api/baseline/trials`
  * for the server to reduce (B9), and the raw stream is purged. The device
- * computes no mean, accuracy or span. What a trial has no field for - tap
- * coordinates above all - never leaves the device, and goes with the purge.
+ * computes no mean, accuracy or span. What a trial has no field for never
+ * leaves the device, and goes with the purge.
+ *
+ * NO TOUCH COORDINATES ARE TAKEN (Lydia, 4 Nov: "The engine works from
+ * response patterns and timing, not touch coordinates"). Where a finger
+ * landed was recorded into this stream and never sent - `BaselineTrial` has
+ * no field for it (B14) - so it was only ever a finer record of a child,
+ * kept on a shared tablet, that nothing read.
  *
  * A run that never reaches its purge - abandoned part way - goes at the next
  * sign-out, or a week after it was written (19 Oct browser-storage audit;
@@ -288,33 +294,6 @@ export class BaselineCapture {
 }
 
 /**
- * Where a tap landed, for the raw stream: viewport x and y, unrounded.
- *
- * Frontend §3 lists tap coordinates among what onboarding captures, and §2 says
- * why precision matters - tap scatter is part of how the engine reads
- * frustration and anxiety, and rounded coordinates are noise it cannot undo.
- * Every baseline tap recorded a cell or a choice index and nothing about where
- * the finger was.
- *
- * A keyboard activation is a click with no pointer (`detail` 0, and 0,0 for
- * the position), so it records no point rather than a false one at the corner.
- *
- * NOTE: these stay on the device. `BaselineTrial` has no field for a point,
- * and backend ruled on 1 Oct that raw touch stays on the device (B14): a tap's
- * coordinates are a finer record of a child than anything the server keeps.
- * `baselineTrials` reads none of them, and the capture is purged once its
- * trials are taken.
- */
-export function tapPoint(e?: {
-  clientX: number;
-  clientY: number;
-  detail: number;
-}): { x: number; y: number } | Record<string, never> {
-  if (!e || e.detail === 0) return {};
-  return { x: e.clientX, y: e.clientY };
-}
-
-/**
  * The condition a trial was run under, where the activity has one.
  *
  * The flanker notes whether a trial was congruent, the reading act whether it
@@ -486,8 +465,8 @@ function wordCount(value: unknown): number | null {
  *    Oct: "send the raw responses and do not compute correctness on your
  *    side"), and the module records none to pass on.
  *
- * Not carried, because `BaselineTrial` has no field for them: coordinates
- * (B14, above) and the intervals between the taps inside a recall.
+ * Not carried, because `BaselineTrial` has no field for them: the intervals
+ * between the taps inside a recall.
  * The run's band and device go beside the trials, not on them
  * (`baselineRunContext`).
  */

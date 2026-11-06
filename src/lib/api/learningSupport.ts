@@ -28,6 +28,12 @@ export interface LearningSupportHolders {
   holders: LearningSupportHolder[];
   /** Whether the person asking holds it themselves. */
   viewerHoldsIt: boolean;
+  /**
+   * SCRUM-304: when NOBODY holds it, the administrator a concern would go to
+   * instead - the school's senior admin first. Null when someone holds it, or
+   * when the school has no active administrator either.
+   */
+  fallbackRecipient?: { userId: string; name: string } | null;
 }
 
 /**

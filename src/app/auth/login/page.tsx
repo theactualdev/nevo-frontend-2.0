@@ -10,6 +10,7 @@ import { Wordmark } from "@/components/shared/BrandMarks";
 import { authApi } from "@/lib/api";
 import {
   classifyLearnerLoginFailure,
+  throttleEndsAt,
   type LearnerLoginFailure,
 } from "@/lib/auth/loginFailure";
 import { doorForRole, knownRole } from "@/lib/auth/consoleDoor";
@@ -45,6 +46,7 @@ import {
   RAISED_FORGOT,
   THROTTLED_PAUSE_COPY,
   ThrottleNote,
+  useThrottleRelease,
 } from "@/components/student/Auth/ThrottledPause";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -162,6 +164,16 @@ export default function LoginPage() {
    * document at all - so this must never assume it has seen them all.
    */
   const [error, setError] = useState<LearnerLoginFailure | null>(null);
+  /**
+   * When the server says D154's pause ends (`retryAt`, SCRUM-251), so the
+   * boxes open again here, on this screen. Null is no end.
+   */
+  const [pauseEnds, setPauseEnds] = useState<number | null>(null);
+  const endPause = useCallback(() => {
+    setError((was) => (was === "throttled" ? null : was));
+    setPauseEnds(null);
+  }, []);
+  useThrottleRelease(error === "throttled" ? pauseEnds : null, endPause);
   const [checking, setChecking] = useState(false);
   const [done, setDone] = useState(false);
   /**
@@ -326,6 +338,7 @@ export default function LoginPage() {
         // D178: told once, on 28d, and their tile leaves the picker now
         // rather than sitting there for thirty days leading back to it.
         if (failure === "closed") closeRememberedChild({ id: remembered.id });
+        setPauseEnds(failure === "throttled" ? throttleEndsAt(cause) : null);
         setError(failure);
       } finally {
         if (!leaving) setChecking(false);

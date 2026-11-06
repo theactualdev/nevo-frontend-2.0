@@ -13,7 +13,9 @@ export type NotificationKind =
   | "message"
   | "done"
   | "support"
-  | "klass";
+  | "klass"
+  /** A type the bell has no mark for: a plain dot, claiming nothing. */
+  | "other";
 
 export interface TeacherNotification {
   id: string;

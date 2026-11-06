@@ -138,15 +138,17 @@ describe("after an erasure", () => {
   it("says what the erase modal said about what is kept", async () => {
     /*
      * The notice read "Nothing of it is kept", one screen after the erase
-     * modal said a small amount is kept for a statutory period. A school
-     * repeats the reassuring one to a parent.
+     * modal said otherwise. A school repeats the reassuring one to a parent.
+     * Both now carry Lydia's erasure wording (4 Nov), from one constant.
      */
     params.set("erased", "Chidi");
     const { container } = render(<StudentsView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Chidi.s record has been erased/));
 
     expect(visibleText(container)).not.toMatch(/Nothing of it is kept/);
-    expect(visibleText(container)).toMatch(/statutory period/);
+    expect(visibleText(container)).toMatch(
+      /A copy can remain in our recovery backups for up to seven more days/,
+    );
     params.delete("erased");
   });
 });

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { schoolApi, type School } from "@/lib/api/school";
 import { cn } from "@/lib/utils";
 import { CARD } from "../Roster/primitives";
+import { failureKind } from "../NoAccess";
+import { CardUnread } from "./CardUnread";
 
 /**
  * The school's join code, on the dashboard where D01 says it now lives.
@@ -23,21 +25,45 @@ import { CARD } from "../Roster/primitives";
  *
  * ABSENT RATHER THAN BLANK when there is no code. `School.code` is nullable -
  * it is null for a provider-connected school - and a card headed "Your school
- * code" over an empty space is worse than no card. A failed read is the same
- * absence for the same reason: this card never says a school has no code.
+ * code" over an empty space is worse than no card.
+ *
+ * A FAILED READ IS NOT THAT ABSENCE (backlog 33). It used to be, on the
+ * reasoning that this card never says a school has no code - but a card that
+ * vanishes says nothing either, and SCRUM-39 says a card that cannot load
+ * tells you so, with Try again. So it keeps its heading, says it couldn't
+ * pull the code in, and never says there isn't one.
  */
 export function SchoolCodeCard() {
   const [school, setSchool] = useState<School | null>(null);
   const [copied, setCopied] = useState(false);
+  /** The read failed - which is not "no code". A 403 stays silent. */
+  const [failed, setFailed] = useState(false);
+  /** Bumped by Try again, to read the school again. */
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     schoolApi
       .get()
-      .then(setSchool)
-      // Silent. A school that cannot be read has not lost its code, and this
-      // card is not the place to report that the school record is unreachable.
-      .catch(() => setSchool(null));
-  }, []);
+      .then((s) => {
+        setSchool(s);
+        setFailed(false);
+      })
+      .catch((err: unknown) => {
+        setSchool(null);
+        setFailed(failureKind(err) !== "denied");
+      });
+  }, [attempt]);
+
+  if (failed) {
+    return (
+      <div className={cn(CARD, "mt-5 px-5 py-[15px]")}>
+        <h3 className="m-0 text-[11.5px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase lg:text-[12px]">
+          School code
+        </h3>
+        <CardUnread className="mt-2" onRetry={() => setAttempt((a) => a + 1)} />
+      </div>
+    );
+  }
 
   const code = school?.code;
   if (!code) return null;

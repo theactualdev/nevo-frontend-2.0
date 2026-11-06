@@ -135,3 +135,8 @@ jobs:
       # if backend downtime starts blocking merges, make this job
       # `continue-on-error: true` rather than deleting it.
       - run: npm run contract
+      # The VALUES an enum can take, which the contract check does not look
+      # at: UploadStage changed its names on the server and every run here
+      # stayed green while both upload ladders stopped moving (#1002). Same
+      # network, same failure mode when the backend is down.
+      - run: npm run enums

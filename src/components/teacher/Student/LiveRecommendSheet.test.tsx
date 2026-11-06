@@ -659,6 +659,20 @@ describe("the library's own sign-off", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/Your library is empty/)).not.toBeInTheDocument();
   });
+
+  // 4 Nov sweep: a library of lessons still being read is not an empty one.
+  it("says nothing is ready yet, not that the library is empty, when every lesson is still being read", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: LESSONS.map((l) => ({ ...l, kind: "parsing" })),
+      live: true,
+      sample: false,
+      loading: false,
+    });
+    show();
+
+    expect(screen.getByText("Nothing in your library is ready to send yet.")).toBeInTheDocument();
+    expect(screen.queryByText(/Your library is empty/)).not.toBeInTheDocument();
+  });
 });
 
 /*

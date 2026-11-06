@@ -201,7 +201,9 @@ describe("pictures and narration in step 1", () => {
     await waitFor(() => expect(media.approve).toHaveBeenCalledWith("l-1", ["p1", "n1", "p2"]));
     expect(media.retry).not.toHaveBeenCalled();
     expect(await screen.findByRole("button", { name: "Continue to key points" })).toBeInTheDocument();
-    expect(screen.getByText("Media approved. Nothing else needs you.")).toBeInTheDocument();
+    // The key points and rewrites still wait, so not "Nothing else needs you" (4 Nov sweep).
+    expect(screen.getByText("Media approved.")).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing else needs you/)).toBeNull();
   });
 
   it("sends a flagged one back to be made again, and approves the rest", async () => {

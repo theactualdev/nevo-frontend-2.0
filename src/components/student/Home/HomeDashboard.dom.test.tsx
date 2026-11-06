@@ -38,6 +38,18 @@ import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
 
 const dashboard = vi.hoisted(() => ({ useStudentDashboard: vi.fn() }));
 vi.mock("@/hooks/useStudentDashboard", () => dashboard);
+// Today's warm-up as the engine names it: a task, so Home offers it. The card
+// is offered only for a run that can happen (Lydia, 4 Nov), and a read that
+// fails offers none - tested in `HomeDashboard.warmup.dom.test.tsx`.
+const warmUp = vi.hoisted(() => ({ prompt: vi.fn() }));
+vi.mock("@/lib/api/baseline", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/baseline")>();
+  return {
+    ...actual,
+    baselineApi: { ...actual.baselineApi, recalibratePrompt: warmUp.prompt },
+  };
+});
+
 
 // The child's full assignment list, finished ones included - which the
 // dashboard leaves out. Unread (failed) unless a test says otherwise.
@@ -68,6 +80,7 @@ beforeEach(() => {
   // Every other hook on this screen reads the network; none of them decides
   // the mark. Failing fast keeps them in their catch instead of pending.
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("no network")));
+  warmUp.prompt.mockReset().mockResolvedValue({ dimension: "wmc" });
   dashboard.useStudentDashboard.mockReset();
   assignments.list.mockReset();
   assignments.list.mockRejectedValue(new Error("no network"));
@@ -899,7 +912,7 @@ describe("Home's two lists", () => {
     await settled(container);
 
     expect(screen.queryByText(/Today's lessons/)).toBeNull();
-    expect(screen.queryByText("Your lessons will show up here soon")).toBeNull();
+    expect(screen.queryByText("When your teacher sets your first lesson, you'll find it right here.")).toBeNull();
     expect(screen.queryByText(/your first lesson/)).toBeNull();
     const pickUp = section(/Pick up where you left off/);
     expect(within(pickUp).getByText("Halfway Fractions")).toBeInTheDocument();
@@ -917,7 +930,7 @@ describe("Home's two lists", () => {
     await settled(container);
 
     expect(section(/Today's lessons/)).toBeInTheDocument();
-    expect(screen.queryByText("Your lessons will show up here soon")).toBeNull();
+    expect(screen.queryByText("When your teacher sets your first lesson, you'll find it right here.")).toBeNull();
     // New and part-way work both waiting: D98's no-note state.
     expect(screen.queryByText(/caught up/)).toBeNull();
   });
@@ -1058,7 +1071,7 @@ describe("what Home says when there is nothing, or nothing left", () => {
     await settled(container);
 
     expect(
-      screen.getByText("Your teacher is setting up your first lesson"),
+      screen.getByText("When your teacher sets your first lesson, you'll find it right here."),
     ).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Nice work/);
   });
@@ -1076,7 +1089,7 @@ describe("what Home says when there is nothing, or nothing left", () => {
 
   /*
    * 22 OCT PRODUCTION RUN: AMINA FINISHED OSMOSIS, HER ONLY LESSON, and Home
-   * told her "Your teacher is setting up your first lesson". The dashboard
+   * told her "When your teacher sets your first lesson, you'll find it right here.". The dashboard
    * leaves completed assignments out, so it had none to show. Her row said
    * `completed` with a `completedAt`, and `GET /api/v1/assignments` listed
    * the assignment completed. Home draws no lesson area for her and says
@@ -1153,7 +1166,7 @@ describe("what Home says when there is nothing, or nothing left", () => {
       });
 
       expect(
-        screen.getByText("Your teacher is setting up your first lesson"),
+        screen.getByText("When your teacher sets your first lesson, you'll find it right here."),
       ).toBeInTheDocument();
     });
   });
@@ -1438,7 +1451,12 @@ describe("Home with nothing set, on a short screen", () => {
    * box is a size container and the figure hides under that height.
    * jsdom lays nothing out, so the chain is pinned here.
    */
-  it("lets the figure shrink so the line stays on screen", async () => {
+  it("says nothing about the teacher, as the Home frame's quiet note (Lydia, 4 Nov)", async () => {
+    /*
+     * 29 Empty States drew a figure over "Your teacher is setting up your
+     * first lesson", which nobody had said. The newer Home frame (52e3ae3)
+     * draws a violet note, its dot and one line, and no figure.
+     */
     signIn();
     dashboard.useStudentDashboard.mockReturnValue({
       data: { assignments: [], recentProgress: [] },
@@ -1446,38 +1464,16 @@ describe("Home with nothing set, on a short screen", () => {
       loading: false,
     });
 
-    const { container } = render(<HomeDashboard />);
+    render(<HomeDashboard />);
     const line = await screen.findByText(
-      "Your teacher is setting up your first lesson",
+      "When your teacher sets your first lesson, you'll find it right here.",
     );
 
-    const block = line.parentElement!;
-    const figure = block.querySelector("img")!;
-    const art = figure.parentElement!;
-    expect(art.parentElement).toBe(block);
-    expect(art).toHaveClass(
-      "min-h-0",
-      "[container-type:size]",
-      "h-[190px]",
-      "md:h-[300px]",
-      "lg:h-[250px]",
-    );
-    expect(art).not.toHaveClass("shrink-0");
-    expect(figure).toHaveClass(
-      "size-full",
-      "object-contain",
-      "[@container(max-height:80px)]:hidden",
-    );
-    expect(line).toHaveClass("shrink-0");
-    // Every box from the figure's block up to the page is the screen's
-    // height, not its content's.
-    for (
-      let box: HTMLElement | null = block;
-      box && box !== container;
-      box = box.parentElement
-    ) {
-      expect(box).toHaveClass("min-h-0", "basis-0", "flex-1");
-    }
+    const note = line.parentElement!;
+    expect(note).toHaveClass("bg-nevo-violet/14", "rounded-[12px]");
+    expect(note.querySelector("span.rounded-full")).not.toBeNull();
+    expect(note.querySelector("img")).toBeNull();
+    expect(screen.queryByText(/setting up/i)).toBeNull();
   });
 });
 
