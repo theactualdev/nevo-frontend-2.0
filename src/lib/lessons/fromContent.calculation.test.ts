@@ -393,6 +393,83 @@ describe("a calculation from the payload", () => {
     expect(calc?.steps[2]).not.toHaveProperty("explanation");
   });
 
+  /*
+   * 8c67353: a step's answerable mini-steps, which Fewer steps asks one at a
+   * time. All or none: a choice or a number, each with its `questionId`, a
+   * prompt and an answer. A tap (no frame draws one for a mini-step) or free
+   * text (no field for it here) leaves the step with none.
+   */
+  describe("a step's mini-steps", () => {
+    const CHOICE = {
+      id: "m1",
+      questionId: "mini-aaa",
+      prompt: "  Which side has the 2x?  ",
+      input: "choice",
+      answer: "left",
+      options: [
+        { value: "left", label: "The left" },
+        { value: "right", label: "The right" },
+      ],
+      acceptedAnswers: [],
+    };
+    const NUMBER = {
+      id: "m2",
+      questionId: "mini-bbb",
+      prompt: "What is 15 - 4?",
+      input: "number",
+      answer: 11,
+      acceptedAnswers: ["11.0", 11],
+    };
+    const built = (miniSteps: unknown) =>
+      calculationFromVariant(algebra({ steps: [step({ miniSteps })] }))?.steps[0];
+
+    it("keeps choices and numbers, in order, with what each goes up as", () => {
+      expect(built([CHOICE, NUMBER])?.miniSteps).toEqual([
+        {
+          id: "m1",
+          questionId: "mini-aaa",
+          prompt: "Which side has the 2x?",
+          input: "choice",
+          options: [
+            { value: "left", label: "The left" },
+            { value: "right", label: "The right" },
+          ],
+          accepted: ["left"],
+        },
+        {
+          id: "m2",
+          questionId: "mini-bbb",
+          prompt: "What is 15 - 4?",
+          input: "number",
+          accepted: ["11", "11.0"],
+        },
+      ]);
+    });
+
+    it.each([
+      ["a tap", { ...NUMBER, input: "tap", answer: 3 }],
+      ["free text", { ...NUMBER, input: "text", answer: "x" }],
+      ["no questionId (a teacher's read)", { ...NUMBER, questionId: null }],
+      ["no prompt", { ...NUMBER, prompt: "  " }],
+      ["no answer", { ...NUMBER, answer: "" }],
+      ["a choice whose answer is none of its options", { ...CHOICE, answer: "middle" }],
+      ["a choice with one option", { ...CHOICE, options: [CHOICE.options[0]] }],
+    ])("gives the step none when one is %s", (_, bad) => {
+      expect(built([CHOICE, bad])).not.toHaveProperty("miniSteps");
+    });
+
+    it("gives none where the step has none, and eight at most", () => {
+      expect(built(undefined)).not.toHaveProperty("miniSteps");
+      expect(built([])).not.toHaveProperty("miniSteps");
+      const ten = Array.from({ length: 10 }, (_, i) => ({
+        ...NUMBER,
+        id: `m${i}`,
+        questionId: `mini-${i}`,
+      }));
+      expect(built(ten)?.miniSteps).toHaveLength(8);
+    });
+  });
+
   it("builds the signed-out walkthrough's calculation through this same path", () => {
     const calc = ADDING_FRACTIONS.segments.find((s) => s.calculation)?.calculation;
 

@@ -11,6 +11,7 @@ import {
 } from "@/lib/constants";
 import type {
   CalcHighlight,
+  CalcMiniStep,
   CalcNarration,
   CalcNumberStep,
   CalcScaffold,
@@ -52,6 +53,9 @@ export const SLOWER_NEXT = "Tap to continue";
 
 /** More support's card, as the solver frame labels it. */
 export const MORE_SUPPORT_LABEL = "LET'S LOOK AT THIS PART TOGETHER";
+
+/** Fewer steps' label over each mini-step, as the solver frame draws it. */
+export const FEWER_LABEL = "ONE PIECE AT A TIME";
 
 /** The card's lines after a miss, Lydia's, verbatim (4 Nov). */
 export const CALC_SUPPORT_LINES = {
@@ -105,11 +109,11 @@ export const SLOWER_LINE = "No rush. Let's take this one a step at a time.";
  * the content". The drawing's geometry, the field a child types into and the
  * controls are left as they are, as they are on the checks.
  *
- * THE CHILD'S OWN ROW: SLOWER AND MORE SUPPORT (the frame's gate controls;
- * Lydia, 29 Oct: "A gap on the backend should not cost a child a control on
- * their screen"). Fewer steps is left out until it is built on the steps'
- * answerable mini-steps (8c67353) - "While anything is absent from a screen,
- * the engine must not offer it as a route there."
+ * THE CHILD'S OWN ROW: SLOWER, MORE SUPPORT AND FEWER STEPS (the frame's gate
+ * controls; Lydia, 29 Oct: "A gap on the backend should not cost a child a
+ * control on their screen"; "While anything is absent from a screen, the
+ * engine must not offer it as a route there"). Each only where there is
+ * something behind it.
  *  - SLOWER is the lesson's pace, the same switch the text's Slower chip is,
  *    held for the sitting on the server. Here it puts the frame's line above
  *    the question and lets the step arrive in pieces: the question, then the
@@ -124,6 +128,8 @@ export const SLOWER_LINE = "No rush. Let's take this one a step at a time.";
  *    nothing to show (rule 5; Teslim: "absence is the normal state"). Held
  *    for the sitting on the server, as Slower is (`lessonPreferences`), so a
  *    child who turned it on finds it on every step that has one.
+ *  - FEWER STEPS is the step's own mini-steps, one at a time, then the step
+ *    whole - only on a step that has them (`miniSteps`; see `fewer`).
  *
  * THE ENGINE'S SUPPORT AFTER A MISS (`engineSupport`): the server's only
  * calculation route since 6b5d496 is "support inside the current answerable
@@ -393,6 +399,39 @@ export function CalculationSolver({
   };
   /** More support has something to show here: the step's explanation. */
   const moreSupportHere = Boolean(onMoreSupport && step.explanation);
+
+  /*
+   * FEWER STEPS: THE STEP'S MINI-STEPS, ONE AT A TIME, THEN THE STEP WHOLE
+   * (8c67353; the Hub, 4 Nov, the reduced build). Offered only on a step a
+   * teacher broke into answerable mini-steps (`miniSteps`); on any other there
+   * is no Fewer steps at all. Pressed, the step's question gives way to its
+   * first mini-step under the frame's "ONE PIECE AT A TIME"; each answered
+   * right brings the next, and after the last the step itself is asked again,
+   * whole. Each answer goes up as its own (`onStepGiven`, under the
+   * mini-step's `questionId`) for the server to mark. The frame moves on to
+   * the next step after the mini-steps instead - but the server needs the
+   * step answered (a mini-step never moves the lesson on, and a later pass
+   * counts as supported), so the step comes back. Lydia is asked whether she
+   * wants the frame's skip (item 46). For this step only, as the frame's
+   * controls are: the server holds no such choice.
+   */
+  const miniSteps = step.miniSteps ?? [];
+  const [fewer, setFewer] = useState<{ stepId: string; at: number } | null>(
+    null,
+  );
+  const fewerHere =
+    asking && miniSteps.length > 0 && fewer?.stepId === step.stepId;
+  const mini: CalcMiniStep | null = fewerHere
+    ? miniSteps[Math.min(fewer.at, miniSteps.length - 1)]
+    : null;
+  /** When the mini-step on screen was put to the child (rule 4). */
+  const miniAskedAt = useRef<number | null>(null);
+  /** Fewer steps is there while a step with mini-steps is being asked. */
+  const fewerOffered = asking && miniSteps.length > 0;
+  const miniId = mini?.questionId ?? null;
+  useEffect(() => {
+    if (miniId) miniAskedAt.current = performance.now();
+  }, [miniId]);
   /** Under Slower, the step as its parts, as many as have arrived. */
   const partsShown =
     pacing && parts.length > 0 ? parts.slice(0, shown + 1) : null;
@@ -596,6 +635,47 @@ export function CalculationSolver({
     advance();
   };
 
+  /** Fewer steps on or off, for this step. Either way the step starts afresh. */
+  const toggleFewer = () => {
+    setFewer(fewerHere ? null : { stepId: step.stepId, at: 0 });
+    setChosen(null);
+    setTyped("");
+    // Off: the step itself is put to the child again, timed from here.
+    if (fewerHere) askedAt.current = performance.now();
+    onAct?.();
+  };
+
+  /*
+   * A MINI-STEP ANSWERED: up as its own answer, under its `questionId`, for
+   * the server to mark - this screen's tick only moves it on. Right, the next
+   * mini-step, or after the last the step itself, whole and timed afresh;
+   * not, the same nudge as a step, and the same mini-step again.
+   */
+  const answerMini = (value: string) => {
+    if (!mini || !fewer) return;
+    const correct = isStoredAnswer(value, mini.accepted);
+    const responseTimeMs = msSince(miniAskedAt.current);
+    onStepGiven?.({
+      stepId: mini.questionId,
+      answer: value,
+      ...(responseTimeMs === undefined ? {} : { responseTimeMs }),
+      hinted: usedOn.current === step.stepId,
+    });
+    setChosen(null);
+    setTyped("");
+    if (!correct) {
+      miniAskedAt.current = performance.now();
+      setNudge((n) => n + 1);
+      return;
+    }
+    if (fewer.at + 1 >= miniSteps.length) {
+      setFewer(null);
+      askedAt.current = performance.now();
+      return;
+    }
+    setFewer({ stepId: step.stepId, at: fewer.at + 1 });
+  };
+
   const openHint = () => {
     setHintOpen(true);
     // Opened is used (the catalogue's "opened one they had to open").
@@ -642,10 +722,11 @@ export function CalculationSolver({
     <div className="mx-auto sm:max-w-[560px] lg:max-w-[600px]">
       {/*
         THE CHILD'S OWN ROW, as the frame's gate controls draw it: pills under
-        the title, navy while on, gone once the solve is done. Slower, and More
-        support where the step has an explanation - see the note at the top.
+        the title, navy while on, gone once the solve is done. Slower; More
+        support where the step has an explanation; Fewer steps where it has
+        mini-steps - see the note at the top.
       */}
-      {!done && (onSlower || moreSupportHere) && (
+      {!done && (onSlower || moreSupportHere || fewerOffered) && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           {onSlower && (
             <RowControl on={slower} onPress={onSlower}>
@@ -661,6 +742,11 @@ export function CalculationSolver({
               }}
             >
               More support
+            </RowControl>
+          )}
+          {fewerOffered && (
+            <RowControl on={fewerHere} onPress={toggleFewer}>
+              Fewer steps
             </RowControl>
           )}
         </div>
@@ -807,7 +893,7 @@ export function CalculationSolver({
               </div>
             )}
             {/* The frame's Slower line, above the question (`presentSlower`). */}
-            {slower && (
+            {slower && !mini && (
               <p
                 className={cn(
                   "mb-4 text-center text-sm text-nevo-violet-text sm:text-[15px]",
@@ -817,7 +903,21 @@ export function CalculationSolver({
                 {SLOWER_LINE}
               </p>
             )}
-            {partsShown ? (
+            {mini ? (
+              <div data-reveal="prompt" data-mini-step={mini.id}>
+                <p className="text-center font-mono text-[10px] tracking-[0.06em] text-nevo-navy">
+                  {FEWER_LABEL}
+                </p>
+                <p
+                  className={cn(
+                    "mt-2.5 text-center text-[19px] font-semibold leading-[1.35] text-nevo-near-black sm:text-[22px]",
+                    reading && READING_HEADING,
+                  )}
+                >
+                  {mini.prompt}
+                </p>
+              </div>
+            ) : partsShown ? (
               <div
                 data-reveal="prompt"
                 aria-live="polite"
@@ -900,7 +1000,7 @@ export function CalculationSolver({
               control, in its place and its words (`SLOWER_NEXT`), where the
               answer area will be.
             */}
-            {!answerShown && (
+            {!mini && !answerShown && (
               <button
                 type="button"
                 onClick={nextPiece}
@@ -915,7 +1015,25 @@ export function CalculationSolver({
               the step's last piece - and with it the docked pad. Faded in
               where it arrives late; there at once, as always, without Slower.
             */}
-            {answerShown && (
+            {mini ? (
+              <MiniStepAnswer
+                // Each mini-step's answer opens anew.
+                key={mini.id}
+                mini={mini}
+                reading={reading}
+                readable={readable}
+                nudge={nudge}
+                chosen={chosen}
+                onChoose={(i) => {
+                  setChosen(i);
+                  onAct?.();
+                }}
+                typed={typed}
+                onType={type}
+                padDock={padDock}
+                onCheck={answerMini}
+              />
+            ) : answerShown && (
             <div
               ref={answerArea}
               className={cn(pacing && "motion-safe:animate-nevo-reveal")}
@@ -1124,6 +1242,96 @@ function DockedPad({
   return (
     dock &&
     createPortal(<NevoKeyboard layout="calc" keys={keys} onKey={onKey} />, dock)
+  );
+}
+
+/**
+ * A MINI-STEP'S ANSWER, drawn as a step's own is: a choice is the step's
+ * option cards and "Check my answer" once one is picked; a number is the
+ * step's field on the Nevo pad, docked as a step's is (`DockedPad`).
+ */
+function MiniStepAnswer({
+  mini,
+  reading,
+  readable,
+  nudge,
+  chosen,
+  onChoose,
+  typed,
+  onType,
+  padDock,
+  onCheck,
+}: {
+  mini: CalcMiniStep;
+  reading: boolean;
+  readable: false | string[];
+  nudge: number;
+  chosen: number | null;
+  onChoose: (i: number) => void;
+  typed: string;
+  onType: (next: string | ((was: string) => string)) => void;
+  padDock?: HTMLElement | null;
+  onCheck: (value: string) => void;
+}) {
+  if (mini.input === "choice") {
+    return (
+      <>
+        <Nudged nudge={nudge} className="mt-4 flex flex-col gap-2.5">
+          {mini.options.map((option, i) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChoose(i)}
+              aria-pressed={chosen === i}
+              className={cn(
+                "cursor-pointer rounded-[12px] border-2 bg-nevo-cream-elevated px-[18px] py-4 text-center text-base font-medium text-nevo-near-black shadow-elevation-1 transition-[transform,border-color] active:scale-[0.98] sm:text-[18px]",
+                chosen === i
+                  ? "border-nevo-navy ring-2 ring-nevo-navy"
+                  : "border-transparent",
+                readable,
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </Nudged>
+        <div className="mt-[18px] min-h-13">
+          {chosen != null && (
+            <Button
+              className="w-full"
+              onClick={() => onCheck(mini.options[chosen]?.value ?? "")}
+            >
+              Check my answer
+            </Button>
+          )}
+        </div>
+      </>
+    );
+  }
+  // A number: the step's own field, with nothing a mini-step does not carry.
+  const asStep: CalcNumberStep = {
+    stepId: mini.id,
+    prompt: mini.prompt,
+    hint: "",
+    assembles: "",
+    equationState: "",
+    highlights: [],
+    input: "number",
+    entry: "numeric",
+    accepted: mini.accepted,
+  };
+  return (
+    <>
+      <NumberEntry
+        step={asStep}
+        reading={reading}
+        nudge={nudge}
+        value={typed}
+        onChange={onType}
+        onCommit={() => onCheck(typed)}
+      />
+      <DockedPad dock={padDock} onKey={(c) => onType((t) => t + c)} />
+    </>
   );
 }
 

@@ -9,6 +9,7 @@ export type {
   CalcChoiceStep,
   CalcNumberStep,
   CalcTapStep,
+  CalcMiniStep,
   CalcScaffold,
   CalcNarration,
   CalcHighlight,
