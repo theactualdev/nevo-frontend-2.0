@@ -48,10 +48,28 @@ export interface AdminNavItem {
    * is ABSENT - not a locked row, not a greyed one (design, D29).
    */
   learningSupportOnly?: boolean;
+  /**
+   * Not shown to an admin who also holds this scope. For a persona home that
+   * is only the home of someone WITHOUT it - see Systems overview below.
+   */
+  notWith?: PermissionScope;
 }
 
 export const ADMIN_NAV: AdminNavItem[] = [
   { label: "Overview", href: "/admin/dashboard", group: "", scope: "oversight" },
+  /*
+   * D17, THE IT ADMIN'S WAY HOME (backlog 20). When IT & SSO left the rail on
+   * 24 Sep nothing replaced it, so an IT admin who opened Settings had no
+   * way back to the Systems overview they land on - only signing in again.
+   * D17 draws this persona's rail with a lit row on this screen; it is named
+   * for the screen's own heading, not "IT & SSO", because the provider set-up
+   * that name stood for stays deferred and off the rail.
+   *
+   * Only the admin whose home it is: an `it_sso` holder without `oversight`
+   * (see `adminHomeForScopes`). A proprietor who also holds IT lands on the
+   * Overview, and their rail is unchanged. Nothing wider - Lydia, 6 Oct.
+   */
+  { label: "Systems overview", href: "/admin/sso/home", group: "", scope: "it_sso", notWith: "oversight" },
   { label: "Classes", href: "/admin/classes", group: "School", scope: "roster" },
   { label: "Teachers", href: "/admin/teachers", group: "School", scope: "roster" },
   { label: "Students", href: "/admin/students", group: "School", scope: "roster" },
@@ -98,6 +116,7 @@ export function navForScopes(
   return ADMIN_NAV.filter(
     (i) =>
       (i.scope === null || scopes.includes(i.scope)) &&
+      (!i.notWith || !scopes.includes(i.notWith)) &&
       (!i.learningSupportOnly || holdsLearningSupport),
   );
 }
@@ -147,12 +166,11 @@ const OWNED_BY: Record<string, string> = {
 };
 
 /**
- * What an admin's home is called, for "Go to ...". The persona homes are not
- * all rail items - D17 is off the rail since SSO was deferred - so its own
- * heading is used.
+ * What an admin's home is called, for "Go to ...". Every persona home is a
+ * rail item now - D17's Systems overview joined the IT admin's rail (backlog
+ * 20) - so it is the row's own label. Finance home sits under Billing.
  */
 export function homeName(href: string): string | null {
-  if (href === "/admin/sso/home") return "Systems overview";
   return activeNavLabel(href);
 }
 
