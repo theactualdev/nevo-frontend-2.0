@@ -263,6 +263,14 @@ export function safetyStop(cause: unknown): SafetyStop | null {
   return { message: apiErrorMessage(cause.detail) };
 }
 
+/** `GET /api/v1/ask-nevo/allowance` (AskNevoAllowanceResponse). */
+export interface AskNevoAllowance {
+  questionsLeft: number;
+  exhausted: boolean;
+  resetsAt: string;
+  message: string;
+}
+
 export const askNevoApi = {
   ask: (payload: AskNevoRequest, options?: RequestOptions) =>
     api.post<AskNevoAnswer>("/api/v1/ask-nevo", payload, options),
@@ -271,6 +279,13 @@ export const askNevoApi = {
    *  ready for it. 204 on success. */
   recordHelpfulness: (interactionId: string, helpful: boolean) =>
     api.post(`/api/v1/ask-nevo/${interactionId}/helpfulness`, { helpful }),
+
+  /**
+   * How many questions are left today (SCRUM-56's daily cap), the server's own
+   * count. `exhausted` is what disables the compose box until it resets.
+   */
+  allowance: (role: "teacher" | "student", options?: RequestOptions) =>
+    api.get<AskNevoAllowance>("/api/v1/ask-nevo/allowance", { ...options, params: { role } }),
 
   /** Past conversations, newest first. No parameters - see `recentThreads`. */
   threads: (options?: RequestOptions) =>

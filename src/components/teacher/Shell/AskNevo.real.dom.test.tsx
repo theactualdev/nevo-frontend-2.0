@@ -9,9 +9,10 @@ const { ask, getToken, path, signedIn } = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => ({ usePathname: () => path.value }));
+const { allowance } = vi.hoisted(() => ({ allowance: vi.fn() }));
 vi.mock("@/lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
-  askNevoApi: { ask, threads: vi.fn(), thread: vi.fn(), recordHelpfulness: vi.fn() },
+  askNevoApi: { ask, threads: vi.fn(), thread: vi.fn(), recordHelpfulness: vi.fn(), allowance },
 }));
 vi.mock("@/lib/auth/session", () => ({ getToken }));
 vi.mock("@/hooks/useHasSession", () => ({ useHasSession: () => signedIn.value }));
@@ -65,6 +66,12 @@ const answer = (over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
+  allowance.mockReset().mockResolvedValue({
+    questionsLeft: 30,
+    exhausted: false,
+    resetsAt: "2026-11-05T00:00:00Z",
+    message: "",
+  });
   ask.mockReset();
   getToken.mockReset().mockReturnValue("a-token");
   signedIn.value = true;
@@ -388,5 +395,31 @@ describe("an answer the server says Nevo cannot help with", () => {
 
     expect(await screen.findByText("That's not something I can help with.")).toBeInTheDocument();
     expect(screen.queryByText(/outside_scope/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * SCRUM-56: "When a teacher hits the daily cap … The compose input disables
+ * until reset." It stayed usable at the cap; the server's own allowance
+ * (`exhausted`) now closes it, with the ticket's line.
+ */
+describe("the daily cap", () => {
+  it("closes the compose box, with the ticket's line, when the server says the day is spent", async () => {
+    allowance.mockResolvedValue({ questionsLeft: 0, exhausted: true, resetsAt: "2026-11-05T00:00:00Z", message: "" });
+    openOn("/teacher/dashboard");
+
+    expect(
+      await screen.findByText("You've reached today's Ask Nevo limit. It'll reset tomorrow."),
+    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Ask about a student, class, or lesson")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    expect(allowance).toHaveBeenCalledWith("teacher");
+  });
+
+  it("leaves the box open while questions are left", async () => {
+    openOn("/teacher/dashboard");
+
+    await waitFor(() => expect(allowance).toHaveBeenCalled());
+    expect(screen.getByPlaceholderText("Ask about a student, class, or lesson")).not.toBeDisabled();
   });
 });

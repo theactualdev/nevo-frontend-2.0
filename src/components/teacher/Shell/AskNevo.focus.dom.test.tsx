@@ -6,7 +6,7 @@ const { getToken } = vi.hoisted(() => ({ getToken: vi.fn() }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/teacher/dashboard" }));
 vi.mock("@/lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
-  askNevoApi: { ask: vi.fn(), threads: vi.fn(), thread: vi.fn(), recordHelpfulness: vi.fn() },
+  askNevoApi: { ask: vi.fn(), threads: vi.fn(), thread: vi.fn(), recordHelpfulness: vi.fn(), allowance: vi.fn(async () => ({ questionsLeft: 30, exhausted: false, resetsAt: "2026-11-05T00:00:00Z", message: "" })) },
 }));
 vi.mock("@/lib/auth/session", () => ({ getToken }));
 vi.mock("@/hooks/useHasSession", () => ({ useHasSession: () => true }));
