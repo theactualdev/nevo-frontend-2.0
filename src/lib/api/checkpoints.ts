@@ -56,6 +56,16 @@ export interface ComprehensionCheckpoint {
   /** The spoken prompt's recording. Only meaningful when `format` is spoken. */
   promptAudioUrl?: string | null;
   /**
+   * A transfer item's situation (ca58ae5): the same concept put to the child
+   * in a new setting, which the question then asks about. Only on the
+   * end-of-lesson questions a teacher generated and approved as a transfer
+   * set; absent or null on any other.
+   *
+   * Its `transferKind` and `masteryLevel` arrive beside it and are never
+   * read: neither names anything a child should see (Lydia's test 4).
+   */
+  transferContext?: string | null;
+  /**
    * Whether a person stands behind its answer key (cdba131,
    * `checkpoint_payloads`): true where the key was written at upload
    * (`authoredBy: "person"`, 294584b) or the lesson's checks sign-off is
