@@ -319,6 +319,13 @@ export function answerText(
 export interface CheckRow {
   /** `${segmentId}:${questionId}`, the pair the server keys a check by. */
   key: string;
+  /**
+   * The level the check asks for, in the frame's words (C24, 1397ec4), or
+   * null when the server sent none - and then nothing is drawn.
+   */
+  level?: string | null;
+  /** Nevo inferred the level, so the checks sign-off accepts it. */
+  levelByNevo?: boolean;
   segmentId: string;
   /** The section it sits in. */
   label: string;
@@ -348,6 +355,13 @@ export interface ChecksView {
   leaks: { key: string; row: CheckRow; step: GuidedCheckStep }[];
   /** The server needs the checks sign-off. */
   checksPending: boolean;
+  /** Any check carries a level, so the step says it shows one. */
+  hasLevels: boolean;
+  /**
+   * A check waiting on the sign-off carries a level Nevo inferred. Its answer
+   * may have come from the file, so "Answers Nevo wrote" would be untrue.
+   */
+  levelsToSign: boolean;
   /** The server needs the guiding questions' sign-off. */
   guidedPending: boolean;
   /** This step's current sign-off, for the footer and the live step. */
@@ -378,6 +392,8 @@ export function checksView(review: LessonReview, segments: LessonSegment[]): Che
   );
   const rows = (review.checks ?? []).map((c, i): CheckRow & { check: CheckReviewItem } => ({
     key: `${c.segmentId}:${c.questionId}`,
+    level: levelWords(c.masteryLevel),
+    levelByNevo: !!levelWords(c.masteryLevel) && c.masteryLevelAuthoredBy !== "person",
     segmentId: c.segmentId,
     label: labelOf(c.segmentId, c.segmentTitle),
     prompt: c.questionPrompt,
@@ -418,17 +434,34 @@ export function checksView(review: LessonReview, segments: LessonSegment[]): Che
     : review.guidedStepsApproval?.current
       ? review.guidedStepsApproval
       : null;
+  const toSign = sorted.filter((r) => r.check.markable && !r.check.teacherReviewed);
   return {
     exists: rows.length > 0 || guidedOnly.length > 0,
-    toSign: sorted.filter((r) => r.check.markable && !r.check.teacherReviewed),
+    toSign,
     reviewed: sorted.filter((r) => r.check.markable && r.check.teacherReviewed),
     unmarkable: sorted.filter((r) => !r.check.markable),
     guidedOnly,
     leaks,
     checksPending,
+    hasLevels: rows.some((r) => !!r.level),
+    levelsToSign: toSign.some((r) => r.levelByNevo),
     guidedPending,
     signoff,
   };
+}
+
+/**
+ * C24's words for the three levels (1397ec4), and nothing for anything else.
+ * Teacher-facing only: a level is never named to a child (test 4).
+ */
+const LEVEL_WORDS: Record<string, string> = {
+  knowledge: "Knowing & understanding",
+  application: "Application",
+  analysis: "Analysis & evaluation",
+};
+
+export function levelWords(level: string | null | undefined): string | null {
+  return (level && LEVEL_WORDS[level]) || null;
 }
 
 /** "a", "a and b", "a, b and c". */
