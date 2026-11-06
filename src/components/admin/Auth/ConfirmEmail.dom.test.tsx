@@ -17,6 +17,9 @@ import { ConfirmEmail } from "./ConfirmEmail";
 
 const verify = vi.fn();
 const resend = vi.fn();
+const read = vi.fn();
+const getSession = vi.fn();
+const schoolGet = vi.fn();
 
 vi.mock("@/lib/api/emailConfirmation", async (importOriginal) => {
   const actual =
@@ -27,8 +30,17 @@ vi.mock("@/lib/api/emailConfirmation", async (importOriginal) => {
       ...actual.emailConfirmationApi,
       verify: (t: string) => verify(t),
       resend: (tok?: string) => resend(tok),
+      read: () => read(),
     },
   };
+});
+vi.mock("@/lib/auth/session", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth/session")>();
+  return { ...actual, getSession: () => getSession() };
+});
+vi.mock("@/lib/api/school", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/school")>();
+  return { ...actual, schoolApi: { ...actual.schoolApi, get: () => schoolGet() } };
 });
 
 const state = (over: Partial<EmailConfirmationState> = {}): EmailConfirmationState => ({
@@ -39,7 +51,11 @@ const state = (over: Partial<EmailConfirmationState> = {}): EmailConfirmationSta
   ...over,
 });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Signed out unless a test says otherwise - how an emailed link is usually opened.
+  getSession.mockReturnValue(null);
+});
 
 describe("ConfirmEmail", () => {
   it("sends the token from the path, not a query param", async () => {
@@ -70,7 +86,7 @@ describe("ConfirmEmail", () => {
     verify.mockResolvedValue(state({ status: "invalid", email: null, message: "No such link." }));
     const { container } = render(<ConfirmEmail token="t3" />);
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/doesn[’']t work/i),
+      expect(visibleText(container)).toMatch(/doesn[’']t look right/i),
     );
     expect(visibleText(container)).not.toMatch(/run out|already confirmed/i);
   });
@@ -127,7 +143,7 @@ describe("ConfirmEmail", () => {
     verify.mockResolvedValue(state({ status: "invalid", email: null, message: "No such link." }));
     const { container } = render(<ConfirmEmail token="t7" />);
 
-    await waitFor(() => expect(visibleText(container)).toMatch(/doesn[’']t work/i));
+    await waitFor(() => expect(visibleText(container)).toMatch(/doesn[’']t look right/i));
     expect(visibleText(container)).not.toMatch(/null|undefined|@/);
   });
 });
@@ -286,5 +302,56 @@ describe("sending a new link from a dead one", () => {
 
     await screen.findByRole("button", { name: /Send a new link/i });
     expect(screen.queryByRole("button", { name: /change the email/i })).toBeNull();
+  });
+});
+
+/**
+ * D01b AC-03b, "Link not valid" (design 1397ec4, Lydia's item 25), reduced to
+ * what is true: "or it's from an older email" is dropped (an older link comes
+ * back `expired`), and the address, school and two buttons appear only for a
+ * SIGNED-IN admin still waiting to confirm - an invalid token names nobody.
+ */
+describe("a link that doesn't look right (AC-03b)", () => {
+  const invalid = state({ status: "invalid", email: null, message: "No such link." });
+
+  it("signed out, says it may have been copied part-way, and offers no button that needs a session", async () => {
+    verify.mockResolvedValue(invalid);
+    const { container } = render(<ConfirmEmail token="t1" />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/This link doesn't look right/));
+    const text = visibleText(container);
+    expect(text).toMatch(/It may have been copied only part-way\./);
+    expect(text).not.toMatch(/older email/);
+    expect(screen.queryByRole("button", { name: /Send a new link/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Change the email address/ })).toBeNull();
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("signed in and waiting, names the school and address, and resends from the session", async () => {
+    getSession.mockReturnValue({ token: "s", userId: "u1", role: "senco_admin", expiresAt: "2026-12-01T00:00:00Z" });
+    verify.mockResolvedValue(invalid);
+    read.mockResolvedValue(state({ status: "pending", email: "f.adebayo@brightgate.edu.ng" }));
+    schoolGet.mockResolvedValue({ name: "Brightgate Academy" });
+    resend.mockResolvedValue(state({ status: "pending" }));
+    const { container } = render(<ConfirmEmail token="t1" />);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(
+        /It may have been copied only part-way\. Nothing's wrong with your account - we can send Brightgate Academy a fresh link to f\.adebayo@brightgate\.edu\.ng\./,
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Send a new link/ }));
+    await waitFor(() => expect(resend).toHaveBeenCalledWith(undefined));
+    expect(screen.getByRole("link", { name: /Change the email address/ })).toHaveAttribute("href", "/admin");
+  });
+
+  it("signed in but already confirmed, offers nothing more to send", async () => {
+    getSession.mockReturnValue({ token: "s", userId: "u1", role: "senco_admin", expiresAt: "2026-12-01T00:00:00Z" });
+    verify.mockResolvedValue(invalid);
+    read.mockResolvedValue(state({ status: "confirmed", email: "f.adebayo@brightgate.edu.ng" }));
+    schoolGet.mockResolvedValue({ name: "Brightgate Academy" });
+    const { container } = render(<ConfirmEmail token="t1" />);
+    await waitFor(() => expect(read).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(visibleText(container)).not.toMatch(/f\.adebayo/);
+    expect(screen.queryByRole("button", { name: /Send a new link/ })).toBeNull();
   });
 });
