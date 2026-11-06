@@ -80,6 +80,11 @@ const onTouch = (touch: boolean) =>
 
 const MOTOR_DAY: WarmUpPrompt = { state: "motor", sampleCount: 8, doneToday: false };
 
+/** Past the intro (Lydia, 2 Nov): only Start begins the timed step. */
+const start = async () => {
+  fireEvent.click(await screen.findByRole("button", { name: "Start" }));
+};
+
 beforeEach(() => {
   now = 1000;
   frames = [];
@@ -121,6 +126,7 @@ describe("a motor-speed warm-up day, on a touch device", () => {
   it("is onboarding's motor step, full-screen, with no warm-up header over it", async () => {
     onTouch(true);
     render(<WarmUpRun />);
+    await start();
 
     await waitFor(() => expect(screen.getByTestId("motor-ground")).toBeInTheDocument());
     expect(screen.getByText("Tap the square each time you see it.")).toBeInTheDocument();
@@ -130,6 +136,7 @@ describe("a motor-speed warm-up day, on a touch device", () => {
   it("sends the eight timings in order, with the device, to the prompt's route - and nothing to /trials", async () => {
     onTouch(true);
     render(<WarmUpRun />);
+    await start();
     await waitFor(() => expect(screen.getByTestId("motor-ground")).toBeInTheDocument());
 
     const waits = [700, 650, 520, 480, 510, 495, 530, 505];
@@ -151,6 +158,7 @@ describe("a motor-speed warm-up day, on a touch device", () => {
     onTouch(true);
     motorTaskDone.mockResolvedValue(false);
     render(<WarmUpRun />);
+    await start();
     await waitFor(() => expect(screen.getByTestId("motor-ground")).toBeInTheDocument());
     for (let i = 0; i < 8; i++) tapAfter(500);
 
@@ -161,6 +169,8 @@ describe("a motor-speed warm-up day, on a touch device", () => {
     onTouch(true);
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     render(<WarmUpRun />);
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
     await act(async () => {});
     expect(screen.getByTestId("motor-ground")).toBeInTheDocument();
 
@@ -182,12 +192,53 @@ describe("a motor-speed warm-up day, on a touch device", () => {
     onTouch(true);
     consent.withdrawn = true;
     render(<WarmUpRun />);
+    await start();
     await waitFor(() => expect(screen.getByTestId("motor-ground")).toBeInTheDocument());
     for (let i = 0; i < 8; i++) tapAfter(500);
 
     expect(await screen.findByText("That's it for today")).toBeInTheDocument();
     expect(motorTaskDone).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * WHAT IS COMING, BEFORE THE TIMED PART (Lydia, 31 Oct Q4; 2 Nov "build it as
+ * described"): the DAILY WARM-UP label, 08a's line, and one button, "Start".
+ */
+describe("a motor-speed warm-up day, before it starts", () => {
+  it("says what is coming, with one button, Start, and no ground yet", async () => {
+    onTouch(true);
+    render(<WarmUpRun />);
+
+    expect(await screen.findByText("DAILY WARM-UP")).toBeInTheDocument();
+    expect(screen.getByText("Tap the square each time you see it.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Start"]);
+    expect(screen.queryByTestId("motor-ground")).toBeNull();
+  });
+
+  it("times nothing and sends nothing until Start is pressed", async () => {
+    onTouch(true);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    render(<WarmUpRun />);
+    await act(async () => {});
+    // Well past 08a's ten seconds on a target: there is none yet.
+    await act(async () => {
+      vi.advanceTimersByTime(30_000);
+    });
+
+    expect(motorTaskDone).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+  });
+
+  it("begins the step on Start, full-screen, as onboarding's", async () => {
+    onTouch(true);
+    render(<WarmUpRun />);
+    await start();
+
+    expect(await screen.findByTestId("motor-ground")).toBeInTheDocument();
+    expect(screen.queryByText("DAILY WARM-UP")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
   });
 });
 
