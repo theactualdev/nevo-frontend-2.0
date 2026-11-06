@@ -44,7 +44,14 @@ function KindMark({ kind }: { kind?: NotificationKind }) {
  * Board 28's tile and line, for an empty feed - and for a feed that could not
  * be read, which the board does not draw and which keeps the same shape.
  */
-function PanelNote({ children }: { children: React.ReactNode }) {
+function PanelNote({
+  children,
+  action,
+}: {
+  children: React.ReactNode;
+  /** A way on under the line, where there is one. */
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col items-center p-8 text-center md:px-[18px] md:pt-6 md:pb-[34px]">
       <span className="flex size-[60px] items-center justify-center rounded-[12px] bg-nevo-cream text-nevo-navy/50 md:size-14">
@@ -53,6 +60,7 @@ function PanelNote({ children }: { children: React.ReactNode }) {
       <p className="mt-4 text-sm text-nevo-near-black/60 md:mt-3.5">
         {children}
       </p>
+      {action}
     </div>
   );
 }
@@ -75,8 +83,15 @@ function PanelNote({ children }: { children: React.ReactNode }) {
  * kind.
  */
 export function NotificationBell({ className }: { className?: string }) {
-  const { notifications, unreadCount, failed, loading, markRead, showingSamples } =
-    useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    failed,
+    loading,
+    markRead,
+    refresh,
+    showingSamples,
+  } = useNotifications();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -147,8 +162,23 @@ export function NotificationBell({ className }: { className?: string }) {
             Notifications
           </p>
           {failed ? (
-            /* Could not ask is not the same as nothing new. */
-            <PanelNote>We couldn&apos;t load these just now</PanelNote>
+            /* Could not ask is not the same as nothing new - and it is not
+               the end of it either: Try again asks once more (audit, 2 Nov,
+               backlog 37). Reopening the panel never did, so the child was
+               left with the line until a reload. */
+            <PanelNote
+              action={
+                <button
+                  type="button"
+                  onClick={refresh}
+                  className="mt-4 flex h-11 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-6 text-[15px] font-medium text-nevo-cream"
+                >
+                  Try again
+                </button>
+              }
+            >
+              We couldn&apos;t load these just now
+            </PanelNote>
           ) : loading ? (
             /* Not answered yet is not "nothing new" either. */
             <div className="flex justify-center px-4 pt-8 pb-10">

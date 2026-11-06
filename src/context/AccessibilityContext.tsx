@@ -98,6 +98,35 @@ export function accountPrefs(
   return out;
 }
 
+/** Whether this device holds any settings under `key` at all. */
+function storedPrefs(key: string): boolean {
+  try {
+    return localStorage.getItem(key) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The three settings on `<html>`, where CSS reads them. One place, because a
+ * first screen held for the account's answer must have them on before it is
+ * shown, not a render later.
+ */
+function paint(prefs: AccessibilityPrefs): void {
+  const root = document.documentElement;
+  root.dataset.reducedMotion = String(prefs.reducedMotion);
+  root.dataset.contrast = prefs.highContrast ? "high" : "normal";
+  root.dataset.textSize = prefs.textSize;
+}
+
+/**
+ * How long a child's first screen waits for their account's settings on a
+ * tablet that holds none of them (SCRUM-228). Past it the screen shows with
+ * the defaults rather than stay blank, and the account's answer, if it comes,
+ * still replaces them.
+ */
+export const ACCOUNT_WAIT_MS = 3_000;
+
 function readPrefs(key: string): AccessibilityPrefs {
   try {
     const raw = localStorage.getItem(key);
@@ -175,6 +204,22 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
   const chosenSince = useRef(false);
   /** Account writes, one at a time, so the last choice is the one kept. */
   const writes = useRef<Promise<unknown>>(Promise.resolve());
+  /** The key whose account read the screen is held for, and its cap. */
+  const holding = useRef<{
+    key: string;
+    cap: ReturnType<typeof setTimeout>;
+  } | null>(null);
+  /**
+   * Show the screen held for `key`, or whichever is held. Only that hold: an
+   * answer for one child never uncovers a screen held for the next.
+   */
+  const release = useCallback((key?: string) => {
+    const held = holding.current;
+    if (!held || (key !== undefined && held.key !== key)) return;
+    clearTimeout(held.cap);
+    holding.current = null;
+    delete document.documentElement.dataset.a11yPending;
+  }, []);
 
   /*
    * ONE CHILD'S SETTINGS, NOT THE TABLET'S.
@@ -196,13 +241,29 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
    * next load paints them. A read that fails changes nothing: the device's
    * copy is the child's last known choice, not a guess. And a choice made
    * while the read is out is not undone by its older answer.
+   *
+   * A TABLET THAT HOLDS NOTHING OF THE CHILD'S (SCRUM-228, rule 6). Then
+   * there is no device copy to paint first, and the child's first screen
+   * after signing in drew at the default size and contrast, then snapped to
+   * their own: "a child who needs large text never sees a frame at the wrong
+   * size first". So a sign-in on this page that finds nothing of theirs here
+   * holds the page unseen (`data-a11y-pending`, globals.css) until the
+   * account answers, its settings already on `<html>` when it is shown. A
+   * read that fails shows it at once, and none waits past `ACCOUNT_WAIT_MS`.
+   * A page that opens already signed in has painted before any of this
+   * runs, and is not covered over after the fact.
    */
   useEffect(() => {
+    let opened = false;
     const load = () => {
       const key = prefsKey();
+      // Read before the commit below, whose effect writes the device copy.
+      const unseen = !storedPrefs(key);
       if (current.current.key !== key) {
         commit({ key, prefs: readPrefs(key) });
       }
+      // Another child's hold, or nobody's now: not this screen's to keep.
+      if (holding.current?.key !== key) release();
       if (!syncedAccount()) {
         // Signed out: the next sign-in, the same child's included, asks again.
         askedFor.current = null;
@@ -211,25 +272,45 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
       if (askedFor.current === key) return;
       askedFor.current = key;
       chosenSince.current = false;
+      if (unseen && opened) {
+        document.documentElement.dataset.a11yPending = "true";
+        holding.current = {
+          key,
+          cap: setTimeout(() => release(key), ACCOUNT_WAIT_MS),
+        };
+      }
       personalSettingsApi.get().then(
         (res) => {
-          if (current.current.key !== key || chosenSince.current) return;
+          if (current.current.key !== key || chosenSince.current) {
+            release(key);
+            return;
+          }
           const held = accountPrefs(res?.preferences);
+          const next = { ...current.current.prefs, ...held };
+          // On before the screen is shown, not a render after.
+          if (holding.current?.key === key) paint(next);
+          release(key);
           if (Object.keys(held).length === 0) return;
-          commit({ key, prefs: { ...current.current.prefs, ...held } });
+          commit({ key, prefs: next });
         },
         () => {
           // Unread is not a preference. Asked again on the next change of
           // session, rather than never.
           if (askedFor.current === key) askedFor.current = null;
+          release(key);
         },
       );
     };
     // Post-mount read of an external store - it cannot run during render
     // without a hydration mismatch.
     load();
-    return onSessionChange(load);
-  }, [commit]);
+    opened = true;
+    const off = onSessionChange(load);
+    return () => {
+      off();
+      release();
+    };
+  }, [commit, release]);
 
   // Apply to the document root + persist on any change.
   useEffect(() => {
@@ -241,10 +322,7 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
      * exists to prevent.
      */
     if (!state.key) return;
-    const root = document.documentElement;
-    root.dataset.reducedMotion = String(state.prefs.reducedMotion);
-    root.dataset.contrast = state.prefs.highContrast ? "high" : "normal";
-    root.dataset.textSize = state.prefs.textSize;
+    paint(state.prefs);
     try {
       localStorage.setItem(state.key, JSON.stringify(state.prefs));
     } catch {

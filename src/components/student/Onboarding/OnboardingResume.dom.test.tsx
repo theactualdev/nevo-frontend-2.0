@@ -123,7 +123,7 @@ function expectNothingState() {
     "Nothing to do here right now",
   );
   expect(document.body.textContent).toContain(
-    "You can go on to Nevo and come back any time.",
+    "If something needs doing here, it will appear on your home screen. You can go on to Nevo and come back any time.",
   );
   expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
     NOTHING,
@@ -582,7 +582,7 @@ describe("the loop guard, while the server still refuses the lesson", () => {
   it("is not used up by a read that failed", async () => {
     readiness.mockRejectedValue(new ApiError(0, "offline"));
     render(<OnboardingResume />);
-    await screen.findByRole("button", { name: NOTHING });
+    await screen.findByRole("button", { name: "Try again" });
 
     readiness.mockResolvedValue(NO_BANK);
     await arriveAgain();
@@ -591,34 +591,56 @@ describe("the loop guard, while the server still refuses the lesson", () => {
   });
 });
 
-describe("the nothing-state, where a read failed", () => {
-  it("is a way to the lessons, not an automatic one, when readiness cannot be read", async () => {
-    readiness.mockRejectedValue(new ApiError(0, "offline"));
-    render(<OnboardingResume />);
-
-    const home = await screen.findByRole("button", { name: NOTHING });
-    expectNothingState();
+/*
+ * A READ THAT FAILED SAYS SO (Lydia, 4 Nov: "the product asserting a state
+ * that is not true ... is worse than any missing feature"; audit, 2 Nov,
+ * backlog 6). It was "Nothing to do here right now", which the server had not
+ * said. Now frame 28's Generic Error: Try again reads again, Go back goes to
+ * the lessons. Never moved past as though the bank were empty, never "done".
+ */
+describe("a read that failed", () => {
+  const saysItFailed = async () => {
+    expect(
+      await screen.findByRole("heading", { name: "Something went wrong" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Nothing to do here right now")).toBeNull();
     expect(screen.queryByTestId("module-four")).toBeNull();
     await act(async () => {});
     expect(replace).not.toHaveBeenCalled();
-    fireEvent.click(home);
+  };
+
+  it("says so when readiness cannot be read, with Go back to the lessons", async () => {
+    readiness.mockRejectedValue(new ApiError(0, "offline"));
+    render(<OnboardingResume />);
+
+    await saysItFailed();
+    fireEvent.click(screen.getByRole("button", { name: "Go back" }));
     expect(replace).toHaveBeenCalledWith(LESSONS);
   });
 
-  it("is the same when Module 4's first item cannot be read", async () => {
+  it("reads again on Try again, and goes on once it answers", async () => {
+    readiness.mockRejectedValueOnce(new ApiError(0, "offline"));
+    readiness.mockResolvedValue(NO_BANK);
+    render(<OnboardingResume />);
+    await saysItFailed();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
+    expect(readiness).toHaveBeenCalledTimes(2);
+  });
+
+  it("says so when Module 4's first item cannot be read", async () => {
     // Not "nothing to ask": a broken read is not moved past as though the
     // bank were empty.
     readiness.mockResolvedValue(THREE_DONE);
     next.mockRejectedValue(new ApiError(0, "offline"));
     render(<OnboardingResume />);
 
-    expect(await screen.findByRole("button", { name: NOTHING })).toBeInTheDocument();
-    expect(screen.queryByTestId("module-four")).toBeNull();
-    await act(async () => {});
-    expect(replace).not.toHaveBeenCalled();
+    await saysItFailed();
   });
 
-  it("is the same when Module 4 itself says its read failed", async () => {
+  it("says so when Module 4 itself says its read failed", async () => {
     readiness.mockResolvedValue(ready({}));
     next.mockRejectedValue(new ApiError(0, "offline"));
     render(<OnboardingResume />);
@@ -626,9 +648,7 @@ describe("the nothing-state, where a read failed", () => {
     fireEvent.click(await screen.findByRole("button", { name: "after profiling" }));
     fireEvent.click(await screen.findByRole("button", { name: "probe failed" }));
 
-    expect(await screen.findByRole("button", { name: NOTHING })).toBeInTheDocument();
-    await act(async () => {});
-    expect(replace).not.toHaveBeenCalled();
+    await saysItFailed();
   });
 });
 
@@ -803,11 +823,11 @@ describe("the way back to the page that was refused", () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith(HOME));
   });
 
-  it("keeps the nothing-state's button to the lessons, a lesson to go back to or not", async () => {
+  it("goes back to the lessons from a read that failed, a lesson to go back to or not", async () => {
     readiness.mockRejectedValue(new ApiError(0, "offline"));
     render(<OnboardingResume returnTo={LESSON} />);
 
-    const home = await screen.findByRole("button", { name: NOTHING });
+    const home = await screen.findByRole("button", { name: "Go back" });
     await act(async () => {});
     expect(replace).not.toHaveBeenCalled();
     fireEvent.click(home);

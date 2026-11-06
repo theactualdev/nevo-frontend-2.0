@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect } from "react";
-import { lessonsApi, type LessonSummary, type LessonSourceType } from "@/lib/api/lessons";
+import {
+  lessonsApi,
+  type LessonSummary,
+  type LessonSourceType,
+  type LibraryTotals,
+} from "@/lib/api/lessons";
 import { useLiveQuery } from "./useLiveQuery";
 import { LIBRARY_LESSONS } from "@/lib/mocks/teacherLibrary";
 
@@ -156,12 +161,22 @@ function needsReviewOf(lesson: LessonSummary): boolean {
   );
 }
 
+/**
+ * C06's "Assigned" pill (backlog item 13): the server's `assignmentCount`
+ * says the lesson has gone to someone. Absent is not zero - an older
+ * response without the count stays "Ready", which claims nothing about
+ * where it went.
+ */
+function isAssigned(lesson: LessonSummary): boolean {
+  return typeof lesson.assignmentCount === "number" && lesson.assignmentCount !== 0;
+}
+
 function statusOf(lesson: LessonSummary): CardStatus {
   switch (lesson.status) {
     case "completed":
-      return waitsForReview(lesson) ? "Needs review" : "Ready";
+      return waitsForReview(lesson) ? "Needs review" : isAssigned(lesson) ? "Assigned" : "Ready";
     case "completed_with_review":
-      return waitsForReview(lesson) ? "Needs review" : "Ready";
+      return waitsForReview(lesson) ? "Needs review" : isAssigned(lesson) ? "Assigned" : "Ready";
     case "pending":
     case "processing":
       return "Preparing";
@@ -295,6 +310,17 @@ export interface LessonLibraryState {
 
 /** How often to look again while a lesson is still being read. */
 const PARSING_REREAD_MS = 10_000;
+
+/**
+ * C06's stat cards, from the server's own totals. Null until they arrive, and
+ * on a failed read: the cards are left out rather than drawn over numbers we
+ * do not have, and never summed from the cards on screen.
+ */
+export function useLibraryTotals(): LibraryTotals | null {
+  const run = useCallback(() => lessonsApi.totals(), []);
+  const { data } = useLiveQuery<LibraryTotals>(run, []);
+  return data;
+}
 
 export function useLessonLibrary(): LessonLibraryState {
   /*

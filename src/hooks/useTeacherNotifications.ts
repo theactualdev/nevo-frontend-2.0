@@ -21,9 +21,9 @@ import { useHasSession } from "./useHasSession";
  * from the same call rather than polling `/unread-count`.
  *
  * `type` is the spec's `NotificationType` enum, and `kindOf` maps it to the
- * C13 frame's marks; anything unrecognised falls back to `done`'s neutral
- * mark, so a type the backend adds tomorrow renders as a plain row rather
- * than an empty square.
+ * C13 frame's marks; anything unrecognised falls back to `other`, a plain
+ * dot, so a type the backend adds tomorrow renders as a plain row rather
+ * than an empty square - and never as a tick it has not earned.
  *
  * Fixtures back the designed panel when there is no session; a signed-in
  * teacher whose feed fails sees an empty bell rather than invented events,
@@ -53,6 +53,8 @@ const KIND_BY_TYPE: Partial<Record<NotificationType, NotificationKind>> = {
   roster_sync_needs_attention: "klass",
   pin_reset_requested: "support",
   consent_action_required: "support",
+  // A child who needs support with a concept - about a child, like a flag.
+  concept_support_needed: "flag",
 };
 
 const KIND_BY_CATEGORY: Record<string, NotificationKind> = {
@@ -64,7 +66,9 @@ function kindOf(type: string, category?: string | null): NotificationKind {
   return (
     KIND_BY_TYPE[type as NotificationType] ??
     (category ? KIND_BY_CATEGORY[category] : undefined) ??
-    "done"
+    // Not `done`: that mark is a tick, and an unknown type is not a
+    // finished thing (5 Nov).
+    "other"
   );
 }
 
@@ -223,7 +227,23 @@ export function useTeacherNotifications(): TeacherNotificationsState {
       setFeed((f) => f?.filter((n) => n.notificationId !== id) ?? f);
       setArchived((a) => [row, ...a]);
       if (!row.read) setUnread((u) => Math.max(0, u - 1));
-      if (getToken()) void notificationsApi.archive(id).catch(() => {});
+      /*
+       * NOT ARCHIVED AFTER ALL, so it comes back. The failure was swallowed
+       * and the panel kept saying `Archived "…"` with an Undo, over a row the
+       * next read would bring straight back (4 Nov sweep).
+       */
+      if (getToken())
+        void notificationsApi.archive(id).catch(() => {
+          setArchived((a) => a.filter((n) => n.notificationId !== id));
+          setFeed((f) =>
+            f && !f.some((n) => n.notificationId === id)
+              ? [row, ...f].sort(
+                  (x, y) => +new Date(y.createdAt) - +new Date(x.createdAt),
+                )
+              : f,
+          );
+          if (!row.read) setUnread((u) => u + 1);
+        });
     },
     [feed],
   );
@@ -240,8 +260,13 @@ export function useTeacherNotifications(): TeacherNotificationsState {
         : f,
     );
     if (!row.read) setUnread((u) => u + 1);
+    // Not restored, so it stays archived - and undoable - as it really is.
     if (getToken())
-      void notificationsApi.restore(row.notificationId).catch(() => {});
+      void notificationsApi.restore(row.notificationId).catch(() => {
+        setFeed((f) => f?.filter((n) => n.notificationId !== row.notificationId) ?? f);
+        setArchived((a) => [row, ...a]);
+        if (!row.read) setUnread((u) => Math.max(0, u - 1));
+      });
   }, [archived]);
 
   const markAllRead = useCallback(() => {

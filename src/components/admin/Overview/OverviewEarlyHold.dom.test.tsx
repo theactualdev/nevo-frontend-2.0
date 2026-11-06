@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { ApiError } from "@/lib/api/client";
 import { visibleText } from "@/test/visibleText";
 import type { AgeCheck } from "@/lib/api/ageChecks";
 import { OverviewView } from "./OverviewView";
@@ -42,6 +43,19 @@ vi.mock("@/lib/api/school", async (importOriginal) => {
       ...actual.schoolApi,
       narrative: () => narrative(),
       overview: () => overview(),
+      // Reads, with no code: a failed school read now says so on the code
+      // card (backlog 33), which is not what these tests are about.
+      get: () =>
+        Promise.resolve({
+          id: "sch1",
+          name: "Brightgate Academy",
+          code: null,
+          slug: null,
+          profile: {},
+          academicConfig: {},
+          retentionPolicy: "contract",
+          retentionDays: 365,
+        }),
     },
   };
 });
@@ -162,10 +176,32 @@ describe("the early Overview with a child already held (D04, 27 Oct)", () => {
     expect(text).not.toMatch(NEEDS_YOU);
   });
 
-  it("shows nothing when the holds can't be read - absent is not zero, and not a claim", async () => {
-    held.mockRejectedValue(new Error("500"));
+  it("says it couldn't check when the holds can't be read - never a count, never 'none' (backlog 33)", async () => {
+    // This used to show nothing at all, which hid a held child - heading for
+    // deletion - exactly as completely as having none. SCRUM-39's per-card line.
+    held.mockRejectedValueOnce(new Error("500"));
+    const { container } = render(<OverviewView />);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/We couldn't pull this in just now\. We're on it\./),
+    );
+    const text = visibleText(container);
+    expect(text.indexOf("Worth a glance")).toBeGreaterThan(-1);
+    expect(text).not.toMatch(/on hold for a date of birth check/);
+    expect(text).not.toMatch(NEEDS_YOU);
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/1 student is on hold for a date of birth check/),
+    );
+    expect(visibleText(container)).not.toMatch(/couldn't pull this in/);
+    expect(held).toHaveBeenCalledTimes(2);
+  });
+
+  it("says nothing on a 403 - a scope this admin lacks is not a fault to retry", async () => {
+    held.mockRejectedValue(new ApiError(403, "forbidden"));
     const { container } = render(<OverviewView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Getting started/));
     expect(visibleText(container)).not.toMatch(/Worth a glance/);
+    expect(visibleText(container)).not.toMatch(/couldn't pull this in/);
   });
 });

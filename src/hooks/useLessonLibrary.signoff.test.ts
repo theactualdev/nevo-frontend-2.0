@@ -54,3 +54,22 @@ describe("the card's review state", () => {
     expect(card.needsReview).toBe(false);
   });
 });
+
+/**
+ * C06's "Assigned" pill (backlog item 13), from the server's own
+ * `assignmentCount`. Absent is not zero, so an older response claims nothing.
+ */
+describe("the card's Assigned pill", () => {
+  it("is Assigned once the server counts it gone to someone", () => {
+    expect(__toCardForTest(lesson({ reviewComplete: true, assignmentCount: 28 })).status).toBe("Assigned");
+  });
+
+  it("stays Ready when it has gone to nobody, or the count was not sent", () => {
+    expect(__toCardForTest(lesson({ reviewComplete: true, assignmentCount: 0 })).status).toBe("Ready");
+    expect(__toCardForTest(lesson({ reviewComplete: true })).status).toBe("Ready");
+  });
+
+  it("still says Needs review over an assigned lesson that is waiting on its review", () => {
+    expect(__toCardForTest(lesson({ reviewComplete: false, assignmentCount: 28 })).status).toBe("Needs review");
+  });
+});

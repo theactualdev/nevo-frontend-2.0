@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { ApiError } from "@/lib/api/client";
 import { visibleText } from "@/test/visibleText";
 import { SchoolCodeCard } from "./SchoolCodeCard";
 
@@ -75,14 +76,30 @@ describe("SchoolCodeCard", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("does not claim a school has no code when the read failed", async () => {
-    // A school that cannot be read has not lost its code.
-    get.mockRejectedValue(new Error("500"));
+  it("says it couldn't pull the code in when the read failed - never that there's none (backlog 33)", async () => {
+    // A school that cannot be read has not lost its code - and a card that
+    // vanishes says nothing either. SCRUM-39's per-card line, with Try again.
+    get.mockRejectedValueOnce(new Error("500"));
+    const { container } = render(<SchoolCodeCard />);
+
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/We couldn't pull this in just now\. We're on it\./),
+    );
+    expect(visibleText(container)).toMatch(/School code/);
+    expect(visibleText(container)).not.toMatch(/no code/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("BGA-4827")).toBeInTheDocument();
+    expect(visibleText(container)).not.toMatch(/couldn't pull/);
+  });
+
+  it("stays absent on a 403 - not a fault, and asking again can't change it", async () => {
+    get.mockRejectedValue(new ApiError(403, "forbidden"));
     const { container } = render(<SchoolCodeCard />);
 
     await waitFor(() => expect(get).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
     expect(container).toBeEmptyDOMElement();
-    expect(visibleText(container)).not.toMatch(/no code|couldn.t/i);
   });
 
   it("does not say Copied when the clipboard refused", async () => {

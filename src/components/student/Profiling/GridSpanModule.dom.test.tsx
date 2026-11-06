@@ -272,7 +272,7 @@ describe("GridSpanModule — the settle (D136)", () => {
 });
 
 describe("GridSpanModule — where a tap landed", () => {
-  it("records the coordinates of a tile tap", () => {
+  it("records no coordinates for a tile tap (Lydia, 4 Nov)", () => {
     const capture = new BaselineCapture("coords");
     render(
       <GridSpanModule
@@ -290,6 +290,8 @@ describe("GridSpanModule — where a tap landed", () => {
     });
 
     const tap = capture.stream.find((e) => e.kind === "tap")?.payload;
-    expect(tap).toMatchObject({ x: 101.5, y: 202.25 });
+    expect(tap).toBeDefined();
+    expect(tap).not.toHaveProperty("x");
+    expect(tap).not.toHaveProperty("y");
   });
 });

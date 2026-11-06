@@ -583,6 +583,50 @@ describe("the door lines 28c draws", () => {
     );
   });
 
+  /*
+   * SCRUM-251 (Teslim 8a7199b): the throttle is a 429 with `retryAt`. A 429
+   * was read as "ours" - "Try again" - and the pause never showed; and a
+   * child who waited it out had to leave and come back.
+   */
+  it("pauses on the server's 429, and opens the PIN again here when its retryAt arrives", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const ends = Date.now() + 30_000;
+    loginPin.mockRejectedValue(
+      new ApiError(429, "Too Many Requests", {
+        detail: {
+          code: "too_many_attempts",
+          message: "slow",
+          retryAt: new Date(ends).toISOString(),
+        },
+      }),
+    );
+    await chooseAda();
+    await tap("1234");
+
+    expect(
+      await screen.findByRole("heading", { name: "Let's take a moment" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Something went wrong on our side. Try again."),
+    ).toBeNull();
+    // Nothing says when: D154 draws no how-long and no countdown.
+    expect(document.body.textContent).not.toMatch(/\d+\s*(s|sec|second|minute)/i);
+
+    await act(async () => {
+      vi.advanceTimersByTime(29_000);
+    });
+    expect(screen.getByText("Let's take a moment")).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+    });
+    expect(
+      await screen.findByText("Enter your PIN to keep going"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "1" })).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
   it("opens the PIN again for a child who comes back from the picker", async () => {
     loginPin.mockRejectedValue(
       new ApiError(401, "Unauthorized", {

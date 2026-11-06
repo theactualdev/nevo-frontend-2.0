@@ -104,6 +104,14 @@ export function TeacherHome() {
   // A card this teacher has already opened is read, and leaves THEIR Home
   // (SCRUM-252; Lydia, 13 Oct: "clears the card from their own view only").
   const flags = noClasses ? [] : liveFlags.filter((f) => !f.seenByMe);
+  /*
+   * OPENED IS NOT CLOSED (4 Nov sweep). The cards this teacher has opened
+   * leave their Home, but the flags are still open. With every one opened,
+   * Home said "Nothing needs you right now. Everyone's moving along at their
+   * own pace" over children Nevo had flagged - and "Everything else is
+   * running smoothly" beside the cards still waiting.
+   */
+  const openedOpen = noClasses ? 0 : liveFlags.length - flags.length;
   const fixtureFlags = noClasses || !showFixtureFlags ? [] : HOME_FLAGS;
   const flagCount = flags.length + fixtureFlags.length;
   const hasFlags = flagCount > 0;
@@ -141,11 +149,13 @@ export function TeacherHome() {
         {hasFlags && (fixtureFlags.length > 0 || flagsComplete) && (
           <>
             <p className="mt-2 hidden text-[15.5px] leading-[1.55] text-nevo-near-black/60 xl:block">
-              {`${flagCount} ${flagCount === 1 ? "thing is" : "things are"} worth your eye before first period. Everything else is running smoothly.`}
+              {`${flagCount} ${flagCount === 1 ? "thing is" : "things are"} worth your eye before first period.`}
+              {openedOpen === 0 && " Everything else is running smoothly."}
             </p>
             {/* B1's shorter line, for a phone. */}
             <p className="mt-1.5 text-[14px] leading-[1.5] text-nevo-near-black/60 md:hidden">
-              {`${flagCount} ${flagCount === 1 ? "thing is" : "things are"} worth your eye. Everything else is steady.`}
+              {`${flagCount} ${flagCount === 1 ? "thing is" : "things are"} worth your eye.`}
+              {openedOpen === 0 && " Everything else is steady."}
             </p>
           </>
         )}
@@ -294,15 +304,28 @@ export function TeacherHome() {
                     <path d="M20 6L9 17l-5-5" />
                   </svg>
                 </span>
-                <div>
-                  <h3 className="text-[16px] font-semibold text-nevo-near-black xl:text-[17px]">
-                    Nothing needs you right now
-                  </h3>
-                  <p className="mt-[5px] text-sm leading-[1.5] text-nevo-near-black/66 xl:text-[14.5px]">
-                    Everyone&rsquo;s moving along at their own pace. We&rsquo;ll
-                    let you know the moment something&rsquo;s worth a look.
-                  </p>
-                </div>
+                {openedOpen > 0 ? (
+                  /* Every card opened, the flags still open: say only that. */
+                  <div>
+                    <h3 className="text-[16px] font-semibold text-nevo-near-black xl:text-[17px]">
+                      You&rsquo;ve opened everything waiting for you
+                    </h3>
+                    <p className="mt-[5px] text-sm leading-[1.5] text-nevo-near-black/66 xl:text-[14.5px]">
+                      They&rsquo;re still on each child&rsquo;s page. We&rsquo;ll
+                      let you know when something new is worth a look.
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <h3 className="text-[16px] font-semibold text-nevo-near-black xl:text-[17px]">
+                      Nothing needs you right now
+                    </h3>
+                    <p className="mt-[5px] text-sm leading-[1.5] text-nevo-near-black/66 xl:text-[14.5px]">
+                      Everyone&rsquo;s moving along at their own pace. We&rsquo;ll
+                      let you know the moment something&rsquo;s worth a look.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 

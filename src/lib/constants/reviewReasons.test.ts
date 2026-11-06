@@ -18,7 +18,7 @@ describe("why a section wants a look", () => {
     expect(reasonCopy("something_new")).toMatch(/doesn.t recognise yet/);
   });
 
-  it("covers every reason the deployed enum carries (24 Oct: twenty)", () => {
+  it("covers every reason the deployed enum carries (5 Nov: twenty-one)", () => {
     const deployed = [
       "deterministic_parse_used", "unmarkable_question", "fewer_than_two_modalities",
       "interactive_activity_missing", "audio_generation_failed",
@@ -30,6 +30,7 @@ describe("why a section wants a look", () => {
       "calculation_variant_missing_manipulative",
       "calculation_segment_has_no_interactive_delivery", "model_flagged_for_review",
       "depth_variant_review_required", "optional_media_pending_review",
+      "guided_steps_review_required",
     ];
     expect(Object.keys(REVIEW_REASON_COPY).sort()).toEqual([...deployed].sort());
     for (const reason of deployed) expect(reasonCopy(reason)).not.toMatch(/doesn.t recognise/);
@@ -39,5 +40,18 @@ describe("why a section wants a look", () => {
     expect(reasonCopy("depth_variant_review_required")).toBe(
       "Nevo wrote a simpler and a longer version of this section. Children don't get them until they're approved.",
     );
+  });
+});
+
+// Found by scripts/enum-check.mjs (5 Nov): in the deployed enum, and read as
+// "a reason this console doesn't recognise yet" until now.
+describe("guided_steps_review_required", () => {
+  it("has its own words, which claim nothing about what a child gets", () => {
+    const line = reasonCopy("guided_steps_review_required");
+
+    expect(line).toBe(
+      "Nevo wrote guiding questions for a check in this section, and they're waiting for your approval.",
+    );
+    expect(line).not.toMatch(/recognise/);
   });
 });

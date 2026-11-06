@@ -1361,20 +1361,38 @@ function segmentFor(
  * so they are passed in rather than fetched here. A module whose segments did
  * not survive the mapping is dropped: the player indexes segments by id and a
  * module pointing at nothing would draw an empty boundary screen.
+ *
+ * BY THE SEGMENTS' RECORD IDS (audit, 2 Nov). `segmentIds` carries the
+ * sections' KEYS ("fallback-1", "chunk-2-1-segment-3") on live lessons, so
+ * every member was filtered out against the player's ids, every module was
+ * dropped, and a lesson of several modules played as one flat list: no
+ * boundary, no recap, no "Module 2 of 3". `segmentRecordIds` (Teslim 58b1a55,
+ * in the live spec) are the ids themselves, in order - the teacher's
+ * structure editor reads them the same way (`structureDraft`). A payload
+ * without them, an older stored one, has its keys read as the server matches
+ * them: a section's key or its id.
  */
 function modulesFor(
   modules: ContentModule[],
   segments: LessonSegment[],
+  raw: ContentSegment[],
 ): LessonModule[] | undefined {
   if (modules.length === 0) return undefined;
   const known = new Set(segments.map((s) => s.id));
+  const byKey = new Map(raw.map((s) => [s.segmentKey, s.id]));
+  const members = (m: ContentModule) =>
+    m.segmentRecordIds && m.segmentRecordIds.length > 0
+      ? m.segmentRecordIds
+      : m.segmentIds.map((key) => (known.has(key) ? key : byKey.get(key)));
   const mapped = modules
     .slice()
     .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
     .map((m) => ({
       id: m.id,
       title: m.title,
-      segmentIds: m.segmentIds.filter((id) => known.has(id)),
+      segmentIds: members(m).filter(
+        (id): id is string => id !== undefined && known.has(id),
+      ),
       ...(m.preview ? { preview: m.preview } : {}),
       ...(m.recap ? { recap: m.recap } : {}),
     }))
@@ -1407,7 +1425,7 @@ export function lessonFromContent(
     id: res.id,
     title: res.title,
     segments,
-    modules: modulesFor(modules, segments),
+    modules: modulesFor(modules, segments, ordered),
     // Omitted rather than set undefined, the same way the segment channels
     // are: the player tests `lesson.assessment` and `lesson.summary` for
     // PRESENCE, and an empty object would light a button that opens nothing.

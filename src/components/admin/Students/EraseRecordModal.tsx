@@ -20,9 +20,13 @@ import {
  * their name typed exactly. SEVERITY COMES FROM FRICTION, NOT FROM COLOUR -
  * there is no red here, the same as everywhere else.
  *
- * The copy is careful about two things a school will be asked later: that a
- * small amount is retained for a statutory period, and that teachers' notes
- * survive with the name removed. Both are stated before the commit.
+ * WHAT ERASING DOES IS LYDIA'S WORDING (4 Nov, her answer 27): "wherever the
+ * product states it" - `ERASURE_LINE`, shared with the roster's erased line.
+ * It replaced "This erases {name}'s record and everything identifying them.
+ * We're required to keep a small amount of it for a statutory period, then
+ * that goes too." - which said nothing of the seven days a copy can sit in
+ * the recovery backups. What survives with the class - teachers' notes, name
+ * removed - is still stated before the commit.
  *
  * TODO(api): the frame quotes the retention deadline as a real date ("until
  * 24 October 2026"). Nothing returns one. `DELETE /api/v1/students/{id}` is a
@@ -40,6 +44,13 @@ import {
  * date on a legal claim it does not describe, which on this screen is the
  * expensive mistake - so the copy still states the fact and invents no date.
  */
+
+/**
+ * What deleting a record does, in Lydia's words (4 Nov, answer 27), wherever
+ * the product states it. Verbatim - not to be paraphrased per surface.
+ */
+export const ERASURE_LINE =
+  "When you ask us to delete a record it is removed from the live system straight away. A copy can remain in our recovery backups for up to seven more days, and if we ever restore from one we reapply your deletion before anyone can see the data again. Files are not held in those backups at all, so a deleted file is gone immediately.";
 
 type Phase = "idle" | "erasing" | "failed";
 
@@ -116,9 +127,7 @@ export function EraseRecordModal({
       }
     >
       <p className="m-0 text-[14.5px] leading-[1.6] text-nevo-near-black/72">
-        This erases {firstName}&rsquo;s record and everything identifying them.
-        We&rsquo;re required to keep a small amount of it for a statutory
-        period, then that goes too. This cannot be undone.
+        {ERASURE_LINE} This cannot be undone.
       </p>
 
       <div className="mt-4 rounded-[10px] bg-nevo-cream-elevated px-4 py-3.5">

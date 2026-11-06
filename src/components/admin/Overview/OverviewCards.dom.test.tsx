@@ -65,6 +65,12 @@ vi.mock("@/lib/api/invites", async (importOriginal) => {
   return { ...actual, invitesApi: { ...actual.invitesApi, list: () => invites() } };
 });
 
+// The holds read resolves. Unmocked it fails in jsdom, and a failed read now
+// says so on its card (backlog 33) - which is not what these tests are about.
+vi.mock("@/lib/api/ageChecks", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/ageChecks")>();
+  return { ...actual, ageChecksApi: { ...actual.ageChecksApi, held: () => Promise.resolve([]) } };
+});
 vi.mock("@/lib/api/students", () => ({
   studentsApi: { list: () => Promise.resolve([]) },
 }));

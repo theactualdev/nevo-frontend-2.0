@@ -55,7 +55,20 @@ type FeedbackType = "feedback" | "feature";
 const PILL_BASE =
   "inline-flex h-9 cursor-pointer items-center rounded-full px-4 text-[13px] transition-[filter,background-color] active:scale-[0.98]";
 
-export function FeedbackPanel({ onClose }: { onClose: () => void }) {
+export function FeedbackPanel({
+  onClose,
+  role,
+}: {
+  onClose: () => void;
+  /**
+   * The parent variant (D23, design 1397ec4): same panel, its own words.
+   * Its consent note ("a consent-like message is routed to SCRUM-80 with a
+   * plain explanation") is left out - the server only stores a note, so
+   * nothing routes it (raised, 5 Nov). Absent: the panel as it was.
+   */
+  role?: "parent";
+}) {
+  const parent = role === "parent";
   const pathname = usePathname();
   const [type, setType] = useState<FeedbackType>("feedback");
   const [text, setText] = useState("");
@@ -186,7 +199,9 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
                 Share Feedback
               </h3>
               <p className="mt-2 max-w-[280px] text-[13px] leading-[1.55] text-nevo-near-black/60">
-                Help us improve Nevo. Your input shapes what we build next.
+                {parent
+                  ? "How is Nevo working for your child? Anything you share helps us make it better for your family."
+                  : "Help us improve Nevo. Your input shapes what we build next."}
               </p>
             </div>
             <button
@@ -261,9 +276,13 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
             onChange={(e) => setText(e.target.value)}
             aria-label="Your feedback"
             placeholder={
-              type === "feature"
-                ? "What would make Nevo better?"
-                : "What’s on your mind?"
+              parent
+                ? type === "feature"
+                  ? "What would make Nevo better for your family?"
+                  : "How is Nevo going for your child at home?"
+                : type === "feature"
+                  ? "What would make Nevo better?"
+                  : "What’s on your mind?"
             }
             /* `FeedbackRequest.note` is capped at 5000 in the contract, so a
                longer note 422s on every attempt - under copy inviting a retry

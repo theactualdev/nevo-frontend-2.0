@@ -52,7 +52,9 @@ export type NotificationType =
   | "lesson_assigned"
   | "review_due"
   | "teacher_replied"
-  | "sign_in_changed";
+  | "sign_in_changed"
+  // In the deployed enum (found by scripts/enum-check.mjs, 5 Nov).
+  | "concept_support_needed";
 
 export interface Notification {
   notificationId: string;

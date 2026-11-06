@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { TryAgain } from "./TryAgain";
 import { ApiError } from "@/lib/api/client";
 import { getSession } from "@/lib/auth/session";
 import { parentApi, type ParentChild } from "@/lib/api/parent";
@@ -32,6 +33,8 @@ type Phase = "loading" | "ready" | "signed-out" | "not-parent" | "failed";
 
 export function ParentHome() {
   const [phase, setPhase] = useState<Phase>("loading");
+  /** Bumped by Try again, to read this parent's children again. */
+  const [attempt, setAttempt] = useState(0);
   const [children, setChildren] = useState<ParentChild[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   /**
@@ -41,6 +44,12 @@ export function ParentHome() {
    * there is something to do. Its own read: unread asks nothing.
    */
   const [asks, setAsks] = useState<Set<string>>(() => new Set());
+  /**
+   * D02b's way in: how many concepts the server says each child has
+   * strengthened, read for the child on screen. Used only to decide whether
+   * the line shows - never displayed. Unread is none: no line.
+   */
+  const [strengthened, setStrengthened] = useState<Map<string, number>>(() => new Map());
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +94,27 @@ export function ParentHome() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
+
+  const retry = () => {
+    setPhase("loading");
+    setAttempt((a) => a + 1);
+  };
+
+  useEffect(() => {
+    if (!selected) return;
+    let alive = true;
+    // Its own read, and its own failure: an unread child shows no line.
+    Promise.resolve()
+      .then(() => parentApi.learningEvidence(selected))
+      .then((e) => {
+        if (alive) setStrengthened((m) => new Map(m).set(selected, e.strengthenedConcepts.length));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [selected]);
 
   if (phase === "loading") {
     return (
@@ -120,7 +149,9 @@ export function ParentHome() {
           <p className={BODY}>
             {phase === "not-parent"
               ? "If you have a Nevo account for school, sign in there instead."
-              : "We’ll send a code to the email address or phone number your child’s school has for you."}
+              : // Email only since SCRUM-162; the sign-in screen itself was
+                // fixed under SCRUM-126, and this line was missed (backlog 58).
+                "We’ll send a code to the email address your child’s school has for you."}
           </p>
           {phase === "signed-out" && (
             <a
@@ -150,6 +181,7 @@ export function ParentHome() {
           <p className={BODY}>
             Something went wrong at our end. Please try again in a moment.
           </p>
+          <TryAgain onClick={retry} />
         </Card>
       </Shell>
     );
@@ -172,6 +204,8 @@ export function ParentHome() {
   }
 
   const selectedChild = children.find((c) => c.studentId === selected) ?? null;
+  const strengthenedHere =
+    selectedChild !== null && (strengthened.get(selectedChild.studentId) ?? 0) > 0;
 
   return (
     <Shell dataHref={`/parent-portal/data${selected ? `?child=${encodeURIComponent(selected)}` : ""}`}>
@@ -204,6 +238,22 @@ export function ParentHome() {
           className="mb-5 flex items-center justify-between gap-3 rounded-xl bg-nevo-cream-elevated px-5 py-4 text-[15px] font-semibold text-nevo-navy shadow-[0_2px_8px_rgba(0,0,0,0.05)] hover:bg-nevo-navy/[0.06]"
         >
           Can you confirm {selectedChild.firstName?.trim() || "your child"}&rsquo;s date of birth?
+          <span aria-hidden>&rarr;</span>
+        </Link>
+      ) : null}
+
+      {/*
+        * D02b's way in. No frame draws one, so it takes the screen's own
+        * heading and sits where the date-check line does - and only when the
+        * server has strengthened something for this child. Nothing to show,
+        * no line (rule 5).
+        */}
+      {selectedChild && strengthenedHere ? (
+        <Link
+          href={`/parent-portal/changes?child=${encodeURIComponent(selectedChild.studentId)}`}
+          className="mb-5 flex items-center justify-between gap-3 rounded-xl bg-nevo-cream-elevated px-5 py-4 text-[15px] font-semibold text-nevo-navy shadow-[0_2px_8px_rgba(0,0,0,0.05)] hover:bg-nevo-navy/[0.06]"
+        >
+          What {selectedChild.firstName?.trim() || "your child"}&rsquo;s strengthened
           <span aria-hidden>&rarr;</span>
         </Link>
       ) : null}
@@ -264,12 +314,21 @@ function Shell({
           className="h-[15px] w-auto"
         />
         {dataHref ? (
-          <Link
-            href={dataHref}
-            className="text-[14px] font-semibold text-nevo-navy hover:opacity-75"
-          >
-            Your child&rsquo;s data
-          </Link>
+          <div className="flex items-center gap-5">
+            <Link
+              href={dataHref}
+              className="text-[14px] font-semibold text-nevo-navy hover:opacity-75"
+            >
+              Your child&rsquo;s data
+            </Link>
+            {/* D01f's way in: the bar's right, where D02 puts the parent. */}
+            <Link
+              href="/parent-portal/settings"
+              className="text-[14px] font-semibold text-nevo-navy hover:opacity-75"
+            >
+              Settings
+            </Link>
+          </div>
         ) : null}
       </div>
       <div className="px-4 pt-[22px] pb-7 md:px-12 md:pt-9 md:pb-10 lg:py-10">

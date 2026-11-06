@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/shared";
@@ -28,15 +28,23 @@ export const WAITING_WAY_BACK = "/auth/login";
  * "It will be soon." until then.
  *
  * CHECK AGAIN IS THE CHILD'S, NEVER A TIMER. It replaced a gate that POLLED,
- * so there is still no interval here, no "checking..." and no live region:
- * one read when the child presses, through the caller (`onCheckAgain`), which
- * knows whether this child is signed in (`WaitingOnConsentPage`) or held in
- * place on 05 Entry. Still waiting is the same screen, unchanged. Where the
- * caller has nothing to re-check with, there is no Check again.
+ * so there is still no interval here and no "checking...": one read when the
+ * child presses, through the caller (`onCheckAgain`), which knows whether this
+ * child is signed in (`WaitingOnConsentPage`) or held in place on 05 Entry.
+ * Where the caller has nothing to re-check with, there is no Check again.
  *
- * The frame's "Ask your teacher" is not drawn yet: the frame draws a button
- * and says only that it "points to the person who can help", so what a tap
- * does is asked. The line still says it.
+ * AND IT SAYS IT CHECKED (Lydia, 31 Oct and 2 Nov): "Check again must show it
+ * checked, with nothing changed yet. A button that looks inert teaches a child
+ * the app is broken." A read that answered "still waiting" puts "Checked just
+ * now. Nothing yet." under the button, in a slot held for it so nothing
+ * moves. Only an answer says it: a read that failed shows nothing new, since
+ * nothing was checked. A new press clears it until its own answer is in, so
+ * each answer is said afresh.
+ *
+ * "ASK YOUR TEACHER" IS A SENTENCE, NOT A CONTROL (Lydia, 31 Oct): "a child
+ * cannot message a teacher from that screen and a control that appears to do
+ * nothing is worse than a sentence." So where the frame draws its button,
+ * the child is told what to ask (her words, 2 Nov).
  *
  * BUT THERE IS A WAY BACK (D189, 13 Oct). Lydia: "Waiting on consent is a
  * genuine dead end and gets fixed ... Yes, give it Back, same as the age-check
@@ -82,6 +90,16 @@ export const WAITING_COPY: Record<
   },
 };
 
+/** Under Check again, once a read has answered "still waiting" (Lydia, 2 Nov). */
+export const CHECKED_NOTHING_YET = "Checked just now. Nothing yet.";
+
+/** Where the frame draws "Ask your teacher" (Lydia, 2 Nov). */
+export const ASK_YOUR_TEACHER =
+  "You can ask your teacher whether your school has confirmed yet.";
+
+/** What a Check again found: still waiting, or not that (moved on, or unread). */
+export type CheckAgainResult = "still-waiting" | void;
+
 export function WaitingOnConsent({
   hold = "consent",
   onCheckAgain,
@@ -90,16 +108,21 @@ export function WaitingOnConsent({
   hold?: WaitingHold;
   /**
    * Read the child's consent again, and go on if it has come. 00d's alone:
-   * the age check's hold has nothing a child can do (D121).
+   * the age check's hold has nothing a child can do (D121). Resolves
+   * "still-waiting" when the read answered and nothing has changed; a read
+   * that failed rejects, or resolves with nothing.
    */
-  onCheckAgain?: () => Promise<unknown>;
+  onCheckAgain?: () => Promise<CheckAgainResult>;
 } = {}) {
   const checking = useRef(false);
+  const [checked, setChecked] = useState(false);
   const checkAgain = () => {
     // One read at a time: a second press while one is out does nothing.
     if (!onCheckAgain || checking.current) return;
     checking.current = true;
+    setChecked(false);
     void onCheckAgain()
+      .then((found) => setChecked(found === "still-waiting"))
       .catch(() => {})
       .finally(() => {
         checking.current = false;
@@ -117,7 +140,24 @@ export function WaitingOnConsent({
             <Button className="w-full text-base" onClick={checkAgain}>
               Check again
             </Button>
+            {/* Held open, so the line arriving moves nothing below it. */}
+            <p
+              role="status"
+              className="mt-3 min-h-[21px] text-center text-sm leading-[1.5] text-nevo-near-black/70"
+            >
+              {checked ? CHECKED_NOTHING_YET : ""}
+            </p>
           </div>
+        )}
+        {hold === "consent" && (
+          <p
+            className={cn(
+              "max-w-[280px] text-center text-[15px] leading-[1.6] text-nevo-near-black/70 sm:max-w-[360px]",
+              onCheckAgain ? "mt-4" : "mt-[30px] sm:mt-9",
+            )}
+          >
+            {ASK_YOUR_TEACHER}
+          </p>
         )}
       </div>
     </div>
@@ -128,8 +168,8 @@ export function WaitingOnConsent({
  * 00d for a child SIGNED IN and sent here from a door (`/student/waiting`).
  * Check again asks the consent gate again, as the doors do
  * (`studentDestination`), and goes where it says: on, or to 00e if consent
- * has gone. Still waiting, or a read that did not answer, stays here as it
- * was.
+ * has gone. Still waiting stays here and says it checked; a read that did not
+ * answer stays here as it was.
  */
 export function WaitingOnConsentPage() {
   const router = useRouter();
@@ -138,7 +178,9 @@ export function WaitingOnConsentPage() {
       onCheckAgain={async () => {
         const to = await studentDestination();
         const path = to.split(/[?#]/)[0];
-        if (path === WAITING_ROUTE || path === UNCHECKED_ROUTE) return;
+        if (path === WAITING_ROUTE) return "still-waiting";
+        // Nothing was checked: nothing new is said.
+        if (path === UNCHECKED_ROUTE) return;
         router.replace(to);
       }}
     />

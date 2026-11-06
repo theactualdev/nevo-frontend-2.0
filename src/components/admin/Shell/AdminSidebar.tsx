@@ -50,6 +50,16 @@ const GLYPH = {
   strokeLinejoin: "round" as const,
 };
 
+/** D17 lights this glyph on the IT admin's home; IT & SSO keeps it too. */
+const IT_GLYPH = (
+  <svg {...GLYPH} aria-hidden>
+    <circle cx="8" cy="15" r="4" />
+    <path d="M10.8 12.2L19 4" />
+    <path d="M16 5l3 3" />
+    <path d="M14 7l2.4 2.4" />
+  </svg>
+);
+
 const ICONS: Record<string, React.ReactNode> = {
   Overview: (
     <svg {...GLYPH} strokeWidth={1.9} aria-hidden>
@@ -119,14 +129,8 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M6 14.5h4" />
     </svg>
   ),
-  "IT & SSO": (
-    <svg {...GLYPH} aria-hidden>
-      <circle cx="8" cy="15" r="4" />
-      <path d="M10.8 12.2L19 4" />
-      <path d="M16 5l3 3" />
-      <path d="M14 7l2.4 2.4" />
-    </svg>
-  ),
+  "Systems overview": IT_GLYPH,
+  "IT & SSO": IT_GLYPH,
   Settings: (
     <svg {...GLYPH} aria-hidden>
       <circle cx="12" cy="12" r="3" />

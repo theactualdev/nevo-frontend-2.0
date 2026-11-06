@@ -162,3 +162,20 @@ describe("pulling one", () => {
     expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
   });
 });
+
+/** Backlog item 16: a failed read was a card with no Try again and no way back. */
+describe("a lesson whose media could not be read", () => {
+  it("offers Try again and the way back to the lesson", async () => {
+    lessons.detail.mockRejectedValue(new Error("offline"));
+    render(<LessonMediaRoute lessonId="l-1" />);
+
+    expect(
+      await screen.findByRole("heading", { name: "We couldn’t load this lesson’s media" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to the lesson" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1",
+    );
+  });
+});

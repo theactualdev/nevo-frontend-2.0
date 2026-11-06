@@ -105,12 +105,22 @@ describe("the parental consent row", () => {
   });
 });
 
-describe("the retention row (pulled 4 Nov)", () => {
-  it("is gone - it promised a period the server doesn't keep to", () => {
+describe("the retention row", () => {
+  it("never quotes a period the server doesn't keep to (pulled 4 Nov)", () => {
     const all = ndpaClaims({ labels: 0, consent: "unreadable" });
-    expect(all.map((c) => c.title)).not.toContain("Records retention");
     const text = all.map((c) => `${c.title} ${c.mechanism} ${c.state ?? ""}`).join(" ");
     expect(text).not.toMatch(/retained beyond|Your school is set to|contract term/i);
+  });
+
+  it("says what the server does keep to, in Lydia's words (4 Nov, answer 27)", () => {
+    // In place of D16c's "Ephemeral processing active", which was false.
+    const row = ndpaClaims({ labels: 0, consent: "unreadable" }).find(
+      (c) => c.title === "Records retention",
+    );
+    expect(row?.mechanism).toBe("Records purged 180 days after the recorded purpose ends.");
+    // A product property: nothing was measured, so no chip.
+    expect(row?.verification).toBe("product");
+    expect(row?.state).toBeUndefined();
   });
 });
 

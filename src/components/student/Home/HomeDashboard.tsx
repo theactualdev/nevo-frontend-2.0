@@ -15,11 +15,7 @@ import { useHydrated } from "@/hooks/useHydrated";
 import type { DashboardProgressRow, LearningWork } from "@/lib/api/students";
 import { DUE_CHIP_LINK } from "@/components/student/Progress/dueChip";
 import { useDisplayName } from "@/components/student/Shell/useDisplayName";
-import {
-  EmptyArt,
-  TAB_FILL,
-  TabEmpty,
-} from "@/components/student/Shell/TabPage";
+import { TAB_FILL } from "@/components/student/Shell/TabPage";
 import { cn } from "@/lib/utils";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useStudentAssignments } from "@/hooks/useStudentAssignments";
@@ -476,10 +472,7 @@ export function HomeDashboard() {
       <TodaysWarmUpCard />
 
       {nothingSet ? (
-        // 29 Empty States, "Home (No lessons)": the illustration and one line.
-        // It used to praise the child ("Nice work staying on top of things")
-        // for having nothing, which is not something they did.
-        <EmptyState line="Your teacher is setting up your first lesson" />
+        <FirstLessonNote />
       ) : (
         <>
           {/*
@@ -712,19 +705,29 @@ function PickUpMark() {
  * still gives way on a screen too short for it (`EmptyArt`), and a floor
  * under the block would stop it and push the line past the bottom again.
  */
-function EmptyState({ line }: { line: string }) {
+/**
+ * Nothing set yet (Nevo Home Frame, 52e3ae3, 23 Oct, state `never`): a quiet
+ * violet note, its dot and one line, and no figure.
+ *
+ * IT SAYS ONLY WHAT IS TRUE. 29 Empty States (13 Oct) drew a figure over "Your
+ * teacher is setting up your first lesson", which nobody had said: nothing
+ * set is all the server tells us, not that anyone is setting anything up.
+ * Lydia, 4 Nov: "the product asserting a state that is not true ... is worse
+ * than any missing feature". The newer Home frame's line says when the lesson
+ * will be here, and nothing about the teacher (audit, 2 Nov, backlog 33).
+ */
+function FirstLessonNote() {
   return (
-    <TabEmpty
-      art={
-        <EmptyArt
-          src="/illustrations/empty-home.png"
-          className="h-[190px] md:h-[300px] lg:h-[250px]"
-        />
-      }
-      line={line}
-      className="pt-5 pb-0 md:pt-6"
-      lineClassName="mt-[22px] md:mt-7"
-    />
+    <div className="mt-8 flex items-center gap-3.5 rounded-[12px] bg-nevo-violet/14 px-5 py-[18px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-500">
+      <span
+        aria-hidden
+        className="size-2.5 shrink-0 rounded-full bg-nevo-violet"
+      />
+      <p className="text-[15px] leading-[1.45] text-nevo-near-black">
+        When your teacher sets your first lesson, you&apos;ll find it right
+        here.
+      </p>
+    </div>
   );
 }
 

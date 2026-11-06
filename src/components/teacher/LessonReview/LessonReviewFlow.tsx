@@ -265,7 +265,9 @@ export function LessonReviewFlow({
                 ? "Nevo is still making the pictures and narration."
                 : next
                   ? `Media approved. ${next}`
-                  : "Media approved. Nothing else needs you."),
+                  : complete
+                    ? "Media approved. Nothing else needs you."
+                    : "Media approved."),
       alert: Boolean(refusal),
       primary: approving ? (
         <span className={SPINNER_BTN} aria-live="polite">
@@ -502,6 +504,7 @@ export function LessonReviewFlow({
               title={lesson.title}
               subject={lesson.subject ?? null}
               needLook={needLook}
+              allSigned={complete && flow.captions.length === 0}
               mediaLine={
                 mediaWaiting
                   ? `Nevo made ${[
@@ -626,6 +629,7 @@ function StepMade({
   title,
   subject,
   needLook,
+  allSigned,
   mediaLine,
   media,
   modules,
@@ -635,6 +639,12 @@ function StepMade({
   title: string;
   subject: string | null;
   needLook: number;
+  /**
+   * Every sign-off is in and no caption waits. "Nothing needs you" was said
+   * on `needLook` alone - flagged key points - over a review whose checks,
+   * rewrites or captions still wanted the teacher (4 Nov sweep).
+   */
+  allSigned: boolean;
   /** Step 1's own line while media waits; otherwise the step names what is next. */
   mediaLine: string | null;
   media: React.ReactNode;
@@ -664,7 +674,9 @@ function StepMade({
         {mediaLine ??
           (needLook > 0
             ? `${needLook} ${needLook === 1 ? "thing needs" : "things need"} a look in the next steps.`
-            : "This looks ready. Nothing needs you.")}
+            : allSigned
+              ? "This looks ready. Nothing needs you."
+              : "Nothing needs a look, just your approval.")}
       </h2>
       <p className={cn(SUB, "mt-2.5 text-nevo-near-black/60")}>
         {subject ? `${title} · ${subject}` : title}

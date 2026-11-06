@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { TryAgain } from "./TryAgain";
 import {
   parentApi,
   type ChildConsents,
@@ -51,6 +53,8 @@ export function ParentMyData() {
   const params = useSearchParams();
   const wanted = params.get("child");
   const [read, setRead] = useState<Read>({ kind: "loading" });
+  /** Bumped by Try again, to read the children and consents again. */
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -74,7 +78,7 @@ export function ParentMyData() {
     return () => {
       alive = false;
     };
-  }, [wanted]);
+  }, [wanted, attempt]);
 
   if (read.kind === "loading") {
     return <main className="min-h-dvh bg-nevo-cream" aria-busy="true" />;
@@ -91,6 +95,21 @@ export function ParentMyData() {
               ? "Your child’s school can link your account to them."
               : "Nothing has changed. Try again in a moment."}
           </p>
+          {read.kind === "failed" ? (
+            <TryAgain
+              onClick={() => {
+                setRead({ kind: "loading" });
+                setAttempt((a) => a + 1);
+              }}
+            />
+          ) : null}
+          {/* The way home this screen didn't have (backlog 59). */}
+          <Link
+            href="/parent-portal"
+            className="mt-4 block w-fit cursor-pointer text-[14.5px] font-semibold text-nevo-navy hover:underline"
+          >
+            Back to home
+          </Link>
         </div>
       </main>
     );

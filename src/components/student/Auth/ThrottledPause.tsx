@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { PinBox } from "./PinBox";
@@ -28,11 +29,13 @@ export const THROTTLED_PAUSE_COPY = {
  * out (`RAISED_FORGOT`), "because a child who reaches a throttle is usually a
  * child who has forgotten the PIN".
  *
- * NOTHING ENDS THE PAUSE ON A TIMER, AND NOTHING SAYS WHEN. The frame draws
- * no end to it and the contract sends no retry time with `too_many_attempts`,
- * so the client has no honest moment to release the boxes or to name (rule 5;
- * D156, a backend ask). It lasts until the child leaves by one of the screen's
- * ways out.
+ * THE SERVER ENDS THE PAUSE, AND NOTHING SAYS WHEN. The 429 now carries
+ * `retryAt` (Teslim 8a7199b, SCRUM-251: "A child who waits out the pause on
+ * the same screen can try again without leaving and coming back"), so the
+ * boxes open again at that moment (`useThrottleRelease`) - the server's
+ * moment, never one the device works out. The frame still says no how-long
+ * and no countdown, so nothing on screen names it. A throttle without
+ * `retryAt` lasts until the child leaves by one of the screen's ways out.
  *
  * It replaces D68's wait line ("Let's wait a moment before trying again.") in
  * the doors' tinted box, and #717's "That didn't save" on PIN creation, which
@@ -84,6 +87,22 @@ export function ThrottleNote({ className }: { className?: string }) {
       {THROTTLED_PAUSE_COPY.note}
     </p>
   );
+}
+
+/**
+ * Lift a pause at the server's `retryAt` (`throttleEndsAt`), on the screen
+ * the child is still on. Null is no end, and nothing is set. `release` must
+ * be stable, or each render would start the wait again.
+ */
+export function useThrottleRelease(
+  until: number | null,
+  release: () => void,
+): void {
+  useEffect(() => {
+    if (until === null) return;
+    const timer = setTimeout(release, Math.max(0, until - Date.now()));
+    return () => clearTimeout(timer);
+  }, [until, release]);
 }
 
 /** "Forgot PIN?", raised from a text link to the screen's way out. */

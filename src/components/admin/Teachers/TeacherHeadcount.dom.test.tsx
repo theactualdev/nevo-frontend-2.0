@@ -145,10 +145,52 @@ describe("TeacherDetailView headcount", () => {
 });
 
 describe("TeacherDetailView's class rows (8 Oct)", () => {
-  it("name the subject each assignment teaches", async () => {
+  it("name the subject each assignment teaches - as its group's heading (D06c)", async () => {
     teacherClasses.mockResolvedValue([{ ...held("c1"), subjectId: "sub-bio", subject: "Biology" }]);
     const { container } = render(<TeacherDetailView teacherId="t1" />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Class c1/));
-    expect(visibleText(container)).toMatch(/Biology ·/);
+    const text = visibleText(container);
+    expect(text.indexOf("Biology")).toBeLessThan(text.indexOf("Class c1"));
+  });
+});
+
+/**
+ * D06c (design 1397ec4): what a teacher teaches, grouped by subject with the
+ * classes under each, in the admin's own words. The frame's "Change a subject
+ * or class by editing the class itself" is left out - a class assignment
+ * refuses a subject the teacher doesn't hold (422), so the subject list stays.
+ */
+describe("what a teacher teaches (D06c)", () => {
+  it("groups the classes under each subject, with the counts", async () => {
+    teacherClasses.mockResolvedValue([
+      { ...held("c1"), subject: "Mathematics" },
+      { ...held("c2"), subject: "Further Mathematics" },
+      { ...held("c3"), subject: "Mathematics" },
+    ]);
+    list.mockResolvedValue([klass("c1", 30), klass("c2", 25), klass("c3", 28)]);
+    const { container } = render(<TeacherDetailView teacherId="t1" />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Class c3/));
+    const text = visibleText(container);
+    expect(text).toMatch(/What Folake Adeyemi teaches/);
+    expect(text).toMatch(/2 subjects · 3 classes/);
+    // Mathematics, then both its classes, then Further Mathematics and its one.
+    const at = (s: string) => text.indexOf(s);
+    expect(at("Mathematics")).toBeLessThan(at("Class c1"));
+    expect(at("Class c1")).toBeLessThan(at("Class c3"));
+    expect(at("Class c3")).toBeLessThan(at("Further Mathematics"));
+    expect(at("Further Mathematics")).toBeLessThan(at("Class c2"));
+    expect(text).toMatch(/2 classes/);
+    expect(text).toMatch(/1 class(?!es)/);
+    expect(text).not.toMatch(/editing the class itself/);
+  });
+
+  it("keeps an assignment with no subject recorded, last and unheaded - nothing guessed", async () => {
+    teacherClasses.mockResolvedValue([held("c9"), { ...held("c1"), subject: "Biology" }]);
+    list.mockResolvedValue([klass("c1", 30), klass("c9", 20)]);
+    const { container } = render(<TeacherDetailView teacherId="t1" />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Class c9/));
+    const text = visibleText(container);
+    expect(text).toMatch(/1 subject · 2 classes/);
+    expect(text.indexOf("Class c1")).toBeLessThan(text.indexOf("Class c9"));
   });
 });

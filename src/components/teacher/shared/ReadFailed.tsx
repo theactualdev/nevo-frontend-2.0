@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 /**
@@ -14,16 +15,43 @@ import { cn } from "@/lib/utils";
  * re-read that fails again changes nothing on screen (`useLiveQuery`), so a
  * button that only re-read would look as if it did nothing at all.
  */
+
+/**
+ * The same Try again, inline, for a PART of a page that failed while the rest
+ * stays usable - a line under a section rather than a card (backlog items 27,
+ * 28, 30, 31, 34: each said "try again in a moment" with nothing to press).
+ */
+export function TryAgain({ className }: { className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => window.location.reload()}
+      className={cn(
+        "cursor-pointer border-none bg-transparent p-0 text-[14px] font-semibold text-nevo-navy underline underline-offset-[3px]",
+        className,
+      )}
+    >
+      Try again
+    </button>
+  );
+}
 export function ReadFailed({
   title,
   body = "It hasn’t gone anywhere. Try again in a moment.",
   as: Heading = "h3",
+  back,
   className,
 }: {
   title: string;
   body?: string;
   /** The heading level where it sits: a page names itself, a section doesn't. */
   as?: "h1" | "h2" | "h3";
+  /**
+   * A way back, for a whole page that failed - the lesson's media and its
+   * review are reached from the lesson, and a dead end there left the
+   * browser's back button as the only way out (backlog items 16 and 21).
+   */
+  back?: { href: string; label: string };
   className?: string;
 }) {
   return (
@@ -37,13 +65,23 @@ export function ReadFailed({
         {title}
       </Heading>
       <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/62">{body}</p>
-      <button
-        type="button"
-        onClick={() => window.location.reload()}
-        className="mt-5 h-[46px] cursor-pointer rounded-[10px] bg-nevo-navy px-5 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
-      >
-        Try again
-      </button>
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="h-[46px] cursor-pointer rounded-[10px] bg-nevo-navy px-5 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+        >
+          Try again
+        </button>
+        {back && (
+          <Link
+            href={back.href}
+            className="inline-flex h-[46px] cursor-pointer items-center rounded-[10px] px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+          >
+            {back.label}
+          </Link>
+        )}
+      </div>
     </div>
   );
 }

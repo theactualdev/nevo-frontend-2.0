@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PermissionScope } from "@/lib/constants/permissions";
-import { adminHomeForScopes, canOpen, homeName, navForScopes } from "./adminNav";
+import { activeNavLabel, adminHomeForScopes, canOpen, homeName, navForScopes } from "./adminNav";
 
 /**
  * Where an admin lands after signing in.
@@ -69,6 +69,26 @@ describe("an IT / SSO admin's rail", () => {
   it("changes nothing for an admin without IT", () => {
     // A finance admin's rail is still theirs alone.
     expect(labels(scopes("billing"))).toEqual(["Billing", "Settings"]);
+  });
+
+  it("has a way home - their Systems overview, then Settings (backlog 20)", () => {
+    // IT & SSO left the rail on 24 Sep and nothing replaced it, so Settings
+    // was a dead end. The row is D17's own heading, and lights on that screen.
+    expect(labels(scopes("it_sso"))).toEqual(["Systems overview", "Settings"]);
+    expect(navForScopes(scopes("it_sso"))[0].href).toBe("/admin/sso/home");
+    expect(activeNavLabel("/admin/sso/home")).toBe("Systems overview");
+  });
+
+  it("is not on the rail of an admin whose home is the Overview", () => {
+    // A proprietor who also holds IT lands on the school, and keeps one home.
+    expect(labels(scopes("oversight", "it_sso"))).not.toContain("Systems overview");
+    expect(labels(scopes("oversight", "roster", "billing"))).not.toContain("Systems overview");
+  });
+
+  it("keeps the deferred provider set-up off the rail", () => {
+    // Design, 24 Sep: the IT & SSO screen stays reachable by URL only.
+    expect(labels(scopes("it_sso"))).not.toContain("IT & SSO");
+    expect(activeNavLabel("/admin/sso")).toBeNull();
   });
 });
 

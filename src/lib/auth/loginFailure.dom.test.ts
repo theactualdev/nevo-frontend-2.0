@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyLearnerLoginFailure,
   classifyLoginFailure,
+  throttleEndsAt,
 } from "./loginFailure";
 import { ApiError } from "@/lib/api/client";
 
@@ -17,6 +18,48 @@ import { ApiError } from "@/lib/api/client";
 /** The 401 body FastAPI actually sends: `{ detail: { code, message } }`. */
 const refusal = (code: string) =>
   new ApiError(401, "Unauthorized", { detail: { code, message: "no" } });
+
+/** The throttle as the server sends it since 8a7199b: HTTP 429, with when it ends. */
+const throttle = (retryAt?: unknown) =>
+  new ApiError(429, "Too Many Requests", {
+    detail: {
+      code: "too_many_attempts",
+      message: "slow",
+      ...(retryAt === undefined ? {} : { retryAt }),
+    },
+  });
+
+describe("a throttle at a child's door (SCRUM-251)", () => {
+  it("is the pause on a 429, not 'something went wrong on our side'", () => {
+    expect(classifyLearnerLoginFailure(throttle("2026-11-02T18:00:30Z"))).toBe(
+      "throttled",
+    );
+  });
+
+  it("is the pause on a 429 that names no code", () => {
+    expect(
+      classifyLearnerLoginFailure(new ApiError(429, "Too Many Requests")),
+    ).toBe("throttled");
+  });
+
+  it("says when it ends, as the server says it", () => {
+    expect(throttleEndsAt(throttle("2026-11-02T18:00:30Z"))).toBe(
+      Date.parse("2026-11-02T18:00:30Z"),
+    );
+  });
+
+  it.each([
+    ["no retryAt", undefined],
+    ["a retryAt that is not a time", "soon"],
+    ["a retryAt that is not a string", 30],
+  ])("has no end with %s", (_, retryAt) => {
+    expect(throttleEndsAt(throttle(retryAt))).toBeNull();
+  });
+
+  it("has no end for anything that is not a refusal", () => {
+    expect(throttleEndsAt(new Error("offline"))).toBeNull();
+  });
+});
 
 describe("classifyLoginFailure", () => {
   it("knows a paused account from a wrong PIN", () => {

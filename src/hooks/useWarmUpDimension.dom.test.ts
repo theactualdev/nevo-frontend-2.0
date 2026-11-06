@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { toPrompt, useWarmUpPrompt } from "./useWarmUpDimension";
 import { clearSession, setSession } from "@/lib/auth/session";
 
@@ -46,14 +46,30 @@ afterEach(() => {
 });
 
 describe("useWarmUpPrompt", () => {
-  it("gives a signed-in child no task when the prompt fails", async () => {
-    // The rotation ran here, and was submitted.
+  it("gives a signed-in child no task when the prompt fails, and says it failed", async () => {
+    // The rotation ran here, and was submitted. And a failed read is not the
+    // engine saying there is nothing today (Lydia, 4 Nov).
     signIn();
     recalibratePrompt.mockRejectedValue(new Error("503"));
 
     const { result } = renderHook(() => useWarmUpPrompt("wmc"));
 
-    await waitFor(() => expect(result.current).toEqual({ state: "none" }));
+    await waitFor(() => expect(result.current.state).toBe("failed"));
+  });
+
+  it("asks again on retry, waiting while it does", async () => {
+    signIn();
+    recalibratePrompt.mockRejectedValueOnce(new Error("503"));
+    recalibratePrompt.mockResolvedValue({ dimension: "wmc" });
+    const { result } = renderHook(() => useWarmUpPrompt("wmc"));
+    await waitFor(() => expect(result.current.state).toBe("failed"));
+
+    act(() => {
+      if (result.current.state === "failed") result.current.retry();
+    });
+
+    await waitFor(() => expect(result.current.state).toBe("ready"));
+    expect(recalibratePrompt).toHaveBeenCalledTimes(2);
   });
 
   it("gives them nothing while the prompt is on its way", () => {

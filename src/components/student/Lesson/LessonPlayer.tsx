@@ -31,7 +31,11 @@ import {
   type SignalEventType,
 } from "@/lib/constants";
 import { useLesson, useSignals } from "@/hooks";
-import { formFactor, type SessionOutcome } from "@/hooks/useSignals";
+import {
+  formFactor,
+  type SessionOutcome,
+  type TrackEvent,
+} from "@/hooks/useSignals";
 import {
   useRuntimeAdaptation,
   type AppliedAdaptations,
@@ -60,6 +64,7 @@ import {
   HintOverlay,
   SocraticPanel,
   type GuidedAnswerOutcome,
+  type GuidedMarking,
   type GuidedReply,
   type PanelPrompt,
 } from "./AffectiveLayer";
@@ -78,6 +83,7 @@ import {
   lessonsApi,
   type ComprehensionGate,
   type LessonQuestionAttempt,
+  type SocraticHandoffPrompt,
   type LessonQuestionAttemptWrite,
   type ReteachingResponse,
   type SegmentChoiceWrite,
@@ -126,6 +132,10 @@ import { useLessonProgress } from "@/hooks/useLessonProgress";
 import { AudioSegment } from "./AudioSegment";
 import { BreakOfferPill } from "./BreakOfferPill";
 import { BreakScreen } from "./BreakScreen";
+import {
+  CalculationBreakCard,
+  CalculationBreakPill,
+} from "./CalculationBreak";
 import { CalculationBoundary } from "./CalculationBoundary";
 import { CalculationSolver, type StepGiven } from "./CalculationSolver";
 import { FeedbackStrip } from "./FeedbackStrip";
@@ -1156,6 +1166,18 @@ export function LessonPlayer({
   // Trigger travels into `break_start`.
   const breakOrigin = useRef<"advance" | "offer" | "check">("advance");
   const breakTrigger = useRef<string>("adaptation_plan");
+  /**
+   * The child's own break on a calculation, taken in place (see
+   * `CalculationBreak`): the section it was taken on, for the card, and in
+   * the ref what ending it owes - the sitting's return, or our own
+   * `break_end`, and since when.
+   */
+  const [calcBreakOn, setCalcBreakOn] = useState<string | null>(null);
+  const calcBreak = useRef<{
+    segmentId: string;
+    asked: { sitting: string; started: Promise<boolean> } | null;
+    since: number;
+  } | null>(null);
   // Break OFFERS (B.7/§4): spent per segment, whoever made them. Declining
   // spends; the same segment never re-asks.
   /*
@@ -1580,15 +1602,18 @@ export function LessonPlayer({
 
   // Runs the clock above while the segment is on screen. Declared AFTER it,
   // so on a segment change this starts the new clock rather than the old one.
+  // A break taken in place on a calculation stops it too: resting is not
+  // time on the segment, wherever the break is drawn.
+  const clockRunning = segmentShowing && calcBreakOn !== segment.id;
   useEffect(() => {
     const clock = segmentClock.current;
-    if (!segmentShowing || !clock) return;
+    if (!clockRunning || !clock) return;
     clock.since = performance.now();
     return () => {
       if (clock.since !== null) clock.shownMs += performance.now() - clock.since;
       clock.since = null;
     };
-  }, [segmentShowing, index]);
+  }, [clockRunning, index]);
 
   /*
    * HOW FAR DOWN THE SEGMENT HAS BEEN ON SCREEN, MEASURED ON WHAT SCROLLS.
@@ -1976,14 +2001,21 @@ export function LessonPlayer({
    * did not land costs one reading, and telling a child their thinking did
    * not count would be worse and untrue.
    */
+  /*
+   * The panel's answer, MARKED BY THE SERVER (backend `guided_panel.py`,
+   * c268404; audit, 2 Nov): its reply is handed back to the panel to follow
+   * (`GuidedMarking`). Out of turn is a 409 naming the step being asked; any
+   * other refusal or failure is an answer not marked, and the panel goes on
+   * as it always did.
+   */
   const answerGuided = (
     promptId: string,
     outcome: GuidedAnswerOutcome | "abandoned",
     reply?: GuidedReply,
-  ) => {
+  ): Promise<GuidedMarking | null> | undefined => {
     const studentId = getSession()?.userId;
-    if (!live || !studentId) return;
-    void intelligenceApi
+    if (!live || !studentId) return undefined;
+    return intelligenceApi
       .answerGuidedQuestion({
         studentId,
         sessionId: progress.sessionId ?? null,
@@ -1991,7 +2023,26 @@ export function LessonPlayer({
         ...reply,
         outcome,
       })
-      .catch(() => {});
+      .then(
+        (res): GuidedMarking => ({
+          correct: res?.correct ?? null,
+          feedback: res?.feedback ?? null,
+          // A miss's reply asks the same step again, in other words where
+          // the step has them (`reaskPrompt`, 8c67353).
+          reask:
+            res?.correct === false && res.prompt?.id === promptId
+              ? res.prompt.prompt
+              : null,
+          next: res?.prompt?.id ?? null,
+          panelComplete: res?.panelComplete === true,
+        }),
+        (cause): GuidedMarking | null => {
+          const current = outOfTurnPrompt(cause);
+          return current
+            ? { correct: null, current, panelComplete: false }
+            : null;
+        },
+      );
   };
   // UDL accommodations (37c) - cross-session delivery themes from the plan.
   const readingOn = Boolean(plan?.accommodations?.reading);
@@ -2267,7 +2318,7 @@ export function LessonPlayer({
     if (on && isCalculation(asEntered(on))) return;
     if (answeredRight.current.has(stored.questionId ?? segmentId)) return;
     const prompts = (stored.guidedPrompts ?? []).flatMap((p) =>
-      p?.id && p.prompt?.trim() ? [{ id: p.id, prompt: p.prompt }] : [],
+      p?.id && p.prompt?.trim() ? [handoffPrompt(p)] : [],
     );
     if (prompts.length === 0) return;
     setCheckOpen(false);
@@ -2457,23 +2508,24 @@ export function LessonPlayer({
     sitting: string;
     started: Promise<boolean>;
   } | null>(null);
+  /** The child's own break, started on the sitting where there is one. */
+  const startSittingBreak = () => {
+    const sitting = progress.sessionId;
+    return choicesHeld && sitting && getToken()
+      ? {
+          sitting,
+          started: lessonsApi.controlBreak(lesson.id, sitting, "start").then(
+            () => true,
+            () => false,
+          ),
+        }
+      : null;
+  };
   const takeBreakFromCheck = () => {
     setCheckOpen(false);
     breakOrigin.current = "check";
     breakTrigger.current = "student_request";
-    const sitting = progress.sessionId;
-    breakOnSitting.current =
-      choicesHeld && sitting && getToken()
-        ? {
-            sitting,
-            started: lessonsApi
-              .controlBreak(lesson.id, sitting, "start")
-              .then(
-                () => true,
-                () => false,
-              ),
-          }
-        : null;
+    breakOnSitting.current = startSittingBreak();
     setBreakActive(BREAK_TYPES.MICRO);
   };
   /**
@@ -2484,15 +2536,52 @@ export function LessonPlayer({
   const returnFromBreak = () => {
     const asked = breakOnSitting.current;
     breakOnSitting.current = null;
-    if (!asked) return;
-    void asked.started.then((ok) =>
-      ok
-        ? lessonsApi
-            .controlBreak(lesson.id, asked.sitting, "return")
-            .catch(() => {})
-        : undefined,
-    );
+    returnOnSitting(lesson.id, asked);
   };
+
+  /*
+   * "TAKE A BREAK" ON A CALCULATION (Calculation Solver Frame, `break-mid`):
+   * the same child's own break as the check's - on the sitting where there is
+   * one, which records it, and as our own `break_start` and `break_end`
+   * (`student_request`, micro) where there is not - drawn in place over the
+   * calculation rather than as a screen. One at a time.
+   */
+  const takeCalcBreak = () => {
+    if (calcBreak.current) return;
+    const asked = startSittingBreak();
+    if (!asked) {
+      trackEvent(SIGNAL_EVENT_TYPES.BREAK_START, {
+        breakType: BREAK_TYPES.MICRO,
+        trigger: "student_request",
+      });
+    }
+    calcBreak.current = {
+      segmentId: segment.id,
+      asked,
+      since: performance.now(),
+    };
+    setCalcBreakOn(segment.id);
+  };
+  const endCalcBreak = () => {
+    const held = calcBreak.current;
+    if (!held) return;
+    calcBreak.current = null;
+    endHeldCalcBreak(held, lesson.id, trackEvent);
+    setCalcBreakOn(null);
+    setObserved((o) => ({ ...o, breaksTaken: o.breaksTaken + 1 }));
+  };
+  // A section left mid-break, or the lesson: the break ends with it, so the
+  // sitting is never left paused behind the child.
+  useEffect(
+    () => () => {
+      const held = calcBreak.current;
+      if (!held) return;
+      calcBreak.current = null;
+      endHeldCalcBreak(held, lesson.id, trackEvent);
+      setCalcBreakOn(null);
+    },
+    [segment.id, lesson.id, trackEvent],
+  );
 
   /** Keeps a pick with the segment it was made on, for this visit. */
   const keepChoice = (segmentId: string, patch: ChosenVersion) => {
@@ -3616,6 +3705,14 @@ export function LessonPlayer({
             been said for the segment, and on no other screen. The solver
             draws to the same level (`supportLevel`).
           */}
+          {/* The calculation's own way to a break, at every step (frame:
+              beside the title, before the dots). */}
+          {calcShowing && phase === "segments" && (
+            <CalculationBreakPill
+              onBreak={takeCalcBreak}
+              onBreakNow={calcBreakOn === segment.id}
+            />
+          )}
           <ScaffoldIndicator key={`scaf-${segment.id}`} level={supportLevel} />
         </div>
         {/* THE CONTROL COLUMN (Nevo Lesson Player Frame, 51b9e2a): right
@@ -3838,11 +3935,17 @@ export function LessonPlayer({
                   onAbandon={(promptId) => answerGuided(promptId, "abandoned")}
                 />
               )}
+            {calcShowing && calcBreakOn === segment.id && (
+              <CalculationBreakCard onReady={endCalcBreak} />
+            )}
             <div
               // Remount on either axis so entry motion replays and per-modality
               // state (audio playback, ticked steps) never leaks across segments.
               key={`${segment.id}:${modality}`}
               ref={bodyRef}
+              // The calculation waits under the break's card, just as the
+              // child left it, and takes nothing until they are back.
+              inert={calcBreakOn === segment.id}
               /*
                * FOCUSABLE, BECAUSE THE REMOUNT ABOVE DESTROYS FOCUS.
                *
@@ -4296,6 +4399,82 @@ export function LessonPlayer({
   );
 }
 
+/**
+ * A break started on the sitting, returned once its start has landed: never
+ * before it, and never for a start that failed - a return that overtook its
+ * start would leave the sitting paused.
+ */
+function returnOnSitting(
+  lessonId: string,
+  asked: { sitting: string; started: Promise<boolean> } | null,
+): void {
+  if (!asked) return;
+  void asked.started.then((ok) =>
+    ok
+      ? lessonsApi.controlBreak(lessonId, asked.sitting, "return").catch(() => {})
+      : undefined,
+  );
+}
+
+/**
+ * The end a calculation's break owes: the sitting's return where the server
+ * recorded its start, or our own `break_end` with how long it lasted.
+ */
+function endHeldCalcBreak(
+  held: {
+    asked: { sitting: string; started: Promise<boolean> } | null;
+    since: number;
+  },
+  lessonId: string,
+  trackEvent: TrackEvent,
+): void {
+  if (held.asked) {
+    returnOnSitting(lessonId, held.asked);
+    return;
+  }
+  trackEvent(SIGNAL_EVENT_TYPES.BREAK_END, {
+    breakType: BREAK_TYPES.MICRO,
+    trigger: "student_request",
+    // Monotonic (rule 4): the break's length goes to the engine.
+    durationMs: Math.max(0, Math.round(performance.now() - held.since)),
+  });
+}
+
+/**
+ * A hand-off's guided step as the panel draws it: its choices by their words,
+ * each sent by its value (which the server marks by), and its answer type.
+ *
+ * A MULTIPLE-CHOICE STEP IS SHOWN AS A QUESTION TO THINK ABOUT, with nothing
+ * to answer: the panel picks one choice, and one pick sent for a step whose
+ * key is several would be marked wrong whatever the child knew. Keep going
+ * stays the way on. No frame draws a several-pick answer here.
+ */
+function handoffPrompt(p: SocraticHandoffPrompt): PanelPrompt {
+  if (p.answerType === "multiple_choice") return { prompt: p.prompt };
+  const options = (p.options ?? []).filter((o) => o?.label?.trim());
+  return {
+    id: p.id,
+    prompt: p.prompt,
+    ...(options.length > 0
+      ? {
+          options: options.map((o) => o.label),
+          optionValues: options.map((o) => o.value),
+        }
+      : {}),
+    ...(p.answerType ? { answerType: p.answerType } : {}),
+  };
+}
+
+/** A 409 `guided_step_out_of_order`'s step: the one the server is asking. */
+function outOfTurnPrompt(cause: unknown): string | undefined {
+  if (!(cause instanceof ApiError) || cause.status !== 409) return undefined;
+  if (apiErrorCode(cause.detail) !== "guided_step_out_of_order") return undefined;
+  const inner = (cause.detail as { detail?: { prompt?: { id?: unknown } } })
+    ?.detail;
+  const id = inner?.prompt?.id;
+  return typeof id === "string" && id ? id : undefined;
+}
+
 /** Renders the segment through the active modality. */
 function SegmentBody({
   segment,
@@ -4459,7 +4638,14 @@ function SegmentBody({
     if (segment.interactive)
       return <InteractiveSegment content={segment.interactive} />;
   }
-  return <ModalityPlaceholder />;
+  /*
+   * A FORMAT THIS SECTION HAS NO CONTENT FOR SHOWS ITS TEXT, OR NOTHING. It
+   * drew "This modality is coming next", which was never true - nothing is
+   * coming - and put an internal word in front of a child (Lydia, 4 Nov: a
+   * state that is not true is worse than any missing feature; rule 5, render
+   * the nothing-state rather than fill the gap).
+   */
+  return text;
 }
 
 function ChevronButton({
@@ -4490,16 +4676,5 @@ function ChevronButton({
     >
       <Icon className="size-6" strokeWidth={2} />
     </button>
-  );
-}
-
-/** Fallback for content this slice can't render yet (the calculation solver, Slice 6). */
-function ModalityPlaceholder() {
-  return (
-    <div className="flex min-h-[200px] items-center justify-center rounded-[12px] bg-nevo-cream-elevated">
-      <span className="font-mono text-xs tracking-[0.04em] text-nevo-near-black/40">
-        This modality is coming next
-      </span>
-    </div>
   );
 }

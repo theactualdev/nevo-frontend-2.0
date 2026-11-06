@@ -79,7 +79,22 @@ describe("the mark on a notification", () => {
     ).toEqual(["flag", "message"]);
   });
 
-  it("takes the neutral mark when neither says anything", async () => {
-    expect(await kinds([row("1", "invoice_issued", "billing")])).toEqual(["done"]);
+  it("is the flag for a child who needs support with a concept", async () => {
+    expect(await kinds([row("1", "concept_support_needed")])).toEqual(["flag"]);
+  });
+
+  /*
+   * NEVER THE TICK (5 Nov). The fallback used to be `done`, which draws a
+   * tick - so an unmapped "support needed" or "review due" row read as
+   * resolved. The neutral mark is a dot that claims nothing.
+   */
+  it("takes the neutral mark, not the tick, when neither says anything", async () => {
+    const got = await kinds([
+      row("1", "invoice_issued", "billing"),
+      row("2", "review_due"),
+      row("3", "a_type_added_tomorrow"),
+    ]);
+    expect(got).toEqual(["other", "other", "other"]);
+    expect(got).not.toContain("done");
   });
 });
