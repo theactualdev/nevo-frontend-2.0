@@ -168,6 +168,44 @@ describe("the calm early note", () => {
     expect(screen.getByText(NOTICED.note)).toBeInTheDocument();
     expect(screen.queryByText(EARLY)).not.toBeInTheDocument();
   });
+
+  // 4 Nov sweep: "Still getting a picture" beside "2 things are worth your
+  // attention" - over a flags read that failed - said two things about one
+  // child that cannot both be true.
+  it("stands down when the flags read failed, beside the count it falls back to", () => {
+    flags([], true);
+
+    render(
+      <LiveStudentProfile
+        studentId="s-1"
+        state={{ ...withCount(2), observed: false }}
+      />,
+    );
+
+    expect(screen.getByText(COUNT_LINE)).toBeInTheDocument();
+    expect(screen.queryByText(EARLY)).not.toBeInTheDocument();
+  });
+
+  it("stands down while the flags are still being read", () => {
+    useStudentFlags.mockReturnValue({ noticed: [], failed: false, loading: true });
+
+    render(
+      <LiveStudentProfile studentId="s-1" state={state({ observed: false })} />,
+    );
+
+    expect(screen.queryByText(EARLY)).not.toBeInTheDocument();
+  });
+
+  it("stands down for a child with an open flag the banner could not show", () => {
+    render(
+      <LiveStudentProfile
+        studentId="s-1"
+        state={{ ...withCount(1), observed: false }}
+      />,
+    );
+
+    expect(screen.queryByText(EARLY)).not.toBeInTheDocument();
+  });
 });
 
 /**

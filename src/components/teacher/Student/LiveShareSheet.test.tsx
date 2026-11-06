@@ -1,9 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const { create } = vi.hoisted(() => ({ create: vi.fn() }));
-vi.mock("@/lib/api/escalations", () => ({ escalationsApi: { create } }));
+const { create, holders } = vi.hoisted(() => ({ create: vi.fn(), holders: vi.fn() }));
+vi.mock("@/lib/api/escalations", () => ({
+  escalationsApi: { create },
+  CONCERN_RECIPIENT_UNAVAILABLE: "concern_recipient_unavailable",
+}));
+// SCRUM-305: the sheet asks who would receive it. Someone holds learning
+// support unless a test says otherwise - the sheet as it always was.
+vi.mock("@/lib/api/learningSupport", async (actual) => {
+  const real = await actual<typeof import("@/lib/api/learningSupport")>();
+  return { ...real, learningSupportApi: { ...real.learningSupportApi, holders } };
+});
 
+import { ApiError } from "@/lib/api/client";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { writeKeptDraft, readKeptDraft } from "@/lib/drafts/keptDraft";
 import { LiveShareSheet } from "./LiveShareSheet";
@@ -55,6 +65,12 @@ const send = () => {
 
 beforeEach(() => {
   create.mockReset();
+  holders.mockReset();
+  holders.mockResolvedValue({
+    holders: [{ userId: "u-ls", name: "Mrs. Okafor", role: "teacher", grantedAt: "2026-10-01T00:00:00Z", grantedBy: "u-a" }],
+    viewerHoldsIt: false,
+    fallbackRecipient: null,
+  });
   create.mockResolvedValue({ id: "e-1" });
 });
 
@@ -116,6 +132,8 @@ describe("when the send fails", () => {
   it("says so, and does not report a referral", async () => {
     create.mockRejectedValueOnce(new Error("500"));
     const { onSent } = show();
+    // "your SENCo" only once the read has said someone holds it (SCRUM-305).
+    await screen.findByText(/A note goes to your SENCo/);
     type("She has gone very quiet.");
     send();
 
@@ -330,5 +348,127 @@ describe("a note that is sent, or closed on purpose", () => {
 
     expect(onCancel).toHaveBeenCalled();
     expect(readKeptDraft("share:s-1")).toBeNull();
+  });
+});
+
+/*
+ * SCRUM-305 (1397ec4, C.8b states 2-4): a school where nobody holds learning
+ * support. The words are the ticket's, approved; the name is ALWAYS the
+ * server's; the confirmation records receipt and claims nothing more; and a
+ * sheet with no one to send to says it could not be sent.
+ */
+const noHolder = (fallback: { userId: string; name: string } | null) =>
+  holders.mockResolvedValue({ holders: [], viewerHoldsIt: false, fallbackRecipient: fallback });
+
+const refusal = (code: string) => new ApiError(409, code, { detail: { code } });
+
+describe("when nobody holds learning support", () => {
+  it("says it goes to the administrator the server names, in the ticket's words", async () => {
+    noHolder({ userId: "u-adm", name: "Mrs. Adebayo" });
+    show();
+
+    expect(
+      await screen.findByText(
+        "No one holds learning support at this school yet, so this goes to Mrs. Adebayo, who can assign the role.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send to Mrs. Adebayo" })).toBeInTheDocument();
+    expect(screen.queryByText(/your SENCo/)).toBeNull();
+    expect(screen.queryByText(/your administrator/i)).toBeNull();
+  });
+
+  it("sends from Send to {name}, as the frame draws it, and confirms by the response's name and date", async () => {
+    noHolder({ userId: "u-adm", name: "Mrs. Adebayo" });
+    create.mockResolvedValue({
+      id: "e-1",
+      routedTo: "school_admin",
+      recipientId: "u-adm",
+      recipientName: "Mrs. Adebayo",
+      receivedAt: "2026-11-04T09:30:00Z",
+    });
+    const { onSent } = show();
+    type("She has gone very quiet.");
+    fireEvent.click(await screen.findByRole("button", { name: "Send to Mrs. Adebayo" }));
+
+    expect(await screen.findByRole("heading", { name: "Sent to Mrs. Adebayo, 4 November" })).toBeInTheDocument();
+    expect(create).toHaveBeenCalledWith({ studentId: "s-1", note: "She has gone very quiet." });
+    // Receipt only: nothing resolved, actioned or under review, and no
+    // pronoun for a person known only by name.
+    expect(screen.queryByText(/resolved|actioned|under review|She has|can assign someone/i)).toBeNull();
+    expect(onSent).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(onSent).toHaveBeenCalledWith({ to: "school_admin", name: "Mrs. Adebayo" });
+  });
+
+  it("names whoever the server actually sent it to, not who the read said", async () => {
+    noHolder({ userId: "u-adm", name: "Mrs. Adebayo" });
+    create.mockResolvedValue({
+      id: "e-1",
+      routedTo: "school_admin",
+      recipientName: "Mr. Eze",
+      receivedAt: "2026-11-04T09:30:00Z",
+    });
+    show();
+    type("She has gone very quiet.");
+    fireEvent.click(await screen.findByRole("button", { name: "Send to Mrs. Adebayo" }));
+
+    expect(await screen.findByRole("heading", { name: "Sent to Mr. Eze, 4 November" })).toBeInTheDocument();
+  });
+
+  it("says it could not be sent when the server has no one to send it to, and keeps the note", async () => {
+    noHolder(null);
+    create.mockRejectedValue(refusal("concern_recipient_unavailable"));
+    const { onSent } = show();
+    type("She has gone very quiet.");
+    fireEvent.click(screen.getByRole("button", { name: "Send to Learning Support" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, send" }));
+
+    expect(await screen.findByRole("heading", { name: "This couldn’t be sent just now" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "We couldn’t reach the right person for this at your school. Your note is kept, so nothing you wrote is lost. Please try again in a moment.",
+      ),
+    ).toBeInTheDocument();
+    expect(onSent).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByRole("textbox")).toHaveValue("She has gone very quiet.");
+  });
+
+  it("tries again from the cannot-send state", async () => {
+    noHolder(null);
+    create.mockRejectedValueOnce(refusal("concern_recipient_unavailable"));
+    create.mockResolvedValueOnce({ id: "e-1", routedTo: "learning_support" });
+    const { onSent } = show();
+    type("She has gone very quiet.");
+    fireEvent.click(screen.getByRole("button", { name: "Send to Learning Support" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, send" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+
+    await waitFor(() => expect(onSent).toHaveBeenCalledWith({ to: "learning_support" }));
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it("claims no recipient when the read fails, and the server decides", async () => {
+    holders.mockRejectedValue(new Error("down"));
+    show();
+    type("She has gone very quiet.");
+    await waitFor(() => expect(holders).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Send to Learning Support" }));
+
+    expect(screen.getByText("This shares Amara’s recent picture and your note.")).toBeInTheDocument();
+    expect(screen.queryByText(/your SENCo|No one holds/)).toBeNull();
+  });
+});
+
+describe("when someone holds learning support", () => {
+  it("is the sheet as it was", async () => {
+    const { onSent } = show();
+    expect(await screen.findByText(/A note goes to your SENCo/)).toBeInTheDocument();
+    type("She has gone very quiet.");
+    send();
+
+    await waitFor(() => expect(onSent).toHaveBeenCalledWith({ to: "learning_support" }));
   });
 });

@@ -324,6 +324,11 @@ export function LiveRecommendSheet({
         <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/62">
           {live && heldBack > 0
             ? `None of your lessons is reviewed yet, so there is nothing to send ${firstName}. Review one from your library first.`
+            : live && libraryCards.length > 0
+            ? /* Lessons still being read, or whose reading stopped, are left
+                 off - a library of only those is not empty (the wizard's
+                 T105 sentence; 4 Nov sweep). */
+              "Nothing in your library is ready to send yet."
             : live
             ? `Your library is empty, so there is nothing to send ${firstName} yet. Upload a lesson and it will appear here.`
             : `We couldn${"’"}t reach your library just now. Nothing has changed, so you can try again.`}

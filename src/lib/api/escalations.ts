@@ -66,7 +66,25 @@ export interface Escalation {
   acknowledgedAt?: string | null;
   acknowledgedBy?: string | null;
   acknowledgedByName?: string | null;
+  /**
+   * Where the concern went (SCRUM-304). `school_admin` when nobody holds
+   * learning support and the server sent it to an administrator instead,
+   * who is then named in `recipientName` with the moment it arrived.
+   */
+  routedTo?: "learning_support" | "school_admin";
+  recipientId?: string | null;
+  recipientName?: string | null;
+  receivedAt?: string | null;
+  /** The server's own receipt sentence. Not rendered: SCRUM-305's words are. */
+  receiptLine?: string | null;
+  notifiedCount?: number | null;
 }
+
+/**
+ * 409: nobody holds learning support and the school has no active
+ * administrator to send it to instead (SCRUM-304). Nothing was stored.
+ */
+export const CONCERN_RECIPIENT_UNAVAILABLE = "concern_recipient_unavailable";
 
 /**
  * One page of `GET /api/v1/escalations?openOnly=true` (14 Oct: `openOnly`,

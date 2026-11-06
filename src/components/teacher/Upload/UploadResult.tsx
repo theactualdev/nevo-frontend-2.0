@@ -204,9 +204,14 @@ export function UploadResult({
             Saved to your library
           </h3>
           <p className="mt-1.5 text-sm leading-[1.55] text-nevo-near-black/68 xl:text-[14.5px]">
+            {/* "Nothing needs your attention" only once the review has said
+                so. It counted flagged sections alone, and sat above "2 key
+                points still to check" (4 Nov sweep). */}
             {review > 0
               ? `Nevo read your file and split it into ${lesson.segmentCount} sections. ${review} ${review === 1 ? "is worth" : "are worth"} a look before you assign it.`
-              : "Nevo read your file and split it into sections. Nothing needs your attention."}
+              : !checking && !verdict.failed && verdict.ready && !awaitingReview
+                ? "Nevo read your file and split it into sections. Nothing needs your attention."
+                : "Nevo read your file and split it into sections."}
           </p>
         </div>
       </div>

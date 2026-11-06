@@ -104,6 +104,31 @@ describe("archiving, and taking it back", () => {
     expect(restore).toHaveBeenCalledTimes(1);
     expect(restore).toHaveBeenCalledWith("n-1");
   });
+
+  // 4 Nov sweep: the failure was swallowed, and "Archived …" with its Undo
+  // stayed over a row the server never archived.
+  it("brings the row back, with no Undo, when the archive failed", async () => {
+    archive.mockRejectedValue(new Error("offline"));
+    const { result } = await loaded();
+    act(() => result.current.archive("n-1"));
+
+    await waitFor(() =>
+      expect(result.current.notes.map((n) => n.id)).toEqual(["n-1", "n-2", "n-3"]),
+    );
+    expect(result.current.lastArchived).toBeNull();
+    expect(result.current.unreadCount).toBe(2);
+  });
+
+  it("keeps it archived, and undoable, when the restore failed", async () => {
+    restore.mockRejectedValue(new Error("offline"));
+    const { result } = await loaded();
+    act(() => result.current.archive("n-1"));
+    act(() => result.current.undoArchive());
+
+    await waitFor(() => expect(result.current.lastArchived?.id).toBe("n-1"));
+    expect(result.current.notes.map((n) => n.id)).toEqual(["n-2", "n-3"]);
+    expect(result.current.unreadCount).toBe(1);
+  });
 });
 
 describe("reading all", () => {
