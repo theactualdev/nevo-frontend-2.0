@@ -48,3 +48,21 @@ describe("when there is genuinely nothing", () => {
     expect(screen.queryByLabelText("Loading notifications")).not.toBeInTheDocument();
   });
 });
+
+describe("a row the bell has no mark for", () => {
+  /*
+   * The fallback mark was the tick, so an unmapped "support needed" row read
+   * as resolved (5 Nov). The neutral mark is a dot; the tick stays `done`'s.
+   */
+  it("draws the neutral dot, never the tick", () => {
+    const { container } = panel({
+      notes: [
+        { id: "1", kind: "other", text: "A child needs support", detail: "", time: "Just now", unread: true },
+      ],
+    });
+
+    expect(screen.getByText("A child needs support")).toBeInTheDocument();
+    expect(container.querySelector('path[d="M20 6L9 17l-5-5"]')).toBeNull();
+    expect(container.querySelector("circle")).not.toBeNull();
+  });
+});
