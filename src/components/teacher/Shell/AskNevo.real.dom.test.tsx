@@ -353,3 +353,40 @@ describe("a class chosen in place on the screen", () => {
     expect(ask.mock.calls[0][0].contextIds.classId).toBeUndefined();
   });
 });
+
+/**
+ * C15's hand-off for a LIVE answer (backlog item 11). The server says
+ * `canHelp: false`; the drawer draws the frame's hand-off, in the server's
+ * words - not the frame's "Your school admin looks after that side of things",
+ * which names who handles it when nothing says the admin does.
+ */
+describe("an answer the server says Nevo cannot help with", () => {
+  it("is drawn as the hand-off, in the server's words, with no vote", async () => {
+    ask.mockResolvedValue(
+      answer({
+        answer: "I can't help with that here. Please contact your school support team.",
+        canHelp: false,
+        cannotHelpReason: "outside_scope",
+      }),
+    );
+    openOn("/teacher/dashboard");
+    askQuestion("Can you change my salary?");
+
+    expect(
+      await screen.findByText("I can't help with that here. Please contact your school support team."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(CANNOT_HELP_LINE)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /helpful/i })).not.toBeInTheDocument();
+  });
+
+  it("never prints the reason code", async () => {
+    ask.mockResolvedValue(
+      answer({ answer: "That's not something I can help with.", canHelp: false, cannotHelpReason: "outside_scope" }),
+    );
+    openOn("/teacher/dashboard");
+    askQuestion("Book me a holiday");
+
+    expect(await screen.findByText("That's not something I can help with.")).toBeInTheDocument();
+    expect(screen.queryByText(/outside_scope/)).not.toBeInTheDocument();
+  });
+});
