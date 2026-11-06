@@ -16,7 +16,7 @@ vi.mock("@/lib/api/assignments", () => ({ assignmentsApi: { create } }));
 // Confirm asks each picked lesson's review for the sign-off (Lydia, 25 Oct).
 // Signed off unless a test says otherwise.
 const { review } = vi.hoisted(() => ({
-  review: vi.fn(async (_id: string): Promise<{ reviewComplete?: boolean }> => ({
+  review: vi.fn(async (_id: string): Promise<{ reviewComplete?: boolean; readyToAssign?: boolean }> => ({
     reviewComplete: true,
   })),
 }));
@@ -1300,7 +1300,7 @@ describe("the library's own sign-off", () => {
     expect(screen.queryByRole("button", { name: /Osmosis/ })).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        "Lessons you haven’t finished reviewing aren’t listed here. Review them from your library first.",
+        "Lessons that can’t be assigned yet aren’t listed here. Review them from your library first.",
       ),
     ).toBeInTheDocument();
   });
@@ -1316,5 +1316,46 @@ describe("the library's own sign-off", () => {
     render(<AssignWizard />);
 
     expect(screen.queryByText(/aren’t listed here/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * ONCE THE SERVER SPLITS ASSIGNABLE FROM FULLY REVIEWED (Teslim b0e0a4f; Lydia,
+ * 2 Nov: "unreviewed generated questions are simply not served until
+ * approved"): the list goes by `canAssign`, and Confirm by `readyToAssign`.
+ */
+describe("a library that sends canAssign", () => {
+  const SPLIT = [
+    { ...LESSONS[0], canAssign: true, reviewComplete: false },
+    { id: "l-2", title: "Osmosis", meta: "Biology", kind: "normal", canAssign: false, reviewComplete: false },
+  ];
+
+  beforeEach(() => {
+    useLessonLibrary.mockReturnValue({
+      cards: SPLIT,
+      live: true,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+  });
+
+  it("offers a lesson with only its checks to review, and leaves off one that can't go", () => {
+    render(<AssignWizard />);
+
+    expect(screen.getByRole("button", { name: /Fractions 3/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Osmosis/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/can’t be assigned yet aren’t listed here/)).toBeInTheDocument();
+  });
+
+  it("sends it, because Confirm asks readyToAssign and not the full sign-off", async () => {
+    review.mockResolvedValue({ readyToAssign: true, reviewComplete: false });
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
+
+    await vi.waitFor(() => expect(create).toHaveBeenCalled());
   });
 });

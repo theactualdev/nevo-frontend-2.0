@@ -12,7 +12,7 @@ import type {
 } from "@/lib/api/content";
 import { SplitSourceNotice } from "@/components/teacher/Library/SplitSourceNotice";
 import { stillToCheck } from "@/components/teacher/Library/LessonDetailActions";
-import { reviewHrefFor } from "@/lib/lessons/signOff";
+import { reviewHrefFor, signOffGates } from "@/lib/lessons/signOff";
 import { cn } from "@/lib/utils";
 import { IncidentLine } from "./ParseFallback";
 
@@ -163,9 +163,12 @@ export function UploadResult({
   const sections = useSegmentReview(lesson.id, segments);
   const checking = verdict.loading;
   /* The lesson page's gate, both halves: the server's `readyToAssign` and
-     its lesson-wide sign-off, which Assign waits for (Lydia, 25 Oct). */
+     its lesson-wide sign-off, which Assign waits for (Lydia, 25 Oct) until
+     the server splits assignable from fully reviewed (2 Nov). After that
+     the sign-off only chooses the line. */
   const awaitingReview = verdict.signedOff === false;
-  const blocked = !verdict.ready || awaitingReview || checking;
+  const blocked =
+    !verdict.ready || (awaitingReview && signOffGates(lesson)) || checking;
   const review = lesson.reviewSegmentCount;
   const rereading = regenerate.state === "running";
 

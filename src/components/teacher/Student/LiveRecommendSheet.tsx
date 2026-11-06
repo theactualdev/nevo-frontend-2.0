@@ -10,7 +10,13 @@ import { assignmentsApi } from "@/lib/api/assignments";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { useLessonLibrary } from "@/hooks/useLessonLibrary";
 import { cn } from "@/lib/utils";
-import { awaitingSignOff, reviewHrefFor, UNREVIEWED_LEFT_OFF } from "@/lib/lessons/signOff";
+import {
+  assignable,
+  awaitingSignOff,
+  reviewHrefFor,
+  splitsAssignable,
+  UNREVIEWED_LEFT_OFF,
+} from "@/lib/lessons/signOff";
 
 /**
  * C08c Recommend a Lesson, for a real student.
@@ -119,14 +125,16 @@ export function LiveRecommendSheet({
    * NOR ONE NOBODY HAS SIGNED OFF: a recommendation is an assignment, and
    * Assign waits for the lesson-wide sign-off (Lydia, 25 Oct). The library
    * says which since Teslim's 294584b. The send still asks the review, for a
-   * sign-off that lapsed after the list was read.
+   * sign-off that lapsed after the list was read. Since b0e0a4f it is the
+   * server's `canAssign`, without the checks (Lydia, 2 Nov) - `assignable()`.
    */
   const cards = live
-    ? libraryCards.filter((c) => c.kind === "normal" && c.reviewComplete !== false)
+    ? libraryCards.filter((c) => c.kind === "normal" && assignable(c))
     : libraryCards;
   const heldBack = live
-    ? libraryCards.filter((c) => c.kind === "normal" && c.reviewComplete === false).length
+    ? libraryCards.filter((c) => c.kind === "normal" && !assignable(c)).length
     : 0;
+  const split = live && libraryCards.some(splitsAssignable);
   /** What the teacher has picked themselves. */
   const [picked, setChoice] = useState<string | null>(null);
   /*
@@ -182,7 +190,7 @@ export function LiveRecommendSheet({
        * recommendation is an assignment. The list below is the library, which
        * carries no sign-off, so the one lesson being sent is asked about.
        */
-      const held = await awaitingSignOff([chosen.id]);
+      const held = await awaitingSignOff([chosen.id], split);
       if (held.has(chosen.id)) {
         setError(`${chosen.title} isn${"’"}t reviewed yet, so it can${"’"}t go to ${firstName}.`);
         setErrorHref(reviewHrefFor(chosen.id));

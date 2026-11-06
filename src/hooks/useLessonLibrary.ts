@@ -67,9 +67,15 @@ export interface LibraryCard {
   needsReview: boolean;
   /**
    * The server's lesson-wide sign-off (`reviewComplete`), or null where it
-   * said nothing. The doors that send a lesson to children read this.
+   * said nothing. The badge reads this.
    */
   reviewComplete?: boolean | null;
+  /**
+   * The server's `canAssign` (Teslim b0e0a4f), or null where it said nothing.
+   * The doors that send a lesson to children read this, through
+   * `assignable()` in `lib/lessons/signOff`.
+   */
+  canAssign?: boolean | null;
   /** Segment count and origin, or the fixture's subject line. */
   meta: string;
   /** The quiet third line. */
@@ -232,6 +238,7 @@ function toCard(lesson: LessonSummary): LibraryCard {
     needsReview: needsReviewOf(lesson),
     reviewComplete:
       typeof lesson.reviewComplete === "boolean" ? lesson.reviewComplete : null,
+    canAssign: typeof lesson.canAssign === "boolean" ? lesson.canAssign : null,
     // C06's meta line gained a duration on 1 Sep. 0 and absent both mean "no
     // estimate" - the figure is floored per content type server-side, so a
     // real lesson is never 0 minutes and "0 min" would be a claim.
@@ -280,6 +287,7 @@ const FIXTURE_CARDS: LibraryCard[] = LIBRARY_LESSONS.map((l) => ({
   // review state, so no fixture card draws the badge.
   needsReview: false,
   reviewComplete: null,
+  canAssign: null,
   meta: l.meta,
   footer: l.assigned,
   subject: l.subject,

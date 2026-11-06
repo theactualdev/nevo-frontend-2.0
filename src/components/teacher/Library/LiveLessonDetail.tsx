@@ -16,6 +16,7 @@ import { activityWithheld, WITHHELD_ROW } from "@/lib/lessons/activityWithheld";
 import { cn } from "@/lib/utils";
 import { LessonDetailActions } from "./LessonDetailActions";
 import { SplitSourceNotice } from "./SplitSourceNotice";
+import { signOffGates } from "@/lib/lessons/signOff";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useLessonReview } from "@/hooks/useLessonReview";
 import { useSegmentReview } from "@/hooks/useSegmentReview";
@@ -548,8 +549,10 @@ export function LiveLessonDetail({
              */
             ready={review.ready}
             /* And the lesson-wide sign-off (Lydia, 25 Oct): Assign waits
-               for it, inside the component beside `ready`. */
+               for it, inside the component beside `ready` - until the
+               server splits assignable from fully reviewed (2 Nov). */
             signedOff={review.signedOff}
+            signOffGates={signOffGates(lesson)}
             checking={!settled}
             outstandingKeyPoints={outstandingPoints}
             outstandingSections={outstandingSections}
@@ -575,7 +578,11 @@ export function LiveLessonDetail({
               {needLook > 0 ? (
                 <>
                   {`${needLook} ${needLook === 1 ? "thing needs" : "things need"} a quick look`}
-                  <span className="hidden xl:inline"> before this is ready</span>
+                  {/* Not once it can be assigned: with only its checks left
+                      the lesson IS ready, and the server says so. */}
+                  {!(review.ready && !signOffGates(lesson)) && (
+                    <span className="hidden xl:inline"> before this is ready</span>
+                  )}
                 </>
               ) : (
                 "Nothing needs a look, just your approval"
