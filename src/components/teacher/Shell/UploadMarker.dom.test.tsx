@@ -18,8 +18,8 @@ import { ApiError } from "@/lib/api/client";
 
 /**
  * C07j LU-03: the upload follows the teacher in the corner, from what the
- * SERVER says about each one by its own id. It never says "Ready to assign"
- * for an upload still waiting for the teacher's check.
+ * SERVER says about each one by its own id. Done, it reads "Ready to review"
+ * and goes to the review - never "Ready to assign" (C07j, 1397ec4).
  */
 
 const follow = (uploadId: string, name = "Quadratic Graphs.pdf") =>
@@ -49,13 +49,25 @@ describe("the upload marker", () => {
     expect(h.status).toHaveBeenCalledWith("u-1");
   });
 
-  it("says it waits for their check - never Ready to assign - before confirm", async () => {
+  /* C07j LU-03 (1397ec4): "Ready to review · Review", never straight to Assign. */
+  it("goes to review once it's done - never Ready to assign", async () => {
     follow("u-1");
-    h.status.mockResolvedValue({ id: "u-1", status: "ready", stage: "complete" });
+    h.status.mockResolvedValue({ id: "u-1", status: "ready", stage: "ready_to_assign" });
     render(<UploadMarker />);
 
-    expect(await screen.findByText("Ready for your check")).toBeInTheDocument();
-    expect(screen.queryByText(/Ready to assign/)).not.toBeInTheDocument();
+    expect(await screen.findByText("Ready to review")).toBeInTheDocument();
+    expect(screen.getByText("Review")).toBeInTheDocument();
+    expect(screen.queryByText(/Ready to assign|Assign/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Tap to view")).not.toBeInTheDocument();
+    expect(screen.getByRole("link")).toHaveAttribute("href", "/teacher/lessons/upload?upload=u-1");
+  });
+
+  it("offers Tap to view while it runs", async () => {
+    follow("u-1");
+    h.status.mockResolvedValue({ id: "u-1", status: "processing", stage: "reading_document" });
+    render(<UploadMarker />);
+
+    expect(await screen.findByText("Reading the document")).toBeInTheDocument();
     expect(screen.getByText("Tap to view")).toBeInTheDocument();
   });
 

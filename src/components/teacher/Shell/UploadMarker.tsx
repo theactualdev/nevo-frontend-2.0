@@ -9,12 +9,11 @@ import { PROCESSING_STAGES, stageOf } from "@/components/teacher/Upload/Processi
  * where they were. The upload keeps going in the corner." - with "Tap to
  * view" back to it (backlog 18 and 20).
  *
- * WHAT IT NEVER SAYS. The frame's finished marker reads "Ready to assign ·
- * Assign". A staged upload at `ready` is waiting for the teacher to check its
- * structure and confirm, and there is no lesson to assign until they do, so
- * that line would be untrue (Lydia, 4 Nov: an untrue state is worse than a
- * missing feature). It says "Ready for your check" and takes them back to
- * the review instead. A reading that stopped says so in C07j LU-05's words.
+ * THE FINISHED MARKER GOES TO REVIEW (C07j, 1397ec4): "Ready to review ·
+ * Review" - "a freshly built lesson can't reach students until it's
+ * reviewed". The frame used to read "Ready to assign · Assign", which was
+ * untrue for a staged upload still waiting on its check; design's push
+ * settled it the same way. A reading that stopped says so in LU-05's words.
  *
  * Only the uploads started in this browser, until the server can say which
  * are this teacher's (`lib/uploads/followedUploads`). None, and it draws
@@ -22,7 +21,7 @@ import { PROCESSING_STAGES, stageOf } from "@/components/teacher/Upload/Processi
  */
 
 function lineFor(row: FollowedRow): string {
-  if (row.status === "ready") return "Ready for your check";
+  if (row.status === "ready") return "Ready to review";
   if (row.status === "failed") return "We couldn’t finish reading this one";
   // Not answered yet: C07j's own heading for the whole wait.
   if (row.status === null) return "Getting it ready";
@@ -62,7 +61,8 @@ export function UploadMarker() {
             </span>
           </span>
           <span className="shrink-0 pt-px text-[12.5px] font-semibold text-nevo-navy">
-            Tap to view
+            {/* LU-03: "Review" once it's done, "Tap to view" while it runs. */}
+            {row.status === "ready" ? "Review" : "Tap to view"}
           </span>
         </Link>
       ))}
