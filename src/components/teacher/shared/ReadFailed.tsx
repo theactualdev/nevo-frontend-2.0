@@ -15,6 +15,26 @@ import { cn } from "@/lib/utils";
  * re-read that fails again changes nothing on screen (`useLiveQuery`), so a
  * button that only re-read would look as if it did nothing at all.
  */
+
+/**
+ * The same Try again, inline, for a PART of a page that failed while the rest
+ * stays usable - a line under a section rather than a card (backlog items 27,
+ * 28, 30, 31, 34: each said "try again in a moment" with nothing to press).
+ */
+export function TryAgain({ className }: { className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => window.location.reload()}
+      className={cn(
+        "cursor-pointer border-none bg-transparent p-0 text-[14px] font-semibold text-nevo-navy underline underline-offset-[3px]",
+        className,
+      )}
+    >
+      Try again
+    </button>
+  );
+}
 export function ReadFailed({
   title,
   body = "It hasn’t gone anywhere. Try again in a moment.",

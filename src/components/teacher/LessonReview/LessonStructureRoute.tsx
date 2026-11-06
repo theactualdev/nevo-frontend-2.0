@@ -8,6 +8,7 @@ import { ApiError } from "@/lib/api/client";
 import { lessonsApi, type LessonDetailResponse } from "@/lib/api/lessons";
 import { getToken } from "@/lib/auth/session";
 import { LessonStructureEdit } from "./LessonStructureEdit";
+import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * Resolves C07d's editor for one lesson in the library, live only - as the
@@ -58,10 +59,17 @@ export function LessonStructureRoute({ lessonId }: { lessonId: string }) {
   }
 
   if (failed) {
+    /* With Try again beside the way back (backlog item 24). */
     return (
-      <Message title="We couldn’t load this lesson" lessonId={lessonId}>
-        It hasn&rsquo;t gone anywhere, and nothing you did is lost. Try again in a moment.
-      </Message>
+      <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
+        <ReadFailed
+          as="h1"
+          title="We couldn’t load this lesson"
+          body="It hasn’t gone anywhere, and nothing you did is lost. Try again in a moment."
+          back={{ href: `/teacher/lessons/${lessonId}`, label: "Back to the lesson" }}
+          className="mx-auto"
+        />
+      </div>
     );
   }
 

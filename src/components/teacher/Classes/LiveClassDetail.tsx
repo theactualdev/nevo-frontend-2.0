@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { SummaryChip, SummaryCount } from "@/components/teacher/shared/SummaryChip";
 import { attentionByStudent, rosterCounts } from "@/components/teacher/shared/summaryState";
+import { TryAgain } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * A class the school assigned, drawn from what the backend actually serves:
@@ -625,7 +626,9 @@ function LessonsPanel({ classId }: { classId: string }) {
     return (
       <p className="mt-5 text-sm leading-[1.55] text-nevo-near-black/68">
         We couldn&rsquo;t load what this class has been given. Nothing has
-        changed for your students, so you can try again in a moment.
+        changed for your students, so you can try again in a moment.{" "}
+        {/* Backlog item 27: the line had nothing to press. */}
+        <TryAgain />
       </p>
     );
   }

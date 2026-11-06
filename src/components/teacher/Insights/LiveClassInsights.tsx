@@ -4,6 +4,7 @@ import Link from "next/link";
 import { MasteryDualTrack } from "@/components/teacher/Student/MasteryDualTrack";
 import { useClassInsights } from "@/hooks/useClassInsights";
 import { cn } from "@/lib/utils";
+import { TryAgain } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * C09 Insights for a real class.
@@ -102,6 +103,8 @@ export function LiveClassInsights({
           <p className="mt-[7px] text-[14.5px] leading-[1.55] text-nevo-near-black/68 xl:mt-2 xl:text-[15px]">
             {`This isn't about ${className} - we just couldn't reach Nevo. Try again in a moment.`}
           </p>
+          {/* Backlog item 30. */}
+          <TryAgain className="mt-3" />
         </div>
       </div>
     );

@@ -11,6 +11,7 @@ import type {
 import { VariantReview } from "./VariantReview";
 import { LiveVariantReview } from "./LiveVariantReview";
 import { SampleRegion } from "@/components/shared/SampleRegion";
+import { TryAgain } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * C16d was never actually blocked, and the paragraph that used to sit here
@@ -125,12 +126,18 @@ export function VariantReviewRoute({
               ? "It may have been re-parsed since this link was made."
               : "It hasn’t gone anywhere. Try again in a moment."}
         </p>
-        <Link
-          href={`/teacher/lessons/${lessonId}`}
-          className="mt-5 inline-flex h-[46px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-5 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
-        >
-          Back to the lesson
-        </Link>
+        <div className="mt-5 flex flex-wrap items-center gap-4">
+          <Link
+            href={`/teacher/lessons/${lessonId}`}
+            className="inline-flex h-[46px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-5 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+          >
+            Back to the lesson
+          </Link>
+          {/* Only for the read that failed (backlog item 40): a lesson that
+              is gone, or a section it does not have, is not fixed by trying
+              again. */}
+          {!missing && !outOfRange && <TryAgain />}
+        </div>
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useSupportContact } from "@/hooks/useSupportContact";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
+import { TryAgain } from "@/components/teacher/shared/ReadFailed";
 
 /**
  * C17 Help & support.
@@ -185,6 +186,8 @@ export function HelpAndSupport() {
               That is our end, not yours. Try again in a moment, and if your
               school has an IT contact they can reach us too.
             </p>
+            {/* Backlog item 31. */}
+            <TryAgain className="mt-3" />
           </div>
         )}
 
