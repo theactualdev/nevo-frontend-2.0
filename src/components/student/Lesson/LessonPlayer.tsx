@@ -4556,7 +4556,14 @@ function SegmentBody({
     if (segment.interactive)
       return <InteractiveSegment content={segment.interactive} />;
   }
-  return <ModalityPlaceholder />;
+  /*
+   * A FORMAT THIS SECTION HAS NO CONTENT FOR SHOWS ITS TEXT, OR NOTHING. It
+   * drew "This modality is coming next", which was never true - nothing is
+   * coming - and put an internal word in front of a child (Lydia, 4 Nov: a
+   * state that is not true is worse than any missing feature; rule 5, render
+   * the nothing-state rather than fill the gap).
+   */
+  return text;
 }
 
 function ChevronButton({
@@ -4587,16 +4594,5 @@ function ChevronButton({
     >
       <Icon className="size-6" strokeWidth={2} />
     </button>
-  );
-}
-
-/** Fallback for content this slice can't render yet (the calculation solver, Slice 6). */
-function ModalityPlaceholder() {
-  return (
-    <div className="flex min-h-[200px] items-center justify-center rounded-[12px] bg-nevo-cream-elevated">
-      <span className="font-mono text-xs tracking-[0.04em] text-nevo-near-black/40">
-        This modality is coming next
-      </span>
-    </div>
   );
 }
