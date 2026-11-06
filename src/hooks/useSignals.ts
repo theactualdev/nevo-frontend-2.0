@@ -202,6 +202,15 @@ export function useSignals(
     }
     // Nobody signed in is nobody to ask for, not a failed read.
     if (!who) return;
+    /*
+     * NOR IS A SESSION A DOOR IS HOLDING (05's device hand-over, 19 Oct). The
+     * client sends nothing with a held token, so its consent read fails
+     * without ever leaving the device (`heldAtDoor`) - a refusal to ask, not
+     * an answer that could not be read. That child is not this stream's to
+     * pause: their held events keep the last try any sign-out gives them
+     * (`forgetSignals`), and their own next session asks afresh.
+     */
+    if (usableSession()?.userId !== who) return;
     if (consent === "allowed") {
       cleared.current = who;
       if (unread.current === who) unread.current = null;

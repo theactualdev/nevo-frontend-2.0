@@ -54,7 +54,7 @@ vi.mock("@/lib/api/consents", async (importOriginal) => {
 const { useSignals } = await import("./useSignals");
 const { ApiError } = await import("@/lib/api");
 const { clearSession, setSession } = await import("@/lib/auth/session");
-const { holdSignals } = await import("@/lib/signals/outbox");
+const { forgetSignals, holdSignals } = await import("@/lib/signals/outbox");
 const { announceSessionEnd } = await import("@/lib/auth/sessionEnd");
 const { openDoor } = await import("@/lib/auth/doorSession");
 
@@ -1039,5 +1039,52 @@ describe("a stream on a door, with another child's session stored", () => {
     expect(submitBatch).toHaveBeenCalledTimes(1);
     const [, events] = submitBatch.mock.calls[0];
     expect(events.some((e) => e.payload?.mine === true)).toBe(true);
+  });
+
+  it("does not take the held child's consent for unreadable: their own events keep their last try", async () => {
+    /*
+     * 05's hand-over (19 Oct). The client sends nothing with a held token,
+     * so the consent read for it fails on the device (`heldAtDoor`). That is
+     * a refusal to ask, not a consent that could not be read (SCRUM-257): the
+     * outgoing child's own unsent events still get the last try any
+     * sign-out gives them.
+     */
+    setSession({
+      token: "tok-held",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId: "held-child",
+      role: "student",
+    });
+    holdSignals(
+      "held-child",
+      {
+        sessionId: UUID,
+        lessonId: LESSON,
+        sessionType: "lesson",
+        startedAt: "2026-10-19T09:00:00.000Z",
+      },
+      [
+        {
+          type: "feeling_checkin",
+          timestamp: "2026-10-19T09:00:01.000Z",
+          payload: { theirs: true },
+        },
+      ],
+    );
+    myConsentGate.mockRejectedValue(
+      new ApiError(0, "held", { heldAtDoor: true }),
+    );
+    const close = openDoor();
+    renderHook(() => useSignals(UUID, undefined, "sso"));
+    await answered();
+    await act(async () => {});
+
+    forgetSignals("held-child", "tok-held");
+    close();
+
+    expect(submitBatch).toHaveBeenCalledTimes(1);
+    const [, events, options] = submitBatch.mock.calls[0];
+    expect(events.some((e) => e.payload?.theirs === true)).toBe(true);
+    expect(options).toMatchObject({ keepalive: true, token: "tok-held" });
   });
 });
