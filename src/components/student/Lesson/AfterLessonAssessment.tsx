@@ -264,6 +264,24 @@ export function AfterLessonAssessment({
               />
             </div>
           )}
+          {/*
+            A TRANSFER ITEM'S SITUATION, above its question (Lydia's test 5:
+            "the same concept appears in two unlike situations, followed by a
+            question asking what the two have in common"). The server's words,
+            in a quiet card and with no label: no frame draws it, so nothing
+            here names what kind of item it is, or any level (test 4).
+          */}
+          {question.context && (
+            <p
+              data-transfer-context
+              className={cn(
+                "mb-5 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 text-[15.5px] leading-[1.55] text-nevo-near-black/85 sm:text-base",
+                reading && READING_BODY,
+              )}
+            >
+              {question.context}
+            </p>
+          )}
           <h2
             className={cn(
               "text-[23px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black sm:text-[26px]",
