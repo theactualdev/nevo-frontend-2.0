@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GridSpanConfig } from "@/lib/profiling/bands";
-import { tapPoint, type BaselineCapture } from "@/lib/profiling/capture";
+import type { BaselineCapture } from "@/lib/profiling/capture";
 import { AvatarBubble, ProfilingShell } from "./ProfilingShell";
 
 /**
@@ -248,20 +248,19 @@ export function GridSpanModule({
     return () => clearTimeout(t);
   }, [genSeq, spanStart, startRound]);
 
-  const answerCheck = (answer: boolean, e: React.MouseEvent) => {
+  const answerCheck = (answer: boolean) => {
     if (step !== "check") return;
     capture?.record("check_answer", {
       check: check.text,
       answer,
       correct: answer === check.isTrue,
-      ...tapPoint(e),
     });
     afterCheck();
     setStep("input");
     capture?.record("input_start", { length: sequence.length });
   };
 
-  const tapTile = (cell: number, e: React.MouseEvent) => {
+  const tapTile = (cell: number) => {
     if (step !== "input") return;
     const expected = [...sequence].reverse();
     const correct = cell === expected[inputPos];
@@ -270,7 +269,6 @@ export function GridSpanModule({
       correct,
       posInSeq: inputPos,
       length: sequence.length,
-      ...tapPoint(e),
     });
     if (correct) {
       const nextTapped = new Set(tapped).add(cell);
@@ -345,7 +343,7 @@ export function GridSpanModule({
                     type="button"
                     tabIndex={interactive ? 0 : -1}
                     aria-hidden={!interactive}
-                    onClick={(e) => tapTile(i, e)}
+                    onClick={() => tapTile(i)}
                     className={cn(
                       "flex items-center justify-center rounded-[12px] transition-[transform,box-shadow] duration-150",
                       tile.m,
@@ -394,8 +392,8 @@ export function GridSpanModule({
 
         {step === "check" && (
           <div className="flex gap-3">
-            <CheckButton label="True" onClick={(e) => answerCheck(true, e)} />
-            <CheckButton label="False" onClick={(e) => answerCheck(false, e)} />
+            <CheckButton label="True" onClick={() => answerCheck(true)} />
+            <CheckButton label="False" onClick={() => answerCheck(false)} />
           </div>
         )}
       </div>

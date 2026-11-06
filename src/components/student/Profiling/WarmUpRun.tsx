@@ -34,7 +34,6 @@ import {
   BaselineCapture,
   baselineRunContext,
   baselineTrials,
-  tapPoint,
   wordsShown,
 } from "@/lib/profiling/capture";
 import {
@@ -1330,7 +1329,7 @@ function SingleChoice({
     [],
   );
 
-  const choose = (i: number, e: React.MouseEvent) => {
+  const choose = (i: number) => {
     if (picked !== -1) return;
     // "Not sure" is an honest non-answer and is never marked wrong; it is
     // counted separately so it cannot silently inflate an accuracy either.
@@ -1343,7 +1342,6 @@ function SingleChoice({
           : answer !== undefined
             ? { correct: options[i] === answer }
             : {}),
-        ...tapPoint(e),
       },
       i,
     );
@@ -1380,7 +1378,7 @@ function SingleChoice({
               <button
                 key={`${i}-${o}`}
                 type="button"
-                onClick={(e) => choose(i, e)}
+                onClick={() => choose(i)}
                 className={cn(
                   // `min-h`, so a served option longer than one line still fits.
                   "min-h-12 cursor-pointer rounded-[10px] border-2 transition-[background-color,transform] active:scale-[0.97]",
@@ -1523,20 +1521,19 @@ function WarmUpGrid({
   }, [play, clearTimers, n, length]);
 
   /** Marked for the engine, as tile memory marks it; never shown. */
-  const answerCheck = (answer: boolean, e: React.MouseEvent) => {
+  const answerCheck = (answer: boolean) => {
     if (phase !== "check") return;
     capture.record("check_answer", {
       module: "warmup",
       check: check.text,
       answer,
       correct: answer === check.isTrue,
-      ...tapPoint(e),
     });
     afterCheck();
     handOver(seq.length);
   };
 
-  const tap = (cell: number, e: React.MouseEvent) => {
+  const tap = (cell: number) => {
     if (phase !== "input") return;
     const expected = [...seq].reverse();
     const correct = cell === expected[pos.current];
@@ -1551,7 +1548,6 @@ function WarmUpGrid({
       // perfectly looked like one who never finished.
       posInSeq: pos.current,
       length: seq.length,
-      ...tapPoint(e),
     });
     if (!correct) {
       misses.current += 1;
@@ -1607,7 +1603,7 @@ function WarmUpGrid({
               key={i}
               type="button"
               tabIndex={inputOn ? 0 : -1}
-              onClick={(e) => tap(i, e)}
+              onClick={() => tap(i)}
               className={cn(
                 "flex items-center justify-center rounded-[12px] transition-[transform,box-shadow] duration-150",
                 tile.m,
@@ -1644,8 +1640,8 @@ function WarmUpGrid({
       </div>
       {checking && (
         <div className="flex gap-3">
-          <CheckButton label="True" onClick={(e) => answerCheck(true, e)} />
-          <CheckButton label="False" onClick={(e) => answerCheck(false, e)} />
+          <CheckButton label="True" onClick={() => answerCheck(true)} />
+          <CheckButton label="False" onClick={() => answerCheck(false)} />
         </div>
       )}
     </>
@@ -1705,14 +1701,13 @@ function WarmUpDots({
   /** How close the two counts are: the baseline's `ratio`, its condition. */
   const ratio = Math.round((pair.a / pair.b) * 100) / 100;
 
-  const choose = (i: number, label: string, e: React.MouseEvent) => {
+  const choose = (i: number, label: string) => {
     if (!masked || picked !== -1) return;
     onPick(label, {
       a: counts[0],
       b: counts[1],
       ratio,
       correct: counts[i] > counts[1 - i],
-      ...tapPoint(e),
     });
     setPicked(i);
     timers.current.push(setTimeout(() => onDoneRef.current(), PICK_BEAT_MS));
@@ -1764,7 +1759,7 @@ function WarmUpDots({
           <button
             key={side}
             type="button"
-            onClick={(e) => choose(i, side, e)}
+            onClick={() => choose(i, side)}
             className={cn(
               "h-12 min-w-0 flex-1 basis-0 rounded-[10px] border-2 px-2 text-base font-semibold",
               picked === i
@@ -1839,9 +1834,9 @@ function WarmUpHeard({
           capture.record("replay", { module: "warmup" });
           speak(sentence, onOpen);
         }}
-        onPick={(i, detail, e) => {
+        onPick={(i, detail) => {
           if (picked !== -1) return;
-          onPick(i, { ...detail, ...tapPoint(e) });
+          onPick(i, detail);
           setPicked(i);
           timer.current = setTimeout(() => onDoneRef.current(), PICK_BEAT_MS);
         }}
