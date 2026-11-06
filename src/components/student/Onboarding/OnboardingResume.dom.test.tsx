@@ -123,7 +123,7 @@ function expectNothingState() {
     "Nothing to do here right now",
   );
   expect(document.body.textContent).toContain(
-    "You can go on to Nevo and come back any time.",
+    "If something needs doing here, it will appear on your home screen. You can go on to Nevo and come back any time.",
   );
   expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
     NOTHING,
