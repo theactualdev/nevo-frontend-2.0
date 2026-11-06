@@ -291,6 +291,21 @@ export interface CalculationStep {
   hint: string;
   confirmationText: string;
   /**
+   * The step in its own ordered pieces, for Slower (Teslim, 8c4ccef): "Ordered,
+   * teacher-approved pieces revealed while this step is asked. Empty means pace
+   * the whole step." A child's read carries them only once a teacher approved
+   * them or they came word for word from the upload; pending ones are kept
+   * back on the server. At most eight.
+   */
+  parts?: string[];
+  /**
+   * The idea behind this step, in a teacher's words (8c67353): what More
+   * support shows (Lydia: "concept help, never the hint"). A child's read
+   * carries it only once a teacher approved the step's support; absent, or
+   * null, the step has none.
+   */
+  conceptExplanation?: string | null;
+  /**
    * WHAT THIS STEP'S ANSWER IS - landed 16 Sep, and it is per STEP.
    *
    * The variant carries an answer too, and mapping that one onto every step is
