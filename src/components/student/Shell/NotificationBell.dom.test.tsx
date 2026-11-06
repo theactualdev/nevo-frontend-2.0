@@ -205,3 +205,27 @@ describe("the panel's place on the screen (board 28)", () => {
     expect(bell.parentElement).toHaveClass("md:relative");
   });
 });
+
+/*
+ * A FEED THAT COULD NOT BE READ OFFERS TRY AGAIN (audit, 2 Nov, backlog 37).
+ * It said so and stopped there, and reopening the panel never read again, so
+ * the child had the line until a reload.
+ */
+describe("a feed that could not be read", () => {
+  it("says so, and Try again reads it once more", () => {
+    ctx.value.failed = true;
+    openPanel();
+
+    expect(screen.getByText("We couldn't load these just now")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(ctx.value.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no Try again on a feed that is simply empty", () => {
+    openPanel();
+
+    expect(screen.getByText("Nothing new right now")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+});
