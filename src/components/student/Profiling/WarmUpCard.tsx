@@ -6,6 +6,8 @@ import { useWarmUpPrompt } from "@/hooks/useWarmUpDimension";
 import { useHydrated } from "@/hooks/useHydrated";
 import { getSession } from "@/lib/auth/session";
 import { warmUpDoneFor } from "@/lib/profiling/warmUpDone";
+import { formFactor } from "@/hooks/useSignals";
+import { motorStepRuns } from "./MotorStep";
 import { dimensionForToday } from "./WarmUpRun";
 
 /** The rotating chip copy - warm, never clinical (frame's rotation map). */
@@ -43,9 +45,25 @@ export function TodaysWarmUpCard() {
   const done =
     hydrated &&
     warmUpDoneFor(
-      prompt.state === "waiting" ? undefined : prompt.doneToday,
+      prompt.state === "waiting" || prompt.state === "failed"
+        ? undefined
+        : prompt.doneToday,
       getSession()?.userId,
     );
+  /*
+   * OFFERED ONLY FOR A RUN THAT CAN HAPPEN (Lydia, 4 Nov: "the product
+   * asserting a state that is not true ... is worse than any missing
+   * feature"; audit, 2 Nov, backlog 7). "Begin warm-up" showed on a day the
+   * engine named nothing, on a motor day on a device that cannot run the
+   * step, and while the prompt was unread - each landing on a screen with
+   * only Home on it. Now the card is there when the engine named a task, or
+   * a motor day this device can run; otherwise there is no card, which
+   * claims nothing. A done day still says it is done.
+   */
+  const runs =
+    prompt.state === "ready" ||
+    (prompt.state === "motor" && hydrated && motorStepRuns(formFactor()));
+  if (!done && !runs) return null;
   // The same dimension the run will use - the card naming one task and the
   // run opening another would be a small, avoidable lie.
   return (
