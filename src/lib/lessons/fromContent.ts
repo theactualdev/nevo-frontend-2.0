@@ -1415,6 +1415,10 @@ function assessmentFor(res: LessonDetailResponse): Assessment | undefined {
       ...(checkpoint.conceptId ? { conceptId: checkpoint.conceptId } : {}),
       // A spoken question (B16), only where the server made it one.
       ...(quick.promptAudio ? { promptAudio: quick.promptAudio } : {}),
+      // A transfer item's situation, as the server wrote it (test 5).
+      ...(checkpoint.transferContext?.trim()
+        ? { context: checkpoint.transferContext.trim() }
+        : {}),
     }));
 
   return questions.length > 0 ? { questions } : undefined;

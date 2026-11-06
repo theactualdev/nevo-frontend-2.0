@@ -9,6 +9,8 @@ import {
 } from "react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/shared";
+import type { ReteachingResponse } from "@/lib/api/lessons";
+import type { WayIn } from "@/lib/lessons/waysIn";
 import type { QuickCheck } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AnswerCheck, AnswerOption } from "./AnswerOption";
@@ -40,6 +42,25 @@ export const RECOVERY_LINE = "Let's look at this another way.";
  * about the child.
  */
 export const GIVES_WAY_AFTER_MS = 1800;
+
+/** The re-teach box's words, the 17f frame's (design 1397ec4). */
+export const RETEACH_COPY = {
+  title: "Let's work through it together",
+  check: "Check",
+  done: "That's it",
+  keepGoing: "Keep going",
+  again: "Let's try it a different way",
+  waysLine:
+    "Here are some other ways to look at it. Take any of them, as many times as you like.",
+  shortBreak: "Take a short break",
+} as const;
+
+/** 17f's names for the ways in it draws, beside a second miss. */
+export const RETEACH_WAY_LABEL: Partial<Record<WayIn, string>> = {
+  picture: "As a picture",
+  audio: "Listen to it",
+  simpler: "Simpler",
+};
 
 /** The sheet is the centred card from `sm:` up, and only the phone's swipes. */
 function centredCard(): boolean {
@@ -141,8 +162,24 @@ export function QuickCheckSheet({
   hint,
   onGiveWay,
   position,
+  reteaching = null,
+  ways = [],
+  onTakeWay,
 }: {
   check: QuickCheck;
+  /**
+   * The server's re-teaching for THIS check, from its reply to a miss
+   * (`ReteachingResponse`) - what the re-teach box draws. Absent, a miss is
+   * held and gives way, as it always did.
+   */
+  reteaching?: ReteachingResponse | null;
+  /**
+   * The ways in the server offers for this section that it can serve here
+   * (`waysInFor`), for the box after a second miss. Only 17f's are drawn.
+   */
+  ways?: readonly WayIn[];
+  /** One of those ways, taken from the box: the sheet closes for it. */
+  onTakeWay?: (way: WayIn) => void;
   /**
    * Where this check is among its section's, counted from 1, where the
    * section has more than one. Absent for a section's only check.
@@ -186,6 +223,40 @@ export function QuickCheckSheet({
   const resolved = chosenId !== null;
   const correct = chosenId === check.correctId;
 
+  /*
+   * THE RE-TEACH BOX (17f, design 1397ec4; Lydia, 4 Nov, her 19: "the box
+   * shows the guided steps only and the explanation is held back until after
+   * the retry"). A miss on a check the server re-teaches opens it here, in
+   * the sheet, over the same question:
+   *  - R1/R2: "Let's work through it together" and the server's steps
+   *    (`screens`), numbered. The same check is answered again: the earlier
+   *    pick held calm (no red, no cross, no verdict), and "Check" quiet until
+   *    a new pick, the primary once there is one.
+   *  - R3, the retry right: "That's it", then the check's own explanation as
+   *    the server sends it, then "Keep going" - never before, never on a
+   *    second miss.
+   *  - R4, the retry missed: "Let's try it a different way", and the ways in
+   *    the server offers that 17f names. Still no answer, no explanation.
+   * WHAT IT SAYS IS ALL THE SERVER'S. Which steps, which ways: its reply's.
+   * Nothing here chooses by the check's level, or by anything else (rule 3).
+   * Without a re-teaching for this check, a miss is held and gives way, as
+   * before.
+   */
+  const [box, setBox] = useState<{
+    held: string;
+    pick: string | null;
+    after: "asking" | "right" | "again";
+  } | null>(null);
+  const reteachHere = reteaching?.questionId === check.id ? reteaching : null;
+  /** The server's steps, less any that is only the question again. */
+  const steps = (reteachHere?.screens ?? []).filter(
+    (s) => s.trim() !== "" && s.trim() !== check.question.trim(),
+  );
+  const boxWays = ways.flatMap((w) => {
+    const label = RETEACH_WAY_LABEL[w];
+    return label ? [{ way: w, label }] : [];
+  });
+
   // When the question was last put in front of the child: on opening, and
   // again once a miss has given way.
   const askedAt = useRef<number | null>(null);
@@ -205,12 +276,38 @@ export function QuickCheckSheet({
 
   /** Tapped out: the check is asked afresh next time, unless it was passed. */
   const tapOut = () => {
-    if (!correct) setChosenId(null);
+    if (!correct) {
+      setChosenId(null);
+      setBox(null);
+    }
     onTapOut();
   };
 
-  // A miss is held - not marked - and then gives way.
-  const recovering = resolved && !correct;
+  // A miss the server re-teaches opens the box, in place of giving way -
+  // taken as the reply lands, during render, so no frame shows it giving way.
+  if (!box && resolved && !correct && reteachHere && chosenId !== null) {
+    setBox({ held: chosenId, pick: null, after: "asking" });
+  }
+  // The retry is timed from the box opening (rule 4).
+  const boxOpen = box !== null;
+  useEffect(() => {
+    if (boxOpen) askedAt.current = performance.now();
+  }, [boxOpen]);
+
+  /** The retry, answered with "Check": marked and sent as any answer is. */
+  const checkRetry = () => {
+    if (!box || box.after !== "asking" || box.pick === null) return;
+    const right = box.pick === check.correctId;
+    const responseTimeMs = msSince(askedAt.current);
+    onAnswered(right, {
+      selectedId: box.pick,
+      ...(responseTimeMs === null ? {} : { responseTimeMs }),
+    });
+    setBox({ ...box, after: right ? "right" : "again" });
+  };
+
+  // A miss is held - not marked - and then gives way, unless the box opens.
+  const recovering = resolved && !correct && !box;
   const giveWay = useRef(onGiveWay);
   useEffect(() => {
     giveWay.current = onGiveWay;
@@ -338,6 +435,22 @@ export function QuickCheckSheet({
         </SheetTitle>
         {hint}
 
+        {box ? (
+          <ReteachBox
+            box={box}
+            steps={steps}
+            explanation={check.explanation}
+            ways={boxWays}
+            options={check.options}
+            reading={reading}
+            onPick={(id) => setBox({ ...box, pick: id })}
+            onCheck={checkRetry}
+            onKeepGoing={onContinue}
+            onTakeWay={(way) => onTakeWay?.(way)}
+            onTakeBreak={onTakeBreak}
+          />
+        ) : (
+          <>
         <div className="mt-[18px] flex flex-col gap-2.5">
           {check.options.map((option) => (
             <AnswerOption
@@ -382,7 +495,168 @@ export function QuickCheckSheet({
                 : "Finish"}
           </Button>
         )}
+          </>
+        )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/**
+ * The re-teach box itself (17f): the frame's cream card, then the options and
+ * the action under it. See `box` above for what each state shows and why.
+ */
+function ReteachBox({
+  box,
+  steps,
+  explanation,
+  ways,
+  options,
+  reading,
+  onPick,
+  onCheck,
+  onKeepGoing,
+  onTakeWay,
+  onTakeBreak,
+}: {
+  box: { held: string; pick: string | null; after: "asking" | "right" | "again" };
+  steps: string[];
+  explanation?: string;
+  ways: { way: WayIn; label: string }[];
+  options: QuickCheck["options"];
+  reading: boolean;
+  onPick: (id: string) => void;
+  onCheck: () => void;
+  onKeepGoing: () => void;
+  onTakeWay: (way: WayIn) => void;
+  onTakeBreak: () => void;
+}) {
+  const asking = box.after === "asking";
+  const right = box.after === "right";
+  const title = right
+    ? RETEACH_COPY.done
+    : asking
+      ? RETEACH_COPY.title
+      : RETEACH_COPY.again;
+  const body = cn("text-[14px] leading-[1.5] text-nevo-near-black/82", reading && READING_BODY);
+  return (
+    <div data-reteach-box={box.after}>
+      <div role="status" className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated p-[18px]">
+        <div className="flex items-center gap-[9px]">
+          {right ? (
+            <span
+              aria-hidden
+              className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream motion-safe:animate-in motion-safe:zoom-in-50"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            </span>
+          ) : (
+            <svg aria-hidden width="20" height="20" viewBox="0 0 24 24" className="shrink-0 fill-nevo-navy">
+              <path d="M12 2l1.6 4.8L18 8.4l-4.4 1.6L12 15l-1.6-5L6 8.4l4.4-1.6z" />
+              <circle cx="18.5" cy="17.5" r="2.2" />
+            </svg>
+          )}
+          <p className="text-[15.5px] font-semibold text-nevo-near-black">{title}</p>
+        </div>
+        {asking && steps.length > 0 && (
+          <ol className="mt-3.5 flex flex-col gap-3">
+            {steps.map((text, i) => (
+              <li key={i} className="flex items-start gap-[11px]">
+                <span
+                  aria-hidden
+                  className="mt-px flex size-[22px] shrink-0 items-center justify-center rounded-full bg-nevo-violet/30 text-[12px] font-semibold text-nevo-navy"
+                >
+                  {i + 1}
+                </span>
+                <span className={body}>{text}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+        {right && explanation && (
+          <p className={cn("mt-3 text-[14px] leading-[1.55] text-nevo-near-black/78 text-pretty", reading && READING_BODY)}>
+            {explanation}
+          </p>
+        )}
+        {box.after === "again" && ways.length > 0 && (
+          <>
+            <p className="mt-2.5 text-[13.5px] leading-[1.5] text-nevo-near-black/66">
+              {RETEACH_COPY.waysLine}
+            </p>
+            <div className="mt-[13px] flex flex-wrap gap-2">
+              {ways.map(({ way, label }) => (
+                <button
+                  key={way}
+                  type="button"
+                  onClick={() => onTakeWay(way)}
+                  className="inline-flex h-10 cursor-pointer items-center rounded-full border-[1.5px] border-nevo-navy/30 bg-nevo-cream px-[15px] text-[13.5px] font-semibold text-nevo-navy"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {asking && (
+        <>
+          <div className="mt-3.5 flex flex-col gap-2.5">
+            {options.map((option) => {
+              const picked = box.pick === option.id;
+              const held = box.pick === null && box.held === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={picked}
+                  onClick={() => onPick(option.id)}
+                  className={cn(
+                    "flex h-[50px] w-full cursor-pointer items-center rounded-[10px] px-4 text-left text-[15px]",
+                    picked
+                      ? "bg-nevo-navy font-semibold text-nevo-cream"
+                      : held
+                        ? "border-[1.5px] border-nevo-navy/40 bg-nevo-cream-elevated font-medium text-nevo-near-black"
+                        : "border-[1.5px] border-nevo-near-black/16 bg-nevo-cream font-medium text-nevo-near-black/80",
+                    reading && READING_BODY,
+                  )}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={onCheck}
+            aria-disabled={box.pick === null}
+            className={cn(
+              "mt-3.5 flex h-[52px] w-full cursor-pointer items-center justify-center rounded-[10px] text-[15.5px] font-semibold",
+              box.pick === null
+                ? "bg-nevo-navy/12 text-nevo-navy"
+                : "bg-nevo-navy text-nevo-cream",
+            )}
+          >
+            {RETEACH_COPY.check}
+          </button>
+        </>
+      )}
+      {right && (
+        <Button className="mt-3.5 w-full" onClick={onKeepGoing}>
+          {RETEACH_COPY.keepGoing}
+        </Button>
+      )}
+      {box.after === "again" && (
+        <button
+          type="button"
+          onClick={onTakeBreak}
+          className="mt-3.5 w-full cursor-pointer text-center text-[13.5px] font-semibold text-nevo-navy"
+        >
+          {RETEACH_COPY.shortBreak}
+        </button>
+      )}
+    </div>
   );
 }

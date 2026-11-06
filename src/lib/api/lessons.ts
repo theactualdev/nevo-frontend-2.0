@@ -565,15 +565,44 @@ export type CheckAnswerKey =
   | (string | number | boolean)[]
   | null;
 
+/**
+ * The curriculum level a check asks for (backend #8, 5 Nov). A property of
+ * the CHECK, never of a child: it is shown to the teacher reviewing the
+ * check and nowhere a child can see (Lydia's test 4).
+ */
+export type MasteryLevel = "knowledge" | "application" | "analysis";
+
+/** Which of the four parts of a transfer set an item is. */
+export type TransferKind = "application_a" | "application_b" | "comparison" | "diagnosis";
+
 /** One in-lesson check, as the review shows it (`CheckReviewItem`). */
 export interface CheckReviewItem {
   segmentId: string;
   segmentTitle: string | null;
+  /** A section's check, or one of the end-of-lesson questions. */
+  scope?: "checkpoint" | "assessment";
   questionId: string;
   questionPrompt: string;
   questionAnswerType: string;
   questionOptions: CheckOption[];
   questionAnswerKey: CheckAnswerKey;
+  /**
+   * The level the check asks for. Null or absent means unestablished, and
+   * nothing is shown (rule 5). A lesson uploaded before 5 Nov 20:52Z has none.
+   */
+  masteryLevel?: MasteryLevel | null;
+  /**
+   * `person` when the level came with the lesson, `nevo` when Nevo inferred
+   * it. An inferred level is part of what the checks sign-off accepts, even
+   * on a check whose answer came from the file.
+   */
+  masteryLevelAuthoredBy?: "person" | "nevo" | null;
+  /** Set only on a transfer item: which part of its set it is. */
+  transferKind?: TransferKind | null;
+  /** The situation a transfer item sets the concept in. */
+  transferContext?: string | null;
+  /** The section a transfer set was written from - its concept's first. */
+  sourceSegmentId?: string | null;
   teacherReviewed: boolean;
   markable: boolean;
 }
