@@ -110,7 +110,7 @@ describe("the warm-up card on Home", () => {
     render(<HomeDashboard />);
 
     expect(
-      await screen.findByText("Your teacher is setting up your first lesson"),
+      await screen.findByText("When your teacher sets your first lesson, you'll find it right here."),
     ).toBeInTheDocument();
     expect(screen.getByText(/A quick warm-up to begin/i)).toBeInTheDocument();
   });
