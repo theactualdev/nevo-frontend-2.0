@@ -66,8 +66,9 @@ describe("rememberOnboardedStudent", () => {
       schoolCode: "751A1136",
       loginIdentifier: SERVER_IDENTIFIER,
       displayName: "Amara",
-      initials: "AK",
     });
+    // Never their initials (Lydia, 4 Nov).
+    expect(getRememberedProfile()).not.toHaveProperty("initials");
   });
 
   it("refuses to remember a child with no school code", () => {

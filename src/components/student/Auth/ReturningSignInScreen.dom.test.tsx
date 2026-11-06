@@ -473,7 +473,6 @@ describe("ReturningSignInScreen — when it does not work", () => {
         schoolCode: "K7DQ",
         loginIdentifier,
         displayName,
-        initials: "XX",
       });
     remember("amara.k", "Amara");
     remember("kofi.b", "Kofi");
@@ -747,7 +746,6 @@ describe("what the device remembers a child as", () => {
       schoolCode: "K7DQ",
       loginIdentifier: "amara.k",
       displayName: "Amara",
-      initials: "AM",
       userId: "student-1",
     });
     loginPin.mockResolvedValue(SESSION);
@@ -761,7 +759,6 @@ describe("what the device remembers a child as", () => {
     expect(getRememberedProfile()).toMatchObject({
       loginIdentifier: "BGA/2031",
       displayName: "Amara",
-      initials: "AM",
     });
   });
 });

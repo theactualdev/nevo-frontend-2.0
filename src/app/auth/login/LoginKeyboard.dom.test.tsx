@@ -46,7 +46,6 @@ vi.mock("@/lib/auth/deviceRoster", () => ({
           schoolCode: "NEVO-1",
           loginIdentifier: "ada.o",
           displayName: "Ada",
-          initials: "AO",
           shapeIndex: 0,
           lastUsedAt: new Date().toISOString(),
         }

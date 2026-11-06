@@ -126,7 +126,7 @@ afterEach(() => {
 
 describe("the name a child chose, on read", () => {
   it("comes from their account, over what this tablet last saw", async () => {
-    setStoredDisplayName("Old", "O");
+    setStoredDisplayName("Old");
     me.mockResolvedValue(account("Tee"));
 
     renderProfile();
@@ -138,7 +138,7 @@ describe("the name a child chose, on read", () => {
   });
 
   it("falls back to this tablet's copy when the account cannot answer", async () => {
-    setStoredDisplayName("Old", "O");
+    setStoredDisplayName("Old");
     me.mockRejectedValue(new Error("offline"));
 
     renderProfile();

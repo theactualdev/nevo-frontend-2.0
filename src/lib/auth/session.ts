@@ -126,8 +126,13 @@ export interface RememberedProfile {
    * showing their username to whoever picks the tablet up next.
    */
   displayName?: string;
-  /** Avatar initials, e.g. "AK". */
-  initials: string;
+  /*
+   * NO INITIALS (Lydia, 4 Nov: "Initials put a child's name on a screen
+   * anyone nearby can read"; the hub, 6 Nov). Entries kept a child's two
+   * letters for an avatar that is a shape now, everywhere, and nothing read
+   * them. An entry stored with them sheds them the next time the roster is
+   * read (`deviceRoster`).
+   */
   /**
    * The account this entry signs in as, recorded the first time a sign-in
    * succeeds from it. Never shown - it is how a signed-in screen finds ITS
@@ -343,11 +348,10 @@ export function onSessionChange(listener: () => void): () => void {
 export function getRememberedProfile(): RememberedProfile | null {
   const latest = rememberedChildren()[0];
   if (!latest) return null;
-  const { schoolCode, loginIdentifier, displayName, initials, userId } = latest;
+  const { schoolCode, loginIdentifier, displayName, userId } = latest;
   return {
     schoolCode,
     loginIdentifier,
-    initials,
     ...(displayName ? { displayName } : {}),
     ...(userId ? { userId } : {}),
   };
@@ -425,7 +429,7 @@ export function retireLegacyDisplayName(): void {
  * replaces. The old single-profile key is not written (19 Oct): the roster
  * is where a name lives.
  */
-export function setStoredDisplayName(name: string, initials: string): void {
+export function setStoredDisplayName(name: string): void {
   const trimmed = name.trim();
   const userId = getSession()?.userId;
   if (!trimmed || !userId) return;
@@ -435,5 +439,5 @@ export function setStoredDisplayName(name: string, initials: string): void {
     // Private mode - the name simply will not survive this session.
   }
   const own = rememberedChildren().find((c) => c.userId === userId);
-  if (own) rememberChild({ ...own, displayName: trimmed, initials });
+  if (own) rememberChild({ ...own, displayName: trimmed });
 }
