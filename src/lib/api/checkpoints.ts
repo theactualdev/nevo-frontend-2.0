@@ -191,6 +191,9 @@ export function toQuickCheck(
       checkpoint.explanation?.trim() ||
       "That's it - you've got this one.",
     recoveryNote: "Not quite. Let's look again.",
+    ...(checkpoint.explanation?.trim()
+      ? { explanation: checkpoint.explanation }
+      : {}),
     // Only the server's word that a person stands behind the key holds a
     // child (Lydia, 26 Oct); absent or false holds nothing.
     holds: checkpoint.teacherReviewed === true,

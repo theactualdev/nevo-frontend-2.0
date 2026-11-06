@@ -3966,6 +3966,15 @@ export function LessonPlayer({
             setGaveWayOn(segment.id);
             setCheckOpen(false);
           }}
+          // The server's re-teaching for this check, for the re-teach box
+          // (17f) - and the ways it offers here, for a second miss there.
+          reteaching={reteachHere}
+          ways={waysHere.ways}
+          onTakeWay={(way) => {
+            setGaveWayOn(segment.id);
+            setCheckOpen(false);
+            takeWay(way);
+          }}
           onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
           onAnswered={(correct, answered) => {
             const { check, at } = checkShown;
