@@ -371,8 +371,11 @@ describe("guided prompts", () => {
 
   const choose = (option: string) =>
     fireEvent.click(screen.getByRole("radio", { name: option }));
-  const send = () =>
+  /** Send, and the server's reply (here, not marked) followed. */
+  const send = async () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await act(async () => {});
+  };
   const field = () =>
     screen.getByRole("textbox", {
       name: PROMPTS[1].prompt,
@@ -384,7 +387,7 @@ describe("guided prompts", () => {
 
     fireEvent.click(screen.getByRole("button", { name: PROMPTS[0].prompt }));
     choose("The sun");
-    send();
+    await send();
     await act(async () => {});
 
     expect(answer).toHaveBeenCalledTimes(1);
@@ -400,7 +403,7 @@ describe("guided prompts", () => {
     expect(sent("guided_question_answered")).toEqual([]);
   });
 
-  it("treat a pick as a choice, not an answer, until Send", () => {
+  it("treat a pick as a choice, not an answer, until Send", async () => {
     // Frame 38: "Picking isn't answering." A change of mind before Send is
     // just a change, so only the last choice is sent, and only once.
     render(<LessonPlayer lesson={TWO} plan={panel()} live />);
@@ -419,20 +422,20 @@ describe("guided prompts", () => {
       "aria-checked",
       "false",
     );
-    send();
+    await send();
 
     expect(answer).toHaveBeenCalledTimes(1);
     expect(answer.mock.calls[0][0]).toMatchObject({ option: "The sun" });
   });
 
-  it("keep Send pressable before anything is picked, and say why nothing went", () => {
+  it("keep Send pressable before anything is picked, and say why nothing went", async () => {
     // Design, 6 Oct: "exactly as the empty written answer does".
     render(<LessonPlayer lesson={TWO} plan={panel()} live />);
     openPanel();
     fireEvent.click(screen.getByRole("button", { name: PROMPTS[0].prompt }));
 
     expect(screen.getByRole("button", { name: "Send" })).not.toBeDisabled();
-    send();
+    await send();
 
     expect(answer).not.toHaveBeenCalled();
     expect(screen.getByRole("status")).toHaveTextContent(
@@ -442,11 +445,11 @@ describe("guided prompts", () => {
     // Picking takes the note away, and Send then sends the pick.
     choose("The sun");
     expect(screen.queryByText("Pick one first, then Send.")).toBeNull();
-    send();
+    await send();
     expect(answer).toHaveBeenCalledTimes(1);
   });
 
-  it("send how much was written to a prompt without options, never the words", () => {
+  it("send how much was written to a prompt without options, never the words", async () => {
     render(<LessonPlayer lesson={TWO} plan={panel()} live />);
     openPanel();
     fireEvent.click(screen.getByRole("button", { name: PROMPTS[1].prompt }));
@@ -454,7 +457,7 @@ describe("guided prompts", () => {
     fireEvent.change(field(), {
       target: { value: "  It catches the light  " },
     });
-    send();
+    await send();
 
     expect(answer).toHaveBeenCalledTimes(1);
     const body = answer.mock.calls[0][0] as Record<string, unknown>;
@@ -482,14 +485,14 @@ describe("guided prompts", () => {
     expect(field()).toHaveAttribute("inputmode", "none");
   });
 
-  it("keep Send pressable on an empty field, and say why nothing went", () => {
+  it("keep Send pressable on an empty field, and say why nothing went", async () => {
     render(<LessonPlayer lesson={TWO} plan={panel()} live />);
     openPanel();
     fireEvent.click(screen.getByRole("button", { name: PROMPTS[1].prompt }));
 
     expect(screen.getByRole("button", { name: "Send" })).not.toBeDisabled();
     fireEvent.change(field(), { target: { value: "   " } });
-    send();
+    await send();
 
     expect(answer).not.toHaveBeenCalled();
     expect(screen.getByRole("status")).toHaveTextContent(
@@ -501,7 +504,7 @@ describe("guided prompts", () => {
     expect(screen.queryByText("Type a little first, then Send.")).toBeNull();
   });
 
-  it("say the same question was asked again when the child goes back to it", () => {
+  it("say the same question was asked again when the child goes back to it", async () => {
     // B41: `asked_again` when the child asks the same guided question again
     // rather than moving on.
     render(<LessonPlayer lesson={TWO} plan={panel()} live />);
@@ -511,10 +514,10 @@ describe("guided prompts", () => {
 
     fireEvent.click(prompt());
     choose("The soil");
-    send();
+    await send();
     fireEvent.click(prompt());
     choose("The sun");
-    send();
+    await send();
 
     expect(answer.mock.calls.map(([body]) => body.outcome)).toEqual([
       "moved_on",
@@ -523,12 +526,12 @@ describe("guided prompts", () => {
     expect(answer.mock.calls[1][0]).toMatchObject({ option: "The sun" });
   });
 
-  it("do not call an answered prompt abandoned when it is opened and left", () => {
+  it("do not call an answered prompt abandoned when it is opened and left", async () => {
     render(<LessonPlayer lesson={TWO} plan={panel()} live />);
     openPanel();
     fireEvent.click(screen.getByRole("button", { name: PROMPTS[0].prompt }));
     choose("The sun");
-    send();
+    await send();
     fireEvent.click(screen.getByRole("button", { name: PROMPTS[0].prompt }));
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -582,12 +585,12 @@ describe("guided prompts", () => {
     expect(document.querySelector("textarea, input")).toBeNull();
   });
 
-  it("send nothing from a demo lesson", () => {
+  it("send nothing from a demo lesson", async () => {
     render(<LessonPlayer lesson={TWO} plan={panel()} />);
     openPanel();
     fireEvent.click(screen.getByRole("button", { name: PROMPTS[0].prompt }));
     choose("The sun");
-    send();
+    await send();
 
     expect(answer).not.toHaveBeenCalled();
   });
@@ -609,24 +612,24 @@ describe("guided prompts", () => {
       seg("seg-2"),
     );
     const ENDING = "Want to try the question again now?";
-    const answerFirst = () => {
+    const answerFirst = async () => {
       fireEvent.click(screen.getByRole("button", { name: PROMPTS[0].prompt }));
       choose("The sun");
-      send();
+      await send();
     };
-    const answerSecond = () => {
+    const answerSecond = async () => {
       fireEvent.click(screen.getByRole("button", { name: PROMPTS[1].prompt }));
       fireEvent.change(field(), { target: { value: "It catches it" } });
-      send();
+      await send();
     };
 
-    it("offers the way back to the question once every prompt is answered", () => {
+    it("offers the way back to the question once every prompt is answered", async () => {
       render(<LessonPlayer lesson={CHECKED} plan={panel()} live />);
       openPanel();
-      answerFirst();
+      await answerFirst();
       expect(screen.queryByText(ENDING)).toBeNull();
 
-      answerSecond();
+      await answerSecond();
 
       expect(screen.getByRole("status")).toHaveTextContent(ENDING);
       // Not the hand-off's ending, and no verdict nothing marked. Keep going
@@ -644,11 +647,11 @@ describe("guided prompts", () => {
       expect(screen.queryByText(ENDING)).toBeNull();
     });
 
-    it("has no way back where there is no question to go back to", () => {
+    it("has no way back where there is no question to go back to", async () => {
       render(<LessonPlayer lesson={TWO} plan={panel()} live />);
       openPanel();
-      answerFirst();
-      answerSecond();
+      await answerFirst();
+      await answerSecond();
 
       expect(screen.queryByText(ENDING)).toBeNull();
       expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();

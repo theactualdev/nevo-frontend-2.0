@@ -1131,6 +1131,10 @@ export interface LessonQuestionAttempt {
 export interface SocraticHandoffPrompt {
   id: string;
   prompt: string;
+  /** How it is answered. The contract's default is `single_choice`. */
+  answerType?: "single_choice" | "multiple_choice" | "numeric" | "boolean" | "text";
+  /** Its choices, each marked by its `value`. */
+  options?: { label: string; value: string | number | boolean }[];
 }
 
 export const lessonsApi = {

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -9,6 +10,7 @@ import {
 import { LessonPlayer } from "./LessonPlayer";
 import { GIVES_WAY_AFTER_MS } from "./QuickCheckSheet";
 import { clearSession, setSession } from "@/lib/auth/session";
+import { ApiError } from "@/lib/api/client";
 import type { Lesson } from "@/lib/types";
 
 /**
@@ -47,7 +49,9 @@ const { trackEvent, recordReview, saveAttempt, answerGuided, applied } =
     saveAttempt: vi.fn(),
     answerGuided: vi.fn(),
     /** The player's applied-adaptation count, as handed to the signals. */
-    applied: { ref: null as { current: { count: number; lastAt: number | null } } | null },
+    applied: {
+      ref: null as { current: { count: number; lastAt: number | null } } | null,
+    },
   }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
@@ -60,7 +64,11 @@ vi.mock("@/hooks", () => ({
   },
 }));
 vi.mock("@/hooks/useRuntimeAdaptation", () => ({
-  useRuntimeAdaptation: () => ({ offeredBreak: null, reason: null, plan: null }),
+  useRuntimeAdaptation: () => ({
+    offeredBreak: null,
+    reason: null,
+    plan: null,
+  }),
 }));
 vi.mock("@/hooks/useScaffoldLevel", () => ({ useScaffoldLevel: () => null }));
 vi.mock("@/hooks/useAssignmentNote", () => ({ useAssignmentNote: () => null }));
@@ -68,7 +76,8 @@ vi.mock("@/lib/api/scheduler", () => ({
   schedulerApi: { recordReview: (...a: unknown[]) => recordReview(...a) },
 }));
 vi.mock("@/lib/api/intelligence", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api/intelligence")>();
+  const actual =
+    await importOriginal<typeof import("@/lib/api/intelligence")>();
   return {
     ...actual,
     intelligenceApi: {
@@ -165,12 +174,14 @@ const miss = async () =>
 const checkOnScreen = () => screen.queryByText("Which number is on top?");
 
 /** Answer the panel's one write-in prompt. */
-const workThrough = () => {
+/** Answered, and the server's reply (here, not marked) followed. */
+const workThrough = async () => {
   fireEvent.click(screen.getByRole("button", { name: PROMPT }));
   fireEvent.change(screen.getByRole("textbox", { name: PROMPT }), {
     target: { value: "The parts" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  await act(async () => {});
 };
 
 beforeEach(() => {
@@ -221,7 +232,7 @@ describe("the server hands a child off from the quick check (B94)", () => {
     await miss();
     await screen.findByText(PROMPT);
 
-    workThrough();
+    await workThrough();
     expect(screen.getByText("Let's keep going.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
@@ -242,7 +253,7 @@ describe("the server hands a child off from the quick check (B94)", () => {
     next();
     await miss();
     await screen.findByText(PROMPT);
-    workThrough();
+    await workThrough();
     fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Previous" }));
@@ -311,7 +322,10 @@ describe("the server hands a child off from the quick check (B94)", () => {
 
   it.each([
     ["false", { advanceAfterHandoff: false }],
-    ["absent, the contract's default false", { advanceAfterHandoff: undefined }],
+    [
+      "absent, the contract's default false",
+      { advanceAfterHandoff: undefined },
+    ],
   ])(
     "opens no panel when advanceAfterHandoff is %s: there is no hand-off (B128)",
     async (_, over) => {
@@ -395,7 +409,7 @@ describe("what a hand-off records (38a)", () => {
     next();
     await miss();
     await screen.findByText(PROMPT);
-    workThrough();
+    await workThrough();
     fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
     next();
 
@@ -457,5 +471,184 @@ describe("a hand-off panel is an adaptation applied (B74)", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(applied.ref?.current.count).toBe(0);
+  });
+});
+
+/*
+ * THE HAND-OFF'S STEPS, MARKED (audit, 2 Nov; backend `guided_panel.py`).
+ * A hand-off's prompts carry their answer type and choices; they were cut
+ * down to id and words, so every step drew as a write-in and went up as a
+ * length, which the server refuses (422 `guided_answer_required`).
+ */
+describe("a hand-off's steps, answered and marked by the server", () => {
+  const CHOICE = {
+    id: "gq-a",
+    prompt: "Which part names the size of each piece?",
+    answerType: "single_choice",
+    options: [
+      { label: "The top number", value: "top" },
+      { label: "The bottom number", value: "bottom" },
+    ],
+  };
+
+  it("draws a step's choices and sends the one picked by its value", async () => {
+    saveAttempt.mockResolvedValue(
+      reply({ ...HANDOFF, guidedPrompts: [CHOICE] }),
+    );
+    answerGuided.mockResolvedValue({
+      promptId: "gq-a",
+      correct: true,
+      panelComplete: true,
+    });
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await miss();
+    fireEvent.click(await screen.findByRole("button", { name: CHOICE.prompt }));
+    fireEvent.click(screen.getByRole("radio", { name: "The bottom number" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await act(async () => {});
+
+    expect(answerGuided).toHaveBeenCalledWith(
+      expect.objectContaining({ promptId: "gq-a", option: "bottom" }),
+    );
+    expect(screen.getByText("Let's keep going.")).toBeInTheDocument();
+  });
+
+  it("asks a step again after a miss, with its explanation only once the retry is missed too", async () => {
+    // Lydia, 4 Nov: "the explanation is held back until after the retry".
+    const WHY = "The bottom number says how many equal pieces make the whole.";
+    saveAttempt.mockResolvedValue(
+      reply({ ...HANDOFF, guidedPrompts: [CHOICE] }),
+    );
+    answerGuided.mockResolvedValue({
+      promptId: "gq-a",
+      correct: false,
+      panelComplete: false,
+      prompt: { id: "gq-a", prompt: CHOICE.prompt },
+      feedback: WHY,
+    });
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await miss();
+    fireEvent.click(await screen.findByRole("button", { name: CHOICE.prompt }));
+    fireEvent.click(screen.getByRole("radio", { name: "The top number" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await act(async () => {});
+
+    expect(screen.queryByText(WHY)).toBeNull();
+    expect(
+      screen.getByRole("radio", { name: "The top number" }),
+    ).toHaveAttribute("aria-checked", "false");
+
+    fireEvent.click(screen.getByRole("radio", { name: "The top number" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await act(async () => {});
+
+    expect(
+      screen.getByText("Let's come at it a different way."),
+    ).toBeInTheDocument();
+    expect(screen.getByText(WHY)).toBeInTheDocument();
+  });
+
+  it("asks a step again in the words the server sends for it after a miss (reaskPrompt)", async () => {
+    const REASK = "Which number tells you how many equal pieces there are?";
+    saveAttempt.mockResolvedValue(
+      reply({ ...HANDOFF, guidedPrompts: [CHOICE] }),
+    );
+    answerGuided.mockResolvedValue({
+      promptId: "gq-a",
+      correct: false,
+      panelComplete: false,
+      prompt: { id: "gq-a", prompt: REASK },
+      feedback: null,
+    });
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await miss();
+    fireEvent.click(await screen.findByRole("button", { name: CHOICE.prompt }));
+    fireEvent.click(screen.getByRole("radio", { name: "The top number" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await act(async () => {});
+
+    expect(
+      screen.getByText("Let's come at it a different way."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: REASK })).toBeInTheDocument();
+  });
+
+  it("never takes another step's prompt, or a right answer's next one, as a re-ask", async () => {
+    saveAttempt.mockResolvedValue(
+      reply({ ...HANDOFF, guidedPrompts: [CHOICE] }),
+    );
+    answerGuided.mockResolvedValue({
+      promptId: "gq-a",
+      correct: false,
+      panelComplete: false,
+      prompt: { id: "gq-b", prompt: "Some other step's question?" },
+      feedback: null,
+    });
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await miss();
+    fireEvent.click(await screen.findByRole("button", { name: CHOICE.prompt }));
+    fireEvent.click(screen.getByRole("radio", { name: "The top number" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await act(async () => {});
+
+    expect(screen.queryByText("Some other step's question?")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: CHOICE.prompt }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the step the server is asking when a 409 says another was out of turn", async () => {
+    const SECOND = {
+      id: "gq-b",
+      prompt: "So what does 4 count here?",
+      answerType: "numeric",
+    };
+    saveAttempt.mockResolvedValue(
+      reply({ ...HANDOFF, guidedPrompts: [CHOICE, SECOND] }),
+    );
+    answerGuided.mockRejectedValue(
+      new ApiError(409, "Conflict", {
+        detail: {
+          code: "guided_step_out_of_order",
+          prompt: { id: "gq-a", prompt: CHOICE.prompt },
+        },
+      }),
+    );
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await miss();
+    fireEvent.click(await screen.findByRole("button", { name: SECOND.prompt }));
+    fireEvent.change(screen.getByRole("textbox", { name: SECOND.prompt }), {
+      target: { value: "4" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await act(async () => {});
+
+    expect(answerGuided).toHaveBeenCalledWith(
+      expect.objectContaining({ promptId: "gq-b", answer: "4" }),
+    );
+    expect(
+      screen.getByRole("radio", { name: "The top number" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a several-answer step as a question to think about, with nothing to send", async () => {
+    saveAttempt.mockResolvedValue(
+      reply({
+        ...HANDOFF,
+        guidedPrompts: [{ ...CHOICE, answerType: "multiple_choice" }],
+      }),
+    );
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await miss();
+    await screen.findByText(CHOICE.prompt);
+
+    expect(screen.queryByRole("button", { name: CHOICE.prompt })).toBeNull();
+    expect(screen.queryByRole("radio")).toBeNull();
   });
 });
