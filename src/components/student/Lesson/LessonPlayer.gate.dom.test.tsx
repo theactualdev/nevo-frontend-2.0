@@ -8,7 +8,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
-import { GIVES_WAY_AFTER_MS, RECOVERY_LINE } from "./QuickCheckSheet";
+import {
+  GIVES_WAY_AFTER_MS,
+  RECOVERY_LINE,
+  RETEACH_COPY,
+} from "./QuickCheckSheet";
 import { clearSession, setSession } from "@/lib/auth/session";
 import type { CalculationVariant } from "@/lib/api/variants";
 import { calculationFromVariant } from "@/lib/lessons/fromContent";
@@ -196,6 +200,17 @@ const missAndWait = async () => {
   await act(async () => {});
 };
 
+/**
+ * A miss the server re-teaches opens the re-teach box (17f) in the sheet, in
+ * place of giving way; the child taps out of it, back to the section, where
+ * its ways in wait.
+ */
+const outOfTheBox = async () => {
+  await screen.findByText(RETEACH_COPY.title);
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+};
+
 beforeEach(() => {
   window.localStorage.clear();
   window.sessionStorage.clear();
@@ -228,16 +243,14 @@ describe("on every check, whatever the server's gate", () => {
     expect(api.comprehension).toHaveBeenCalledWith("lesson-1", SESSION);
   });
 
-  it("holds a miss, gives way, and offers the ways in the miss's own reply names - the gate off", async () => {
+  it("opens the re-teach box on a miss the reply re-teaches, its ways in waiting behind it - the gate off", async () => {
     api.saveAttempt.mockResolvedValue(reply(false, GATE_OFF, RETEACHING));
     await open();
     await missAndWait();
 
-    expect(screen.getByRole("status").textContent).toBe(RECOVERY_LINE);
+    expect(await screen.findByText(RETEACH_COPY.title)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
-      timeout: GIVES_WAY_AFTER_MS + 2000,
-    });
+    await outOfTheBox();
     expect(card()).toBeInTheDocument();
     expect(ways().map((b) => b.getAttribute("aria-label"))).toEqual([
       "See it as a picture",
@@ -259,9 +272,7 @@ describe("on every check, whatever the server's gate", () => {
     );
     await open();
     await missAndWait();
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
-      timeout: GIVES_WAY_AFTER_MS + 2000,
-    });
+    await outOfTheBox();
 
     // The reply's three ways, not the gate's one.
     expect(ways()).toHaveLength(3);
@@ -316,9 +327,7 @@ describe("on every check, whatever the server's gate", () => {
       await screen.findByRole("img", { name: "Picture of a fraction" }),
     ).toBeInTheDocument();
     await missAndWait();
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
-      timeout: GIVES_WAY_AFTER_MS + 2000,
-    });
+    await outOfTheBox();
 
     expect(ways().map((b) => b.getAttribute("aria-label"))).toEqual([
       "See it as a picture",
@@ -350,9 +359,7 @@ describe("on every check, whatever the server's gate", () => {
     fireEvent.click(screen.getByRole("button", { name: "Picture" }));
     await screen.findByRole("img", { name: "Picture of a fraction" });
     await missAndWait();
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
-      timeout: GIVES_WAY_AFTER_MS + 2000,
-    });
+    await outOfTheBox();
 
     fireEvent.click(screen.getByRole("button", { name: "Try it as text" }));
 
@@ -369,6 +376,61 @@ describe("on every check, whatever the server's gate", () => {
   });
 });
 
+/*
+ * THE RE-TEACH BOX THROUGH THE PLAYER (17f; Lydia, 4 Nov). The server's own
+ * steps over the same check, the retry answered and sent as any answer is,
+ * the explanation only after it is right, and the ways in after a second miss.
+ */
+describe("the re-teach box, in the player", () => {
+  const STEPS = ["Look at the fraction.", "Which number sits on top?"];
+  const WITH_STEPS = { ...RETEACHING, screens: STEPS };
+
+  it("asks the check again under the server's steps, and moves on after a right retry", async () => {
+    api.saveAttempt
+      .mockResolvedValueOnce(reply(false, GATE_OFF, WITH_STEPS))
+      .mockResolvedValue(reply(true, GATE_OFF));
+    await open();
+    await missAndWait();
+
+    expect(await screen.findByText(RETEACH_COPY.title)).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "1Look at the fraction.",
+      "2Which number sits on top?",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "The numerator" }));
+    fireEvent.click(screen.getByRole("button", { name: RETEACH_COPY.check }));
+    await act(async () => {});
+
+    expect(api.saveAttempt).toHaveBeenCalledTimes(2);
+    expect(api.saveAttempt.mock.calls[1][1]).toMatchObject({ answer: "a" });
+    expect(screen.getByText(RETEACH_COPY.done)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: RETEACH_COPY.keepGoing }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByText("Below the line.")).toBeInTheDocument();
+  });
+
+  it("takes a way from the box after a second miss, closing the sheet for it", async () => {
+    api.saveAttempt.mockResolvedValue(reply(false, GATE_OFF, WITH_STEPS));
+    await open();
+    await missAndWait();
+    await screen.findByText(RETEACH_COPY.title);
+    fireEvent.click(screen.getByRole("button", { name: "The denominator" }));
+    fireEvent.click(screen.getByRole("button", { name: RETEACH_COPY.check }));
+    await act(async () => {});
+
+    expect(screen.getByText(RETEACH_COPY.again)).toBeInTheDocument();
+    // Of the server's ways, 17f's that this section can serve: no recording.
+    expect(screen.queryByRole("button", { name: "Listen to it" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "As a picture" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(
+      await screen.findByRole("img", { name: "Picture of a fraction" }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("with the gate on", () => {
   beforeEach(() => {
     api.comprehension.mockResolvedValue(GATE_ON);
@@ -377,16 +439,14 @@ describe("with the gate on", () => {
     );
   });
 
-  it("holds a miss without a verdict, then gives way to the ways in, in place", async () => {
+  it("opens the re-teach box on a miss, without a verdict, and the ways in wait in place", async () => {
     await open();
     await missAndWait();
 
-    expect(screen.getByRole("status").textContent).toBe(RECOVERY_LINE);
+    expect(await screen.findByText(RETEACH_COPY.title)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
-      timeout: GIVES_WAY_AFTER_MS + 2000,
-    });
+    await outOfTheBox();
     expect(card()).toBeInTheDocument();
     // Only what this section can serve, in the frame's words: no recording,
     // and nothing named for re-chunking or the panel.
@@ -407,9 +467,7 @@ describe("with the gate on", () => {
     await missAndWait();
     // The card is there behind the held miss; it is reachable once the sheet
     // has given way.
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
-      timeout: GIVES_WAY_AFTER_MS + 2000,
-    });
+    await outOfTheBox();
 
     fireEvent.click(screen.getByRole("button", { name: "A simpler version" }));
     expect(await screen.findByText("The top number.")).toBeInTheDocument();

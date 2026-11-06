@@ -180,6 +180,21 @@ describe("toQuickCheck refuses anything it cannot honestly draw", () => {
     // field carries them - and no promise to come back that nothing keeps.
     expect(q!.recoveryNote).toBe("Not quite. Let's look again.");
   });
+
+  it("carries the explanation for the re-teach box exactly as sent, and none where it has none", () => {
+    // Lydia, 4 Nov: "Do not rewrite the explanations."
+    const said = "  Doubling both gives 2/4 - the same amount.  ";
+    expect(
+      toQuickCheck(checkpoint({ answerKey: "2/4", options, explanation: said }))
+        ?.explanation,
+    ).toBe(said);
+    expect(
+      toQuickCheck(checkpoint({ answerKey: "2/4", options, explanation: null })),
+    ).not.toHaveProperty("explanation");
+    expect(
+      toQuickCheck(checkpoint({ answerKey: "2/4", options, explanation: "   " })),
+    ).not.toHaveProperty("explanation");
+  });
 });
 
 describe("toQuickCheck carries what the answer write needs", () => {
