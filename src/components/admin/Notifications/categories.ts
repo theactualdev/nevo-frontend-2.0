@@ -155,8 +155,24 @@ export function preferencesIntro(visible: CategoryMeta[], scopes: PermissionScop
  * used to print the raw `type` instead, which could put an engine event name
  * ("MODALITY SHIFT") in front of an admin.
  */
-export function categoryLabel(category: string | null | undefined): string | null {
+export function categoryLabel(
+  category: string | null | undefined,
+  type?: string | null,
+): string | null {
+  if (type && UNLABELLED_TYPES.has(type)) return null;
   return category && category in CATEGORY_META
     ? CATEGORY_META[category as AdminCategory].name
     : null;
 }
+
+/**
+ * Types the server files under a category whose name here would say something
+ * untrue about them, so their row carries no label (5 Nov).
+ *
+ * `deactivated_student_support_requested` - "A teacher needs help with a
+ * learner account" - is filed under `account`, which this console names
+ * Platform: "Maintenance, changes to screens you use, and policy updates". A
+ * teacher asking about a child is none of those. No label until the server
+ * files it somewhere that fits (raised to the hub).
+ */
+const UNLABELLED_TYPES = new Set<string>(["deactivated_student_support_requested"]);
