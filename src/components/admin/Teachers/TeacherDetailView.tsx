@@ -90,6 +90,29 @@ import {
 
 type Phase = "loading" | "ready" | "failed" | "denied";
 
+/** "1 class", "3 classes" - grammar for a count of rows, nothing measured. */
+function plural(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** Assignments grouped by their subject, in first-seen order; none last. */
+function groupBySubject(rows: AssignedClass[]): { subject: string | null; rows: AssignedClass[] }[] {
+  const groups = new Map<string, AssignedClass[]>();
+  const none: AssignedClass[] = [];
+  for (const r of rows) {
+    const s = r.subject?.trim();
+    if (!s) {
+      none.push(r);
+      continue;
+    }
+    groups.set(s, [...(groups.get(s) ?? []), r]);
+  }
+  return [
+    ...[...groups].map(([subject, rs]) => ({ subject, rows: rs })),
+    ...(none.length > 0 ? [{ subject: null, rows: none }] : []),
+  ];
+}
+
 export function TeacherDetailView({
   teacherId,
   back = null,
@@ -218,6 +241,12 @@ export function TeacherDetailView({
     ),
   );
   const firstName = teacher.name.split(" ").filter(Boolean).slice(-1)[0] ?? teacher.name;
+  /*
+   * D06c's grouping: each subject in the order the server first lists it,
+   * with its classes under it. An assignment with no subject recorded (older
+   * ones) sits last, under no heading - nothing is guessed for it.
+   */
+  const subjectGroups = groupBySubject(held);
   const lastSeen = lastActiveCard(teacher.lastActiveAt, now);
 
   const restoreAccess = () => {
@@ -315,7 +344,17 @@ export function TeacherDetailView({
       </div>
 
       <div className="mt-[30px] flex items-center justify-between gap-4">
-        <SectionHeading>Classes</SectionHeading>
+        {/*
+          * D06c (design 1397ec4): "What {name} teaches", grouped by subject
+          * with the classes under each - the admin's own words for an
+          * enrolment fact. Built reduced: the frame's footer, "Change a
+          * subject or class by editing the class itself", is left out because
+          * a class assignment refuses a subject the teacher doesn't hold
+          * (422 `subject_not_on_teacher`) - the subject list above is still
+          * how one is added (raised to design, 5 Nov). The full name, not a
+          * guessed first name: the record carries only `name`.
+          */}
+        <SectionHeading>What {teacher.name} teaches</SectionHeading>
         {/* SCRUM-40's second door onto D5c. This was a link back to Classes,
             leaving the admin to find the class and start again from there. */}
         {/* An invited teacher too (L11, 26 Oct): the assignment waits for
@@ -333,6 +372,14 @@ export function TeacherDetailView({
         ) : null}
       </div>
       {canAssign ? <PausedNote className="mt-2" /> : null}
+      {held.length > 0 ? (
+        <p className="m-0 mt-1.5 text-[13.5px] text-nevo-near-black/58">
+          {subjectGroups.filter((g) => g.subject).length > 0
+            ? `${plural(subjectGroups.filter((g) => g.subject).length, "subject")} · `
+            : ""}
+          {plural(new Set(held.map((h) => h.classId)).size, "class", "classes")}
+        </p>
+      ) : null}
 
       <div className={cn(CARD, "mt-3.5")}>
         {held.length === 0 ? (
@@ -343,7 +390,24 @@ export function TeacherDetailView({
             </p>
           </div>
         ) : (
-          held.map((h, i) => {
+          subjectGroups.flatMap((g, gi) => [
+            ...(g.subject
+              ? [
+                  <div
+                    key={`subject-${g.subject}`}
+                    className={cn(
+                      "flex items-baseline justify-between gap-3 px-[22px] pt-4 pb-1.5",
+                      gi > 0 && ROW_DIVIDER,
+                    )}
+                  >
+                    <span className="text-[13.5px] font-semibold text-nevo-near-black">{g.subject}</span>
+                    <span className="text-[12.5px] text-nevo-near-black/55">
+                      {plural(g.rows.length, "class", "classes")}
+                    </span>
+                  </div>,
+                ]
+              : []),
+            ...g.rows.map((h, i) => {
             const info = byId.get(h.classId);
             // The card counts ACTIVE classes; without this the list below it
             // shows more rows than the card admits to, and nothing says which
@@ -351,8 +415,7 @@ export function TeacherDetailView({
             const started = longDate(h.assignedAt);
             const meta = [
               info?.archivedAt ? "Archived" : null,
-              // The subject this assignment teaches (8 Oct), when it has one.
-              h.subject?.trim() || null,
+              // The subject is the group's heading now (D06c), so not repeated.
               yearGroupLabel(info?.yearGroup),
               info ? `${info.studentCount} ${info.studentCount === 1 ? "student" : "students"}` : null,
               started ? `assigned ${started}` : null,
@@ -369,7 +432,9 @@ export function TeacherDetailView({
                 })}
                 className={cn(
                   "flex items-center gap-3.5 px-[22px] py-[15px] transition-colors hover:bg-nevo-navy/[0.03]",
-                  i < held.length - 1 && ROW_DIVIDER,
+                  // Under a subject, rows run on; an unheaded group (no
+                  // subject recorded) is divided from what came before.
+                  (g.subject ? i < g.rows.length - 1 : i > 0 || gi > 0) && ROW_DIVIDER,
                 )}
               >
                 <span className="flex-1 truncate text-[15px] font-semibold text-nevo-near-black">
@@ -381,7 +446,8 @@ export function TeacherDetailView({
                 <RolePill role={h.role} />
               </Link>
             );
-          })
+            }),
+          ])
         )}
       </div>
       {/* NOT A HISTORY, AND IT SAYS SO. SCRUM-40 asks for a collapsed
