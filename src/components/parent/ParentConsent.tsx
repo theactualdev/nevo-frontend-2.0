@@ -112,8 +112,12 @@ const POINTS = [
   {
     key: "control",
     title: () => "You stay in control",
+    // "...progress is always saved" overclaimed (Lydia, 5 Nov). Her line is
+    // "Her progress carries between lessons, terms and devices." - with the
+    // child's name for "Her", because this page names the child and uses no
+    // pronouns (see the pronoun test).
     body: (c: string) =>
-      `You can withdraw any time. ${sentenceCase(c)}’s progress is always saved.`,
+      `You can withdraw any time. ${sentenceCase(c)}’s progress carries between lessons, terms and devices.`,
     icon: (
       <path d="M12 20s-6.5-4.2-9-8.2C1.5 9 3 5.5 6.2 5.5c2 0 3.2 1.2 3.8 2.3.6-1.1 1.8-2.3 3.8-2.3C21 5.5 22.5 9 21 11.8c-2.5 4-9 8.2-9 8.2z" />
     ),
