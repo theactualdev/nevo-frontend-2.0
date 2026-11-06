@@ -25,6 +25,12 @@ import type { CheckOutcome } from "@/lib/lessons/checkOutcome";
 export interface ReviewAnswer {
   questionIndex: number;
   selectedId: string;
+  /**
+   * The server's mark on it, once its reply has landed (test 9): Review
+   * Answers says right or wrong by this, and by the lesson's own key only
+   * for a pick whose mark never came back.
+   */
+  correct?: boolean | null;
 }
 
 /** Whose shelf: the signed-in child's, or the walkthrough's. */

@@ -51,6 +51,13 @@ const CHECK: QuickCheck = {
   holds: true,
 };
 
+/**
+ * THE HOST'S MARK, given straight back (test 9): the package's key, as the
+ * player gives it where no reply comes. The sheet marks nothing itself.
+ */
+const byKey = ({ selectedId }: { selectedId: string }) =>
+  selectedId === CHECK.correctId;
+
 const RETEACHING: ReteachingResponse = {
   questionId: "cp-1",
   segmentId: "seg-1",
@@ -72,7 +79,7 @@ const mount = (over: Partial<Props> = {}) => {
     check: CHECK,
     open: true,
     onTapOut: vi.fn(),
-    onAnswered: vi.fn(),
+    onAnswered: vi.fn(byKey),
     onContinue: vi.fn(),
     onTakeBreak: vi.fn(),
     onGiveWay: vi.fn(),
@@ -130,7 +137,6 @@ describe("the re-teach box, on a miss the server re-teaches", () => {
     expect(checkButton().className).toContain("bg-nevo-navy");
     fireEvent.click(checkButton());
     expect(props.onAnswered).toHaveBeenLastCalledWith(
-      true,
       expect.objectContaining({ selectedId: "co2" }),
     );
   });
@@ -165,7 +171,6 @@ describe("the re-teach box, on a miss the server re-teaches", () => {
     fireEvent.click(checkButton());
 
     expect(props.onAnswered).toHaveBeenLastCalledWith(
-      false,
       expect.objectContaining({ selectedId: "n2" }),
     );
     expect(screen.getByText(RETEACH_COPY.again)).toBeInTheDocument();
@@ -226,7 +231,7 @@ describe("the re-teach box, on a miss the server re-teaches", () => {
       fireEvent.click(option("Carbon dioxide"));
       fireEvent.click(checkButton());
 
-      expect(props.onAnswered).toHaveBeenLastCalledWith(true, {
+      expect(props.onAnswered).toHaveBeenLastCalledWith({
         selectedId: "co2",
         responseTimeMs: 7_000,
       });
