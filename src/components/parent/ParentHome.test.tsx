@@ -107,6 +107,18 @@ describe("a parent who is not signed in", () => {
     ).toBeInTheDocument();
   });
 
+  it("promises the code by email only - no code goes to a phone (backlog 58)", async () => {
+    getSession.mockReturnValue(null);
+    render(<ParentHome />);
+
+    expect(
+      await screen.findByText(
+        "We’ll send a code to the email address your child’s school has for you.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/phone/i)).toBeNull();
+  });
+
   it("says the same thing when the server rejects the session", async () => {
     getSession.mockReturnValue({ token: "stale", expiresAt: "", userId: "", role: "" });
     myChildren.mockRejectedValue(new ApiError(401, "no"));

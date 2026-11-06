@@ -128,7 +128,9 @@ export function ParentHome() {
           <p className={BODY}>
             {phase === "not-parent"
               ? "If you have a Nevo account for school, sign in there instead."
-              : "We’ll send a code to the email address or phone number your child’s school has for you."}
+              : // Email only since SCRUM-162; the sign-in screen itself was
+                // fixed under SCRUM-126, and this line was missed (backlog 58).
+                "We’ll send a code to the email address your child’s school has for you."}
           </p>
           {phase === "signed-out" && (
             <a
