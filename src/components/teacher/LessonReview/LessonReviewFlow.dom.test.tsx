@@ -502,3 +502,23 @@ describe("the way to change how it is broken up", () => {
     );
   });
 });
+
+/**
+ * Backlog item 21: the review every lesson passes through before it can be
+ * assigned had no Try again when its read failed - only "Back to the lesson".
+ */
+describe("a review that could not be read", () => {
+  it("offers Try again beside the way back to the lesson", async () => {
+    api.review.mockRejectedValue(new Error("offline"));
+    render(<LessonReviewRoute lessonId="l-1" />);
+
+    expect(
+      await screen.findByRole("heading", { name: "We couldn’t load this review" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to the lesson" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1",
+    );
+  });
+});
