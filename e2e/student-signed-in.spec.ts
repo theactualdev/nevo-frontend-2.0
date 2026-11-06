@@ -287,13 +287,14 @@ async function homeResolved(page: Page) {
 }
 
 /**
- * Profile, resolved. The disc carries the child's initials, which nothing
- * knows until the client is running and the account has answered. Before that
- * it is blank, never another child's.
+ * Profile, resolved. The row beside the disc carries the child's name, which
+ * nothing knows until the client is running and the account has answered.
+ * Before that it is blank, never another child's. (The disc itself is a
+ * shape, never initials, so it has no text to wait on.)
  */
 async function profileResolved(page: Page) {
   await expect(
-    page.getByRole("button", { name: "Choose your look" }),
+    page.locator("[data-profile-name]"),
     "Profile never named the child: the account read did not answer.",
   ).toHaveText(/\S/, { timeout: LIVE_MS });
 }

@@ -330,13 +330,6 @@ export function entryIdentityFromDraft(): EntryIdentity | null {
   return schoolCode && admissionNumber ? { schoolCode, admissionNumber } : null;
 }
 
-/** "Amara Kalu" -> "AK"; single names fall back to the first two letters. */
-function initialsOf(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-  return name.trim().slice(0, 2).toUpperCase();
-}
-
 /**
  * Fold the draft into the device's remembered profile - called when the
  * student finishes creating their PIN (the moment this device becomes theirs).
@@ -394,7 +387,6 @@ export function rememberOnboardedStudent(
     schoolCode,
     loginIdentifier: identifier,
     displayName: name.split(/\s+/)[0],
-    initials: initialsOf(name),
     // Account creation has just stored the session this child now owns.
     ...(userId ? { userId } : {}),
   });

@@ -102,28 +102,6 @@ const USERNAME_MIN = 1;
 const USERNAME_MAX = 60;
 
 /**
- * Avatar initials from a USERNAME, which is not a name.
- *
- * Onboarding derives these from what a child typed about themselves - "Amara
- * Kalu" -> "AK" - and splits on whitespace. A server-issued identifier has no
- * whitespace in it: `amara.k` would give "AM" through that path, which is
- * nobody's initials. Splitting on the separators an identifier actually uses
- * gets back to "AK".
- *
- * It is a stand-in either way. Nothing on this path returns a display name, so
- * both this and the name itself are replaced the moment something reads
- * `users/me`.
- */
-function initialsFromUsername(identifier: string): string {
-  const parts = identifier.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return identifier
-    .replace(/[^\p{L}\p{N}]/gu, "")
-    .slice(0, 2)
-    .toUpperCase();
-}
-
-/**
  * 00c's field shell, for the school code's cells and the Student ID alike:
  * 56px (60 from `sm`), a navy hairline at 40% on cream-elevated.
  */
@@ -404,9 +382,6 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
       rememberProfile({
         schoolCode: school,
         loginIdentifier: identifier,
-        // Two letters, not an identifier. Better than a blank circle, and it
-        // is replaced the moment the real name lands below.
-        initials: initialsFromUsername(identifier),
         // So a signed-in screen can find THIS child's entry on a shared tablet.
         userId: session.userId,
       });
@@ -449,7 +424,6 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
             schoolCode: school,
             loginIdentifier: identifier,
             displayName: first,
-            initials: first.slice(0, 2).toUpperCase(),
             userId: session.userId,
           });
           // And the greeting, if they are still looking at it.

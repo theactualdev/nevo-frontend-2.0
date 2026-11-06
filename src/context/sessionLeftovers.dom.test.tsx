@@ -89,7 +89,6 @@ async function aSharedTablet() {
     schoolCode: "NEVO-1",
     loginIdentifier: "ada.o",
     displayName: "Ada",
-    initials: "AO",
     userId: a,
   });
   // The old single-profile record, as a build from before 19 Oct left it:
@@ -100,7 +99,6 @@ async function aSharedTablet() {
       schoolCode: "NEVO-1",
       loginIdentifier: "ada.o",
       displayName: "Ada",
-      initials: "AO",
       userId: a,
     }),
   );

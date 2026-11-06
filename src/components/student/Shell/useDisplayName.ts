@@ -79,7 +79,7 @@ export function useDisplayName(): { name: string; initials: string } {
   // Keep the device copy in step with the account, so it is a true fallback.
   useEffect(() => {
     if (!account || account === getStoredDisplayName()) return;
-    setStoredDisplayName(account, initialsOf(account));
+    setStoredDisplayName(account);
   }, [account]);
 
   const serverFirst = identity?.name?.split(/\s+/)[0] ?? null;
@@ -112,7 +112,7 @@ export async function saveChosenName(name: string): Promise<boolean> {
   if (!trimmed) return false;
   try {
     const user = await usersApi.updateMe({ preferredName: trimmed });
-    setStoredDisplayName(trimmed, initialsOf(trimmed));
+    setStoredDisplayName(trimmed);
     publishIdentity(user);
     return true;
   } catch {

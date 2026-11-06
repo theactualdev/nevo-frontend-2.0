@@ -21,7 +21,6 @@ const rememberAda = () =>
   rememberProfile({
     schoolCode: "NEVO-1",
     loginIdentifier: "ada.o",
-    initials: "AO",
   });
 
 const page = async (next?: string) =>

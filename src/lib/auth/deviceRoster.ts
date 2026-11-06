@@ -110,9 +110,12 @@ function read(): RememberedChild[] {
     const raw = window.localStorage.getItem(ROSTER_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : null;
     if (!Array.isArray(parsed)) return migrateLegacy();
-    const children = parsed.filter(isChild);
+    const stored = parsed.filter(isChild);
+    // An entry from before 6 Nov sheds the initials it was stored with.
+    const children = stored.map(withoutInitials);
+    const shed = children.some((c, i) => c !== stored[i]);
     const merged = mergeSameAccount(children);
-    if (merged.length !== children.length) write(merged);
+    if (shed || merged.length !== children.length) write(merged);
     return merged;
   } catch {
     // Private mode, refused storage, or something that is not our JSON. An
@@ -134,7 +137,7 @@ const stamp = (c: RememberedChild): number => {
  * Entries already stored that way are folded into one here, and written back.
  *
  * The tile the child knows stays: a named one before a nameless one, the
- * latest used among them, with its id, its shape, its name and initials. It
+ * latest used among them, with its id, its shape and its name. It
  * takes the newest identifier and last-used time, since that is the pair
  * that last signed in. Closed if any of them is: the account is one account.
  *
@@ -174,6 +177,19 @@ function mergeSameAccount(children: RememberedChild[]): RememberedChild[] {
   return out;
 }
 
+/**
+ * NO INITIALS KEPT (Lydia, 4 Nov; the hub, 6 Nov). A child's avatar is their
+ * shape everywhere, and two letters of their name on a shared tablet were a
+ * finer record of them than anything drew. Gone from every entry as it is
+ * read, and never written again.
+ */
+function withoutInitials<T extends object>(entry: T): T {
+  if (!("initials" in entry)) return entry;
+  const rest = { ...entry } as T & { initials?: unknown };
+  delete rest.initials;
+  return rest;
+}
+
 function isChild(v: unknown): v is RememberedChild {
   if (typeof v !== "object" || v === null) return false;
   const c = v as Record<string, unknown>;
@@ -203,7 +219,7 @@ function migrateLegacy(): RememberedChild[] {
     if (!p?.schoolCode || !p?.loginIdentifier) return [];
     const migrated: RememberedChild[] = [
       {
-        ...p,
+        ...withoutInitials(p),
         id: newId(),
         shapeIndex: 0,
         // Unknown, and "now" is the safe guess: it gives the child the full
@@ -351,9 +367,8 @@ export function childById(id: string): RememberedChild | null {
  * a second, nameless tile for the same account. An entry found by its
  * account takes the identifier that signed in now.
  *
- * An existing child keeps their id, their shape, their name and its initials
- * - a write without a name brings only stand-in initials - and moves to the
- * front. A
+ * An existing child keeps their id, their shape and their name, and moves to
+ * the front. A
  * new child joins the front, and if that makes seven, the least recently used
  * drops off. Signing out does not call this and does not remove anybody, which
  * is 28c's rule: *"signing out does not remove a child"*.
@@ -375,15 +390,11 @@ export function rememberChild(profile: RememberedProfile): RememberedChild[] {
         c.schoolCode === schoolCode && c.loginIdentifier === loginIdentifier,
     );
   const rest = existing.filter((c) => c !== match);
-  const named = Boolean(profile.displayName?.trim());
 
   const updated: RememberedChild = {
-    ...profile,
+    ...withoutInitials(profile),
     schoolCode,
     loginIdentifier,
-    // Initials go with the name they were made from: a write without one
-    // brings the identifier's stand-in ("B2"), not the child's.
-    initials: !named && match?.initials ? match.initials : profile.initials,
     id: match?.id ?? newId(),
     // Kept across sign-ins so a child's shape is the same every morning. A new
     // child takes the lowest slot nobody on the device is using, so a full
