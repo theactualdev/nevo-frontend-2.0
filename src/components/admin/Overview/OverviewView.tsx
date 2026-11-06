@@ -19,6 +19,7 @@ import {
 } from "./overviewGettingStarted";
 import { SetupPausedBanner } from "../SetupPausedBanner";
 import { SchoolCodeCard } from "./SchoolCodeCard";
+import { CardUnread } from "./CardUnread";
 import { useSetupGate } from "@/hooks/useSetupGate";
 import {
   readAcademic,
@@ -133,6 +134,12 @@ type Phase = "loading" | "ready";
  */
 type CardPhase = "loading" | "ready" | "failed" | "denied";
 
+/** The reads behind the snapshot tiles and Worth a glance - see `unread`. */
+type CardRead = "overview" | "school" | "roster" | "holds" | "flags";
+
+/** True when a failed read is a fault to say, not a scope this admin lacks. */
+const isFault = (err: unknown) => failureKind(err) !== "denied";
+
 /** D04's two board-pack glyphs, traced from the frame. */
 function CopyGlyph() {
   return (
@@ -228,6 +235,118 @@ export function OverviewView() {
   const [holds, setHolds] = useState<AgeCheck[] | null>(null);
   /** Read for the getting-started sign-in row only. Null means unread. */
   const [flags, setFlags] = useState<AttentionFlag[] | null>(null);
+  /*
+   * WHICH CARD READS FAILED (backlog 33). Each of these used to fail into the
+   * same null as "nothing to show", so a tile or a Worth a glance row simply
+   * vanished - and a failed holds read hid a child whose account is held and
+   * heading for deletion. SCRUM-39: a card that cannot load says so, per card,
+   * with Try again, and the rest of the dashboard still renders. A 403 never
+   * lands here (`isFault`).
+   */
+  const [unread, setUnread] = useState<ReadonlySet<CardRead>>(() => new Set());
+  const mark = useCallback((read: CardRead, failed: boolean) => {
+    setUnread((s) => {
+      if (s.has(read) === failed) return s;
+      const next = new Set(s);
+      if (failed) next.add(read);
+      else next.delete(read);
+      return next;
+    });
+  }, []);
+
+  const readOverview = useCallback(() => {
+    schoolApi
+      .overview()
+      .then((ov) => {
+        setCounts(ov.counts);
+        setClassActivity(ov.classActivity ?? null);
+        mark("overview", false);
+      })
+      .catch((err: unknown) => mark("overview", isFault(err)));
+  }, [mark]);
+
+  // The school record is its own call, so it can never hold the page. It
+  // names the school, dates the setup, and holds the terms that decide what
+  // "this term" means on the adaptations tile (Lydia, 7 Oct).
+  const readSchool = useCallback(() => {
+    schoolApi
+      .get()
+      .then((sc) => {
+        mark("school", false);
+        setSchoolName(sc.name?.trim() || null);
+        setSetUp(setUpAgo(readOnboarding(sc).completedAt, Date.now()));
+        const term = currentTerm(readAcademic(sc).terms ?? [], Date.now());
+        const from = term ? startOfDay(term.from) : null;
+        if (!term || !from) return;
+        schoolIntelligenceApi
+          .adaptationLog({ limit: 1, dateFrom: from.toISOString() })
+          .then((log) => setTermAdaptations({ count: log.total, period: termPeriod(term) }))
+          .catch((err: unknown) => {
+            setTermAdaptations(null);
+            mark("school", isFault(err));
+          });
+      })
+      .catch((err: unknown) => {
+        setSchoolName(null);
+        mark("school", isFault(err));
+      });
+  }, [mark]);
+
+  const readRoster = useCallback(() => {
+    studentsApi
+      .list()
+      .then((r) => {
+        setRoster(r);
+        mark("roster", false);
+      })
+      .catch((err: unknown) => {
+        setRoster(null);
+        mark("roster", isFault(err));
+      });
+  }, [mark]);
+
+  const readHolds = useCallback(() => {
+    ageChecksApi
+      .held()
+      .then((h) => {
+        setHolds(h);
+        mark("holds", false);
+      })
+      .catch((err: unknown) => {
+        setHolds(null);
+        mark("holds", isFault(err));
+      });
+  }, [mark]);
+
+  const readFlags = useCallback(() => {
+    intelligenceApi
+      // Open flags only: one whose evidence stopped holding has closed
+      // (Teslim 9c35c95), and the server's own count leaves it out too.
+      .allFlags(10, { openOnly: true })
+      // `complete: false` means we could not read them all, and a count off a
+      // partial read is a floor. Report nothing rather than a floor - and not
+      // a failure either, because asking again would read the same partial.
+      .then((r) => {
+        setFlags(r.complete ? r.flags : null);
+        mark("flags", false);
+      })
+      .catch((err: unknown) => {
+        setFlags(null);
+        mark("flags", isFault(err));
+      });
+  }, [mark]);
+
+  /** A card's Try again: only its own reads, and only those that failed. */
+  const retry = (reads: CardRead[]) => {
+    for (const r of reads) {
+      if (!unread.has(r)) continue;
+      if (r === "overview") readOverview();
+      else if (r === "school") readSchool();
+      else if (r === "roster") readRoster();
+      else if (r === "holds") readHolds();
+      else readFlags();
+    }
+  };
 
   const load = useCallback(() => {
     Promise.all([
@@ -249,7 +368,10 @@ export function OverviewView() {
       // The board narrative and the roster counts are their own cards and
       // their own failures - neither should take the page down.
       schoolApi.narrative().catch(() => null),
-      schoolApi.overview().catch(() => null),
+      schoolApi.overview().catch((err: unknown) => {
+        mark("overview", isFault(err));
+        return null;
+      }),
       // The SSO status read that sat here fed only the checklist's sign-in
       // tick, which went when the row became "Share your school code"
       // (manual-only launch). One request fewer on every Overview load.
@@ -263,6 +385,7 @@ export function OverviewView() {
       setNarrativeFailed(n === null);
       setCounts(ov ? ov.counts : null);
       setClassActivity(ov?.classActivity ?? null);
+      if (ov) mark("overview", false);
       /*
        * NULL WHEN WE DID NOT READ IT, and it used to be `?? 0`. That mattered
        * only once the audit stopped gating the page: a zero here is the signal
@@ -274,23 +397,7 @@ export function OverviewView() {
       setPhase("ready");
     });
 
-    // The school record is its own call, so it can never hold the page. It
-    // names the school, dates the setup, and holds the terms that decide what
-    // "this term" means on the adaptations tile (Lydia, 7 Oct).
-    schoolApi
-      .get()
-      .then((sc) => {
-        setSchoolName(sc.name?.trim() || null);
-        setSetUp(setUpAgo(readOnboarding(sc).completedAt, Date.now()));
-        const term = currentTerm(readAcademic(sc).terms ?? [], Date.now());
-        const from = term ? startOfDay(term.from) : null;
-        if (!term || !from) return;
-        schoolIntelligenceApi
-          .adaptationLog({ limit: 1, dateFrom: from.toISOString() })
-          .then((log) => setTermAdaptations({ count: log.total, period: termPeriod(term) }))
-          .catch(() => setTermAdaptations(null));
-      })
-      .catch(() => setSchoolName(null));
+    readSchool();
 
     // D04's "N invitations pending" on the teachers tile. Its own read and its
     // own failure: an admin without the invitations surface still gets the
@@ -321,25 +428,10 @@ export function OverviewView() {
      * 403 here is routine rather than exceptional - all the more reason it can
      * only ever cost the row it feeds.
      */
-    studentsApi
-      .list()
-      .then(setRoster)
-      .catch(() => setRoster(null));
-
-    ageChecksApi
-      .held()
-      .then(setHolds)
-      .catch(() => setHolds(null));
-
-    intelligenceApi
-      // Open flags only: one whose evidence stopped holding has closed
-      // (Teslim 9c35c95), and the server's own count leaves it out too.
-      .allFlags(10, { openOnly: true })
-      // `complete: false` means we could not read them all, and a count off a
-      // partial read is a floor. Report nothing rather than a floor.
-      .then((r) => setFlags(r.complete ? r.flags : null))
-      .catch(() => setFlags(null));
-  }, []);
+    readRoster();
+    readHolds();
+    readFlags();
+  }, [mark, readSchool, readRoster, readHolds, readFlags]);
 
   useEffect(() => {
     load();
@@ -450,10 +542,18 @@ export function OverviewView() {
    * NO ROWS, NO SECTION. "Worth a glance" only ever holds rows this school's
    * own reads produced; with none, a heading over empty space would read as a
    * list that failed to load, and a line saying nothing needs a look would be
-   * a claim - a read that failed also yields no rows.
+   * a claim.
+   *
+   * A READ THAT FAILED SAYS SO (backlog 33). It used to yield no rows and so
+   * no section, which hid a held child as completely as having none. Early,
+   * only the holds read feeds the section; live, the roster and flags do too.
+   * (The class-activity row comes from the school overview, whose failure the
+   * tiles already say - one failed read, one line.)
    */
+  const glanceReads: CardRead[] = early ? ["holds"] : ["roster", "holds", "flags"];
+  const glanceUnread = glanceReads.some((r) => unread.has(r));
   const glanceSection =
-    glance.length > 0 ? (
+    glance.length > 0 || glanceUnread ? (
       <>
         <h3 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
           Worth a glance
@@ -497,9 +597,27 @@ export function OverviewView() {
               </div>
             );
           })}
+          {glanceUnread ? (
+            <CardUnread
+              className={cn(
+                "px-[22px] py-[18px]",
+                glance.length > 0 && "border-t border-nevo-near-black/7",
+              )}
+              onRetry={() => retry(glanceReads)}
+            />
+          ) : null}
         </div>
       </>
     ) : null;
+
+  /*
+   * THE TILES SAY SO TOO. The headcounts come from the school overview, and
+   * the live adaptations tile from the school record's current term; a failed
+   * read of either took its tiles away without a word. (Early, the
+   * adaptations figure is the page's own total, so only the overview counts.)
+   */
+  const tileReads: CardRead[] = early ? ["overview"] : ["overview", "school"];
+  const tilesUnread = tileReads.some((r) => unread.has(r));
 
   const tiles = snapshotTiles({
     studentsProfiled: audit ? audit.studentsProfiled : null,
@@ -794,6 +912,12 @@ export function OverviewView() {
                 ))}
               </div>
             )}
+            {tilesUnread ? (
+              <CardUnread
+                className={cn(CARD, "mt-3 px-[22px] py-5")}
+                onRetry={() => retry(tileReads)}
+              />
+            ) : null}
 
             {/* Live, the roll-up follows the snapshot. */}
             {early ? null : glanceSection}
