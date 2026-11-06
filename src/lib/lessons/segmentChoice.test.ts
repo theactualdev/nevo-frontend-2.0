@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   chosenFrom,
+  lessonMoreSupport,
   lessonPace,
+  moreSupportOf,
   paceOf,
   paceWrite,
   withSessionChoices,
@@ -159,5 +161,32 @@ describe("the sitting's pace (741685e: depth and Slower hold for the sitting)", 
     ).toBe("simplify");
     expect(lessonPace([{ density: "expand" }, { density: null }])).toBe("expand");
     expect(lessonPace([{ density: null }, { density: null }])).toBeNull();
+  });
+});
+
+describe("the sitting's More support (8c67353: held for the sitting, as the pace is)", () => {
+  it("reads it off a section's choice, on or off, beside the rest", () => {
+    expect(chosenFrom({ moreSupport: true })).toEqual({ moreSupport: true });
+    expect(chosenFrom({ slower: true, moreSupport: false })).toEqual({
+      density: "slower",
+      moreSupport: false,
+    });
+    expect(chosenFrom({ moreSupport: null })).toBeUndefined();
+  });
+
+  it("is on where any of the lesson read's sections says so", () => {
+    expect(lessonMoreSupport([undefined, { moreSupport: true }])).toBe(true);
+    expect(lessonMoreSupport([{ moreSupport: false }, { density: "slower" }])).toBe(false);
+    expect(lessonMoreSupport([])).toBe(false);
+  });
+
+  it("is the sitting's word where it says one, and nothing where it says none", () => {
+    expect(moreSupportOf({ moreSupport: true })).toBe(true);
+    expect(moreSupportOf({ moreSupport: false })).toBe(false);
+    // Null is no choice: off.
+    expect(moreSupportOf({ moreSupport: null, slower: true })).toBe(false);
+    // A server from before the field says nothing about it.
+    expect(moreSupportOf({ slower: true })).toBeUndefined();
+    expect(moreSupportOf(undefined)).toBeUndefined();
   });
 });

@@ -283,6 +283,18 @@ export interface CalculationEquationToken {
   hiddenUntilAccepted?: boolean;
 }
 
+/** One of a step's answerable mini-steps (8c67353). */
+export interface CalculationMiniStep {
+  id: string;
+  /** What its answer goes up as (`problemId`). Absent on a teacher's read. */
+  questionId?: string | null;
+  prompt: string;
+  input: "tap" | "choice" | "number" | "text";
+  answer: string | number | boolean;
+  options?: { value: string | number | boolean; label: string }[];
+  acceptedAnswers?: (string | number | boolean)[];
+}
+
 export interface CalculationStep {
   stepId: string;
   stepNumber: number;
@@ -290,6 +302,30 @@ export interface CalculationStep {
   expectedInput: CalculationStepInput;
   hint: string;
   confirmationText: string;
+  /**
+   * The step in its own ordered pieces, for Slower (Teslim, 8c4ccef): "Ordered,
+   * teacher-approved pieces revealed while this step is asked. Empty means pace
+   * the whole step." A child's read carries them only once a teacher approved
+   * them or they came word for word from the upload; pending ones are kept
+   * back on the server. At most eight.
+   */
+  parts?: string[];
+  /**
+   * The idea behind this step, in a teacher's words (8c67353): what More
+   * support shows (Lydia: "concept help, never the hint"). A child's read
+   * carries it only once a teacher approved the step's support; absent, or
+   * null, the step has none.
+   */
+  conceptExplanation?: string | null;
+  /**
+   * The step in smaller answerable steps, a teacher's (8c67353): what Fewer
+   * steps asks, one at a time. A child's read carries them only once a
+   * teacher approved the step's support, each with the `questionId` its
+   * answer goes up under. The server marks them; they never move the lesson
+   * on, and a later pass of the step itself counts as supported. At most
+   * eight.
+   */
+  miniSteps?: CalculationMiniStep[];
   /**
    * WHAT THIS STEP'S ANSWER IS - landed 16 Sep, and it is per STEP.
    *
