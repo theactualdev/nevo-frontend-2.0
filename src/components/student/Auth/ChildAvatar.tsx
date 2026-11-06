@@ -1,5 +1,7 @@
 import { cn } from "@/lib/utils";
 import { SHAPE_COUNT } from "@/lib/auth/deviceRoster";
+import { AVATAR_SHAPES } from "@/lib/profile/avatarLook";
+import { AvatarGlyph } from "@/components/student/Shell/StudentAvatar";
 
 /**
  * A remembered child's avatar: a soft geometric shape on a quiet tint.
@@ -18,33 +20,11 @@ import { SHAPE_COUNT } from "@/lib/auth/deviceRoster";
  * another child signed in, and a cue that moves is not a cue.
  */
 
-/** The frame's six, in its order. `currentColor` is set by the wrapper. */
-const SHAPES = [
-  <circle key="circle" cx="12" cy="12" r="8.5" />,
-  <rect key="rsquare" x="4" y="4" width="16" height="16" rx="6" />,
-  <rect key="pill" x="2.5" y="7" width="19" height="10" rx="5" />,
-  <path
-    key="diamond"
-    d="M12 4 20 12 12 20 4 12Z"
-    stroke="currentColor"
-    strokeWidth="2.4"
-    strokeLinejoin="round"
-  />,
-  <path
-    key="triangle"
-    d="M12 5.5 19.5 18 4.5 18Z"
-    stroke="currentColor"
-    strokeWidth="2.4"
-    strokeLinejoin="round"
-  />,
-  <path
-    key="hex"
-    d="M12 4 19 8 19 16 12 20 5 16 5 8Z"
-    stroke="currentColor"
-    strokeWidth="2.4"
-    strokeLinejoin="round"
-  />,
-];
+/*
+ * The frame's six, in its order, are the `Nevo Avatar` component's - the same
+ * glyphs a signed-in child chooses from on Profile, drawn from one place.
+ * `currentColor` is set by the wrapper.
+ */
 
 /**
  * The frame's tints, which are `nevo-violet` and `nevo-navy` at six opacities.
@@ -79,14 +59,7 @@ export function ChildAvatar({
         className,
       )}
     >
-      <svg
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        className="size-[46%]"
-        aria-hidden
-      >
-        {SHAPES[i]}
-      </svg>
+      <AvatarGlyph shape={AVATAR_SHAPES[i]} />
     </span>
   );
 }

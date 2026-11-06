@@ -27,7 +27,8 @@ import {
 import { Letterbox } from "./Letterbox";
 import { doorAfterLostSession } from "./lostSession";
 import { MOCK_STUDENT, STUDENT_NAV, STUDENT_PROFILE_HREF } from "./studentNav";
-import { useAvatarTone } from "./useAvatarTone";
+import { StudentAvatar } from "./StudentAvatar";
+import { useAvatarLook } from "./useAvatarLook";
 import { useDisplayName } from "./useDisplayName";
 
 /**
@@ -127,8 +128,9 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
   }, []);
   // The chrome calls the student by their own name, not the fixture's.
   const student = useDisplayName();
-  // The look the child chose on Profile; the navy disc until they choose.
-  const { tone } = useAvatarTone();
+  // The look the child chose on Profile; the navy circle until they choose.
+  // Their shape, never their initials (Lydia, 4 Nov).
+  const { look } = useAvatarLook();
   const signedIn = useHasSession();
   // `useHasSession` is the server's answer until hydration, so gating on it
   // alone showed a real child the fixture's "Year 4" for a frame. Same reason
@@ -216,7 +218,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
               subtitle: showingFixtureIdentity
                 ? MOCK_STUDENT.subtitle
                 : undefined,
-              tone,
+              avatar: <StudentAvatar look={look} className="size-10" />,
               href: STUDENT_PROFILE_HREF,
             }}
             collapsed={collapsed}
@@ -257,10 +259,9 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
               <Link
                 href={STUDENT_PROFILE_HREF}
                 aria-label="Profile"
-                style={{ background: tone.background, color: tone.text }}
-                className="flex size-10 cursor-pointer items-center justify-center rounded-full text-sm font-semibold transition-[filter] hover:brightness-110"
+                className="flex size-10 cursor-pointer rounded-full transition-[filter] hover:brightness-110"
               >
-                {student.initials}
+                <StudentAvatar look={look} className="size-full" />
               </Link>
             </MaybeSample>
           </div>

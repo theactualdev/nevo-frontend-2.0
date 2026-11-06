@@ -1,16 +1,19 @@
 "use client";
 
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { AVATAR_TONES, type AvatarTone } from "@/lib/profile/avatarTone";
+import { StudentAvatar } from "@/components/student/Shell/StudentAvatar";
+import { AVATAR_LOOKS, type AvatarLook } from "@/lib/profile/avatarLook";
 import { cn } from "@/lib/utils";
 
 /**
  * "Choose your look" (frame 27, avatar selector).
  *
  * The frame draws a mobile bottom sheet: a close button, the title, and eight
- * discs in a four-column grid, each carrying the child's own initials so they
- * see themselves in every option. The chosen one wears a navy ring. There is
- * no Save - tapping a disc IS the choice, which is why the sheet closes on it.
+ * shapes in a four-column grid, each a `Nevo Avatar` look - a shape on a round
+ * tile, never the child's initials (Lydia, 4 Nov: "Initials put a child's
+ * name on a screen anyone nearby can read"; "Frame 27 is correct and the
+ * build changes"). The chosen one wears a navy ring. There is no Save -
+ * tapping a look IS the choice, which is why the sheet closes on it.
  *
  * Tablet and desktop are not drawn; they get the centred card the sign-out
  * sheet already uses, so the two sheets on this screen behave alike.
@@ -18,15 +21,13 @@ import { cn } from "@/lib/utils";
 export function AvatarPickerSheet({
   open,
   onOpenChange,
-  initials,
   current,
   onChoose,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initials: string;
-  current: AvatarTone;
-  onChoose: (tone: AvatarTone) => void;
+  current: AvatarLook;
+  onChoose: (look: AvatarLook) => void;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -40,23 +41,22 @@ export function AvatarPickerSheet({
           Choose your look
         </SheetTitle>
         <div className="mt-5 grid grid-cols-4 gap-4">
-          {AVATAR_TONES.map((tone) => {
-            const chosen = tone.id === current.id;
+          {AVATAR_LOOKS.map((look) => {
+            const chosen = look.id === current.id;
             return (
               <button
-                key={tone.id}
+                key={look.id}
                 type="button"
-                aria-label={tone.label}
+                aria-label={look.label}
                 aria-pressed={chosen}
-                onClick={() => onChoose(tone)}
-                style={{ background: tone.background, color: tone.text }}
+                onClick={() => onChoose(look)}
                 className={cn(
-                  "flex aspect-square cursor-pointer items-center justify-center rounded-full text-xl font-semibold transition-transform active:scale-95",
+                  "flex aspect-square cursor-pointer rounded-full transition-[transform,filter] hover:brightness-[0.96] active:scale-95",
                   chosen &&
-                    "outline-[2.5px] outline-offset-2 outline-nevo-navy outline-solid",
+                    "outline-[2.5px] outline-offset-3 outline-nevo-navy outline-solid",
                 )}
               >
-                <span aria-hidden>{initials}</span>
+                <StudentAvatar look={look} className="size-full" />
               </button>
             );
           })}

@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { usersApi } from "@/lib/api/users";
 import { getToken } from "@/lib/auth/session";
-import { avatarTone, type AvatarTone } from "@/lib/profile/avatarTone";
+import { avatarLook, type AvatarLook } from "@/lib/profile/avatarLook";
 
 /**
- * The look the signed-in child chose, shared by every disc that draws it.
+ * The look the signed-in child chose, shared by every avatar that draws it.
+ * Kept in `users/me`'s `avatarTone` as "<shape>-<colourway>" - see
+ * `avatarLook`, which also reads an old colour-only id as the default look.
  *
  * ONE STORE, NOT ONE STATE PER DISC. The shell's disc and the Profile screen's
  * are on screen together; a choice made on one has to move the other at the
@@ -74,8 +76,8 @@ function load(owner: string) {
     });
 }
 
-export function useAvatarTone(): {
-  tone: AvatarTone;
+export function useAvatarLook(): {
+  look: AvatarLook;
   /** Resolves once the account holds it; rejects, and puts the old look back, if not. */
   choose: (id: string) => Promise<void>;
 } {
@@ -105,5 +107,5 @@ export function useAvatarTone(): {
     }
   }, []);
 
-  return { tone: avatarTone(id), choose };
+  return { look: avatarLook(id), choose };
 }
