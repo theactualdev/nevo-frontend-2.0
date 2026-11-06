@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
 import {
   billingApi,
   type BillingContact,
@@ -43,6 +44,8 @@ export function BillingContactSheet({
   const [country, setCountry] = useState(contact?.country ?? "Nigeria");
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
+  /** 409 `billing_contact_exists`: that address is already on the list. */
+  const [duplicate, setDuplicate] = useState(false);
 
   const complete =
     email.trim().length > 0 &&
@@ -54,6 +57,7 @@ export function BillingContactSheet({
     if (!complete || saving) return;
     setSaving(true);
     setFailed(false);
+    setDuplicate(false);
     const blankToNull = (v: string) => (v.trim().length > 0 ? v.trim() : null);
     const draft: BillingContactDraft = {
       email: email.trim(),
@@ -65,12 +69,17 @@ export function BillingContactSheet({
       postalCode: blankToNull(postcode),
       country: country.trim(),
     };
-    billingApi
-      .updateContact(draft)
+    // One contact of several (a16224d): a new one is added, an existing one
+    // edited by its id.
+    (contact ? billingApi.editContact(contact.id, draft) : billingApi.addContact(draft))
       .then(onSaved)
-      .catch(() => {
+      .catch((err: unknown) => {
         // Stay open, keep their typing, and say it did not save.
-        setFailed(true);
+        if (err instanceof ApiError && apiErrorCode(err.detail) === "billing_contact_exists") {
+          setDuplicate(true);
+        } else {
+          setFailed(true);
+        }
         setSaving(false);
       });
   };
@@ -91,14 +100,15 @@ export function BillingContactSheet({
           Billing contact
         </h2>
         {/*
-          * NO "Where invoices and payment reminders go." Nothing goes there:
-          * an issued invoice is an in-app notice to the school's active admins
-          * (billing/issuance.py `_notify_billing_contacts`), and no reminder
-          * or invoice email uses this address anywhere on the server (checked
-          * 5 Nov). A line promising delivery to an address nothing writes to
-          * is an untrue state (Lydia, 4 Nov). Raised to the hub; the words
-          * come back when the server sends to it.
+          * BACK, AND TRUE NOW (Teslim e8b70bd, 6 Nov). It came off in #1008
+          * because nothing sent to this address. Now every billing contact is
+          * emailed each invoice as it is issued, and a reminder 7 days before
+          * it is due and on the day (billing/email_worker.py, the daily
+          * `billing.invoice_reminders` job).
           */}
+        <p className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+          Where invoices and payment reminders go.
+        </p>
 
         <div className="mt-5 grid grid-cols-2 gap-4">
           <label className="col-span-2 block">
@@ -169,6 +179,11 @@ export function BillingContactSheet({
           </label>
         </div>
 
+        {duplicate && (
+          <p className="m-0 mt-4 text-[13.5px] leading-[1.5] text-nevo-navy">
+            That address is already one of your billing contacts.
+          </p>
+        )}
         {failed && (
           <p className="m-0 mt-4 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-navy">
             That didn&rsquo;t save. Nothing has changed, and what you typed is
