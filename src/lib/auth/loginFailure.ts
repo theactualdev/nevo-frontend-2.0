@@ -90,6 +90,20 @@ export type LearnerLoginFailure = LoginFailure | "closed";
 export function classifyLearnerLoginFailure(
   cause: unknown,
 ): LearnerLoginFailure {
+  /*
+   * A THROTTLE IS A 429 (Teslim 8a7199b, SCRUM-251): `too_many_attempts`,
+   * with `retryAt`, on HTTP 429. Read only on a 401 above, it fell to "ours"
+   * - "Something went wrong on our side. Try again." - so a throttled child
+   * was told to keep trying, which extends the throttle, and D154's pause
+   * never showed (audit, 2 Nov). The code is read on any status, as
+   * `firstPin` reads it.
+   */
+  if (
+    cause instanceof ApiError &&
+    (cause.status === 429 || apiErrorCode(cause.detail) === "too_many_attempts")
+  ) {
+    return "throttled";
+  }
   if (
     cause instanceof ApiError &&
     (cause.status === 401 || cause.status === 403) &&
@@ -98,4 +112,25 @@ export function classifyLearnerLoginFailure(
     return "closed";
   }
   return classifyLoginFailure(cause);
+}
+
+/**
+ * When a throttle ends, as the server says it (`detail.retryAt`, an ISO time,
+ * SCRUM-251), in epoch ms. Null when it says nothing usable - then the pause
+ * has no end on this screen, as before the field existed (D156).
+ */
+export function throttleEndsAt(cause: unknown): number | null {
+  if (!(cause instanceof ApiError)) return null;
+  const detail = cause.detail as { detail?: unknown } | null | undefined;
+  const body =
+    detail && typeof detail === "object" && "detail" in detail
+      ? detail.detail
+      : detail;
+  const at =
+    body && typeof body === "object"
+      ? (body as { retryAt?: unknown }).retryAt
+      : undefined;
+  if (typeof at !== "string") return null;
+  const ms = Date.parse(at);
+  return Number.isNaN(ms) ? null : ms;
 }

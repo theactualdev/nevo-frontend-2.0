@@ -345,3 +345,78 @@ describe("a failure that is not theirs", () => {
     expect(document.body.textContent).not.toMatch(/kept|teacher can help/i);
   });
 });
+
+/*
+ * TOO MANY TRIES IS D154'S PAUSE HERE TOO (audit, 2 Nov, backlog 14; SCRUM-251
+ * "the PIN door, PIN creation and Change PIN. One pause, one contract"). It
+ * said "That didn't save" / "Try again", which extends the throttle.
+ */
+describe("too many tries", () => {
+  const throttled = (retryAt?: string) =>
+    new ApiError(429, "Too Many Requests", {
+      detail: {
+        code: "too_many_attempts",
+        message: "slow",
+        ...(retryAt ? { retryAt } : {}),
+      },
+    });
+
+  it("pauses the screen: the heading's slot, the boxes held, the note, and no pad", async () => {
+    setPin.mockRejectedValue(throttled());
+    render(<ChangePinScreen />);
+    passStepOne();
+    await enterNewPinTwice();
+
+    expect(
+      screen.getByRole("heading", { name: "Let's take a moment" }),
+    ).toBeInTheDocument();
+    expect(document.querySelector("[data-held-pin]")).not.toBeNull();
+    expect(
+      screen.getByText("Let's wait a little before trying again."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "5" })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/on us, not you|didn.t save/i);
+    // Back to Profile is still the way out.
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(push).toHaveBeenCalledWith("/student/profile");
+  });
+
+  it("sends nothing while paused, whatever is typed", async () => {
+    setPin.mockRejectedValue(throttled());
+    render(<ChangePinScreen />);
+    passStepOne();
+    await enterNewPinTwice();
+    setPin.mockClear();
+
+    type(CURRENT + NEXT + NEXT);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    expect(setPin).not.toHaveBeenCalled();
+    expect(screen.getByText("Let's take a moment")).toBeInTheDocument();
+  });
+
+  it("lifts at the server's retryAt, back on step 1, and names no time", async () => {
+    setPin.mockRejectedValue(
+      throttled(new Date(Date.now() + 40_000).toISOString()),
+    );
+    render(<ChangePinScreen />);
+    passStepOne();
+    await enterNewPinTwice();
+    expect(document.body.textContent).not.toMatch(/\d+\s*(s|sec|second|minute)/i);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(39_000);
+    });
+    expect(screen.getByText("Let's take a moment")).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+
+    expect(
+      screen.getByRole("heading", { name: /Enter your current PIN/i }),
+    ).toBeInTheDocument();
+    expect(dots()).toBe(0);
+  });
+});

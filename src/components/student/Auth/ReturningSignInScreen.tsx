@@ -10,6 +10,7 @@ import { authApi } from "@/lib/api";
 import { usersApi } from "@/lib/api/users";
 import {
   classifyLearnerLoginFailure,
+  throttleEndsAt,
   type LearnerLoginFailure,
 } from "@/lib/auth/loginFailure";
 import { doorForRole, knownRole } from "@/lib/auth/consoleDoor";
@@ -38,6 +39,7 @@ import {
   RAISED_FORGOT,
   THROTTLED_PAUSE_COPY,
   ThrottleNote,
+  useThrottleRelease,
 } from "./ThrottledPause";
 import {
   WrongDoorNote,
@@ -178,6 +180,16 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   const [releasedTo, setReleasedTo] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<LearnerLoginFailure | null>(null);
+  /**
+   * When the server says D154's pause ends (`retryAt`, SCRUM-251), so the
+   * boxes open again here, on this screen. Null is no end.
+   */
+  const [pauseEnds, setPauseEnds] = useState<number | null>(null);
+  const endPause = useCallback(() => {
+    setError((was) => (was === "throttled" ? null : was));
+    setPauseEnds(null);
+  }, []);
+  useThrottleRelease(error === "throttled" ? pauseEnds : null, endPause);
   /** Whose account a non-student one is; see `studentDoorRefusal`. */
   const [wrongDoor, setWrongDoor] = useState<StudentDoorRefusal | null>(null);
   /**
@@ -479,6 +491,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
       if (failure === "closed") {
         closeRememberedChild({ schoolCode: school, loginIdentifier: identifier });
       }
+      setPauseEnds(failure === "throttled" ? throttleEndsAt(cause) : null);
       setError(failure);
     } finally {
       if (!leaving) setChecking(false);
