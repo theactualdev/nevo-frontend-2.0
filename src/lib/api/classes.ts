@@ -287,6 +287,22 @@ export interface BulkClassResponse {
   rejected: ClassRejection[];
 }
 
+/**
+ * SCRUM-231: one child with a check from today still open
+ * (`GET /api/v1/classes/{id}/unfinished-checks`). The server lists only the
+ * checks that can still be resumed, in name order. `checkPosition` is how far
+ * through they got, which the ticket rules out showing - typed because it is
+ * sent, never rendered.
+ */
+export interface UnfinishedClassCheck {
+  studentId: string;
+  studentName: string;
+  lessonId: string;
+  lessonTitle: string;
+  checkPosition: number;
+  resumableUntil: string;
+}
+
 export const classesApi = {
   /**
    * Every class in the school. Archived rows are excluded by default and a
@@ -374,6 +390,10 @@ export const classesApi = {
   /** The class roster. GET /api/v1/classes/{class_id}/students */
   classStudents: (classId: string) =>
     api.get<ClassStudent[]>(`/api/v1/classes/${classId}/students`),
+
+  /** SCRUM-231: today's checks still to finish in a teacher's own class. */
+  unfinishedChecks: (classId: string) =>
+    api.get<UnfinishedClassCheck[]>(`/api/v1/classes/${classId}/unfinished-checks`),
 
   /**
    * Assign a teacher to a class, for one subject (admin seam).
