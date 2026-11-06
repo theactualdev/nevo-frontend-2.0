@@ -224,6 +224,18 @@ describe("high contrast in CSS", () => {
   });
 });
 
+describe("a first screen held for the account's settings, in CSS", () => {
+  it("is not drawn while the provider holds it (SCRUM-228)", () => {
+    const css = readFileSync(
+      join(process.cwd(), "src", "app", "globals.css"),
+      "utf8",
+    );
+    expect(css).toMatch(
+      /html\[data-a11y-pending\] body \{\s*visibility: hidden;\s*\}/,
+    );
+  });
+});
+
 describe("the text-size zoom in CSS", () => {
   it("uses TEXT_ZOOM's numbers, so the CSS and the teacher shell agree", () => {
     const css = readFileSync(
