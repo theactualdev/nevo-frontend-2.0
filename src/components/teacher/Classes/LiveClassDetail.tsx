@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { SummaryChip, SummaryCount } from "@/components/teacher/shared/SummaryChip";
 import { attentionByStudent, rosterCounts } from "@/components/teacher/shared/summaryState";
 import { TryAgain } from "@/components/teacher/shared/ReadFailed";
+import { UnfinishedChecks } from "./UnfinishedChecks";
 
 /**
  * A class the school assigned, drawn from what the backend actually serves:
@@ -218,6 +219,10 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
 
         {tab === "roster" && !loading && students.length > 0 && (
           <>
+            {/* SCRUM-231: who has a check from today to finish, first - the
+                teacher is in the room and can say so. Draws nothing when the
+                server names no one, or its read failed. */}
+            <UnfinishedChecks classId={klass.classId} />
             <h3 className="mt-7 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-8 xl:text-sm">
               Student observations
             </h3>
