@@ -19,6 +19,7 @@ import {
 import { ConsentWithdrawn } from "@/components/student/Entry/ConsentWithdrawn";
 import {
   WaitingOnConsent,
+  type CheckAgainResult,
   type WaitingHold,
 } from "@/components/student/Entry/WaitingOnConsent";
 import { useSignals } from "@/hooks";
@@ -474,14 +475,16 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
    * 00d's CHECK AGAIN, FOR A CHILD HELD HERE (design 5bb9ee2, 28 Oct): the
    * same lookup, for the pair that was matched, and the same routing
    * (`onward`) - so consent that has come goes straight on into the run.
-   * Still waiting, or a lookup that did not answer, stays on 00d as it was.
+   * Still waiting stays on 00d and says it checked; a lookup that did not
+   * answer stays as it was.
    */
-  const checkConsentAgain = async () => {
+  const checkConsentAgain = async (): Promise<CheckAgainResult> => {
     const state = await studentEntryApi.lookup({
       schoolCode,
       admissionNumber: id,
     });
-    if (!alive.current || entryRoute(state) === "waiting") return;
+    if (!alive.current) return;
+    if (entryRoute(state) === "waiting") return "still-waiting";
     setHeld(null);
     onward(state, schoolCode, id);
   };

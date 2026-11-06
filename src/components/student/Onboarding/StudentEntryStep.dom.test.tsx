@@ -558,7 +558,7 @@ describe("where a match goes", () => {
     expect(getOnboardingDraft().name).toBe("Amara");
   });
 
-  it("stays on 00d, as it was, when Check again finds consent still waiting", async () => {
+  it("stays on 00d, and says it checked, when Check again finds consent still waiting", async () => {
     lookup.mockResolvedValue(matched({ consentState: "pending" }));
     render(<StudentEntryStep framing="school" />);
     await enterAndSubmit();
@@ -572,6 +572,9 @@ describe("where a match goes", () => {
     expect(
       screen.getByRole("heading", { name: "Nevo isn't quite ready for you yet" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("status").textContent).toBe(
+      "Checked just now. Nothing yet.",
+    );
   });
 
   it("stays on 00d when the lookup behind Check again does not answer", async () => {
@@ -587,6 +590,8 @@ describe("where a match goes", () => {
 
     expect(push).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Check again" })).toBeInTheDocument();
+    // Nothing was checked, so nothing new is said.
+    expect(screen.getByRole("status").textContent).toBe("");
   });
 
   it("holds a child whose consent was withdrawn on 00e, in place, never 00d (D117)", async () => {
