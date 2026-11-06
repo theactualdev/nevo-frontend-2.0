@@ -539,6 +539,25 @@ describe("live, once the server sends canAssign", () => {
     expect(screen.getByRole("link", { name: "Assign to classes" })).toBeInTheDocument();
   });
 
+  /*
+   * A check whose answer is from the file but whose level Nevo inferred waits
+   * on the press too, and IS asked (5ab4ecd serves file-answered checks). The
+   * review can't tell it from one Nevo answered, so "Children aren't asked
+   * them" is not said over it.
+   */
+  it("does not say children aren't asked them when every waiting check has a Nevo level", async () => {
+    api.review.mockResolvedValue(
+      reviewOf({
+        readyToAssign: true,
+        checks: [check(1, { masteryLevel: "application", masteryLevelAuthoredBy: "nevo" })],
+      }),
+    );
+    await open(5);
+
+    expect(screen.getByRole("heading", { name: "This lesson is ready" })).toBeInTheDocument();
+    expect(screen.queryByText(/aren.t asked them/)).not.toBeInTheDocument();
+  });
+
   it("names the guiding questions, not the checks, as what still holds it", async () => {
     api.review.mockResolvedValue(reviewOf({ readyToAssign: false, guidedSteps: [guided(1)] }));
     await open(5);

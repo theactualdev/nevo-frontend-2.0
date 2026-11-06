@@ -1252,8 +1252,20 @@ function StepLive({
   onGo: (step: Step) => void;
 }) {
   const live = split ? review.readyToAssign : review.reviewComplete === true;
-  /* Checks that hold nothing any more, but are still the teacher's to see. */
-  const checksAfter = split && checks.checksPending;
+  /*
+   * Checks that hold nothing any more, but are still the teacher's to see.
+   *
+   * ONLY WHERE THE LINE IS TRUE. The server serves a child only the checks
+   * that are signed or came with their answer in the file (5ab4ecd,
+   * `student_checkpoint_payloads`), so "Children aren't asked them" holds
+   * for the checks Nevo wrote answers for. But since levels (#1006) a check
+   * whose ANSWER is from the file and whose LEVEL Nevo inferred also waits
+   * on the press - and is asked. The review cannot tell those two apart, so
+   * the line is said only when a waiting check has no Nevo level: then its
+   * answer is Nevo's. Otherwise nothing is said; step 3 still shows them.
+   */
+  const checksAfter =
+    split && checks.checksPending && checks.toSign.some((r) => !r.levelByNevo);
   if (!live) {
     /*
      * WHAT IS STILL WAITING, IN STEP ORDER, from the server's own sign-offs.
