@@ -24,10 +24,13 @@ import { parentApi, type ParentChild, type ParentLearningEvidence } from "@/lib/
  *    read carries neither.
  *  - "Now secure" / "she's holding onto it now": the server says a line was
  *    crossed, not that the child has kept it - the same concept can be due
- *    back for review.
+ *    back for review. LYDIA'S WORDS for it (SCRUM-321, 7 Nov): "{child}
+ *    crossed the mark on this idea."
  *  - The empty state's "{child}'s just getting started": the read can't tell
- *    starting out from nothing strengthened yet. An empty list says only
- *    what's true.
+ *    starting out from nothing strengthened yet. LYDIA'S ONE STATE for both
+ *    (SCRUM-321): "Nothing has strengthened here yet." The home's way in shows
+ *    only when there's something to list, but a kept link or Back can still
+ *    land here on an empty list, so the screen says it itself.
  *  - "Measured against where {child} was before, not against anyone else":
  *    left for Lydia with the rest, rather than half-kept.
  * Pronouns become the child's name; this page uses none.
@@ -150,14 +153,25 @@ function Body({ read, retry }: { read: Read; retry: () => void }) {
                 i < rows.length - 1 ? "border-b border-nevo-near-black/7" : ""
               }`}
             >
-              <span className="text-[15.5px] font-semibold text-nevo-near-black">{r.conceptName}</span>
+              <span className="min-w-0">
+                <span className="block text-[15.5px] font-semibold text-nevo-near-black">
+                  {r.conceptName}
+                </span>
+                <span className="mt-0.5 block text-[13.5px] leading-[1.45] text-nevo-near-black/62">
+                  {name} crossed the mark on this idea.
+                </span>
+              </span>
               {onDay(r.recordedAt) ? (
                 <span className="shrink-0 text-[13px] text-nevo-near-black/55">{onDay(r.recordedAt)}</span>
               ) : null}
             </li>
           ))}
         </ul>
-      ) : null}
+      ) : (
+        <p className="m-0 mt-5 rounded-[14px] bg-nevo-cream-elevated px-[22px] py-5 text-[15px] leading-[1.55] text-nevo-near-black/70 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+          Nothing has strengthened here yet.
+        </p>
+      )}
       <Link
         href="/parent-portal"
         className="mt-5 inline-block text-[14.5px] font-semibold text-nevo-navy hover:underline"
