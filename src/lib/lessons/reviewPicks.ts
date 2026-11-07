@@ -5,6 +5,8 @@ import type { AssessmentQuestion } from "@/lib/types";
 export interface ReviewPick {
   questionIndex: number;
   selectedId: string;
+  /** The server's mark on the stored answer (test 9) - see `ReviewAnswer`. */
+  correct?: boolean | null;
 }
 
 /**
@@ -40,7 +42,14 @@ export function picksFromAttempts(
           (o) => o.value !== undefined && o.value === newest.answer,
         )
       : undefined;
-    if (option) picks.push({ questionIndex, selectedId: option.id });
+    if (option)
+      picks.push({
+        questionIndex,
+        selectedId: option.id,
+        ...(newest && newest.correct !== undefined
+          ? { correct: newest.correct }
+          : {}),
+      });
   });
   return picks;
 }

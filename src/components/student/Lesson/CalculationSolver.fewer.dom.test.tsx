@@ -137,6 +137,8 @@ describe("Fewer steps on the calculation", () => {
 
     expect(props.onStepGiven).toHaveBeenCalledWith(
       expect.objectContaining({ stepId: "mini-aaa", answer: "1" }),
+      // The package's own mark, for the host to fall back on offline only.
+      true,
     );
     // The mini-step is never the step's own signal.
     expect(props.onStepAnswered).not.toHaveBeenCalled();
@@ -151,6 +153,7 @@ describe("Fewer steps on the calculation", () => {
 
     expect(props.onStepGiven).toHaveBeenCalledWith(
       expect.objectContaining({ stepId: "mini-aaa", answer: "4" }),
+      false,
     );
     expect(screen.getByText(MINIS[0].prompt)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "1" })).toHaveAttribute("aria-pressed", "false");
@@ -165,6 +168,7 @@ describe("Fewer steps on the calculation", () => {
 
     expect(props.onStepGiven).toHaveBeenLastCalledWith(
       expect.objectContaining({ stepId: "mini-bbb", answer: "2" }),
+      true,
     );
   });
 
@@ -183,6 +187,7 @@ describe("Fewer steps on the calculation", () => {
     expect(props.onStepAnswered).toHaveBeenCalledWith("s1", true);
     expect(props.onStepGiven).toHaveBeenLastCalledWith(
       expect.objectContaining({ stepId: "s1", answer: "tops" }),
+      true,
     );
   });
 

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -393,12 +394,18 @@ describe("never on a calculation (Lydia, 26 Oct #1)", () => {
   });
 
   it("opens no hand-off the server sends for its check: the check stays", async () => {
-    saveAttempt.mockResolvedValue(
-      reply({ questionId: "cp-calc", segmentId: SEG_1, ...HANDOFF }),
+    // The step's "4 and 4" is marked right (test 9); the check's miss
+    // carries the hand-off.
+    saveAttempt.mockImplementation(async (_lesson: string, body: { source?: string }) =>
+      body.source === "calculation"
+        ? reply({ source: "calculation", correct: true })
+        : reply({ questionId: "cp-calc", segmentId: SEG_1, ...HANDOFF }),
     );
     render(<LessonPlayer lesson={CALC_LESSON} plan={CALC_PLAN} live />);
     fireEvent.click(screen.getByRole("button", { name: "4 and 4" }));
     fireEvent.click(screen.getByRole("button", { name: "Check my answer" }));
+    // The step moves on its mark (test 9).
+    await act(async () => {});
     next();
 
     await miss();

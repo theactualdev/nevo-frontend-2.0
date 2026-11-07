@@ -101,6 +101,12 @@ import {
 } from "@/lib/lessons/segmentChoice";
 import { schedulerApi, type ReviewOutcome } from "@/lib/api/scheduler";
 import { answerFor, calculationAttemptFor } from "@/lib/lessons/attempts";
+import {
+  onVerdict,
+  verdictOf,
+  type Verdict,
+  type VerdictReply,
+} from "@/lib/lessons/verdict";
 import { holdAnswer, retryable } from "@/lib/lessons/pendingProgress";
 import {
   answersBefore,
@@ -3035,12 +3041,15 @@ export function LessonPlayer({
    * `onStored` hears the server's answer to it - the stored row, marked -
    * which is where a hand-off arrives (B94). An answer held for later has no
    * answer yet, and none is waited for.
+   *
+   * GIVES BACK the reply on its way - the stored row, or null for one held or
+   * refused - or null at once when nothing was sent (see `markAttempt`).
    */
   const saveAttempt = (
     answer: Omit<LessonQuestionAttemptWrite, "sessionId"> | null,
     onStored?: (stored: LessonQuestionAttempt) => void,
-  ) => {
-    if (!live || !answer) return;
+  ): Promise<LessonQuestionAttempt | null> | null => {
+    if (!live || !answer) return null;
     const body = { ...answer, clientAttemptId: randomId() };
     const id = progress.sessionId;
     // Taken now: a 401 clears the session before its failure arrives.
@@ -3051,20 +3060,46 @@ export function LessonPlayer({
         { sessionId: null, localId: progress.localId, body },
         owner,
       );
-      return;
+      return null;
     }
-    attemptWrites.current.push(
-      lessonsApi.saveAttempt(lesson.id, { sessionId: id, ...body }).then(
-        // Beside the failure, not before it: what the answer leads to is no
-        // reason to hold the answer again.
-        (stored) => onStored?.(stored),
-        (cause: unknown) => {
-          if (retryable(cause)) {
-            holdAnswer(lesson.id, { sessionId: id, body }, owner);
-          }
-        },
-      ),
+    const write = lessonsApi.saveAttempt(lesson.id, { sessionId: id, ...body }).then(
+      // Beside the failure, not before it: what the answer leads to is no
+      // reason to hold the answer again.
+      (stored) => {
+        onStored?.(stored);
+        return stored;
+      },
+      (cause: unknown) => {
+        if (retryable(cause)) {
+          holdAnswer(lesson.id, { sessionId: id, body }, owner);
+        }
+        return null;
+      },
     );
+    attemptWrites.current.push(write);
+    return write;
+  };
+
+  /*
+   * TEST 9: THE SERVER MARKS, ONLINE (Lydia, 5 Nov; the hub, 6 Nov). An
+   * answer is sent and the screen moves on the MARK ITS REPLY CARRIES -
+   * `correct` on the stored row - never the device's. Until it lands the
+   * child's pick is held, quietly (see `Verdict`).
+   *
+   * OFFLINE THE PACKAGE STILL MARKS (`packageMark`), for now: an answer that
+   * cannot go - no sitting yet, no connection, a mock lesson - or one the
+   * server refused has no reply to wait for, so the lesson's own key decides,
+   * as before, until Teslim's offline-marked flag and re-verify on sync.
+   */
+  const markAttempt = (
+    answer: Omit<LessonQuestionAttemptWrite, "sessionId"> | null,
+    packageMark: () => boolean,
+    onStored?: (stored: LessonQuestionAttempt) => void,
+  ): VerdictReply => {
+    const write = saveAttempt(answer, onStored);
+    return write
+      ? write.then((stored) => verdictOf(stored, packageMark))
+      : packageMark();
   };
 
   /*
@@ -3360,20 +3395,22 @@ export function LessonPlayer({
           });
           exitTo(HOME_HREF);
         }}
-        onAnswer={({ questionIndex, selectedId, correct, responseTimeMs }) => {
+        onAnswer={({ questionIndex, selectedId, responseTimeMs }) => {
           // The pick goes up on the attempt, where the server marks it - with
           // the time it took, as the check measured it (Lydia, 17 Oct). No
           // hint is ever shown on the after-lesson check, so none is sent.
-          const checkpointId = lesson.assessment?.questions[questionIndex]?.id;
-          saveAttempt(
+          // The question moves on that mark (test 9).
+          const question = lesson.assessment?.questions[questionIndex];
+          const checkpointId = question?.id;
+          const reply = markAttempt(
             answerFor({
               questionId: checkpointId,
               source: "assessment",
-              choice: lesson.assessment?.questions[questionIndex]?.options.find(
-                (o) => o.id === selectedId,
-              ),
+              choice: question?.options.find((o) => o.id === selectedId),
               responseTimeMs,
             }),
+            // Offline only: the package's key.
+            () => selectedId === question?.correctId,
           );
           /*
            * THE CATALOGUE'S KEYS, `segmentId` and `questionId`, and nothing it
@@ -3403,9 +3440,6 @@ export function LessonPlayer({
            * d461b60). It also sent a device verdict the server no longer
            * takes from a student.
            */
-          if (!firstAnswers.current.has(questionIndex)) {
-            firstAnswers.current.set(questionIndex, correct);
-          }
           // Record the pick (first per question) for the Review Answers screen.
           reviewAnswers.current = [
             ...reviewAnswers.current.filter(
@@ -3414,6 +3448,21 @@ export function LessonPlayer({
             { questionIndex, selectedId },
           ];
           saveReviewAnswers(lesson.id, reviewAnswers.current);
+          // Its mark, once it lands: the scheduler's first answer (#11), and
+          // the right or wrong Review Answers draws (#5). One the server
+          // could not mark is evidence of nothing.
+          onVerdict(reply, (mark) => {
+            if (mark !== null && !firstAnswers.current.has(questionIndex)) {
+              firstAnswers.current.set(questionIndex, mark);
+            }
+            reviewAnswers.current = reviewAnswers.current.map((a) =>
+              a.questionIndex === questionIndex && a.selectedId === selectedId
+                ? { ...a, correct: mark }
+                : a,
+            );
+            saveReviewAnswers(lesson.id, reviewAnswers.current);
+          });
+          return reply;
         }}
         onFinish={() => {
           setPhase("complete");
@@ -4015,7 +4064,7 @@ export function LessonPlayer({
                     saveAttempt(completion),
                   );
                 }}
-                onCalcGiven={(given) =>
+                onCalcGiven={(given, packageMark) =>
                   /*
                    * EVERY STEP THE CHILD COMMITS IS WRITTEN, each wrong try its
                    * own answer, for the server to mark: the engine's error
@@ -4026,8 +4075,11 @@ export function LessonPlayer({
                    * addition to the step's signal below, never in the child's
                    * way. What the server says back about a miss is support in
                    * that step, and only that (`noteCalcSupport`).
+                   *
+                   * The step moves on the MARK its reply carries (test 9); the
+                   * package's `packageMark` only where no reply comes.
                    */
-                  saveAttempt(
+                  markAttempt(
                     calculationAttemptFor({
                       segmentId: segment.id,
                       problemId: given.stepId,
@@ -4035,19 +4087,23 @@ export function LessonPlayer({
                       responseTimeMs: given.responseTimeMs,
                       hinted: given.hinted,
                     }),
+                    () => packageMark,
                     (stored) => noteCalcSupport(segment.id, stored),
                   )
                 }
-                onCalcStep={(stepId, correct) => {
-                  // The catalogue's keys, exactly: which step, never whether it
-                  // was right. Correctness is the server's, on the answer
-                  // written above (`onCalcGiven`), and the error streak the
-                  // engine reads is taken from those marked answers.
+                onCalcCommitted={(stepId) =>
+                  // The catalogue's keys, exactly: which step, never whether
+                  // it was right - as it is committed, before its mark.
                   trackEvent(SIGNAL_EVENT_TYPES.CALCULATION_STEP_RESPONSE, {
                     segmentId: segment.id,
                     stepId,
-                  });
-                  noteAnswer(correct);
+                  })
+                }
+                onCalcStep={(_stepId, mark) => {
+                  // The error streak the engine is sent, from the step's
+                  // MARK (test 9, #10). One the server could not mark counts
+                  // for nothing.
+                  if (mark !== null) noteAnswer(mark);
                 }}
                 onPiecePlaced={(stepId) =>
                   trackEvent(SIGNAL_EVENT_TYPES.MANIPULATIVE_PIECE_PLACED, {
@@ -4149,10 +4205,12 @@ export function LessonPlayer({
             takeWay(way);
           }}
           onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
-          onAnswered={(correct, answered) => {
+          onAnswered={(answered) => {
             const { check, at } = checkShown;
             const checkpointId = check.id;
             const key = checkKey(segment.id, check, at);
+            const here = segment.id;
+            const hinted = hintedSegments.current.has(here);
             // The catalogue's keys, `source` naming a quick check's answer
             // from the after-lesson check's; the pick goes up on the attempt
             // below, where the server marks it - with the time it took as the
@@ -4164,48 +4222,64 @@ export function LessonPlayer({
               ...(checkpointId ? { questionId: checkpointId } : {}),
               source: "checkpoint",
             });
-            saveAttempt(
+            const reply = markAttempt(
               answerFor({
                 questionId: checkpointId,
-                segmentId: segment.id,
+                segmentId: here,
                 source: "checkpoint",
                 choice: check.options.find(
                   (o) => o.id === answered.selectedId,
                 ),
                 responseTimeMs: answered.responseTimeMs,
-                hinted: hintedSegments.current.has(segment.id),
+                hinted,
               }),
+              // Offline only: the package's key (test 9).
+              () => answered.selectedId === check.correctId,
               // B94: the server's answer may hand this child off; and a miss
               // brings the section's other ways in (SCRUM-282).
               (stored) => {
-                handOffFrom(segment.id, stored);
-                noteReteaching(segment.id, stored);
+                handOffFrom(here, stored);
+                noteReteaching(here, stored);
                 // The server's own gate, where it is on (`shownHolds`).
-                noteServerGate(segment.id, stored.comprehensionGate);
+                noteServerGate(here, stored.comprehensionGate);
               },
             );
-            if (correct) answeredRight.current.add(checkpointId ?? segment.id);
-            noteAnswer(correct);
-            // Which pick first got it, for the scheduler - a miss re-opens the
-            // check until it is passed, so "passed" is true of everyone.
-            const seen = checkRecall.current.get(key);
-            const picks = (seen?.picks ?? 0) + 1;
-            checkRecall.current.set(key, {
-              picks,
-              rightOnPick: seen?.rightOnPick ?? (correct ? picks : null),
-              hinted: seen?.hinted ?? hintedSegments.current.has(segment.id),
+            /*
+             * WHAT FOLLOWS FROM THE ANSWER FOLLOWS ITS MARK (test 9), never
+             * the device's: whether the check is passed, the error streak the
+             * engine is sent (#10), and which pick first got it, for the
+             * scheduler (#11). An answer the server could not mark counts
+             * for neither, and holds no one.
+             *
+             * PASSED ON `correct`, NOT `canAdvance` ALONE. With the gate off -
+             * production - the server answers `required: false, canAdvance:
+             * true` to every answer, wrong ones too (comprehension.py,
+             * ca58ae5), so passing on it would let a wrong answer through,
+             * against Lydia's 23 Oct gate. Where the gate is on, the section
+             * also waits for its `canAdvance` (`noteServerGate`, `shownHolds`).
+             */
+            onVerdict(reply, (mark: Verdict) => {
+              if (mark === true) answeredRight.current.add(checkpointId ?? here);
+              if (mark !== null) noteAnswer(mark);
+              // Which pick first got it - a miss re-opens the check until it
+              // is passed, so "passed" is true of everyone.
+              const seen = checkRecall.current.get(key);
+              const picks = (seen?.picks ?? 0) + 1;
+              checkRecall.current.set(key, {
+                picks,
+                rightOnPick: seen?.rightOnPick ?? (mark === true ? picks : null),
+                hinted: seen?.hinted ?? hinted,
+              });
+              if (mark === false) return;
+              // This check is behind the child; the section once every one is.
+              setRightOn(here);
+              setChecksDone((prev) =>
+                new Map(prev).set(here, Math.max(at + 1, prev.get(here) ?? 0)),
+              );
+              if (at + 1 >= checksHere.length)
+                setPassedChecks((prev) => new Set(prev).add(here));
             });
-            if (!correct) return;
-            // This check is behind the child; the section once every one is.
-            setRightOn(segment.id);
-            setChecksDone((prev) =>
-              new Map(prev).set(
-                segment.id,
-                Math.max(at + 1, prev.get(segment.id) ?? 0),
-              ),
-            );
-            if (at + 1 >= checksHere.length)
-              setPassedChecks((prev) => new Set(prev).add(segment.id));
+            return reply;
           }}
           onContinue={() => {
             setRightOn(null);
@@ -4425,6 +4499,7 @@ function SegmentBody({
   onAudioBusy,
   onMediaFailed,
   onCalcSolved,
+  onCalcCommitted,
   onCalcStep,
   onCalcGiven,
   onPiecePlaced,
@@ -4466,9 +4541,15 @@ function SegmentBody({
   /** A picture or recording would not load (B12). */
   onMediaFailed: (channel: "image" | "audio", reason: MediaFailReason) => void;
   onCalcSolved: (solved: { responseTimeMs?: number }) => void;
-  onCalcStep: (stepId: string, correct: boolean) => void;
-  /** What the child gave on a committed step, for the server to mark. */
-  onCalcGiven: (given: StepGiven) => void;
+  /** A step committed, before its mark (`calculation_step_response`). */
+  onCalcCommitted: (stepId: string) => void;
+  /** A committed step's mark, once known (test 9) - see `CalculationSolver`. */
+  onCalcStep: (stepId: string, mark: Verdict) => void;
+  /**
+   * What the child gave on a committed step, for the server to mark; gives
+   * back that mark (test 9), the package's `packageMark` where none comes.
+   */
+  onCalcGiven: (given: StepGiven, packageMark: boolean) => VerdictReply;
   onPiecePlaced: (stepId: string) => void;
   /** The child opened a calculation step's hint themselves. */
   onCalcHint: () => void;
@@ -4537,6 +4618,7 @@ function SegmentBody({
             // D30: the same accommodation the text segment and the checks take.
             reading={reading}
             onSolved={onCalcSolved}
+            onStepCommitted={onCalcCommitted}
             onStepAnswered={onCalcStep}
             onStepGiven={onCalcGiven}
             onPiecePlaced={onPiecePlaced}

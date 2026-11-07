@@ -166,15 +166,19 @@ const leave = () =>
 const toAssessment = async () => {
   next();
   fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
   next();
   fireEvent.click(screen.getByRole("button", { name: "Start" }));
 };
 
-/** Confirm an answer on the after-lesson check. */
-const answer = (label: string) => {
+/**
+ * Confirm an answer on the after-lesson check, and let its mark come back
+ * on the reply (test 9): the question moves on that, not on the tap.
+ */
+const answer = async (label: string) => {
   fireEvent.click(screen.getByRole("button", { name: label }));
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  await act(async () => {});
 };
 
 const signIn = () =>
@@ -223,7 +227,7 @@ describe("leaving the after-lesson check (D36)", () => {
   it("records the lesson as exited, never completed", async () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     await toAssessment();
-    answer("Two");
+    await answer("Two");
     progress.report.mockClear();
 
     leave();
@@ -252,7 +256,7 @@ describe("leaving the after-lesson check (D36)", () => {
   it("keeps the answer already given, on the account", async () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     await toAssessment();
-    answer("Two");
+    await answer("Two");
 
     leave();
 
@@ -273,7 +277,7 @@ describe("leaving the after-lesson check (D36)", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
     next();
     progress.report.mockClear();
 
@@ -289,7 +293,7 @@ describe("leaving the after-lesson check (D36)", () => {
     // A finished lesson stays finished, as the leave dialog already keeps it.
     render(<LessonPlayer lesson={LESSON} plan={null} live finished />);
     await toAssessment();
-    answer("Two");
+    await answer("Two");
 
     leave();
 
@@ -395,15 +399,22 @@ describe("every answer to a check is stored as it is given", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     await toAssessment();
 
-    answer("Two");
+    await answer("Two");
 
-    await waitFor(() => expect(heldAnswers()).toHaveLength(1));
-    const [held] = heldAnswers();
+    // Offline the inline check's answer is held too; this is the after-lesson
+    // question's.
+    const assessmentHeld = () =>
+      heldAnswers().filter(
+        (h) => (h.body as { source?: string }).source === "assessment",
+      );
+    await waitFor(() => expect(assessmentHeld()).toHaveLength(1));
+    const [held] = assessmentHeld();
     expect(held).toMatchObject({ sessionId: SESSION });
     // The id it was first sent with, so it cannot land twice.
-    expect(held.body.clientAttemptId).toBe(
-      saveAttempt.mock.calls[0][1].clientAttemptId,
+    const sent = saveAttempt.mock.calls.find(
+      ([, body]) => body.source === "assessment",
     );
+    expect(held.body.clientAttemptId).toBe(sent?.[1].clientAttemptId);
   });
 
   it("does not hold one the server refused", async () => {
@@ -412,7 +423,7 @@ describe("every answer to a check is stored as it is given", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     await toAssessment();
 
-    answer("Two");
+    await answer("Two");
 
     await waitFor(() => expect(saveAttempt).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
@@ -455,7 +466,7 @@ describe("the time each answer took, as it was measured", () => {
     saveAttempt.mockClear();
 
     clock.now = 9_000;
-    answer("Two");
+    await answer("Two");
 
     expect(saveAttempt).toHaveBeenCalledWith(
       "lesson-1",
@@ -530,7 +541,7 @@ describe("what the review tells the scheduler (B28)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
     next();
   };
 
@@ -597,7 +608,7 @@ describe("which sitting the review names (Teslim, 19 Oct)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
     next();
     return view;
   };
@@ -699,7 +710,7 @@ describe("what the review's completion may claim (D40)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
     next();
   };
 
@@ -793,7 +804,7 @@ describe("an ordinary lesson's completion (D40)", () => {
     render(<LessonPlayer lesson={REVIEW} plan={null} />);
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
     next();
 
     expect(
@@ -838,7 +849,7 @@ describe("the reading accommodation reaches the checks (D30)", () => {
 const intoCheck = async () => {
   next();
   fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
   next();
 };
 
@@ -1043,8 +1054,8 @@ describe("the check ending completes the lesson", () => {
   it("writes the completion as the result appears, not on the next tap", async () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     await toAssessment();
-    answer("Two");
-    answer("Two");
+    await answer("Two");
+    await answer("Two");
 
     await waitFor(() =>
       expect(statuses()).toContain(LESSON_STATUS.COMPLETED),
@@ -1058,11 +1069,11 @@ describe("the check ending completes the lesson", () => {
     let store: () => void = () => {};
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     await toAssessment();
-    answer("Two");
+    await answer("Two");
     saveAttempt.mockImplementation(
       () => new Promise<void>((resolve) => (store = resolve)),
     );
-    answer("Two");
+    await answer("Two");
 
     await new Promise((r) => setTimeout(r, 0));
     expect(statuses()).not.toContain(LESSON_STATUS.COMPLETED);
@@ -1095,8 +1106,8 @@ describe("from the check-in (B26)", () => {
       <LessonPlayer lesson={LESSON} plan={null} live />,
     );
     await toAssessment();
-    answer("Two");
-    answer("Two");
+    await answer("Two");
+    await answer("Two");
     expect(screen.queryByText("Numerators")).toBeNull();
 
     // The completion lands.
@@ -1118,8 +1129,8 @@ describe("from the check-in (B26)", () => {
   it("draws nothing before it lands", async () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     await toAssessment();
-    answer("Two");
-    answer("Two");
+    await answer("Two");
+    await answer("Two");
 
     expect(screen.queryByText(/revisit soon/)).toBeNull();
     expect(document.querySelectorAll(".shadow-elevation-1")).toHaveLength(0);
@@ -1153,7 +1164,10 @@ describe("no way on past an unpassed check (Olayinka, 23 Oct)", () => {
       within(dialog).getByRole("button", { name: /The denominator/ }),
     );
 
-    expect(within(dialog).getByRole("status").textContent).toBe(RECOVERY_LINE);
+    // Its mark comes back on the reply (test 9).
+    expect((await within(dialog).findByRole("status")).textContent).toBe(
+      RECOVERY_LINE,
+    );
     expect(wayOn()).toBeNull();
   });
 
@@ -1189,7 +1203,9 @@ describe("no way on past an unpassed check (Olayinka, 23 Oct)", () => {
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
     fireEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Continue" }),
+      await within(screen.getByRole("dialog")).findByRole("button", {
+        name: "Continue",
+      }),
     );
 
     expect(screen.getByRole("heading", { name: "Denominators" })).toBeInTheDocument();
@@ -1211,7 +1227,9 @@ describe("no way on past an unpassed check (Olayinka, 23 Oct)", () => {
     next();
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
     fireEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Continue" }),
+      await within(screen.getByRole("dialog")).findByRole("button", {
+        name: "Continue",
+      }),
     );
 
     expect(screen.getByRole("button", { name: "I'm done" })).toBeInTheDocument();

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import type { Lesson } from "@/lib/types";
 
@@ -114,12 +114,14 @@ const HEADING = "That version didn't work.";
 const BODY = "Nevo is taking you through this lesson again, a simpler way.";
 
 /** Through the lesson and the check, every answer right on this device. */
-const finishCheck = () => {
+const finishCheck = async () => {
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
   fireEvent.click(screen.getByRole("button", { name: "Start" }));
   for (let i = 0; i < 2; i++) {
     fireEvent.click(screen.getByRole("button", { name: "Two" }));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    // Each answer moves on its mark, which comes back on the reply (test 9).
+    await act(async () => {});
   }
 };
 
@@ -159,11 +161,11 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     return onStartAgain;
   };
 
-  it("says so in design's words, with one action that goes forward (D155)", () => {
+  it("says so in design's words, with one action that goes forward (D155)", async () => {
     const { rerender } = render(
       <LessonPlayer lesson={LESSON} plan={null} live onStartAgain={vi.fn()} />,
     );
-    finishCheck();
+    await finishCheck();
 
     land(
       rerender,
@@ -179,11 +181,11 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     expect(document.body.textContent).not.toMatch(/\d|%/);
   });
 
-  it("follows the reroute's place when the child starts again", () => {
+  it("follows the reroute's place when the child starts again", async () => {
     const { rerender } = render(
       <LessonPlayer lesson={LESSON} plan={null} live onStartAgain={vi.fn()} />,
     );
-    finishCheck();
+    await finishCheck();
     const onStartAgain = land(
       rerender,
       completed({
@@ -199,12 +201,12 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     expect(endings.at(-1)).toEqual({ completionStatus: "completed" });
   });
 
-  it("replaces the completion screen too, if the child moved on first", () => {
+  it("replaces the completion screen too, if the child moved on first", async () => {
     const { rerender } = render(
       <LessonPlayer lesson={LESSON} plan={null} live onStartAgain={vi.fn()} />,
     );
-    finishCheck();
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await finishCheck();
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
     expect(
       screen.getByRole("heading", { name: "That's the lesson done." }),
     ).toBeTruthy();
@@ -217,11 +219,11 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     expect(screen.getByRole("heading", { name: HEADING })).toBeTruthy();
   });
 
-  it("is not shown where something landed, whatever the child's answers were", () => {
+  it("is not shown where something landed, whatever the child's answers were", async () => {
     const { rerender } = render(
       <LessonPlayer lesson={LESSON} plan={null} live onStartAgain={vi.fn()} />,
     );
-    finishCheck();
+    await finishCheck();
 
     land(rerender, completed({ resultState: "partly_landed", reroute: null }));
 
@@ -231,11 +233,11 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     ).toBeTruthy();
   });
 
-  it("is not shown without a reroute to follow: the result says nothing landed (D143)", () => {
+  it("is not shown without a reroute to follow: the result says nothing landed (D143)", async () => {
     const { rerender } = render(
       <LessonPlayer lesson={LESSON} plan={null} live onStartAgain={vi.fn()} />,
     );
-    finishCheck();
+    await finishCheck();
 
     land(rerender, completed({ resultState: "nothing_landed" }));
 
@@ -244,12 +246,12 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     expect(screen.queryByRole("heading")).toBeNull();
   });
 
-  it("decides nothing landed from the server alone, never the child's answers", () => {
+  it("decides nothing landed from the server alone, never the child's answers", async () => {
     // Every answer was right on this device; the server's verdict stands.
     const { rerender } = render(
       <LessonPlayer lesson={LESSON} plan={null} live onStartAgain={vi.fn()} />,
     );
-    finishCheck();
+    await finishCheck();
     expect(screen.queryByText(/didn.t land yet/)).toBeNull();
 
     land(rerender, completed({ resultState: "nothing_landed" }));
@@ -257,19 +259,19 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     expect(screen.getByText(/didn.t land yet/)).toBeTruthy();
   });
 
-  it("holds the result's mark and heading until the verdict comes back", () => {
+  it("holds the result's mark and heading until the verdict comes back", async () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
-    finishCheck();
+    await finishCheck();
 
     expect(screen.queryByRole("heading")).toBeNull();
     expect(document.querySelector("h2")?.closest(".invisible")).toBeTruthy();
   });
 
-  it("never sends the child here for a lesson they did not attempt", () => {
+  it("never sends the child here for a lesson they did not attempt", async () => {
     const { rerender } = render(
       <LessonPlayer lesson={LESSON} plan={null} live onStartAgain={vi.fn()} />,
     );
-    finishCheck();
+    await finishCheck();
 
     land(
       rerender,
@@ -282,9 +284,9 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     expect(screen.queryByText(HEADING)).toBeNull();
   });
 
-  it("sends no result state on any write: it is the server's to derive", () => {
+  it("sends no result state on any write: it is the server's to derive", async () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
-    finishCheck();
+    await finishCheck();
 
     for (const [, position] of progress.report.mock.calls)
       expect(position).not.toHaveProperty("resultState");
@@ -298,9 +300,9 @@ describe("a check result that can't be read (D183)", () => {
   const rerender_ = (rerender: (ui: React.ReactElement) => void) =>
     rerender(<LessonPlayer lesson={LESSON} plan={null} live />);
 
-  it("says so in Lydia's words, with Try again and Back to my lessons", () => {
+  it("says so in Lydia's words, with Try again and Back to my lessons", async () => {
     const { rerender } = render(<LessonPlayer lesson={LESSON} plan={null} live />);
-    finishCheck();
+    await finishCheck();
 
     // The completion write did not reach Nevo - offline, or failed.
     progress.completionFailed = true;
@@ -315,16 +317,16 @@ describe("a check result that can't be read (D183)", () => {
     expect(document.body.textContent).not.toMatch(/save/i);
   });
 
-  it("is not shown while the result is still on its way", () => {
+  it("is not shown while the result is still on its way", async () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
-    finishCheck();
+    await finishCheck();
 
     expect(screen.queryByText(UNREAD)).toBeNull();
   });
 
-  it("reads the result again on Try again, and shows it once it lands", () => {
+  it("reads the result again on Try again, and shows it once it lands", async () => {
     const { rerender } = render(<LessonPlayer lesson={LESSON} plan={null} live />);
-    finishCheck();
+    await finishCheck();
     progress.completionFailed = true;
     rerender_(rerender);
 
@@ -347,9 +349,9 @@ describe("a check result that can't be read (D183)", () => {
     ).toBeTruthy();
   });
 
-  it("stays when the second try fails too", () => {
+  it("stays when the second try fails too", async () => {
     const { rerender } = render(<LessonPlayer lesson={LESSON} plan={null} live />);
-    finishCheck();
+    await finishCheck();
     progress.completionFailed = true;
     rerender_(rerender);
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
@@ -365,9 +367,9 @@ describe("a check result that can't be read (D183)", () => {
     ).toBe(false);
   });
 
-  it("goes to the lessons on Back to my lessons, the check finished", () => {
+  it("goes to the lessons on Back to my lessons, the check finished", async () => {
     const { rerender } = render(<LessonPlayer lesson={LESSON} plan={null} live />);
-    finishCheck();
+    await finishCheck();
     progress.completionFailed = true;
     rerender_(rerender);
 

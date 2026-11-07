@@ -133,11 +133,19 @@ export function ReviewAnswersScreen({
 
           <div className="mt-6 flex flex-col gap-3">
             {questions.map((q, i) => {
-              const picked = answers.find(
-                (a) => a.questionIndex === i,
-              )?.selectedId;
+              const pick = answers.find((a) => a.questionIndex === i);
+              const picked = pick?.selectedId;
               const answered = picked != null;
-              const isCorrect = picked === q.correctId;
+              /*
+               * RIGHT OR WRONG IS THE SERVER'S (test 9): its mark on the
+               * stored answer. The lesson's own key decides only for a pick
+               * whose mark never came back - one held offline. One it could
+               * not mark is never wrong.
+               */
+              const isCorrect =
+                pick?.correct === undefined
+                  ? picked === q.correctId
+                  : pick.correct !== false;
               return (
                 <div
                   key={i}
@@ -167,7 +175,9 @@ export function ReviewAnswersScreen({
                       <AnswerRow
                         tone="check"
                         label={answered ? "YOUR ANSWER" : "THE ANSWER"}
-                        text={labelFor(q, q.correctId)}
+                        // Their own pick where they made one: what the
+                        // server marked, whichever option the key names.
+                        text={labelFor(q, answered ? picked : q.correctId)}
                       />
                     )}
                   </div>

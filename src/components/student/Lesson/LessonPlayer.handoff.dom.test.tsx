@@ -172,6 +172,15 @@ const miss = async () =>
     await screen.findByRole("button", { name: /The denominator/ }),
   );
 const checkOnScreen = () => screen.queryByText("Which number is on top?");
+/**
+ * Out of a miss whose mark is still on its way. Since test 9 a miss waits for
+ * its reply before it gives way, so a second answer in flight beside it is
+ * one given after a tap out.
+ */
+const tapOutWhileMarked = async () => {
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+};
 
 /** Answer the panel's one write-in prompt. */
 /** Answered, and the server's reply (here, not marked) followed. */
@@ -372,14 +381,17 @@ describe("the server hands a child off from the quick check (B94)", () => {
 
   it("ignores a hand-off for a miss the child has since answered right", async () => {
     let land: (row: unknown) => void = () => {};
-    saveAttempt.mockImplementationOnce(
-      () => new Promise((resolve) => (land = resolve)),
-    );
+    saveAttempt
+      .mockImplementationOnce(() => new Promise((resolve) => (land = resolve)))
+      .mockResolvedValueOnce(reply({ answer: "a", correct: true }));
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     await miss();
-    await askAgain();
-    fireEvent.click(screen.getByRole("button", { name: /The numerator/ }));
+    // Left while the miss is marked, and answered right on the way back.
+    await tapOutWhileMarked();
+    next();
+    fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
+    await act(async () => {});
 
     land(reply(HANDOFF));
     await new Promise((r) => setTimeout(r, 0));
@@ -448,7 +460,8 @@ describe("a hand-off panel is an adaptation applied (B74)", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     await miss();
-    await askAgain();
+    await tapOutWhileMarked();
+    next();
     await miss();
 
     lands[0](reply(HANDOFF));

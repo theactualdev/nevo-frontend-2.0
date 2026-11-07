@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/shared";
 import type { ReteachingResponse } from "@/lib/api/lessons";
 import type { WayIn } from "@/lib/lessons/waysIn";
+import { onVerdict, type Verdict, type VerdictReply } from "@/lib/lessons/verdict";
 import type { QuickCheck } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AnswerCheck, AnswerOption } from "./AnswerOption";
@@ -206,11 +207,15 @@ export function QuickCheckSheet({
   /**
    * Fired per attempt, the moment an option is picked - with what was picked
    * and how long the question had been in front of the child (rule 4).
+   *
+   * GIVES BACK THE MARK, which this sheet moves on (test 9): the server's,
+   * from the attempt's reply, online; the package's offline. Never one made
+   * here. While it is on its way the pick is held, quietly - see `Verdict`.
    */
-  onAnswered: (
-    correct: boolean,
-    answered: { selectedId: string; responseTimeMs?: number },
-  ) => void;
+  onAnswered: (answered: {
+    selectedId: string;
+    responseTimeMs?: number;
+  }) => VerdictReply;
   /**
    * The way on after a correct answer: "Continue", or with several checks
    * "Next check" and, on the last, "Finish". The player decides where it goes.
@@ -220,8 +225,22 @@ export function QuickCheckSheet({
   onTakeBreak: () => void;
 }) {
   const [chosenId, setChosenId] = useState<string | null>(null);
-  const resolved = chosenId !== null;
-  const correct = chosenId === check.correctId;
+  /**
+   * THE MARK ON THE PICK IN PLACE, as the answer's reply gave it (test 9):
+   * undefined while it is on its way. The sheet never marks a pick itself.
+   */
+  const [verdict, setVerdict] = useState<Verdict | undefined>(undefined);
+  /** Which ask a mark answers, so one for a pick since let go lands nowhere. */
+  const ask = useRef(0);
+  const resolved = chosenId !== null && verdict !== undefined;
+  const correct = resolved && verdict === true;
+  /** Marked wrong: the only mark that holds the child. */
+  const missed = resolved && verdict === false;
+  /**
+   * The way on: a right answer, or one the server could not mark - which is
+   * never wrong, says nothing, and holds no one ("NULL MEANS UNMARKABLE").
+   */
+  const through = resolved && verdict !== false;
 
   /*
    * THE RE-TEACH BOX (17f, design 1397ec4; Lydia, 4 Nov, her 19: "the box
@@ -246,6 +265,8 @@ export function QuickCheckSheet({
     held: string;
     pick: string | null;
     after: "asking" | "right" | "again";
+    /** The retry's mark is on its way: the pick held, nothing said. */
+    marking?: boolean;
   } | null>(null);
   const reteachHere = reteaching?.questionId === check.id ? reteaching : null;
   /** The server's steps, less any that is only the question again. */
@@ -265,19 +286,29 @@ export function QuickCheckSheet({
   }, [open, chosenId]);
 
   const choose = (id: string) => {
-    if (resolved) return;
+    // One pick per ask: a second tap while the first is marked is no answer.
+    if (chosenId !== null) return;
     setChosenId(id);
     const responseTimeMs = msSince(askedAt.current);
-    onAnswered(id === check.correctId, {
-      selectedId: id,
-      ...(responseTimeMs === null ? {} : { responseTimeMs }),
-    });
+    const mine = ++ask.current;
+    onVerdict(
+      onAnswered({
+        selectedId: id,
+        ...(responseTimeMs === null ? {} : { responseTimeMs }),
+      }),
+      (mark) => {
+        if (ask.current === mine) setVerdict(mark);
+      },
+    );
   };
 
   /** Tapped out: the check is asked afresh next time, unless it was passed. */
   const tapOut = () => {
-    if (!correct) {
+    if (!through) {
+      // A mark still on its way answers a pick that is no longer there.
+      ask.current += 1;
       setChosenId(null);
+      setVerdict(undefined);
       setBox(null);
     }
     onTapOut();
@@ -285,7 +316,7 @@ export function QuickCheckSheet({
 
   // A miss the server re-teaches opens the box, in place of giving way -
   // taken as the reply lands, during render, so no frame shows it giving way.
-  if (!box && resolved && !correct && reteachHere && chosenId !== null) {
+  if (!box && missed && reteachHere && chosenId !== null) {
     setBox({ held: chosenId, pick: null, after: "asking" });
   }
   // The retry is timed from the box opening (rule 4).
@@ -294,20 +325,41 @@ export function QuickCheckSheet({
     if (boxOpen) askedAt.current = performance.now();
   }, [boxOpen]);
 
-  /** The retry, answered with "Check": marked and sent as any answer is. */
+  /**
+   * The retry, answered with "Check": sent as any answer is, and moved on by
+   * its mark. While that is on its way the pick and Check stay as they are.
+   * One the server could not mark leaves the box for the sheet's way on, as
+   * a first answer it could not mark does.
+   */
   const checkRetry = () => {
-    if (!box || box.after !== "asking" || box.pick === null) return;
-    const right = box.pick === check.correctId;
+    if (!box || box.after !== "asking" || box.pick === null || box.marking)
+      return;
+    const pick = box.pick;
     const responseTimeMs = msSince(askedAt.current);
-    onAnswered(right, {
-      selectedId: box.pick,
-      ...(responseTimeMs === null ? {} : { responseTimeMs }),
-    });
-    setBox({ ...box, after: right ? "right" : "again" });
+    const mine = ++ask.current;
+    setBox({ ...box, marking: true });
+    onVerdict(
+      onAnswered({
+        selectedId: pick,
+        ...(responseTimeMs === null ? {} : { responseTimeMs }),
+      }),
+      (mark) => {
+        if (ask.current !== mine) return;
+        if (mark === null) {
+          setBox(null);
+          setChosenId(pick);
+          setVerdict(null);
+          return;
+        }
+        setBox((b) =>
+          b ? { ...b, marking: false, after: mark ? "right" : "again" } : b,
+        );
+      },
+    );
   };
 
   // A miss is held - not marked - and then gives way, unless the box opens.
-  const recovering = resolved && !correct && !box;
+  const recovering = missed && !box;
   const giveWay = useRef(onGiveWay);
   useEffect(() => {
     giveWay.current = onGiveWay;
@@ -358,7 +410,8 @@ export function QuickCheckSheet({
   };
 
   const tone = (id: string) => {
-    if (!resolved) return "idle";
+    // Held from the tap: while its mark is on its way, as after.
+    if (chosenId === null) return "idle";
     if (id !== chosenId) return "muted";
     // Right or not, the pick is held in navy: `qc-recovery` puts no verdict
     // on a miss.
@@ -443,7 +496,9 @@ export function QuickCheckSheet({
             ways={boxWays}
             options={check.options}
             reading={reading}
-            onPick={(id) => setBox({ ...box, pick: id })}
+            onPick={(id) => {
+              if (!box.marking) setBox({ ...box, pick: id });
+            }}
             onCheck={checkRetry}
             onKeepGoing={onContinue}
             onTakeWay={(way) => onTakeWay?.(way)}
@@ -466,8 +521,10 @@ export function QuickCheckSheet({
           ))}
         </div>
 
-        {/* Result note — plain text, lands instantly (results never animate) */}
-        {resolved && (
+        {/* Result note — plain text, lands instantly (results never animate).
+            None for an answer the server could not mark: nothing is true to
+            say about it. */}
+        {(correct || missed) && (
           <p
             role="status"
             className={cn(
@@ -485,8 +542,9 @@ export function QuickCheckSheet({
           </p>
         )}
 
-        {/* The way on, and only after a right answer. */}
-        {correct && (
+        {/* The way on, and only after a right answer - or one the server
+            could not mark, which holds no one. */}
+        {through && (
           <Button className="mt-5 w-full" onClick={onContinue}>
             {!position
               ? "Continue"
@@ -519,7 +577,12 @@ function ReteachBox({
   onTakeWay,
   onTakeBreak,
 }: {
-  box: { held: string; pick: string | null; after: "asking" | "right" | "again" };
+  box: {
+    held: string;
+    pick: string | null;
+    after: "asking" | "right" | "again";
+    marking?: boolean;
+  };
   steps: string[];
   explanation?: string;
   ways: { way: WayIn; label: string }[];
@@ -631,7 +694,7 @@ function ReteachBox({
           <button
             type="button"
             onClick={onCheck}
-            aria-disabled={box.pick === null}
+            aria-disabled={box.pick === null || box.marking === true}
             className={cn(
               "mt-3.5 flex h-[52px] w-full cursor-pointer items-center justify-center rounded-[10px] text-[15.5px] font-semibold",
               box.pick === null
