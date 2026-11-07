@@ -347,3 +347,70 @@ describe("both checks done and it still holds (S5, design cb527bf)", () => {
     expect(said).toMatch(/the parent’s doesn’t match it\./);
   });
 });
+
+/**
+ * ITEM 17 (Teslim, 7 Nov): a child can be held for a ROSTER GAP - the dates
+ * agree, but no single year group is recorded (`enrolled_age_band_unavailable`,
+ * `differs` false). Nothing may say the dates differ for that child (Lydia's
+ * 4 Nov principle: an untrue state is worse than a missing one).
+ */
+describe("a roster gap on Date of birth checks (item 17)", () => {
+  const gap = (over: Partial<AgeCheck> = {}) =>
+    check({
+      id: "ac-gap",
+      studentId: "s-gap",
+      studentFirstName: "Kemi",
+      differs: false,
+      holdReasons: ["enrolled_age_band_unavailable"],
+      clearable: true,
+      ...over,
+    });
+
+  it("sits under Lydia's heading with her label - never 'date of birth difference' or the 'differs' heading (SCRUM-321)", async () => {
+    held.mockResolvedValue([gap()]);
+    getStudent.mockResolvedValue({ id: "s-gap", firstName: "Kemi", lastName: "Ade", classIds: [] });
+    const { container } = render(<DobHoldView />);
+    expect(await screen.findByText("Kemi Ade")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Held for a missing year group" })).toBeInTheDocument();
+    const group = screen.getByRole("list", { name: "Held for a missing year group" });
+    expect(group).toHaveTextContent("Kemi Ade");
+    expect(group).toHaveTextContent("No year group on the roster");
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/date of birth difference/);
+    expect(text).not.toMatch(/date of birth a parent gave differs/);
+  });
+
+  it("keeps the 'differs' heading for the children whose dates do differ, with the gap below it", async () => {
+    held.mockResolvedValue([gap(), check()]);
+    getStudent.mockImplementation(async (id: string) =>
+      id === "s-gap"
+        ? { id: "s-gap", firstName: "Kemi", lastName: "Ade", classIds: [] }
+        : { id: "s-tunde", firstName: "Tunde", lastName: "Adeyemi", classIds: ["c-2a"] },
+    );
+    const { container } = render(<DobHoldView />);
+    await screen.findByText("Kemi Ade");
+    await screen.findByText("Tunde Adeyemi");
+    const differing = screen.getByRole("list", { name: "Dates that differ" });
+    expect(differing).toHaveTextContent("Tunde Adeyemi");
+    expect(differing).toHaveTextContent("On hold · date of birth difference");
+    expect(differing).not.toHaveTextContent("Kemi Ade");
+    const text = container.textContent ?? "";
+    expect(text.indexOf("date of birth a parent gave differs")).toBeLessThan(text.indexOf("Tunde Adeyemi"));
+    expect(text.indexOf("Tunde Adeyemi")).toBeLessThan(text.indexOf("Held for a missing year group"));
+    expect(text.indexOf("Held for a missing year group")).toBeLessThan(text.indexOf("Kemi Ade"));
+  });
+
+  it("a year-group child waiting on the parent can still be resent, from inside the group", async () => {
+    const waiting = gap({ schoolRecheckedAt: "2026-10-21T09:00:00Z", parentNotifiedAt: "2026-10-21T09:00:01Z" });
+    held.mockResolvedValue([waiting]);
+    resendParentNotice.mockResolvedValue({ ...waiting, parentNotifiedAt: "2026-11-04T12:00:00Z" });
+    getStudent.mockResolvedValue({ id: "s-gap", firstName: "Kemi", lastName: "Ade", classIds: [] });
+    render(<DobHoldView />);
+    await screen.findByText("Kemi Ade");
+    const group = screen.getByRole("list", { name: "Held for a missing year group" });
+    expect(group).toHaveTextContent("This notice went to everyone linked to Kemi.");
+    fireEvent.click(within(group).getByRole("button", { name: "Resend the request" }));
+    expect(await within(group).findByText("Request resent")).toBeInTheDocument();
+    expect(resendParentNotice).toHaveBeenCalledWith("ac-gap");
+  });
+});

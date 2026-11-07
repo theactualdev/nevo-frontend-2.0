@@ -125,7 +125,9 @@ beforeEach(() => {
     student({ id: "s1", name: "Chisom Eze" }),
     student({ id: "s2", name: "Tunde Bello" }),
   ]);
-  mismatches.mockResolvedValue([{ id: "ac1", studentId: "s2", state: "mismatch", blocksAccess: true }]);
+  mismatches.mockResolvedValue([
+    { id: "ac1", studentId: "s2", state: "mismatch", blocksAccess: true, differs: true, holdReasons: [] },
+  ]);
 });
 
 describe("a child held for a date of birth check", () => {
@@ -180,5 +182,30 @@ describe("a child held for a date of birth check", () => {
     await waitFor(() => expect(mismatches).toHaveBeenCalled());
     expect(screen.queryByText(NOTE)).toBeNull();
     expect(screen.queryByRole("link", { name: /on hold/ })).toBeNull();
+  });
+});
+
+/**
+ * ITEM 17 (Teslim, 7 Nov): a child can be held for a ROSTER GAP - the dates
+ * agree, but no single year group is recorded (`enrolled_age_band_unavailable`,
+ * `differs` false). Nothing may say the dates differ for that child (Lydia's
+ * 4 Nov principle: an untrue state is worse than a missing one).
+ */
+describe("a child held for a roster gap (item 17)", () => {
+  it("is On hold with no 'different date of birth' note - the dates agree", async () => {
+    mismatches.mockResolvedValue([
+      {
+        id: "ac1",
+        studentId: "s2",
+        state: "mismatch",
+        blocksAccess: true,
+        differs: false,
+        holdReasons: ["enrolled_age_band_unavailable"],
+      },
+    ]);
+    render(<StudentsView />);
+    await screen.findByText("Tunde Bello");
+    await waitFor(() => expect(screen.getAllByText("On hold").length).toBeGreaterThan(0));
+    expect(screen.queryByText(NOTE)).toBeNull();
   });
 });
