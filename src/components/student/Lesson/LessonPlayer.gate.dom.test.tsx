@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  within,
   act,
   cleanup,
   fireEvent,
@@ -9,7 +10,6 @@ import {
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import {
-  GIVES_WAY_AFTER_MS,
   RECOVERY_LINE,
   RETEACH_COPY,
 } from "./QuickCheckSheet";
@@ -306,11 +306,15 @@ describe("on every check, whatever the server's gate", () => {
     });
     await open();
     await missAndWait();
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
-      timeout: GIVES_WAY_AFTER_MS + 2000,
-    });
 
+    // Never a miss (test 9): the sheet offers its way on, with nothing said
+    // about the answer, and no re-teaching - in the sheet or behind it.
+    expect(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Continue" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
     expect(card()).toBeNull();
+    expect(ways()).toEqual([]);
   });
 
   /*

@@ -133,8 +133,11 @@ const reply = (questionId: string, correct: boolean) => ({
 const next = () =>
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
 const sheet = () => screen.getByRole("dialog");
-const pick = (label: string) =>
+/** Pick an answer, and let its mark come back on the reply (test 9). */
+const pick = async (label: string) => {
   fireEvent.click(within(sheet()).getByRole("button", { name: new RegExp(label) }));
+  await act(async () => {});
+};
 const press = (name: string) =>
   fireEvent.click(within(sheet()).getByRole("button", { name }));
 
@@ -175,18 +178,18 @@ describe("several checks, one after another in the same sheet", () => {
 
     expect(within(sheet()).getByText("Check 1 of 3")).toBeTruthy();
     expect(within(sheet()).getByText("Question 1?")).toBeTruthy();
-    pick("Right 1");
+    await pick("Right 1");
     press("Next check");
 
     expect(within(sheet()).getByText("Check 2 of 3")).toBeTruthy();
     expect(within(sheet()).getByText("Question 2?")).toBeTruthy();
     // Asked with nothing picked.
     expect(within(sheet()).queryByRole("status")).toBeNull();
-    pick("Right 2");
+    await pick("Right 2");
     press("Next check");
 
     expect(within(sheet()).getByText("Check 3 of 3")).toBeTruthy();
-    pick("Right 3");
+    await pick("Right 3");
     expect(within(sheet()).queryByRole("button", { name: "Next check" })).toBeNull();
     press("Finish");
 
@@ -196,9 +199,9 @@ describe("several checks, one after another in the same sheet", () => {
 
   it("sends each answer against its own check", async () => {
     await toTheChecks();
-    pick("Right 1");
+    await pick("Right 1");
     press("Next check");
-    pick("Right 2");
+    await pick("Right 2");
 
     expect(saveAttempt.mock.calls.map(([, body]) => body.problemId)).toEqual([
       "cp-1",
@@ -208,7 +211,7 @@ describe("several checks, one after another in the same sheet", () => {
 
   it("never names a count of right answers, only the place", async () => {
     await toTheChecks();
-    pick("Right 1");
+    await pick("Right 1");
     press("Next check");
 
     expect(sheet().textContent).not.toMatch(/\d+ (right|correct)|score|%/i);
@@ -218,11 +221,11 @@ describe("several checks, one after another in the same sheet", () => {
 describe("each check gates on its own", () => {
   it("holds a miss on check 2, and Next asks check 2 again, not check 1", async () => {
     await toTheChecks();
-    pick("Right 1");
+    await pick("Right 1");
     press("Next check");
 
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    pick("Wrong 2");
+    await pick("Wrong 2");
     expect(within(sheet()).getByRole("status").textContent).toBe(RECOVERY_LINE);
     // No way on past it.
     expect(within(sheet()).queryByRole("button", { name: /Next check|Finish|Continue/ })).toBeNull();
@@ -244,7 +247,7 @@ describe("each check gates on its own", () => {
 
   it("opens on the next check after a tap-out that left a right answer's way on untaken", async () => {
     await toTheChecks();
-    pick("Right 1");
+    await pick("Right 1");
     fireEvent.keyDown(sheet(), { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
@@ -270,17 +273,17 @@ describe("each check gates on its own", () => {
       }),
     );
     await toTheChecks();
-    pick("Right 1");
+    await pick("Right 1");
     press("Next check");
 
-    pick("Wrong 2");
+    await pick("Wrong 2");
 
     expect(await screen.findByText("What does a leaf need?")).toBeTruthy();
   });
 
   it("does not let Next past the section until every check is passed", async () => {
     await toTheChecks();
-    pick("Right 1");
+    await pick("Right 1");
     fireEvent.keyDown(sheet(), { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
@@ -340,7 +343,7 @@ describe("a section with one check", () => {
     await screen.findByRole("dialog");
 
     expect(within(sheet()).queryByText(/Check \d of \d/)).toBeNull();
-    pick("Right 1");
+    await pick("Right 1");
     expect(within(sheet()).getByRole("button", { name: "Continue" })).toBeTruthy();
   });
 });

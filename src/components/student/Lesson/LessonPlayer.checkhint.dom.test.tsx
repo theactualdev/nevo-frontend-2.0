@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -307,7 +308,7 @@ describe("the engine's hint while a check is open (SCRUM-275 #2)", () => {
     );
   });
 
-  it("on a calculation's check, is in the sheet and still said as offered", () => {
+  it("on a calculation's check, is in the sheet and still said as offered", async () => {
     // A solved calculation with a check after it: the solver draws no hint
     // once it is solved, so the sheet is the hint's only place on screen.
     const CALC = "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f";
@@ -358,9 +359,16 @@ describe("the engine's hint while a check is open (SCRUM-275 #2)", () => {
       lessonId: "lesson-1",
       segments: [{ segmentId: CALC, startModality: "interactive" }],
     } as AdaptationPlan;
+    // The server marks the step's "3" right (test 9).
+    saveAttempt.mockImplementation(async (_lesson: string, body: { source?: string; answer?: unknown }) => ({
+      ...reply(),
+      correct: body.source === "calculation" ? body.answer === "3" : body.answer === "a",
+    }));
     const view = render(<LessonPlayer lesson={lesson} plan={plan} live />);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: "Check my answer" }));
+    // The step moves on its mark (test 9).
+    await act(async () => {});
     next();
     expect(screen.getByRole("dialog")).toBeTruthy();
 
