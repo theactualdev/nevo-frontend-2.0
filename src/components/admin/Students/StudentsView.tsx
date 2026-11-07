@@ -198,15 +198,26 @@ export function StudentsView() {
    * (Lydia, 4 Nov: an untrue state is worse than a missing one).
    */
   const [holdsRead, setHoldsRead] = useState(false);
+  /**
+   * The held children whose dates the server says DIFFER (`differs`). Only
+   * they carry "Parent gave a different date of birth." A hold can also be a
+   * roster gap - the dates agree, but no single year group is recorded
+   * (`enrolled_age_band_unavailable`, Teslim's item 17) - and saying the
+   * parent gave a different date would be untrue (Lydia, 4 Nov). Those keep
+   * the "On hold" pill and no note.
+   */
+  const [dobDiffers, setDobDiffers] = useState<Set<string>>(() => new Set());
   useEffect(() => {
     ageChecksApi
       .held()
       .then((rows) => {
         setDobNotes(new Set(rows.map((r) => r.studentId)));
+        setDobDiffers(new Set(rows.filter((r) => r.differs === true).map((r) => r.studentId)));
         setHoldsRead(true);
       })
       .catch(() => {
         setDobNotes(new Set());
+        setDobDiffers(new Set());
         setHoldsRead(false);
       });
   }, []);
@@ -621,7 +632,7 @@ export function StudentsView() {
                                 {s.loginIdentifier}
                               </span>
                             ) : null}
-                            {dobNotes.has(s.id) ? (
+                            {dobDiffers.has(s.id) ? (
                               // The row is a button, so D07's inline "Check
                               // your record" can't sit in it: the row opens the
                               // student, whose page links to the checks, and

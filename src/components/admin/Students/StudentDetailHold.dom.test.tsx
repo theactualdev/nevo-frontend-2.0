@@ -136,7 +136,7 @@ describe("what happened to the date (Lydia, 2 Nov, item 12)", () => {
 
 describe("a student held for a date of birth check", () => {
   it("reads On hold, and points at the checks, with a way back here", async () => {
-    held.mockResolvedValue([{ id: "ac1", studentId: "s1", blocksAccess: true }]);
+    held.mockResolvedValue([{ id: "ac1", studentId: "s1", blocksAccess: true, differs: true, holdReasons: [] }]);
     const { container } = render(<StudentDetailView studentId="s1" />);
     expect(await screen.findByText("On hold")).toBeInTheDocument();
     expect(container.textContent).toMatch(
@@ -162,5 +162,38 @@ describe("a student held for a date of birth check", () => {
     expect(await screen.findByText("Tunde Adeyemi")).toBeInTheDocument();
     expect(screen.queryByText("Active")).toBeNull();
     expect(screen.queryByText("On hold")).toBeNull();
+  });
+});
+
+/**
+ * ITEM 17 (Teslim, 7 Nov): a child can be held for a ROSTER GAP - the dates
+ * agree, but no single year group is recorded (`enrolled_age_band_unavailable`,
+ * `differs` false). Nothing may say the dates differ for that child (Lydia's
+ * 4 Nov principle: an untrue state is worse than a missing one).
+ */
+describe("a student held for a roster gap (item 17)", () => {
+  it("says no year group is recorded, in Lydia's 2 Nov words - never that the dates differ", async () => {
+    held.mockResolvedValue([
+      { id: "ac1", studentId: "s1", blocksAccess: true, differs: false, holdReasons: ["enrolled_age_band_unavailable"] },
+    ]);
+    const { container } = render(<StudentDetailView studentId="s1" />);
+    expect(await screen.findByText("On hold")).toBeInTheDocument();
+    expect(container.textContent).toMatch(
+      /Tunde’s date of birth is confirmed, but no year group is recorded for them\. Check the enrolment on their record\./,
+    );
+    expect(container.textContent).not.toMatch(/differs|different date|don.t match/i);
+    expect(screen.getByRole("link", { name: "Date of birth checks" })).toBeInTheDocument();
+  });
+
+  it("when the dates agree but fall outside the year group, says that - in Lydia's 31 Oct words", async () => {
+    held.mockResolvedValue([
+      { id: "ac1", studentId: "s1", blocksAccess: true, differs: false, holdReasons: ["outside_enrolled_age_band"] },
+    ]);
+    const { container } = render(<StudentDetailView studentId="s1" />);
+    expect(await screen.findByText("On hold")).toBeInTheDocument();
+    expect(container.textContent).toMatch(
+      /The dates now agree, but the date of birth does not match the year group Tunde is enrolled in/,
+    );
+    expect(container.textContent).not.toMatch(/differs from the one the parent gave/);
   });
 });

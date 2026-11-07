@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import {
   AGE_CHECK_EXPIRED,
   AGE_CHECK_NOT_PENDING,
+  PARENT_ACCOUNT_UNAVAILABLE,
+  PARENT_NOTICE_RECENTLY_SENT,
   ageCheckRefusal,
   ageChecksApi,
   holdStage,
@@ -97,6 +99,16 @@ interface Person {
 /** What the admin just did here, so the card can say it in their terms. */
 type Done = { kind: "confirmed" } | { kind: "corrected"; to: string };
 
+/**
+ * A hold for a missing year group (item 17): the dates agree, and no single
+ * year group is recorded. Lydia's label for it (SCRUM-321), which says nothing
+ * about dates.
+ */
+function missingYearGroup(c: AgeCheck): boolean {
+  return c.differs !== true && (c.holdReasons ?? []).includes("enrolled_age_band_unavailable");
+}
+const NO_YEAR_GROUP_LABEL = "No year group on the roster";
+
 export function DobHoldView({ back = null }: { back?: Back | null }) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [held, setHeld] = useState<AgeCheck[]>([]);
@@ -150,10 +162,27 @@ export function DobHoldView({ back = null }: { back?: Back | null }) {
     setHeld((rows) => (next.blocksAccess ? rows.map((r) => (r.id === next.id ? next : r)) : rows.filter((r) => r.id !== next.id)));
   };
 
-  const toDo = held.filter((c) => holdStage(c) === "school");
-  const waiting = held.filter((c) => holdStage(c) === "parent");
+  /** A resend answers with the check as it now stands - its new sent date. */
+  const onResent = (next: AgeCheck) => {
+    setHeld((rows) => rows.map((r) => (r.id === next.id ? next : r)));
+  };
+
+  /*
+   * HELD FOR A MISSING YEAR GROUP (item 17; Lydia, SCRUM-321): the dates
+   * agree, but no single year group is recorded (`enrolled_age_band_unavailable`,
+   * `differs` false). Those children get their own group, whatever stage
+   * their check is at, under her heading - and nothing there says anything
+   * about dates, because for them the dates aren't the problem.
+   */
+  const gap = held.filter(missingYearGroup);
+  const rest = held.filter((c) => !missingYearGroup(c));
+  const toDo = rest.filter((c) => holdStage(c) === "school");
+  // Item 17: only checks whose dates DIFFER sit under the "differs" heading.
+  const toDoDiffer = toDo.filter((c) => c.differs === true);
+  const toDoOther = toDo.filter((c) => c.differs !== true);
+  const waiting = rest.filter((c) => holdStage(c) === "parent");
   // Both have checked and it still holds: never the re-check again.
-  const settled = held.filter((c) => holdStage(c) === "both");
+  const settled = rest.filter((c) => holdStage(c) === "both");
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
@@ -206,15 +235,69 @@ export function DobHoldView({ back = null }: { back?: Back | null }) {
           </div>
         ) : (
           <>
-            {toDo.length > 0 || waiting.length > 0 ? (
+            {/*
+              * "...because the date of birth a parent gave differs" heads only
+              * the checks whose dates the server says DIFFER. A roster gap
+              * (dates agree, no single year group recorded - item 17) sits in
+              * its own list below, under no heading: its card says what's true
+              * (Lydia's words for those children are asked for, 7 Nov).
+              */}
+            {toDoDiffer.length > 0 || (toDo.length === 0 && waiting.length > 0) ? (
               <p className="mt-2 max-w-[68ch] text-[15px] leading-[1.6] text-nevo-near-black/64">
-                {toDo.length > 0
+                {toDoDiffer.length > 0
                   ? "These accounts can’t start yet because the date of birth a parent gave differs from your admissions record. Check each one against your record, then confirm it’s right or correct it."
                   : "You’ve done your part on these. They’re waiting on the parent now; nothing else is needed from you."}
               </p>
             ) : null}
+            {toDoDiffer.length > 0 ? (
+              <ul className="m-0 mt-6 flex list-none flex-col gap-3.5 p-0" aria-label="Dates that differ">
+                {toDoDiffer.map((c) => (
+                  <RecheckCard
+                    key={c.id}
+                    check={c}
+                    person={personFor(c)}
+                    onRechecked={onRechecked}
+                    onGone={read}
+                  />
+                ))}
+              </ul>
+            ) : null}
+            {gap.length > 0 ? (
+              <>
+                <h3 className="m-0 mt-8 text-[15px] font-semibold text-nevo-near-black">
+                  Held for a missing year group
+                </h3>
+                <ul
+                  className="m-0 mt-3.5 flex list-none flex-col gap-3.5 p-0"
+                  aria-label="Held for a missing year group"
+                >
+                  {gap.map((c) =>
+                    holdStage(c) === "school" ? (
+                      <RecheckCard
+                        key={c.id}
+                        check={c}
+                        person={personFor(c)}
+                        onRechecked={onRechecked}
+                        onGone={read}
+                      />
+                    ) : holdStage(c) === "parent" ? (
+                      <WaitingCard
+                        key={c.id}
+                        check={c}
+                        person={personFor(c)}
+                        done={done[c.id] ?? null}
+                        onResent={onResent}
+                        onGone={read}
+                      />
+                    ) : (
+                      <BothCheckedCard key={c.id} check={c} person={personFor(c)} />
+                    ),
+                  )}
+                </ul>
+              </>
+            ) : null}
             <ul className="m-0 mt-6 flex list-none flex-col gap-3.5 p-0">
-              {toDo.map((c) => (
+              {toDoOther.map((c) => (
                 <RecheckCard
                   key={c.id}
                   check={c}
@@ -224,7 +307,14 @@ export function DobHoldView({ back = null }: { back?: Back | null }) {
                 />
               ))}
               {waiting.map((c) => (
-                <WaitingCard key={c.id} check={c} person={personFor(c)} done={done[c.id] ?? null} />
+                <WaitingCard
+                  key={c.id}
+                  check={c}
+                  person={personFor(c)}
+                  done={done[c.id] ?? null}
+                  onResent={onResent}
+                  onGone={read}
+                />
               ))}
               {settled.map((c) => (
                 <BothCheckedCard key={c.id} check={c} person={personFor(c)} />
@@ -293,7 +383,16 @@ function RecheckCard({
           ) : null}
         </div>
         <span className="inline-flex flex-none items-center whitespace-nowrap rounded-full bg-nevo-violet/24 px-3 py-[5px] text-[12.5px] font-semibold text-nevo-navy">
-          {cannotClear ? "On hold · needs a correction" : "On hold · date of birth difference"}
+          {/* "date of birth difference" only on the server's `differs`: a roster
+              gap (item 17) holds with the dates agreeing. Then it's "On hold" -
+              the words the roster and the record already use. */}
+          {missingYearGroup(check)
+            ? NO_YEAR_GROUP_LABEL
+            : cannotClear
+              ? "On hold · needs a correction"
+              : check.differs
+                ? "On hold · date of birth difference"
+                : "On hold"}
         </span>
       </div>
 
@@ -403,9 +502,73 @@ function RecheckCard({
  * school IS told when they still differ. With no parent account to ask,
  * nobody has been, so it keeps saying what has to happen instead.
  */
-function WaitingCard({ check, person, done }: { check: AgeCheck; person: Person; done: Done | null }) {
+/*
+ * D30b, WAITING ON THE PARENT (design 1397ec4), built reduced to what the
+ * server makes true (5 Nov check):
+ *
+ * - "sent {date}" is the server's `parentNotifiedAt`, and "Resend the request"
+ *   asks again (`resend-parent-notice`). "Request resent" is the tablet
+ *   frame's words; the desktop's "…to Mr. Adeyemi" is dropped, because the
+ *   notice goes to every linked parent with an active account and
+ *   `parentName` is only the earliest-linked guardian.
+ * - The removal date stays a date. The frame's "(30 days from today)" is
+ *   left out: the date is 30 days from the SCHOOL's notice, a resend doesn't
+ *   move it, and counting days would be the page's arithmetic.
+ * - Left out, raised to Lydia: the answered state ("{name}'s account has
+ *   started" / "entered a date that matches your record") - a hold can lift
+ *   with the dates still differing, and consent and payment are separate
+ *   gates; and the header's "enrolled {date}", which no read carries.
+ */
+function WaitingCard({
+  check,
+  person,
+  done,
+  onResent,
+  onGone,
+}: {
+  check: AgeCheck;
+  person: Person;
+  done: Done | null;
+  /** Optional, so a card drawn elsewhere on this page needn't wire it. */
+  onResent?: (next: AgeCheck) => void;
+  /** The server says it is no longer held: read the list again. */
+  onGone?: () => void;
+}) {
   const removal = longDay(check.deletionDueAt);
   const asked = Boolean(check.parentNotifiedAt);
+  const sentOn = longDay(check.parentNotifiedAt ?? null);
+  const [busy, setBusy] = useState(false);
+  const [resent, setResent] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
+
+  const resend = () => {
+    if (busy) return;
+    setBusy(true);
+    setRefusal(null);
+    ageChecksApi
+      .resendParentNotice(check.id)
+      .then((next) => {
+        setResent(true);
+        onResent?.(next);
+      })
+      .catch((err: unknown) => {
+        const code = ageCheckRefusal(err);
+        if (code === AGE_CHECK_NOT_PENDING) {
+          onGone?.();
+          return;
+        }
+        setRefusal(
+          code === PARENT_NOTICE_RECENTLY_SENT
+            ? "It went in the last few minutes, so it hasn't been sent again."
+            : code === PARENT_ACCOUNT_UNAVAILABLE
+              ? `No parent linked to ${person.first} has an active Nevo account, so there's no one to send it to.`
+              : code === AGE_CHECK_EXPIRED
+                ? "This check has closed, so the request can’t be sent again."
+                : "That didn’t go through, and nothing has changed. Try again in a moment.",
+        );
+      })
+      .finally(() => setBusy(false));
+  };
   return (
     <li className="rounded-xl bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-lg:px-5 max-lg:py-[18px]">
       <span className="block text-[13.5px] font-semibold text-nevo-near-black/58">{person.name}</span>
@@ -418,23 +581,52 @@ function WaitingCard({ check, person, done }: { check: AgeCheck; person: Person;
         {done?.kind === "corrected" && longDate(done.to)
           ? `Your record now reads ${longDate(done.to)}. `
           : ""}
+        {/*
+          * LYDIA'S WORDS, SCRUM-321 (7 Nov). "This notice went to everyone
+          * linked to {name}" - the server notifies every linked parent with an
+          * active account, not one named adult. The "activates on its own as
+          * soon as the two dates agree" sentence is gone: not the whole rule.
+          * Her replacement ("The hold can clear once…") is asked about - its
+          * "yours" reads oddly on the school's screen - so it waits.
+          */}
         {asked ? (
           <>
-            We&rsquo;ve asked {person.first}&rsquo;s parent to enter it again. If the two dates now
-            agree, {person.first}&rsquo;s account activates on its own. If they still differ,
-            we&rsquo;ll let you know - there&rsquo;s nothing more for you to do here for now.
+            This notice went to everyone linked to {person.first}.
+            {sentOn ? ` Sent ${sentOn}.` : ""}
           </>
         ) : (
-          <>
-            {person.first}&rsquo;s parent now needs to enter the date again. If the two dates agree,{" "}
-            {person.first}&rsquo;s account activates on its own.
-          </>
+          <>{person.first}&rsquo;s parent now needs to enter the date again.</>
         )}
       </p>
       <p className="m-0 mt-3 text-[13px] leading-[1.5] text-nevo-near-black/58">
         Not active yet - waiting on the parent.
-        {removal ? ` Record removed on ${removal} if unresolved.` : ""}
+        {/* SCRUM-321: the date only, with nothing implying a resend moves it.
+            "their", as this page says it for every child. */}
+        {removal ? ` ${person.first} will be removed from their class on ${removal}.` : ""}
       </p>
+      {asked ? (
+        <div className="mt-3.5">
+          {resent ? (
+            <p className="m-0 text-[13.5px] font-semibold text-nevo-navy" role="status">
+              Request resent
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={resend}
+              disabled={busy}
+              className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline disabled:cursor-default disabled:opacity-60"
+            >
+              {busy ? "Sending…" : "Resend the request"}
+            </button>
+          )}
+          {refusal ? (
+            <p className="m-0 mt-2 text-[13px] leading-[1.5] text-nevo-near-black/70" role="alert">
+              {refusal}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </li>
   );
 }
@@ -477,7 +669,7 @@ function BothCheckedCard({ check, person }: { check: AgeCheck; person: Person })
           ) : null}
         </div>
         <span className="inline-flex flex-none items-center whitespace-nowrap rounded-full bg-nevo-violet/24 px-3 py-[5px] text-[12.5px] font-semibold text-nevo-navy">
-          On hold · both checks done
+          {missingYearGroup(check) ? NO_YEAR_GROUP_LABEL : "On hold · both checks done"}
         </span>
       </div>
 
