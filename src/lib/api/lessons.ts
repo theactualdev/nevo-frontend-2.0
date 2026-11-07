@@ -612,6 +612,9 @@ export interface CheckReviewItem {
    * on a check whose answer came from the file.
    */
   masteryLevelAuthoredBy?: "person" | "nevo" | null;
+  /** The concept the check is about, where the parser named one (8c078a8). */
+  conceptId?: string | null;
+  conceptName?: string | null;
   /** Set only on a transfer item: which part of its set it is. */
   transferKind?: TransferKind | null;
   /** The situation a transfer item sets the concept in. */
@@ -1312,6 +1315,23 @@ export const lessonsApi = {
     api.post<LessonReview>(
       `/api/v1/lessons/${lessonId}/checks/approve-all`,
       { expectedContentHash },
+    ),
+
+  /**
+   * C24's "Change level" (41c2f83): a teacher corrects a check's level; the
+   * answer is untouched. A section's check names its section; an
+   * end-of-lesson question must NOT (422 `assessment_has_no_segment`).
+   * The level becomes `person`-authored, and the checks sign-off re-opens.
+   * Refusals: 409 `unmarkable_question`; 404 `lesson_question_not_found`.
+   */
+  setCheckLevel: (
+    lessonId: string,
+    questionId: string,
+    body: { scope: "checkpoint" | "assessment"; masteryLevel: MasteryLevel; segmentId?: string },
+  ) =>
+    api.put<LessonReview>(
+      `/api/v1/lessons/${lessonId}/checks/${encodeURIComponent(questionId)}/level`,
+      body,
     ),
 
   /** The generated guiding questions, signed in the same step. */

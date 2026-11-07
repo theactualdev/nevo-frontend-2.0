@@ -8,6 +8,7 @@ import {
   type LessonModule,
   type LessonReview,
   type MissingKeyPointWrite,
+  type MasteryLevel,
 } from "@/lib/api/lessons";
 import { mediaApi, type VisualCaptionReview } from "@/lib/api/media";
 import { getToken } from "@/lib/auth/session";
@@ -69,6 +70,14 @@ export interface LessonReviewFlowState {
    * not the checks': the parts never hold back Assign.
    */
   approveParts: () => Promise<boolean>;
+  /**
+   * C24: change one check's level. Resolves true when saved; the review it
+   * returns replaces this one (the checks sign-off re-opens on the server).
+   */
+  setLevel: (
+    check: { questionId: string; segmentId: string; scope?: "checkpoint" | "assessment" },
+    level: MasteryLevel,
+  ) => Promise<boolean>;
   approveRewrites: () => Promise<boolean>;
   amendPoint: (keyPointId: string, text: string) => Promise<boolean>;
   resolveMissing: (segmentId: string, write: MissingKeyPointWrite) => Promise<boolean>;
@@ -242,6 +251,29 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
     [working, review, lessonId, fail],
   );
 
+  const setLevel = useCallback(
+    async (
+      check: { questionId: string; segmentId: string; scope?: "checkpoint" | "assessment" },
+      level: MasteryLevel,
+    ) => {
+      const scope = check.scope ?? "checkpoint";
+      try {
+        setReview(
+          await lessonsApi.setCheckLevel(lessonId, check.questionId, {
+            scope,
+            masteryLevel: level,
+            // An end-of-lesson question has no section, and must say none.
+            ...(scope === "checkpoint" ? { segmentId: check.segmentId } : {}),
+          }),
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [lessonId],
+  );
+
   const approveParts = useCallback(async () => {
     if (working || !review) return false;
     setWorking("parts");
@@ -395,6 +427,7 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
     approveKeyPoints,
     approveChecks,
     approveParts,
+    setLevel,
     approveRewrites,
     amendPoint,
     resolveMissing,
