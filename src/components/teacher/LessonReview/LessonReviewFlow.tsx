@@ -22,6 +22,7 @@ import {
   type ChecksView,
   type RewriteKind,
   type RewriteRow,
+  REVIEW_STEPS,
 } from "./reviewModel";
 import { StepChecks } from "./StepChecks";
 import { getSession } from "@/lib/auth/session";
@@ -54,7 +55,7 @@ import { getSession } from "@/lib/auth/session";
  * step's pattern because no frame is coming (Lydia, 26 Oct).
  */
 
-const STEPS = ["What I made", "Key points", "Checks", "Rewrites", "Live"] as const;
+const STEPS = REVIEW_STEPS;
 type Step = 1 | 2 | 3 | 4 | 5;
 
 const EYEBROW =

@@ -16,6 +16,8 @@ import { stillToCheck } from "@/components/teacher/Library/LessonDetailActions";
 import { assignRefusal, reviewHrefFor } from "@/lib/lessons/signOff";
 import { cn } from "@/lib/utils";
 import { IncidentLine } from "./ParseFallback";
+import { FinishBlock } from "./FinishBlock";
+import { finishView } from "@/components/teacher/LessonReview/reviewModel";
 
 /**
  * What came back from a real upload (C07g step 3, honestly).
@@ -172,15 +174,37 @@ export function UploadResult({
   /* SCRUM-319: Assign stays pressable; a tap while held explains it. */
   const [explained, setExplained] = useState(false);
   const refusal = assignRefusal(lesson.id, verdict.outstandingSteps);
+  /*
+   * C07j LU-04 / 04b / 04c, by the server's own review - and only over an
+   * answered read: a loading or failed one draws the screen as it was, with
+   * no claim about where the review stands. LU-04c offers Assign, so it is
+   * drawn only where Assign is open.
+   */
+  const read = !checking && !verdict.failed && verdict.signedOff !== null ? verdict.review : null;
+  const drawn = read ? finishView(read, segments) : null;
+  const finish = drawn && (drawn.stage !== "reviewed" || !blocked) ? drawn : null;
 
   return (
     <div className="mx-auto w-full max-w-[820px] px-6 pb-10">
-      <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
-        {lesson.title}
-      </h2>
-      <p className="mt-[5px] text-[14.5px] text-nevo-near-black/60">
-        {`From ${fileName} · ${lesson.segmentCount} ${lesson.segmentCount === 1 ? "section" : "sections"}`}
-      </p>
+      {finish ? (
+        <FinishBlock
+          view={finish}
+          lessonId={lesson.id}
+          title={lesson.title}
+          fileName={fileName}
+          readyToAssign={verdict.ready}
+          onUploadAnother={onUploadAnother}
+        />
+      ) : (
+        <>
+          <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+            {lesson.title}
+          </h2>
+          <p className="mt-[5px] text-[14.5px] text-nevo-near-black/60">
+            {`From ${fileName} · ${lesson.segmentCount} ${lesson.segmentCount === 1 ? "section" : "sections"}`}
+          </p>
+        </>
+      )}
 
       {/* The first place a teacher meets the lesson, so the first place this
           can be said. "Saved to your library" below is true either way and
@@ -241,7 +265,9 @@ export function UploadResult({
             teacher had to open the lesson and find "Review in five steps".
             The lesson page's own words, and the one live primary while
             Assign waits. */}
-        {blocked && !checking && (
+        {/* Below the C07j block, only what it does not already offer: the
+            way into the review is its own primary in LU-04 and LU-04b. */}
+        {blocked && !checking && !finish && (
           <Link
             href={reviewHrefFor(lesson.id)}
             className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[22px] text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
@@ -249,7 +275,7 @@ export function UploadResult({
             Review in five steps
           </Link>
         )}
-        {blocked ? (
+        {finish?.stage === "reviewed" ? null : blocked ? (
           <button
             type="button"
             onClick={() => setExplained(true)}
@@ -266,12 +292,14 @@ export function UploadResult({
             Assign to a class
           </Link>
         )}
-        <Link
-          href={`/teacher/lessons/${lesson.id}`}
-          className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-        >
-          Open the lesson
-        </Link>
+        {finish?.stage !== "reviewed" && (
+          <Link
+            href={`/teacher/lessons/${lesson.id}`}
+            className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+          >
+            Open the lesson
+          </Link>
+        )}
         {/* Only where a caller can take the new lesson. No handler means no
             control, rather than a button that reads the lesson again and
             throws the result away. */}
@@ -285,13 +313,15 @@ export function UploadResult({
             {rereading ? "Reading it again…" : "Try that again"}
           </button>
         )}
-        <button
-          type="button"
-          onClick={onUploadAnother}
-          className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-        >
-          Upload another
-        </button>
+        {finish?.stage !== "unstarted" && (
+          <button
+            type="button"
+            onClick={onUploadAnother}
+            className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+          >
+            Upload another
+          </button>
+        )}
       </div>
 
       {blocked && !checking && explained && (
