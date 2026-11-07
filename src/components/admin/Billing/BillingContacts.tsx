@@ -94,9 +94,27 @@ export function BillingContacts({
         ) : contacts === null ? (
           <div aria-busy="true" className="h-[72px]" />
         ) : contacts.length === 0 ? (
-          <p className="m-0 px-6 py-[22px] text-[14.5px] text-nevo-near-black/62">
-            No billing contact on file.
-          </p>
+          /*
+           * NO ONE TO SEND TO - Lydia's words (SCRUM-321, 7 Nov). True to the
+           * server: with no contact nothing is emailed (2de78a1 only logs it),
+           * so the invoices are on this page and nowhere else.
+           */
+          <div className="px-6 py-[22px]">
+            <p className="m-0 text-[14.5px] leading-[1.55] text-nevo-near-black/78">
+              No one is set to receive your invoices. Add a billing contact and we&rsquo;ll send
+              them there.
+            </p>
+            <p className="m-0 mt-1.5 text-[13.5px] leading-[1.5] text-nevo-near-black/58">
+              Until then, your invoices appear here only.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSheet("new")}
+              className="mt-3.5 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
+            >
+              Add a billing contact
+            </button>
+          </div>
         ) : (
           contacts.map((c, i) => (
             <div
@@ -148,7 +166,7 @@ export function BillingContacts({
           ))
         )}
       </div>
-      {!failed ? (
+      {!failed && contacts !== null && contacts.length > 0 ? (
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
           <button
             type="button"

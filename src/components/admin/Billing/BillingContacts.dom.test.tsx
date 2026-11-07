@@ -81,11 +81,19 @@ describe("who gets the invoices", () => {
     expect(screen.getByText("bursar@brightgate.edu.ng")).toBeInTheDocument();
   });
 
-  it("says when nobody is on file, and still offers to add one", async () => {
+  it("with nobody on file, says invoices appear here only, in Lydia's words (SCRUM-321)", async () => {
     contacts.mockResolvedValue([]);
-    render(<BillingContacts primaryId={null} onChanged={vi.fn()} />);
-    expect(await screen.findByText("No billing contact on file.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add a contact" })).toBeInTheDocument();
+    const { container } = render(<BillingContacts primaryId={null} onChanged={vi.fn()} />);
+    expect(
+      await screen.findByText(
+        /No one is set to receive your invoices\. Add a billing contact and we.ll send them there\./,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Until then, your invoices appear here only.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add a billing contact" })).toBeInTheDocument();
+    // The listed-contacts footer isn't repeated under it.
+    expect(screen.queryByRole("button", { name: "Add a contact" })).toBeNull();
+    expect(visibleText(container)).not.toMatch(/No billing contact on file|founding admin/);
   });
 
   it("says a failed read failed, not that the list is empty", async () => {
@@ -94,7 +102,7 @@ describe("who gets the invoices", () => {
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/couldn't read who gets your invoices just now/),
     );
-    expect(visibleText(container)).not.toMatch(/No billing contact on file/);
+    expect(visibleText(container)).not.toMatch(/No one is set to receive your invoices/);
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("bursar@brightgate.edu.ng")).toBeInTheDocument();
   });
