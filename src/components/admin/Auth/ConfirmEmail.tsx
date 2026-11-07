@@ -127,9 +127,18 @@ function bodyFor(status: EmailConfirmationStatus, email: string | null): string 
  *    null), so they can only be known when the person is SIGNED IN and their
  *    own confirmation is still pending. Signed out - the usual way someone
  *    opens an emailed link - there's nothing to name and nothing a button
- *    could do without a session, so the first sentence stands alone.
+ *    could do without a session. Signed out, it says to sign in (Lydia, below).
  */
-function invalidBody(own: OwnConfirmation | null): string {
+function invalidBody(own: OwnConfirmation | null, signedOut: boolean): string {
+  /*
+   * SIGNED OUT: LYDIA'S WORDS (SCRUM-321, 7 Nov), "Sign in to your account to
+   * continue." - no address, no school, and Sign in the only control, because
+   * the screen has none of them. Her first sentence, "This link has expired.",
+   * is NOT used: the server says this link is `invalid` - not expired, not
+   * used - and an expired link already has its own screen saying exactly
+   * that. Raised to the hub; the heading stays what the server makes true.
+   */
+  if (signedOut) return "Sign in to your account to continue.";
   const lead = "It may have been copied only part-way.";
   if (!own) return lead;
   return own.school
@@ -174,6 +183,12 @@ export function ConfirmEmail({ token }: { token: string }) {
   const [resendFailed, setResendFailed] = useState(false);
   /** Signed in, still unconfirmed, after an invalid link - see `invalidBody`. */
   const [own, setOwn] = useState<OwnConfirmation | null>(null);
+  /**
+   * Known to have no session, after an invalid link: no session at all, or
+   * the server refusing the one there is (401). A read that fails any other
+   * way proves nothing, so it keeps the frame's part-way line.
+   */
+  const [signedOut, setSignedOut] = useState(false);
 
   /*
    * The request alone. No synchronous setState, because this runs from an
@@ -189,15 +204,21 @@ export function ConfirmEmail({ token }: { token: string }) {
         setState(s);
         setPhase("done");
         // AC-03b's signed-in case: the link names nobody, but a session does.
-        if (s.status !== "invalid" || !getSession()) return;
+        if (s.status !== "invalid") return;
+        if (!getSession()) {
+          setSignedOut(true);
+          return;
+        }
         Promise.all([emailConfirmationApi.read(), schoolApi.get().catch(() => null)])
           .then(([mine, school]) => {
             if ((mine.status === "pending" || mine.status === "expired") && mine.email) {
               setOwn({ email: mine.email, school: school?.name?.trim() || null });
             }
           })
-          // Not signed in after all, or unreadable: the signed-out screen.
-          .catch(() => undefined);
+          .catch((err: unknown) => {
+            // The session has ended: signed out after all.
+            if (err instanceof ApiError && err.status === 401) setSignedOut(true);
+          });
       })
       .catch(() => {
         // Deliberately NOT `status: "invalid"`. We do not know that.
@@ -282,7 +303,7 @@ export function ConfirmEmail({ token }: { token: string }) {
               */}
             <p className="mt-[13px] max-w-[420px] text-[17px] leading-[1.55] text-nevo-near-black/70">
               {state.status === "invalid"
-                ? invalidBody(own)
+                ? invalidBody(own, signedOut)
                 : (bodyFor(state.status, state.email) ?? state.message)}
             </p>
             {/*

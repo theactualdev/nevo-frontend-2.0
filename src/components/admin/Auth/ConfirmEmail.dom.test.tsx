@@ -314,16 +314,44 @@ describe("sending a new link from a dead one", () => {
 describe("a link that doesn't look right (AC-03b)", () => {
   const invalid = state({ status: "invalid", email: null, message: "No such link." });
 
-  it("signed out, says it may have been copied part-way, and offers no button that needs a session", async () => {
+  /*
+   * SIGNED OUT, IN LYDIA'S WORDS (SCRUM-321, 7 Nov): "Sign in to your account
+   * to continue.", with no address, no school, and Sign in the only control.
+   * Not her "This link has expired.": the server says this link is invalid,
+   * not expired, and saying otherwise would be an untrue state (raised).
+   */
+  it("signed out, says to sign in, with Sign in the only control", async () => {
     verify.mockResolvedValue(invalid);
     const { container } = render(<ConfirmEmail token="t1" />);
     await waitFor(() => expect(visibleText(container)).toMatch(/This link doesn't look right/));
     const text = visibleText(container);
-    expect(text).toMatch(/It may have been copied only part-way\./);
-    expect(text).not.toMatch(/older email/);
-    expect(screen.queryByRole("button", { name: /Send a new link/ })).toBeNull();
-    expect(screen.queryByRole("link", { name: /Change the email address/ })).toBeNull();
+    expect(text).toMatch(/Sign in to your account to continue\./);
+    expect(text).not.toMatch(/part-way|older email|expired|@/);
+    expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual(["Sign in"]);
+    expect(screen.queryAllByRole("button")).toEqual([]);
     expect(read).not.toHaveBeenCalled();
+  });
+
+  it("a session the server refuses reads as signed out", async () => {
+    getSession.mockReturnValue({ token: "s", userId: "u1", role: "senco_admin", expiresAt: "2026-12-01T00:00:00Z" });
+    verify.mockResolvedValue(invalid);
+    read.mockRejectedValue(new ApiError(401, "Not authenticated"));
+    schoolGet.mockResolvedValue({ name: "Brightgate Academy" });
+    const { container } = render(<ConfirmEmail token="t1" />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Sign in to your account to continue\./));
+    expect(screen.queryByRole("button", { name: /Send a new link/ })).toBeNull();
+  });
+
+  it("a read that fails any other way keeps the part-way line - it proves nothing about the session", async () => {
+    getSession.mockReturnValue({ token: "s", userId: "u1", role: "senco_admin", expiresAt: "2026-12-01T00:00:00Z" });
+    verify.mockResolvedValue(invalid);
+    read.mockRejectedValue(new Error("offline"));
+    schoolGet.mockResolvedValue({ name: "Brightgate Academy" });
+    const { container } = render(<ConfirmEmail token="t1" />);
+    await waitFor(() => expect(read).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(visibleText(container)).toMatch(/It may have been copied only part-way\./);
+    expect(visibleText(container)).not.toMatch(/Sign in to your account to continue/);
   });
 
   it("signed in and waiting, names the school and address, and resends from the session", async () => {
