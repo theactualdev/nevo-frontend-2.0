@@ -35,6 +35,7 @@ describe("recordWrittenConsent", () => {
       parentRelationship: "Mother",
       signedOn: "2026-10-01",
       form: photo,
+      consentHolderLinkId: "pl-1",
     });
     const [path, body] = post.mock.calls[0] as [string, FormData];
     expect(path).toBe("/api/v1/students/s-1/consents/written");
@@ -42,6 +43,8 @@ describe("recordWrittenConsent", () => {
     expect(body.get("parentName")).toBe("Mrs. Ngozi Okafor");
     expect(body.get("parentRelationship")).toBe("Mother");
     expect(body.get("signedOn")).toBe("2026-10-01");
+    // SCRUM-306: the linked adult who gave it, so only they can withdraw it.
+    expect(body.get("consentHolderLinkId")).toBe("pl-1");
     expect(body.getAll("consentTypes")).toEqual(["data_processing"]);
     expect((body.get("form") as File).name).toBe("form.jpg");
     // The server's default notice version stands.
@@ -53,6 +56,7 @@ describe("recordWrittenConsent", () => {
       parentName: "Mr. Bello",
       parentRelationship: "Father",
       signedOn: "2026-10-01",
+      consentHolderLinkId: "pl-2",
     });
     const body = post.mock.calls[0][1] as FormData;
     expect(body.has("form")).toBe(false);
