@@ -112,38 +112,43 @@ afterEach(() => {
   clearSession();
 });
 
-describe("the looks on offer", () => {
-  it("are frame 27's eight, in its order and with its words", () => {
-    expect(AVATAR_LOOKS.map((l) => [l.id, l.label])).toEqual([
-      ["circle-navy", "Navy circle"],
-      ["roundsquare-dark", "Dark rounded square"],
-      ["pill-cream", "Cream pill"],
-      ["diamond-navy", "Navy diamond"],
-      ["triangle-dark", "Dark triangle"],
-      ["hexagon-cream", "Cream hexagon"],
-      ["roundsquare-navy", "Navy rounded square"],
-      ["circle-dark", "Dark circle"],
-    ]);
+describe("the looks on offer (928cf30; SCRUM-322, 324)", () => {
+  it("are frame 27's eighteen - six shapes in each tone, the star among them - in its order and words", () => {
+    const shapes = ["circle", "square", "star", "diamond", "triangle", "hexagon"];
+    const words = ["circle", "rounded square", "star", "diamond", "triangle", "hexagon"];
+    const tones = [
+      ["navy", "Navy"],
+      ["near_black", "Dark"],
+      ["cream_elevated", "Cream"],
+    ];
+    expect(AVATAR_LOOKS.map((l) => [l.id, l.label])).toEqual(
+      tones.flatMap(([key, word]) =>
+        shapes.map((shape, i) => [`${shape}-${key}`, `${word} ${words[i]}`]),
+      ),
+    );
   });
 
-  it("reads an old colour-only id, or anything unrecognised, as the navy circle", () => {
-    // The ids before shapes, which accounts may still hold. No migration.
+  it("keeps the server's keys, so one set of keys runs end to end", () => {
+    expect(avatarLook("star-near_black")).toMatchObject({
+      shape: "star",
+      colourway: "near_black",
+      label: "Dark star",
+    });
+    expect(avatarLook("square-cream_elevated").label).toBe("Cream rounded square");
+  });
+
+  it("reads an old id, the retired pill or a design name as the navy circle", () => {
+    // Ids from before, which an account may hold. No migration.
     for (const old of ["navy", "lavender", "cream", "ink", "soft-ink", "stone"]) {
       expect(avatarLook(old).id).toBe("circle-navy");
     }
-    for (const junk of [undefined, null, 42, "", "-navy", "circle-", "star-navy", "circle-gold"]) {
+    // The pill is gone (928cf30), and the design's names are not keys.
+    for (const gone of ["pill-cream", "pill-navy", "roundsquare-navy", "circle-dark", "hexagon-cream"]) {
+      expect(avatarLook(gone).id).toBe("circle-navy");
+    }
+    for (const junk of [undefined, null, 42, "", "-navy", "circle-", "circle-gold"]) {
       expect(avatarLook(junk).id).toBe("circle-navy");
     }
-  });
-
-  it("draws any shape and colourway the component has, as stored", () => {
-    // Offered or not, it is still the child's choice.
-    expect(avatarLook("hexagon-navy")).toMatchObject({
-      shape: "hexagon",
-      colourway: "navy",
-      label: "Navy hexagon",
-    });
-    expect(avatarLook("roundsquare-cream").label).toBe("Cream rounded square");
   });
 });
 
@@ -159,13 +164,13 @@ describe("a child's avatar on Profile", () => {
   });
 
   it("draws the look the account holds", async () => {
-    me.mockResolvedValue({ userId: "u", avatarTone: "triangle-dark" });
+    me.mockResolvedValue({ userId: "u", avatarTone: "star-near_black" });
     renderProfile();
 
-    await waitFor(() => expect(shapeIn(disc())).toBe("triangle"));
+    await waitFor(() => expect(shapeIn(disc())).toBe("star"));
     expect(disc().querySelector("[data-avatar-look]")).toHaveAttribute(
       "data-avatar-look",
-      "triangle-dark",
+      "star-near_black",
     );
   });
 });
@@ -182,21 +187,23 @@ describe("Choose your look", () => {
     expect(pressed).toEqual(["Navy circle"]);
   });
 
-  it("offers eight shapes and no initials, each drawn as it says", async () => {
+  it("offers the eighteen and no initials, each drawn as it says", async () => {
     currentUser.value = { name: "Tobi Bello", initials: "TB" };
     renderProfile();
     openPicker();
 
     const tiles = AVATAR_LOOKS.map((l) => swatch(l.label));
-    expect(tiles.map((t) => shapeIn(t))).toEqual([
+    expect(tiles).toHaveLength(18);
+    expect(tiles.map((t) => shapeIn(t))).toEqual(
+      AVATAR_LOOKS.map((l) => l.shape),
+    );
+    expect(tiles.map((t) => shapeIn(t)).slice(0, 6)).toEqual([
       "circle",
-      "roundsquare",
-      "pill",
+      "square",
+      "star",
       "diamond",
       "triangle",
       "hexagon",
-      "roundsquare",
-      "circle",
     ]);
     for (const tile of tiles) expect(tile.textContent).toBe("");
     expect(within(screen.getByRole("dialog")).queryByText("TB")).toBeNull();
@@ -206,17 +213,17 @@ describe("Choose your look", () => {
     renderProfile();
     openPicker();
     await act(async () => {
-      fireEvent.click(swatch("Cream pill"));
+      fireEvent.click(swatch("Cream star"));
     });
 
-    expect(updateMe).toHaveBeenCalledWith({ avatarTone: "pill-cream" });
+    expect(updateMe).toHaveBeenCalledWith({ avatarTone: "star-cream_elevated" });
     // Not the deprecated bag: the profile has a field for this now.
     expect(update).not.toHaveBeenCalled();
     expect(await screen.findByText("Saved")).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveClass("opacity-100"),
     );
-    expect(shapeIn(disc())).toBe("pill");
+    expect(shapeIn(disc())).toBe("star");
   });
 
   it("moves every avatar on screen at once, not just the one tapped", async () => {
@@ -229,7 +236,7 @@ describe("Choose your look", () => {
 
     expect(screen.getByTestId("other-disc")).toHaveAttribute(
       "data-look",
-      "triangle-dark",
+      "triangle-near_black",
     );
   });
 
@@ -254,34 +261,34 @@ describe("Choose your look", () => {
     renderProfile();
     openPicker();
     await act(async () => {
-      fireEvent.click(swatch("Cream pill"));
+      fireEvent.click(swatch("Cream star"));
     });
 
     const everything = JSON.stringify({ ...window.localStorage });
-    expect(everything).not.toContain("pill-cream");
+    expect(everything).not.toContain("star-cream_elevated");
   });
 });
 
 describe("a look chosen earlier", () => {
   it("comes back from the account on a device that has never seen the child", async () => {
-    me.mockResolvedValue({ userId: "u", avatarTone: "hexagon-cream" });
+    me.mockResolvedValue({ userId: "u", avatarTone: "hexagon-cream_elevated" });
     renderProfile();
 
     await waitFor(() =>
       expect(screen.getByTestId("other-disc")).toHaveAttribute(
         "data-look",
-        "hexagon-cream",
+        "hexagon-cream_elevated",
       ),
     );
   });
 
   it("is not shown to the next child on a shared tablet", async () => {
-    me.mockResolvedValue({ userId: "u", avatarTone: "roundsquare-navy" });
+    me.mockResolvedValue({ userId: "u", avatarTone: "square-navy" });
     const first = renderProfile();
     await waitFor(() =>
       expect(screen.getByTestId("other-disc")).toHaveAttribute(
         "data-look",
-        "roundsquare-navy",
+        "square-navy",
       ),
     );
     first.unmount();

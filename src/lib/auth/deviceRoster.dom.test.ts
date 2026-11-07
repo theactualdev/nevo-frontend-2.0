@@ -6,6 +6,7 @@ import {
   closeRememberedChild,
   pickerEntries,
   rememberChild,
+  rememberLook,
   rememberedChildren,
   retireLegacyProfile,
 } from "./deviceRoster";
@@ -581,5 +582,41 @@ describe("a child's initials", () => {
 
     expect(rememberedChildren()[0]).not.toHaveProperty("initials");
     expect(window.localStorage.getItem(KEY)).not.toContain("initials");
+  });
+});
+
+/**
+ * THE CHILD'S OWN LOOK, KEPT FOR THE PICKER (28c, SCRUM-324): learnt when their
+ * account is read or they choose on this device, and kept across sign-ins.
+ */
+describe("a child's look on this device", () => {
+  it("is kept on their entry, by account, and reaches the picker", () => {
+    rememberChild({ ...child("ada.o", "Ada"), userId: "u-ada" });
+    rememberChild({ ...child("ben.k", "Ben"), userId: "u-ben" });
+
+    rememberLook("u-ada", "star-near_black");
+
+    const byName = Object.fromEntries(pickerEntries().map((e) => [e.name, e.look]));
+    expect(byName).toEqual({ Ada: "star-near_black", Ben: undefined });
+  });
+
+  it("stays theirs across a sign-in, and does not move them up the list", () => {
+    rememberChild({ ...child("ada.o", "Ada"), userId: "u-ada" });
+    rememberChild({ ...child("ben.k", "Ben"), userId: "u-ben" });
+    const before = pickerEntries().map((e) => e.name);
+
+    rememberLook("u-ada", "hexagon-cream_elevated");
+    expect(pickerEntries().map((e) => e.name)).toEqual(before);
+
+    rememberChild({ ...child("ada.o"), userId: "u-ada" });
+    expect(pickerEntries().find((e) => e.name === "Ada")?.look).toBe(
+      "hexagon-cream_elevated",
+    );
+  });
+
+  it("is nothing for an account this device does not remember", () => {
+    rememberLook("u-nobody", "star-navy");
+
+    expect(window.localStorage.getItem(KEY)).toBeNull();
   });
 });

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { usersApi } from "@/lib/api/users";
-import { getToken } from "@/lib/auth/session";
+import { getSession, getToken } from "@/lib/auth/session";
+import { rememberLook } from "@/lib/auth/deviceRoster";
 import { avatarLook, type AvatarLook } from "@/lib/profile/avatarLook";
 
 /**
@@ -66,6 +67,9 @@ function load(owner: string) {
       const stored: unknown = res.avatarTone;
       state = { owner, id: typeof stored === "string" ? stored : null };
       emit();
+      // The tile on this device's picker draws it from now on (28c).
+      const userId = getSession()?.userId;
+      if (userId) rememberLook(userId, avatarLook(stored).id);
     })
     .catch(() => {
       // No read, no choice: the default disc, which is what the child had
@@ -97,6 +101,8 @@ export function useAvatarLook(): {
     if (owner === GUEST) return;
     try {
       await usersApi.updateMe({ avatarTone: next });
+      const userId = getSession()?.userId;
+      if (userId) rememberLook(userId, avatarLook(next).id);
     } catch (cause) {
       // Only undo OUR choice - a later tap may already have replaced it.
       if (state.owner === owner && state.id === next) {

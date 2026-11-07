@@ -16,7 +16,17 @@ import {
 import { doorForRole, knownRole } from "@/lib/auth/consoleDoor";
 import { withNext } from "@/lib/auth/nextPath";
 import { SCHOOL_CODE_LENGTH, placeSchoolCode } from "@/lib/auth/schoolCode";
-import { closeRememberedChild } from "@/lib/auth/deviceRoster";
+import {
+  closeRememberedChild,
+  rememberLook,
+  rememberedChildren,
+} from "@/lib/auth/deviceRoster";
+import { StudentAvatar } from "@/components/student/Shell/StudentAvatar";
+import {
+  avatarLook,
+  DEFAULT_AVATAR_LOOK,
+  type AvatarLook,
+} from "@/lib/profile/avatarLook";
 import { rememberProfile } from "@/lib/auth/session";
 import {
   clearSignInHandoff,
@@ -193,6 +203,11 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
    * half a credential on a screen anyone in the room can read.
    */
   const [greetName, setGreetName] = useState<string | null>(null);
+  /**
+   * The child's own look on the welcome beat (SCRUM-324): what this device
+   * learnt of it before, then their account's, once `users/me` answers.
+   */
+  const [greetLook, setGreetLook] = useState<AvatarLook>(DEFAULT_AVATAR_LOOK);
   const alive = useRef(true);
   useEffect(
     () => () => {
@@ -385,6 +400,11 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
         // So a signed-in screen can find THIS child's entry on a shared tablet.
         userId: session.userId,
       });
+      setGreetLook(
+        avatarLook(
+          rememberedChildren().find((c) => c.userId === session.userId)?.look,
+        ),
+      );
       signIn({
         id: session.userId,
         // `name` is optional on AuthUser, and absent beats the username.
@@ -413,6 +433,11 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
       void usersApi
         .me()
         .then((me) => {
+          // Their look, as their account keeps it - on the beat, and on this
+          // device's picker from now on (28c).
+          const look = avatarLook(me.avatarTone);
+          rememberLook(session.userId, look.id);
+          if (alive.current) setGreetLook(look);
           // The name they chose for themselves first (`preferredName`), then
           // the school's record - what every signed-in screen calls them.
           const first =
@@ -505,14 +530,11 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
       <main className="flex min-h-[100dvh] w-full flex-col bg-nevo-cream text-nevo-near-black">
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-7 pt-[52px] pb-6 text-center sm:px-12 sm:pt-14 sm:pb-8">
           <Wordmark size="form" />
-          <span
-            aria-hidden
-            className="mt-7 flex size-16 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop"
-          >
-            <svg viewBox="0 0 24 24" className="size-[46%] fill-nevo-cream">
-              <circle cx="12" cy="12" r="8.5" />
-            </svg>
-          </span>
+          <StudentAvatar
+            look={greetLook}
+            size={64}
+            className="mt-7 motion-safe:animate-nevo-pop"
+          />
           <h2 className="mt-5 text-2xl leading-[1.25] font-medium tracking-[-0.01em] sm:text-[28px]">
             {/*
               NEVER THE USERNAME. This read "Welcome back, amara.k" - the login

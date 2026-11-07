@@ -58,6 +58,19 @@ export interface RememberedChild extends RememberedProfile {
    */
   id: string;
   /**
+   * THE CHILD'S OWN LOOK, as their account keeps it (SCRUM-324; 28c, 928cf30:
+   * "a child's avatar is a shape and a tone together, the pair they picked in
+   * 27 Profile and Settings, and it belongs to the child rather than to the
+   * tile they happen to sit in"). Learnt when their account is read, or they
+   * choose, on this device (`rememberLook`); absent until then, and the tile
+   * draws the nothing-chosen look. A "<shape>-<colourway>" id - see
+   * `avatarLook`.
+   */
+  look?: string;
+  /**
+   * NO LONGER DRAWN (SCRUM-324): the tile draws the child's own `look`. Kept
+   * on the entry so an older build reading this roster still finds one.
+   *
    * Which avatar shape this child gets, fixed when they are first remembered.
    *
    * THE FRAME ASSIGNS THIS BY LIST POSITION, and that cannot be right once the
@@ -102,6 +115,8 @@ export interface PickerEntry {
   /** First name only, and absent when the name was never fetched (28c-4). */
   name?: string;
   shapeIndex: number;
+  /** The child's own look, where this device has learnt it - see `look`. */
+  look?: string;
 }
 
 function read(): RememberedChild[] {
@@ -316,7 +331,24 @@ export function pickerEntries(): PickerEntry[] {
     id: c.id,
       ...(c.displayName?.trim() ? { name: c.displayName.trim() } : {}),
       shapeIndex: c.shapeIndex,
+      ...(c.look ? { look: c.look } : {}),
     }));
+}
+
+/**
+ * The look the account `userId` keeps, learnt on this device: kept on that
+ * child's entry for the picker to draw (28c). Nothing for a child this
+ * device does not remember. Not a sign-in: the entry keeps its place and its
+ * last-used time.
+ */
+export function rememberLook(userId: string, look: string): void {
+  if (!userId || !look) return;
+  const all = read();
+  const at = all.findIndex((c) => c.userId === userId);
+  if (at < 0 || all[at].look === look) return;
+  const next = [...all];
+  next[at] = { ...all[at], look };
+  write(next);
 }
 
 /** Which remembered child an `account_closed` was about, as each place knows it. */
@@ -416,6 +448,8 @@ export function rememberChild(profile: RememberedProfile): RememberedChild[] {
       : match?.displayName
         ? { displayName: match.displayName }
         : {}),
+    // The child's own look stays theirs across sign-ins (28c).
+    ...(match?.look ? { look: match.look } : {}),
   };
 
   /*

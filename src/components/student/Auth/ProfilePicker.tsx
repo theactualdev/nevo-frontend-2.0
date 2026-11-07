@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import type { PickerEntry } from "@/lib/auth/deviceRoster";
-import { ChildAvatar } from "./ChildAvatar";
+import { StudentAvatar } from "@/components/student/Shell/StudentAvatar";
+import { avatarLook } from "@/lib/profile/avatarLook";
 
 /**
  * 28c-1 — "Who's learning?": the children this tablet remembers.
@@ -86,8 +87,9 @@ export function ProfilePicker({
             aria-label={entry.name ?? "Choose this account"}
             className="flex w-[142px] cursor-pointer flex-col items-center gap-2.5 rounded-2xl border-none bg-transparent px-1.5 py-2.5 transition-[transform,filter] hover:brightness-[0.98] active:scale-[0.97] motion-reduce:transition-none portrait:sm:w-[158px] portrait:sm:gap-3"
           >
-            <ChildAvatar
-              shapeIndex={entry.shapeIndex}
+            {/* The child's own look (28c, SCRUM-324), never the tile's. */}
+            <StudentAvatar
+              look={avatarLook(entry.look)}
               className="size-[92px] portrait:sm:size-[104px]"
             />
             {entry.name && (
