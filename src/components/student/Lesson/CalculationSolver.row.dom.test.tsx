@@ -141,18 +141,40 @@ describe("Slower on the calculation", () => {
   const options = () => screen.queryByRole("button", { name: "4 and 4" });
   const next = () => screen.queryByRole("button", { name: SLOWER_NEXT });
 
-  it("puts the frame's line above the question, and the answer on the child's tap", () => {
-    show(build(), { slower: true, onSlower: vi.fn() });
+  it("puts the frame's line above a step with pieces, and the answer on the child's tap", () => {
+    show(build({ steps: [step({ parts: ["One.", "Two."] })] }), {
+      slower: true,
+      onSlower: vi.fn(),
+    });
 
     const line = screen.getByText(SLOWER_LINE);
-    const question = screen.getByText("What are the denominators?");
-    expect(line.compareDocumentPosition(question) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const first = screen.getByText("One.");
+    expect(line.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(options()).toBeNull();
+
+    tap(SLOWER_NEXT);
+    tap(SLOWER_NEXT);
+
+    expect(options()).toBeInTheDocument();
+    expect(next()).toBeNull();
+  });
+
+  /*
+   * LYDIA, 7 NOV (copy pass, urgent): "That line is a claim about something
+   * that is not going to happen... in front of children." A step with no
+   * pieces in the child's read - none made, or pieces still waiting for a
+   * teacher, which the server keeps back - is paced without it.
+   */
+  it("says nothing of a step at a time on a step with no pieces, and still paces it", () => {
+    show(build(), { slower: true, onSlower: vi.fn() });
+
+    expect(screen.queryByText(SLOWER_LINE)).toBeNull();
+    expect(screen.getByText("What are the denominators?")).toBeInTheDocument();
     expect(options()).toBeNull();
 
     tap(SLOWER_NEXT);
 
     expect(options()).toBeInTheDocument();
-    expect(next()).toBeNull();
   });
 
   it("never brings a piece on a timer", () => {
@@ -266,7 +288,8 @@ describe("Slower on the calculation", () => {
     view.rerender(<CalculationSolver calculation={build()} {...props} slower />);
 
     expect(options()).toBeInTheDocument();
-    expect(screen.getByText(SLOWER_LINE)).toBeInTheDocument();
+    // A step with no pieces: no line (Lydia, 7 Nov).
+    expect(screen.queryByText(SLOWER_LINE)).toBeNull();
     expect(next()).toBeNull();
   });
 
