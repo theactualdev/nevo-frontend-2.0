@@ -16,6 +16,9 @@
 
 export const LINK_LIFETIME_LINE = "This link works for 30 days from the day it was sent.";
 
+/** What's left for the parent, on its own (SCRUM-321). */
+export const CONFIRM_ONCE_MORE = "You’ll need to confirm once more, signed in to your account.";
+
 export function isHeld(ageCheck: string | null | undefined): boolean {
   return ageCheck === "mismatch";
 }
@@ -25,7 +28,7 @@ export function ChildHeldLines({ child, className }: { child: string; className:
   return (
     <>
       <p className={className}>{child} can&rsquo;t start yet.</p>
-      <p className={className}>You&rsquo;ll need to confirm once more, signed in to your account.</p>
+      <p className={className}>{CONFIRM_ONCE_MORE}</p>
     </>
   );
 }

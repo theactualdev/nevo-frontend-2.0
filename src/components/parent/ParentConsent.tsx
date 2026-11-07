@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { ChildHeldLines, LINK_LIFETIME_LINE, isHeld } from "./childHeld";
+import { CONFIRM_ONCE_MORE, ChildHeldLines, LINK_LIFETIME_LINE, isHeld } from "./childHeld";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { setSession } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
@@ -335,18 +335,21 @@ export function ParentConsent({
           </span>
           <h1 className="mt-6 text-[23px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black">
             {/* Held, "that's all we needed" isn't true: there's one more
-                confirmation to come. D01e's own heading instead. */}
+                confirmation to come. Lydia's thank-you for a held child
+                (copy pass, 7 Nov), then what's left (SCRUM-321). */}
             {held ? (
-              <>Thank you - {child}&rsquo;s consent is recorded.</>
+              <>
+                Thank you. {childLead} can&rsquo;t start just yet, and we&rsquo;ll tell you as
+                soon as that changes.
+              </>
             ) : (
               <>Thank you. That&rsquo;s all we needed.</>
             )}
           </h1>
           {held ? (
-            <ChildHeldLines
-              child={childLead}
-              className="mt-3 mb-0 max-w-[320px] text-[15px] font-medium leading-[1.6] text-nevo-near-black/80"
-            />
+            <p className="mt-3 mb-0 max-w-[320px] text-[15px] font-medium leading-[1.6] text-nevo-near-black/80">
+              {CONFIRM_ONCE_MORE}
+            </p>
           ) : null}
           <p className="mt-3 max-w-[320px] text-[15px] leading-[1.6] text-nevo-near-black/68">
             {/* D01b "Consent given · account created", without the frame's

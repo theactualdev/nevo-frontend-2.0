@@ -585,7 +585,7 @@ describe("whether the child can start", () => {
     done("mismatch");
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
     giveConsent();
-    await screen.findByText(/Amara can.t start yet\./);
+    await screen.findByText(/Amara can.t start just yet/);
     expect(screen.queryByText(/can start learning/)).toBeNull();
   });
 
@@ -598,10 +598,12 @@ describe("whether the child can start", () => {
     done("mismatch");
     const { container } = render(<ParentConsent token={TOKEN} invitation={inv()} />);
     giveConsent();
+    // Lydia's thank-you for a held child (copy pass, 7 Nov).
     expect(
-      await screen.findByRole("heading", { name: /Thank you - Amara.s consent is recorded\./ }),
+      await screen.findByRole("heading", {
+        name: "Thank you. Amara can’t start just yet, and we’ll tell you as soon as that changes.",
+      }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Amara can’t start yet.")).toBeInTheDocument();
     expect(screen.getByText("You’ll need to confirm once more, signed in to your account.")).toBeInTheDocument();
     expect(screen.getByText("This link works for 30 days from the day it was sent.")).toBeInTheDocument();
     const text = container.textContent ?? "";
@@ -839,7 +841,7 @@ describe("the child's date of birth", () => {
     });
     const { container } = render(<ParentConsent token={TOKEN} invitation={inv()} />);
     giveConsent();
-    await screen.findByText(/Amara can.t start yet\./);
+    await screen.findByText(/Amara can.t start just yet/);
     expect(visibleText(container)).not.toMatch(/can start learning/);
   });
 });
