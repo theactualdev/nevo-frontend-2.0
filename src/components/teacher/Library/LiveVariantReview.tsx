@@ -14,13 +14,29 @@ import { isActivity } from "@/lib/api/variants";
 import { cn } from "@/lib/utils";
 
 /**
- * The orientation line for a REAL section, without the frame's first sentence
- * (4 Nov sweep). "Nevo generates every one of these variants for each
- * segment" sat above "Nevo has not generated a visual version of this
- * section" on the same screen; which versions exist is the section's own say.
+ * C16d's orientation line (design 928cf30, 7 Nov): "Nevo generates these
+ * variants for every segment. As the lesson runs, Nevo chooses which one a
+ * child gets from how they are working. You do not assign variants to
+ * individual students."
+ *
+ * The FIRST SENTENCE IS STILL LEFT OUT, as in the 4 Nov sweep: it would sit
+ * above "Nevo has not generated a visual version of this section" on the same
+ * screen, and which versions exist is each section's own say. Raised again
+ * with the hub; the other two are the frame's, word for word.
  */
 const LIVE_VARIANT_ORIENTATION =
-  "During the lesson, the system decides which variant a student sees based on how they are engaging. You do not need to assign specific variants to specific students.";
+  "As the lesson runs, Nevo chooses which one a child gets from how they are working. You do not assign variants to individual students.";
+
+/**
+ * C16d: THE CALCULATION TAB IS CONDITIONAL. "A drawn tab states that the
+ * thing behind it exists", and the calculation variant is null wherever a
+ * section carries no calculation - so the tab is absent there, rather than
+ * present and empty. The other four are always drawn: each says plainly when
+ * its version was not made.
+ */
+export function tabsFor(segment: Pick<LessonSegment, "calculationVariant">): VariantTab[] {
+  return VARIANT_TABS.filter((t) => t !== "Calculation" || Boolean(segment.calculationVariant));
+}
 
 /**
  * Variant review, on the teacher's OWN lesson (C16d).
@@ -469,7 +485,10 @@ export function LiveVariantReview({
   /** How many sections this lesson has, for "Section N of M". */
   segmentCount?: number;
 }) {
-  const [tab, setTab] = useState<VariantTab>("Text");
+  const [chosen, setTab] = useState<VariantTab>("Text");
+  const tabs = tabsFor(segment);
+  // A tab this section does not have falls back to Text, never to an empty one.
+  const tab = tabs.includes(chosen) ? chosen : "Text";
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       {/* No cap of its own at tablet - it conforms to its host (C16d, 8 Oct). */}
@@ -537,7 +556,7 @@ export function LiveVariantReview({
           role="tablist"
           aria-label="Lesson variants"
         >
-          {VARIANT_TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t}
               type="button"
