@@ -119,8 +119,9 @@ export function TransferSets({
  * more. A set joins the checks and re-opens their sign-off, which the line
  * says; that line and the refusal lines are ours, for her.
  *
- * HELD with the set view: what this adds includes the `diagnosis` item that
- * is not drawn but would be signed (see `TransferSets`).
+ * What it adds is a four-part set (SCRUM-295), and the set view draws all
+ * four. The line names the situations and the shared question, not the
+ * judgement question; that is for Lydia's words, not a claim it makes.
  */
 const WRITE_REFUSED: Record<string, string> = {
   concept_has_no_source_section: "Nevo couldn't find a section that teaches this, so it can't write one.",

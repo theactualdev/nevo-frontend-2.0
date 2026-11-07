@@ -152,7 +152,7 @@ beforeEach(() => {
 });
 
 const transfer = (
-  kind: "application_a" | "application_b" | "comparison" | "diagnosis",
+  kind: "application_a" | "application_b" | "comparison" | "judgement",
   source = "s-1",
 ): CheckReviewItem =>
   check(0, {
@@ -168,7 +168,7 @@ const transfer = (
   });
 
 const setFor = (source: string) =>
-  (["application_a", "application_b", "comparison", "diagnosis"] as const).map((k) => transfer(k, source));
+  (["application_a", "application_b", "comparison", "judgement"] as const).map((k) => transfer(k, source));
 
 const withConcepts = (a: string | null = "c-prop", b: string | null = "c-other") =>
   api.detail.mockResolvedValue({
