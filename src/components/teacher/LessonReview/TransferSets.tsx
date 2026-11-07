@@ -34,8 +34,17 @@ const PART =
 const PART_TAG =
   "inline-flex items-center gap-[7px] text-[11px] font-semibold tracking-[0.05em] uppercase";
 
-export function TransferSets({ sets }: { sets: TransferSet[] }) {
-  const names = useConceptNames(sets.map((s) => s.conceptId));
+export function TransferSets({
+  sets,
+  unwritten = [],
+  onWrite,
+}: {
+  sets: TransferSet[];
+  /** Concepts with no set yet, each offered the press (see `WriteTransfer`). */
+  unwritten?: { conceptId: string; label: string }[];
+  onWrite?: (conceptId: string) => Promise<string | null>;
+}) {
+  const names = useConceptNames([...sets.map((s) => s.conceptId), ...unwritten.map((c) => c.conceptId)]);
   return (
     <div className="mt-6 flex flex-col gap-8">
       {sets.map((set) => {
@@ -94,6 +103,64 @@ export function TransferSets({ sets }: { sets: TransferSet[] }) {
           </section>
         );
       })}
+      {onWrite &&
+        unwritten.map((c) => (
+          <WriteTransfer key={c.conceptId} name={names[c.conceptId] || c.label} onWrite={() => onWrite(c.conceptId)} />
+        ))}
+    </div>
+  );
+}
+
+/**
+ * THE PRESS THAT ASKS FOR A SET. Lydia, 5 Nov: placement right, and the label
+ * is "Add a transfer question" - "Nevo writes it and the teacher asks for
+ * it". One press per concept with no set; nothing writes a set at upload yet
+ * (she has asked Teslim), and if that ships this stays as the way to add
+ * more. A set joins the checks and re-opens their sign-off, which the line
+ * says; that line and the refusal lines are ours, for her.
+ *
+ * What it adds is a four-part set (SCRUM-295), and the set view draws all
+ * four. The line names the situations and the shared question, not the
+ * judgement question; that is for Lydia's words, not a claim it makes.
+ */
+const WRITE_REFUSED: Record<string, string> = {
+  concept_has_no_source_section: "Nevo couldn't find a section that teaches this, so it can't write one.",
+  transfer_generation_unavailable: "Nevo can't write one right now. Try again in a moment.",
+  transfer_generation_invalid_output: "Nevo couldn't write one that works this time. Try again.",
+  transfer_items_exist: "This already has a transfer question.",
+};
+
+function WriteTransfer({ name, onWrite }: { name: string; onWrite: () => Promise<string | null> }) {
+  const [writing, setWriting] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
+  return (
+    <div className="rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px] shadow-elevation-1 xl:px-6">
+      <span className="text-[13.5px] text-nevo-near-black/55">{name ? `${name} · transfer question` : "Transfer question"}</span>
+      <p className="mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/72 xl:text-[14px]">
+        Nevo can write two unlike situations that need this idea, and a question about what they
+        share, from your sections. They join the checks, so you accept them with the others.
+      </p>
+      <div className="mt-3.5 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          disabled={writing}
+          onClick={async () => {
+            setWriting(true);
+            setRefused(null);
+            const code = await onWrite();
+            setWriting(false);
+            if (code) setRefused(WRITE_REFUSED[code] ?? "That didn't go through. Try again.");
+          }}
+          className="inline-flex h-11 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-5 text-[14.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-104 disabled:cursor-default disabled:opacity-55"
+        >
+          {writing ? "Writing…" : "Add a transfer question"}
+        </button>
+        {refused && (
+          <span role="status" className="text-[13px] leading-[1.45] text-nevo-violet-text">
+            {refused}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

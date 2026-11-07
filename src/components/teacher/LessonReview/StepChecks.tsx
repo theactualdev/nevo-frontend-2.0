@@ -103,8 +103,11 @@ export function StepChecks({
   onAcceptParts,
   acceptingParts = false,
   partsRefusal = null,
+  onWriteTransfer,
 }: {
   view: ChecksView;
+  /** HELD for its frame: asks Nevo for a concept's transfer set (C25). */
+  onWriteTransfer?: (conceptId: string) => Promise<string | null>;
   /** Nothing in this step waits for a sign-off any more. */
   signed: boolean;
   readLeaks: ReadonlySet<string>;
@@ -181,8 +184,12 @@ export function StepChecks({
       )}
       {view.guidedOnly.length > 0 && <CheckList label="Guiding questions" rows={view.guidedOnly} />}
 
-      {view.transferSets.length > 0 && (
-        <TransferSets sets={view.transferSets} />
+      {(view.transferSets.length > 0 || (onWriteTransfer && view.unwrittenConcepts.length > 0)) && (
+        <TransferSets
+          sets={view.transferSets}
+          unwritten={onWriteTransfer ? view.unwrittenConcepts : []}
+          onWrite={onWriteTransfer}
+        />
       )}
 
       {unmarkable.length > 0 && (

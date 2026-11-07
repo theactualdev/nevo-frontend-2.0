@@ -69,6 +69,12 @@ export interface LessonReviewFlowState {
    * not the checks': the parts never hold back Assign.
    */
   approveParts: () => Promise<boolean>;
+  /**
+   * Asks Nevo for one concept's transfer set (C25, HELD for its frame).
+   * Resolves to null when written, or the server's refusal code. A set that
+   * already exists re-reads the review, so it shows.
+   */
+  writeTransfer: (conceptId: string) => Promise<string | null>;
   approveRewrites: () => Promise<boolean>;
   amendPoint: (keyPointId: string, text: string) => Promise<boolean>;
   resolveMissing: (segmentId: string, write: MissingKeyPointWrite) => Promise<boolean>;
@@ -263,6 +269,23 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
     }
   }, [working, review, lessonId, fail]);
 
+  const writeTransfer = useCallback(
+    async (conceptId: string): Promise<string | null> => {
+      try {
+        const res = await lessonsApi.generateTransferItems(lessonId, conceptId);
+        setReview(res.review);
+        return null;
+      } catch (err: unknown) {
+        const code = err instanceof ApiError ? apiErrorCode(err.detail) : null;
+        if (code === "transfer_items_exist") {
+          await lessonsApi.review(lessonId).then(setReview).catch(() => {});
+        }
+        return code ?? "unknown";
+      }
+    },
+    [lessonId],
+  );
+
   const approveRewrites = useCallback(
     () =>
       // The segments carry each rewrite's review stamp, so they are re-read
@@ -395,6 +418,7 @@ export function useLessonReviewFlow(lessonId: string): LessonReviewFlowState {
     approveKeyPoints,
     approveChecks,
     approveParts,
+    writeTransfer,
     approveRewrites,
     amendPoint,
     resolveMissing,
