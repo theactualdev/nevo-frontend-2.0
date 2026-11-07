@@ -146,8 +146,11 @@ describe("when the link does not resolve", () => {
     getInvitation.mockRejectedValue(new ApiError(500, "boom"));
     render(<ParentPortal token={TOKEN} />);
 
-    expect(await screen.findByText(/couldn[’']t open this page/i)).toBeInTheDocument();
+    // Lydia's words (SCRUM-321), and nothing about whether consent is
+    // recorded - unread, the page doesn't know.
+    expect(await screen.findByText(/couldn[’']t load this just now/i)).toBeInTheDocument();
     expect(screen.queryByText(/no longer active/i)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/consent|recorded|safe/i);
   });
 });
 
@@ -176,5 +179,40 @@ describe("when the link can't be read just now", () => {
 
     expect(await screen.findByText(/no longer active/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+});
+
+/**
+ * D01e's return state (Teslim's item 16, live 7 Nov): back through the same
+ * link with consent recorded and the date-of-birth check holding the child.
+ * Lydia's lines (SCRUM-321), then the parent's one step - sign in if they have
+ * an account, set it up if not - with their rights still below.
+ */
+describe("a returning parent whose child is held", () => {
+  it("with no account yet: the held lines, account setup, and the rights below", async () => {
+    getInvitation.mockResolvedValue(inv({ status: "confirmed", ageCheck: "mismatch", parentAccountReady: false }));
+    render(<ParentPortal token={TOKEN} />);
+    expect(await screen.findByRole("heading", { name: "Welcome back." })).toBeInTheDocument();
+    expect(screen.getByText("Amara can’t start yet.")).toBeInTheDocument();
+    expect(screen.getByText("You’ll need to confirm once more, signed in to your account.")).toBeInTheDocument();
+    expect(screen.getByText("This link works for 30 days from the day it was sent.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
+    expect(screen.getByRole("heading", { name: /Amara.s data on Nevo/ })).toBeInTheDocument();
+  });
+
+  it("with an account already: Sign in, never setting it up again", async () => {
+    getInvitation.mockResolvedValue(inv({ status: "confirmed", ageCheck: "mismatch", parentAccountReady: true }));
+    render(<ParentPortal token={TOKEN} />);
+    expect(await screen.findByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/parent-sign-in");
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+  });
+
+  it("isn't shown when nothing holds the child", async () => {
+    getInvitation.mockResolvedValue(inv({ status: "confirmed", ageCheck: null, parentAccountReady: false }));
+    render(<ParentPortal token={TOKEN} />);
+    expect(await screen.findByRole("heading", { name: /Amara.s data on Nevo/ })).toBeInTheDocument();
+    expect(screen.queryByText(/can.t start yet/)).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Welcome back." })).toBeNull();
   });
 });

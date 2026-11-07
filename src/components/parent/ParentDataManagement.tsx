@@ -114,12 +114,15 @@ export function ParentDataManagement({
   token,
   invitation,
   act,
+  lead = null,
 }: {
   /** The tokenised link's, when the page was opened from one. */
   token?: string;
   invitation: DataSubject;
   /** A signed-in parent's own routes; without it, the link's. */
   act?: ExerciseRight;
+  /** Shown above the page - D01e's held card on a returning link. */
+  lead?: React.ReactNode;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -231,6 +234,7 @@ export function ParentDataManagement({
 
   return (
     <Shell>
+      {lead}
       <div className={CARD}>
         <h1 className="text-[21px] font-semibold tracking-[-0.015em] text-nevo-near-black">
           {childLead}&rsquo;s data on Nevo

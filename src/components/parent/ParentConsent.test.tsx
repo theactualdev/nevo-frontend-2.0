@@ -585,8 +585,44 @@ describe("whether the child can start", () => {
     done("mismatch");
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
     giveConsent();
-    await screen.findByText(/that[’']s all we needed/i);
+    await screen.findByText(/Amara can.t start yet\./);
     expect(screen.queryByText(/can start learning/)).toBeNull();
+  });
+
+  /*
+   * D01e IN LYDIA'S WORDS (SCRUM-321, 7 Nov): no cause the server doesn't
+   * have, not "nothing more you need to do" (a held check clears only once
+   * the parent confirms again, signed in), and the link's real lifetime.
+   */
+  it("says the child can't start yet, what's left, and how long the link works", async () => {
+    done("mismatch");
+    const { container } = render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    giveConsent();
+    expect(
+      await screen.findByRole("heading", { name: /Thank you - Amara.s consent is recorded\./ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Amara can’t start yet.")).toBeInTheDocument();
+    expect(screen.getByText("You’ll need to confirm once more, signed in to your account.")).toBeInTheDocument();
+    expect(screen.getByText("This link works for 30 days from the day it was sent.")).toBeInTheDocument();
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/all we needed|getting (her|their|the) class ready|nothing more you need|stays active/i);
+  });
+
+  it("says it again after Maybe later, so later isn't a dead end", async () => {
+    done("mismatch");
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    giveConsent();
+    fireEvent.click(await screen.findByRole("button", { name: "Maybe later" }));
+    expect(await screen.findByText("Amara can’t start yet.")).toBeInTheDocument();
+    expect(screen.getByText("This link works for 30 days from the day it was sent.")).toBeInTheDocument();
+  });
+
+  it("says none of it when nothing holds them", async () => {
+    done("matched");
+    const { container } = render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    giveConsent();
+    await screen.findByText(/that[’']s all we needed/i);
+    expect(container.textContent).not.toMatch(/can.t start yet|confirm once more|30 days/);
   });
 });
 
@@ -803,7 +839,7 @@ describe("the child's date of birth", () => {
     });
     const { container } = render(<ParentConsent token={TOKEN} invitation={inv()} />);
     giveConsent();
-    await screen.findByText(/that[’']s all we needed/i);
+    await screen.findByText(/Amara can.t start yet\./);
     expect(visibleText(container)).not.toMatch(/can start learning/);
   });
 });
