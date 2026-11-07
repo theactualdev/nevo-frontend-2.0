@@ -1335,6 +1335,19 @@ export const lessonsApi = {
   concept: (conceptId: string) =>
     api.get<{ id: string; name: string }>(`/api/concepts/${conceptId}`),
 
+  /**
+   * Asks Nevo to write one concept's transfer set (backend #8): four checks,
+   * appended to the end-of-lesson questions, which RE-OPEN the checks
+   * sign-off. Returns the whole review. Refusals: 409 `transfer_items_exist`
+   * or `concept_has_no_source_section`, 503 `transfer_generation_unavailable`,
+   * 502 `transfer_generation_invalid_output`.
+   */
+  generateTransferItems: (lessonId: string, conceptId: string) =>
+    api.post<{ lessonId: string; conceptId: string; generatedCount: number; review: LessonReview }>(
+      `/api/v1/lessons/${lessonId}/transfer-items/generate`,
+      { conceptId },
+    ),
+
   /** The generated guiding questions, signed in the same step. */
   approveAllGuidedSteps: (lessonId: string, expectedContentHash: string) =>
     api.post<LessonReview>(

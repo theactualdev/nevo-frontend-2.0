@@ -582,6 +582,7 @@ export function LessonReviewFlow({
               onAcceptParts={() => void flow.approveParts()}
               acceptingParts={flow.working === "parts"}
               partsRefusal={refusedHere("parts")}
+              onWriteTransfer={flow.writeTransfer}
             />
           )}
 
