@@ -104,8 +104,13 @@ describe("a hold waiting on the school", () => {
     expect(
       await screen.findByText(/This notice went to everyone linked to Tunde\. Sent 21 October 2026\./),
     ).toBeInTheDocument();
-    // "as soon as the two dates agree" is not the whole rule (SCRUM-321).
+    // "as soon as the two dates agree" is not the whole rule (SCRUM-321);
+    // her line for the ADMIN card stands in its place (13b, 7 Nov).
     expect(document.body.textContent).not.toMatch(/activates on its own|We’ve asked/);
+    expect(document.body.textContent).toMatch(
+      /The hold can clear once your record and the parent’s line up closely enough\./,
+    );
+    expect(document.body.textContent).not.toMatch(/her school.s record and yours/);
   });
 
   it("doesn't say anyone was asked when no parent account was there to ask", async () => {

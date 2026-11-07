@@ -26,7 +26,11 @@ const check = (over: Partial<AgeCheck>): AgeCheck => ({
   ...over,
 });
 
-beforeEach(() => get.mockReset());
+// A block body: an arrow that RETURNS the mock is run by vitest as a teardown
+// after every test, making a stray call (the teacher lane's #1038).
+beforeEach(() => {
+  get.mockReset();
+});
 
 describe("held", () => {
   it("is the server's blocksAccess and nothing else", async () => {

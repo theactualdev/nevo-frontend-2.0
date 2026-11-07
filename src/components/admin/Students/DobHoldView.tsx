@@ -586,8 +586,9 @@ function WaitingCard({
           * linked to {name}" - the server notifies every linked parent with an
           * active account, not one named adult. The "activates on its own as
           * soon as the two dates agree" sentence is gone: not the whole rule.
-          * Her replacement ("The hold can clear once…") is asked about - its
-          * "yours" reads oddly on the school's screen - so it waits.
+          * In its place, her line for the ADMIN card (13b, 7 Nov): "The hold
+          * can clear once your record and the parent's line up closely
+          * enough." The parent's own date-check page keeps her original.
           */}
         {asked ? (
           <>
@@ -596,7 +597,8 @@ function WaitingCard({
           </>
         ) : (
           <>{person.first}&rsquo;s parent now needs to enter the date again.</>
-        )}
+        )}{" "}
+        The hold can clear once your record and the parent&rsquo;s line up closely enough.
       </p>
       <p className="m-0 mt-3 text-[13px] leading-[1.5] text-nevo-near-black/58">
         Not active yet - waiting on the parent.
