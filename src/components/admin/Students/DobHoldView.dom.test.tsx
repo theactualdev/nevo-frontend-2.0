@@ -288,12 +288,15 @@ describe("a roster gap on Date of birth checks (item 17)", () => {
       ...over,
     });
 
-  it("is 'On hold', never 'date of birth difference', and isn't under the 'differs' heading", async () => {
+  it("sits under Lydia's heading with her label - never 'date of birth difference' or the 'differs' heading (SCRUM-321)", async () => {
     held.mockResolvedValue([gap()]);
     getStudent.mockResolvedValue({ id: "s-gap", firstName: "Kemi", lastName: "Ade", classIds: [] });
     const { container } = render(<DobHoldView />);
     expect(await screen.findByText("Kemi Ade")).toBeInTheDocument();
-    expect(screen.getByText("On hold")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Held for a missing year group" })).toBeInTheDocument();
+    const group = screen.getByRole("list", { name: "Held for a missing year group" });
+    expect(group).toHaveTextContent("Kemi Ade");
+    expect(group).toHaveTextContent("No year group on the roster");
     const text = container.textContent ?? "";
     expect(text).not.toMatch(/date of birth difference/);
     expect(text).not.toMatch(/date of birth a parent gave differs/);
@@ -315,6 +318,7 @@ describe("a roster gap on Date of birth checks (item 17)", () => {
     expect(differing).not.toHaveTextContent("Kemi Ade");
     const text = container.textContent ?? "";
     expect(text.indexOf("date of birth a parent gave differs")).toBeLessThan(text.indexOf("Tunde Adeyemi"));
-    expect(text.indexOf("Tunde Adeyemi")).toBeLessThan(text.indexOf("Kemi Ade"));
+    expect(text.indexOf("Tunde Adeyemi")).toBeLessThan(text.indexOf("Held for a missing year group"));
+    expect(text.indexOf("Held for a missing year group")).toBeLessThan(text.indexOf("Kemi Ade"));
   });
 });
