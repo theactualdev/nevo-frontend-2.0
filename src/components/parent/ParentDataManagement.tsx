@@ -281,13 +281,12 @@ export function ParentDataManagement({
               rendering "You withdrew consent on , so ...". Composing the whole
               sentence from the FORMATTED value collapses that to two states. */}
           {notTheirsToRestore ? (
-            <>
-              <p className={BODY}>
-                Consent for {child} has been withdrawn, so they can no longer
-                access Nevo.
-              </p>
-              <p className={BODY}>Only the guardian who gave it can restore it.</p>
-            </>
+            // Lydia's 10 (copy pass, 7 Nov).
+            <p className={BODY}>
+              {childLead}&rsquo;s consent has been withdrawn, so they can&rsquo;t use Nevo
+              at the moment. The adult who gave that consent is the only one who can
+              restore it.
+            </p>
           ) : (
             <>
               <p className={BODY}>
@@ -295,14 +294,41 @@ export function ParentDataManagement({
               </p>
               <p className={BODY}>{RESTORE_LINE}</p>
               {restore && !notTheirs ? (
-                <button
-                  type="button"
-                  className={PRIMARY}
-                  disabled={restoring === "sending"}
-                  onClick={() => void giveBack()}
-                >
-                  {restoring === "sending" ? "Restoring…" : "Restore consent"}
-                </button>
+                <>
+                  {/*
+                    * D01c (design 928cf30): restoring is consenting AGAIN,
+                    * not an undo - so the same four terms the page shows are
+                    * shown again, then one press. No deadline and no date:
+                    * the purge is a scheduled job, and a date would be wrong
+                    * both ways.
+                    */}
+                  <div className="mt-4 rounded-[10px] bg-nevo-cream px-4 py-3.5">
+                    <p className="m-0 text-[14px] font-semibold text-nevo-near-black">
+                      What you are agreeing to again
+                    </p>
+                    <div className="mt-2.5 flex flex-col gap-2.5">
+                      {SECTIONS.map((s) => (
+                        <div key={s.heading}>
+                          <p className="m-0 text-[13.5px] font-semibold text-nevo-near-black/80">
+                            {s.heading}
+                          </p>
+                          <p className="m-0 mt-0.5 text-[13.5px] leading-[1.5] text-nevo-near-black/65">
+                            {s.body(child)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <p className={BODY}>Restoring puts {child}&rsquo;s access back.</p>
+                  <button
+                    type="button"
+                    className={PRIMARY}
+                    disabled={restoring === "sending"}
+                    onClick={() => void giveBack()}
+                  >
+                    {restoring === "sending" ? "Restoring…" : "Restore consent"}
+                  </button>
+                </>
               ) : null}
               {notTheirs ? (
                 <p role="alert" className={NOTE}>
@@ -511,11 +537,11 @@ export function ParentDataManagement({
           </>
         ) : (
           <>
+            {/* Lydia's line for before withdrawing (copy pass, 7 Nov). */}
             <p className={BODY}>
-              This will immediately suspend {child}&rsquo;s access to Nevo. They
-              will not be able to use the platform until consent is restored.
+              This will suspend {child}&rsquo;s access straight away. You can restore it
+              yourself later from your account.
             </p>
-            <p className={BODY}>{RESTORE_LINE}</p>
             <button
               type="button"
               className={PRIMARY}

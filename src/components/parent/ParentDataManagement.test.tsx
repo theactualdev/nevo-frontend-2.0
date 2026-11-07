@@ -380,11 +380,12 @@ describe("restoring access is the parent's, never the school's", () => {
     expect(screen.queryByRole("button", { name: /Restore consent/i })).toBeNull();
   });
 
-  it("says so before a withdrawal too", () => {
+  it("before a withdrawal, says the parent can restore it themselves later - Lydia's copy-pass line", () => {
     const { container } = render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
     fireEvent.click(screen.getByRole("button", { name: /^Withdraw consent$/i }));
-    expect(screen.getByText(LINE)).toBeInTheDocument();
-    expect(container.textContent).toMatch(/will not be able to use the platform until consent is restored\./);
-    expect(container.textContent).not.toMatch(/through your school|To restore access later, contact/);
+    expect(
+      screen.getByText("This will suspend Amara’s access straight away. You can restore it yourself later from your account."),
+    ).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/through your school|To restore access later, contact|until consent is restored/);
   });
 });

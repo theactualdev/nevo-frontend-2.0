@@ -260,6 +260,10 @@ describe("restoring from the account (SCRUM-321)", () => {
     });
     render(<ParentMyData />);
     expect(await screen.findByText(LINE)).toBeInTheDocument();
+    // D01c (928cf30): restoring is consenting again, so the terms come first.
+    expect(screen.getByText("What you are agreeing to again")).toBeInTheDocument();
+    expect(screen.getAllByText("What Nevo collects").length).toBeGreaterThan(0);
+    expect(screen.getByText("Restoring puts Amara’s access back.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Restore consent" }));
     expect(
       await screen.findByText("Your child can use Nevo again. Their school has been told."),
@@ -274,7 +278,11 @@ describe("restoring from the account (SCRUM-321)", () => {
     myConsents.mockResolvedValue([withdrawn(false)]);
     const { container } = render(<ParentMyData />);
     expect(await screen.findByText(/account is suspended/i)).toBeInTheDocument();
-    expect(container.textContent).toMatch(/Only the guardian who gave it can restore it\./);
+    // Lydia's 10 (copy pass, 7 Nov).
+    expect(container.textContent).toMatch(
+      /Amara’s consent has been withdrawn, so they can’t use Nevo at the moment\. The adult who gave that consent is the only one who can restore it\./,
+    );
+    expect(screen.queryByText("What you are agreeing to again")).toBeNull();
     expect(container.textContent).not.toMatch(/You withdrew/);
     expect(screen.queryByText(LINE)).toBeNull();
     expect(screen.queryByRole("button", { name: "Restore consent" })).toBeNull();
