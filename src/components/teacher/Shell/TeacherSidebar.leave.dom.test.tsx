@@ -37,7 +37,9 @@ function Editing() {
   return null;
 }
 
-beforeEach(() => push.mockReset());
+beforeEach(() => {
+  push.mockReset();
+});
 
 describe("a sidebar tab, mid-edit", () => {
   it("asks before it leaves the page", () => {
