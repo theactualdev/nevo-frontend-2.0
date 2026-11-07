@@ -44,6 +44,56 @@ export const reviewHrefFor = (lessonId: string) =>
 export const REVIEW_TO_ASSIGN = "Review this lesson to assign it.";
 
 /**
+ * SCRUM-319: a refused Assign names the step that holds it, and goes back to
+ * it. The words are the server's own (`REVIEW_STEP_NAMES`, backend b74b5e8),
+ * so the console and the 409's message call each step the same thing; the
+ * numbers are C07k's five steps.
+ */
+const STEP_WORDS: Record<string, string> = {
+  media: "pictures",
+  key_points: "key points",
+  checks: "checks",
+  guided_steps: "guided steps",
+  calculation_parts: "calculation parts",
+  rewrites: "rewrites",
+};
+const STEP_NUMBER: Record<string, number> = {
+  media: 1,
+  key_points: 2,
+  checks: 3,
+  guided_steps: 3,
+  calculation_parts: 3,
+  rewrites: 4,
+};
+
+const listed = (parts: string[]) =>
+  parts.length <= 1 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+
+export interface AssignRefusal {
+  /** What holds it, by step - or null where the server named no step. */
+  line: string | null;
+  /** Back to the first step that holds it, in review order. */
+  href: string;
+  /** "Go to the checks", or the review itself when no step is named. */
+  label: string;
+}
+
+export function assignRefusal(lessonId: string, steps: string[] | null | undefined): AssignRefusal {
+  const known = [...new Set((steps ?? []).filter((s) => STEP_WORDS[s]))].sort(
+    (a, b) => STEP_NUMBER[a] - STEP_NUMBER[b],
+  );
+  if (known.length === 0) {
+    return { line: null, href: reviewHrefFor(lessonId), label: "Review in five steps" };
+  }
+  const first = known[0];
+  return {
+    line: `It can${"’"}t be assigned until its review is done: ${listed(known.map((s) => STEP_WORDS[s]))} still to sign off.`,
+    href: `${reviewHrefFor(lessonId)}?step=${STEP_NUMBER[first]}`,
+    label: `Go to the ${STEP_WORDS[first]}`,
+  };
+}
+
+/**
  * The rest of the wizard's sentence after the lessons' names: "Photosynthesis
  * isn’t reviewed yet...", "Photosynthesis and Osmosis aren’t...".
  */

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { LessonDetailResponse, LessonSegment } from "@/lib/api/lessons";
 
 const { useLessonReview, useSegmentReview } = vi.hoisted(() => ({
@@ -393,6 +393,8 @@ describe("the way into the four-step review", () => {
     show();
 
     expect(screen.queryByRole("link", { name: "Assign to a class" })).not.toBeInTheDocument();
+    // SCRUM-319: pressable, and the reason comes with the tap.
+    fireEvent.click(screen.getByRole("button", { name: "Assign to a class" }));
     expect(screen.getByText("Review this lesson to assign it.")).toBeInTheDocument();
   });
 
@@ -565,12 +567,14 @@ describe("while the review is still being read", () => {
     expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
   });
 
-  it("holds Assign, so it cannot be pressed into a 409", () => {
+  /* SCRUM-319: never disabled - but while the verdict is out, a tap goes nowhere and claims nothing. */
+  it("holds Assign without disabling it, so a tap can't reach a 409", () => {
     reviewState({ loading: true });
     show();
 
     expect(screen.queryByRole("link", { name: "Assign to a class" })).not.toBeInTheDocument();
-    expect(screen.getByText("Assign to a class")).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Assign to a class" }));
+    expect(screen.queryByText(/still to|Still being checked|Review this lesson/)).not.toBeInTheDocument();
   });
 
   it("does not explain a refusal nobody has made", () => {

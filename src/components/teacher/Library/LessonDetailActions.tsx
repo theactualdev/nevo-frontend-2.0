@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
-import { REVIEW_TO_ASSIGN } from "@/lib/lessons/signOff";
+import { useState } from "react";
+import { assignRefusal, REVIEW_TO_ASSIGN } from "@/lib/lessons/signOff";
 
 /**
  * The line under an Assign that cannot go yet: what is left, from the
@@ -69,6 +72,7 @@ export function LessonDetailActions({
   checking = false,
   outstandingKeyPoints = 0,
   outstandingSections = 0,
+  outstandingSteps = [],
 }: {
   lessonId: string;
   variantsHref?: string;
@@ -105,11 +109,16 @@ export function LessonDetailActions({
   outstandingKeyPoints?: number;
   /** Flagged sections nobody has approved. */
   outstandingSections?: number;
+  /** SCRUM-307: the review steps still holding Assign, by the server's names. */
+  outstandingSteps?: string[];
 }) {
   // C06b's tablet draws 42px / 14px buttons; desktop 44px / 14.5px.
   const h = compact ? "h-[42px] text-sm" : "h-[42px] text-sm xl:h-11 xl:text-[14.5px]";
   const awaitingReview = signedOff === false;
   const blocked = !ready || awaitingReview || checking;
+  /* SCRUM-319: pressed while held, it explains - never a disabled button. */
+  const [explained, setExplained] = useState(false);
+  const refusal = assignRefusal(lessonId, outstandingSteps);
 
   return (
     // Under the title on tablet, so it reads from the left; beside it on desktop.
@@ -124,12 +133,18 @@ export function LessonDetailActions({
           </Link>
         )}
         {blocked ? (
-          <span
-            aria-disabled="true"
-            className={`inline-flex items-center rounded-[10px] bg-nevo-navy/30 px-[18px] font-semibold text-nevo-cream xl:px-5 ${h}`}
+          /* SCRUM-319 (Lydia, 7 Nov): the control stays pressable and the
+             refusal is explained after the tap, naming the step, with the
+             way back to it. While the verdict is on its way there is nothing
+             to explain yet, so the tap waits for it. */
+          <button
+            type="button"
+            onClick={() => setExplained(true)}
+            aria-expanded={explained}
+            className={`inline-flex cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] font-semibold text-nevo-cream transition-[filter,transform] hover:brightness-93 active:scale-[0.99] xl:px-5 ${h}`}
           >
             Assign to a class
-          </span>
+          </button>
         ) : (
           <Link
             href={`/teacher/lessons/assign?lesson=${lessonId}`}
@@ -156,15 +171,25 @@ export function LessonDetailActions({
           </Link>
         )}
       </div>
-      {blocked && !checking && (
-        <span className="text-[12.5px] font-medium text-nevo-navy xl:text-right xl:text-[13px]">
-          {/* The server says it is not ready and we do not always know why -
-              a refusal we cannot itemise still has to say something true. */}
-          {/* C06b: "2 key points still to check". The "below" this used to
-              carry was true on the lesson page and false everywhere else
-              this component is drawn. */}
-          {stillToCheck(outstandingKeyPoints, outstandingSections, awaitingReview)}
-        </span>
+      {blocked && !checking && explained && (
+        <div role="status" className="flex max-w-[420px] flex-col items-start gap-1 xl:items-end xl:text-right">
+          <span className="text-[12.5px] font-medium text-nevo-navy xl:text-right xl:text-[13px]">
+            {/* The step, where the server names one (SCRUM-307); otherwise
+                C06b's counts, or the one true thing when it can't be
+                itemised. */}
+            {refusal.line ?? stillToCheck(outstandingKeyPoints, outstandingSections, awaitingReview)}
+          </span>
+          {/* The route back to a NAMED step; with none named, the page's own
+              way into the review stands. */}
+          {refusal.line && (
+            <Link
+              href={refusal.href}
+              className="text-[12.5px] font-semibold text-nevo-navy underline underline-offset-2 xl:text-[13px]"
+            >
+              {refusal.label}
+            </Link>
+          )}
+        </div>
       )}
     </div>
   );

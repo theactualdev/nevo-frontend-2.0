@@ -10,7 +10,7 @@ import { assignmentsApi } from "@/lib/api/assignments";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { useLessonLibrary } from "@/hooks/useLessonLibrary";
 import { cn } from "@/lib/utils";
-import { awaitingSignOff, reviewHrefFor, UNREVIEWED_LEFT_OFF } from "@/lib/lessons/signOff";
+import { assignRefusal, awaitingSignOff, reviewHrefFor, UNREVIEWED_LEFT_OFF } from "@/lib/lessons/signOff";
 
 /**
  * C08c Recommend a Lesson, for a real student.
@@ -237,7 +237,13 @@ export function LiveRecommendSheet({
           apiErrorMessage(err.detail) ??
             "This lesson still has sections waiting for you, so it cannot go to students yet.",
         );
-        setErrorHref(`/teacher/lessons/${chosen.id}`);
+        /* SCRUM-319: back to the STEP the 409 names (SCRUM-307), else the lesson. */
+        const steps =
+          (err.detail as { detail?: { lessons?: { lessonId?: string; outstandingReviewSteps?: string[] }[] } } | undefined)
+            ?.detail?.lessons?.find((l) => l.lessonId === chosen.id)?.outstandingReviewSteps ?? [];
+        const back = assignRefusal(chosen.id, steps);
+        setErrorHref(steps.length > 0 ? back.href : `/teacher/lessons/${chosen.id}`);
+        setErrorLink(steps.length > 0 ? back.label : "");
         return;
       }
       // Nothing is confirmed until something is stored. The old sheet said

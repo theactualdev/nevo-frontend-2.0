@@ -338,6 +338,31 @@ describe("a lesson that has not been approved", () => {
     });
     expect(link).toHaveAttribute("href", "/teacher/lessons/l-1");
   });
+
+  /*
+   * SCRUM-319 (Lydia, 7 Nov): the refusal names the outstanding step, with
+   * the route back to IT. The 409 names each lesson's steps (SCRUM-307).
+   */
+  it("goes back to the step that holds it when the server names one", async () => {
+    create.mockRejectedValue(
+      new ApiError(409, "conflict", {
+        detail: {
+          code: "lesson_not_approved",
+          message: "Fractions 3: checks and rewrites still to sign off",
+          lessons: [{ lessonId: "l-1", outstandingReviewSteps: ["rewrites", "checks"] }],
+        },
+      }),
+    );
+    toStudents();
+    fireEvent.click(screen.getByRole("button", { name: /Amara Okafor/ }));
+    send();
+
+    expect(await screen.findByText(/checks and rewrites still to sign off/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Go to the checks" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1/review?step=3",
+    );
+  });
 });
 
 /**

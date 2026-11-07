@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 import { LessonDetailActions } from "./LessonDetailActions";
 
@@ -31,6 +31,8 @@ describe("the lesson's actions", () => {
     render(
       <LessonDetailActions lessonId="l-1" ready={false} outstandingKeyPoints={2} />,
     );
+    // SCRUM-319: the reason comes with the tap.
+    fireEvent.click(screen.getByRole("button", { name: "Assign to a class" }));
 
     expect(screen.getByText(/2 key points still to check/)).toHaveClass("xl:text-right");
     expect(screen.getByText(/2 key points still to check/).className.split(" ")).not.toContain(
