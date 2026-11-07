@@ -354,21 +354,26 @@ describe("a link that doesn't look right (AC-03b)", () => {
     expect(visibleText(container)).not.toMatch(/Sign in to your account to continue/);
   });
 
-  it("signed in and waiting, names the school and address, and resends from the session", async () => {
+  /*
+   * LYDIA, 7 Nov (her 8 and 13d): signed in and waiting, the heading and Send
+   * a new link - "nothing else on it". The admin is the school.
+   */
+  it("signed in and waiting: the heading and Send a new link, nothing else", async () => {
     getSession.mockReturnValue({ token: "s", userId: "u1", role: "senco_admin", expiresAt: "2026-12-01T00:00:00Z" });
     verify.mockResolvedValue(invalid);
     read.mockResolvedValue(state({ status: "pending", email: "f.adebayo@brightgate.edu.ng" }));
     schoolGet.mockResolvedValue({ name: "Brightgate Academy" });
     resend.mockResolvedValue(state({ status: "pending" }));
     const { container } = render(<ConfirmEmail token="t1" />);
-    await waitFor(() =>
-      expect(visibleText(container)).toMatch(
-        /It may have been copied only part-way\. Nothing's wrong with your account - we can send Brightgate Academy a fresh link to f\.adebayo@brightgate\.edu\.ng\./,
-      ),
-    );
-    fireEvent.click(screen.getByRole("button", { name: /Send a new link/ }));
+    const send = await screen.findByRole("button", { name: /Send a new link/ });
+    expect(screen.getByRole("heading", { name: /This link doesn.t look right/ })).toBeInTheDocument();
+    expect(screen.queryAllByRole("link")).toEqual([]);
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    const text = visibleText(container);
+    expect(text).not.toMatch(/part-way|f\.adebayo|Brightgate|Wrong address|Change the email/);
+    fireEvent.click(send);
     await waitFor(() => expect(resend).toHaveBeenCalledWith(undefined));
-    expect(screen.getByRole("link", { name: /Change the email address/ })).toHaveAttribute("href", "/admin");
+    expect(await screen.findByText(/Sent\. Check your email/)).toBeInTheDocument();
   });
 
   it("signed in but already confirmed, offers nothing more to send", async () => {

@@ -129,21 +129,22 @@ function bodyFor(status: EmailConfirmationStatus, email: string | null): string 
  *    opens an emailed link - there's nothing to name and nothing a button
  *    could do without a session. Signed out, it says to sign in (Lydia, below).
  */
-function invalidBody(own: OwnConfirmation | null, signedOut: boolean): string {
+function invalidBody(own: OwnConfirmation | null, signedOut: boolean): string | null {
   /*
-   * SIGNED OUT: LYDIA'S WORDS (SCRUM-321, 7 Nov), "Sign in to your account to
-   * continue." - no address, no school, and Sign in the only control, because
-   * the screen has none of them. Her first sentence, "This link has expired.",
-   * is NOT used: the server says this link is `invalid` - not expired, not
-   * used - and an expired link already has its own screen saying exactly
-   * that. Raised to the hub; the heading stays what the server makes true.
+   * LYDIA, 7 Nov (her 8 in the copy pass, and 13d): this screen is "This link
+   * doesn't look right" - the expired screen keeps its own words - with Send a
+   * new link when signed in and Sign in when signed out.
+   *
+   * SIGNED IN AND WAITING: the heading and Send a new link, "nothing else on
+   * it". The admin is the school; there's no one else to send them to.
+   *
+   * SIGNED OUT: her SCRUM-321 line, "Sign in to your account to continue." -
+   * no address, no school, Sign in the only control, because the screen has
+   * none of them.
    */
+  if (own) return null;
   if (signedOut) return "Sign in to your account to continue.";
-  const lead = "It may have been copied only part-way.";
-  if (!own) return lead;
-  return own.school
-    ? `${lead} Nothing’s wrong with your account - we can send ${own.school} a fresh link to ${own.email}.`
-    : `${lead} We can send a fresh one to ${own.email}.`;
+  return "It may have been copied only part-way.";
 }
 
 /**
@@ -301,11 +302,17 @@ export function ConfirmEmail({ token }: { token: string }) {
               * D01b names the 24-hour lifetime and the address; `message` knows
               * neither, so on the two states design drew, design wins.
               */}
-            <p className="mt-[13px] max-w-[420px] text-[17px] leading-[1.55] text-nevo-near-black/70">
-              {state.status === "invalid"
-                ? invalidBody(own, signedOut)
-                : (bodyFor(state.status, state.email) ?? state.message)}
-            </p>
+            {(() => {
+              const body =
+                state.status === "invalid"
+                  ? invalidBody(own, signedOut)
+                  : (bodyFor(state.status, state.email) ?? state.message);
+              return body ? (
+                <p className="mt-[13px] max-w-[420px] text-[17px] leading-[1.55] text-nevo-near-black/70">
+                  {body}
+                </p>
+              ) : null;
+            })()}
             {/*
               * The address on its own line, only where the body has not
               * already named it. `email` is nullable - an invalid token
@@ -316,7 +323,9 @@ export function ConfirmEmail({ token }: { token: string }) {
                 {state.email}
               </p>
             ) : null}
-            {OFFERS_SIGN_IN[state.status] ? (
+            {/* Signed in and waiting after an invalid link, Send a new link is
+                the only control (Lydia, 13d) - they're signed in already. */}
+            {OFFERS_SIGN_IN[state.status] && !(state.status === "invalid" && own) ? (
               <Link
                 href="/auth/admin"
                 className="mt-7 flex h-[52px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-6 text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 active:brightness-93"
@@ -416,16 +425,7 @@ export function ConfirmEmail({ token }: { token: string }) {
                   * caller of the address change was the setup wizard, which a
                   * signed-in admin never sees again.
                   */}
-                {state.status === "invalid" && own ? (
-                  /* AC-03b's second button. Signed in, the address change is
-                     the console banner's Change email, one step away. */
-                  <Link
-                    href="/admin"
-                    className="flex h-[48px] w-full cursor-pointer items-center justify-center rounded-[10px] border border-nevo-near-black/15 px-5 text-[15px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/[0.04]"
-                  >
-                    Change the email address
-                  </Link>
-                ) : (
+                {state.status === "invalid" && own ? null : (
                   <p className="m-0 max-w-[340px] text-[13.5px] leading-[1.55] text-nevo-near-black/55">
                     Wrong address? Sign in and you can change it there.
                   </p>
