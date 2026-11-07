@@ -57,6 +57,10 @@ beforeEach(() => {
   getSession.mockReturnValue(null);
 });
 
+/** Signed in: AC-03 is what an expired link shows then (AC-03c is signed out). */
+const signedIn = () =>
+  getSession.mockReturnValue({ token: "s", userId: "u1", role: "senco_admin", expiresAt: "2026-12-01T00:00:00Z" });
+
 describe("ConfirmEmail", () => {
   it("sends the token from the path, not a query param", async () => {
     // The parent consent link shipped once with the token in a query param
@@ -129,6 +133,7 @@ describe("ConfirmEmail", () => {
      * written, and the constraint is gone: backend widened resend to accept
      * the token on 24 Sep. The old test would have kept the button out.
      */
+    signedIn();
     verify.mockResolvedValue(state({ status: "expired", email: null, message: "Ran out." }));
     const { container } = render(<ConfirmEmail token="t6" />);
 
@@ -157,6 +162,10 @@ describe("ConfirmEmail", () => {
  * matched /expired/i would pass against either wording and catch nothing.
  */
 describe("D01b's own copy", () => {
+  beforeEach(() => {
+    signedIn();
+  });
+
   it("says what AC-03 says, with the backend's 48 hours and the address", async () => {
     verify.mockResolvedValue(
       state({ status: "expired", email: "f.adebayo@brightgate.edu.ng", message: "Ran out." }),
@@ -226,6 +235,10 @@ describe("D01b's own copy", () => {
  * wall.
  */
 describe("sending a new link from a dead one", () => {
+  beforeEach(() => {
+    signedIn();
+  });
+
   const expired = () =>
     verify.mockResolvedValue(state({ status: "expired", email: "f@b.edu.ng" }));
 
@@ -386,5 +399,39 @@ describe("a link that doesn't look right (AC-03b)", () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(visibleText(container)).not.toMatch(/f\.adebayo/);
     expect(screen.queryByRole("button", { name: /Send a new link/ })).toBeNull();
+  });
+});
+
+/*
+ * AC-03c (design 928cf30, Job 14): an expired link opened SIGNED OUT. It
+ * names no address or school - an expired link is a URL anyone can hold -
+ * and Sign in is the only control. The 48 hours is Lydia's correction of the
+ * frame's 24. The frame's "Sign in and we will send a fresh one." is left
+ * out: signing in sends nothing on its own (raised).
+ */
+describe("an expired link opened signed out (AC-03c)", () => {
+  it("says it expired and how long links last, with Sign in the only control", async () => {
+    verify.mockResolvedValue(
+      state({ status: "expired", email: "f.adebayo@brightgate.edu.ng", message: "Ran out." }),
+    );
+    const { container } = render(<ConfirmEmail token="t1" />);
+    expect(await screen.findByRole("heading", { name: "This link has expired" })).toBeInTheDocument();
+    const text = visibleText(container);
+    expect(text).toMatch(/Confirmation links last 48 hours\./);
+    expect(text).not.toMatch(/f\.adebayo|Brightgate|we will send|We can send|Wrong address|24 hours/);
+    expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual(["Sign in"]);
+    expect(screen.queryAllByRole("button")).toEqual([]);
+  });
+
+  it("signed in, it's AC-03 - the address and Send a new link", async () => {
+    signedIn();
+    verify.mockResolvedValue(
+      state({ status: "expired", email: "f.adebayo@brightgate.edu.ng", message: "Ran out." }),
+    );
+    const { container } = render(<ConfirmEmail token="t1" />);
+    expect(await screen.findByRole("button", { name: /Send a new link/ })).toBeInTheDocument();
+    expect(visibleText(container)).toMatch(
+      /Confirmation links last 48 hours\. We can send a fresh one to f\.adebayo@brightgate\.edu\.ng\./,
+    );
   });
 });

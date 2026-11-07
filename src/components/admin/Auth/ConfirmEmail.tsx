@@ -204,6 +204,15 @@ export function ConfirmEmail({ token }: { token: string }) {
       .then((s) => {
         setState(s);
         setPhase("done");
+        /*
+         * AC-03c (design 928cf30, Job 14): an expired link opened SIGNED OUT
+         * names nobody and offers only Sign in - "an expired link is a URL
+         * anyone can hold". Once signed in, AC-03 is what they see.
+         */
+        if (s.status === "expired") {
+          if (!getSession()) setSignedOut(true);
+          return;
+        }
         // AC-03b's signed-in case: the link names nobody, but a session does.
         if (s.status !== "invalid") return;
         if (!getSession()) {
@@ -303,10 +312,19 @@ export function ConfirmEmail({ token }: { token: string }) {
               * neither, so on the two states design drew, design wins.
               */}
             {(() => {
+              /*
+               * AC-03c's "Sign in and we will send a fresh one." is left out:
+               * signing in sends nothing (the console's banner offers Resend,
+               * a press away), so "we will send" would promise more than
+               * happens - raised. The 48 hours is Lydia's correction of the
+               * frame's 24 (copy pass, 7 Nov).
+               */
               const body =
                 state.status === "invalid"
                   ? invalidBody(own, signedOut)
-                  : (bodyFor(state.status, state.email) ?? state.message);
+                  : state.status === "expired" && signedOut
+                    ? "Confirmation links last 48 hours."
+                    : (bodyFor(state.status, state.email) ?? state.message);
               return body ? (
                 <p className="mt-[13px] max-w-[420px] text-[17px] leading-[1.55] text-nevo-near-black/70">
                   {body}
@@ -355,7 +373,7 @@ export function ConfirmEmail({ token }: { token: string }) {
               * password). `/verify` transfers nothing; changing transfers
               * everything. Two ways to serve it are with design.
               */}
-            {state.status === "expired" ||
+            {(state.status === "expired" && !signedOut) ||
             state.status === "pending" ||
             (state.status === "invalid" && own) ? (
               <div className="mt-6 flex w-full max-w-[360px] flex-col items-center gap-3">
