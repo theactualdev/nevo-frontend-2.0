@@ -360,3 +360,31 @@ describe("what the page tells a parent", () => {
     expect(screen.getByText(/how Amara is learning/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * LYDIA'S D01c LINE (SCRUM-321 comment, 7 Nov). The page said only the school
+ * could restore access - the opposite of what is true. The parent who withdrew
+ * restores it from their own account; the school cannot.
+ */
+describe("restoring access is the parent's, never the school's", () => {
+  const LINE =
+    "If you change your mind, you can restore this yourself from your account. Your school cannot do it for you.";
+
+  it("says so on the suspended page, and sends no one to the school", () => {
+    const { container } = render(
+      <ParentDataManagement token={TOKEN} invitation={inv({ status: "withdrawn" })} />,
+    );
+    expect(screen.getByText(LINE)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/contact Brightgate|work with Nevo to reactivate|through your school/);
+    // The emailed link can't restore - the server keeps that to the account.
+    expect(screen.queryByRole("button", { name: /Restore consent/i })).toBeNull();
+  });
+
+  it("says so before a withdrawal too", () => {
+    const { container } = render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Withdraw consent$/i }));
+    expect(screen.getByText(LINE)).toBeInTheDocument();
+    expect(container.textContent).toMatch(/will not be able to use the platform until consent is restored\./);
+    expect(container.textContent).not.toMatch(/through your school|To restore access later, contact/);
+  });
+});

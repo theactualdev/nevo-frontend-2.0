@@ -103,7 +103,21 @@ export type DataSubject = Pick<
    * shows as before (raised: the token route doesn't ask yet).
    */
   canWithdraw?: boolean;
+  /**
+   * Signed in, after a withdrawal: whether this parent may give it back - the
+   * server's `canWithdraw` on the withdrawn consents, the rule the restore
+   * route asks too. Undefined on a tokenised link.
+   */
+  canRestore?: boolean;
 };
+
+/**
+ * LYDIA'S WORDS (SCRUM-321, her D01c comment, 7 Nov). The page said only the
+ * school could restore access - the opposite of what is true: the parent who
+ * withdrew restores it from their own account, and the school can't.
+ */
+const RESTORE_LINE =
+  "If you change your mind, you can restore this yourself from your account. Your school cannot do it for you.";
 
 /** Exercise one right; the page says what came back. */
 export type ExerciseRight = (
@@ -122,12 +136,22 @@ export function ParentDataManagement({
   token,
   invitation,
   act,
+  restore,
+  notice = null,
 }: {
   /** The tokenised link's, when the page was opened from one. */
   token?: string;
   invitation: DataSubject;
   /** A signed-in parent's own routes; without it, the link's. */
   act?: ExerciseRight;
+  /**
+   * Signed in only: give back a withdrawn consent. Resolves once the server
+   * has; the caller reads the page again. The emailed link has no restore -
+   * the server keeps it to the signed-in account on purpose.
+   */
+  restore?: () => Promise<void>;
+  /** The server's own words about the last thing done, shown once. */
+  notice?: string | null;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -140,6 +164,30 @@ export function ParentDataManagement({
    * the card goes and this stands in its place.
    */
   const [notTheirs, setNotTheirs] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState<"idle" | "sending" | "failed">("idle");
+
+  async function giveBack() {
+    if (!restore) return;
+    setRestoring("sending");
+    try {
+      await restore();
+      setRestoring("idle");
+    } catch (e) {
+      const code = e instanceof ApiError ? apiErrorCode(e.detail) : null;
+      if (
+        code === "consent_decision_belongs_to_another_guardian" ||
+        code === "consent_belongs_to_another_guardian"
+      ) {
+        setNotTheirs(
+          (e instanceof ApiError ? apiErrorMessage(e.detail) : null) ??
+            "Only the guardian who gave this consent can restore it.",
+        );
+        setRestoring("idle");
+        return;
+      }
+      setRestoring("failed");
+    }
+  }
 
   async function exercise(right: ParentRightType) {
     const withReason = right === "object" ? reason : undefined;
@@ -207,9 +255,21 @@ export function ParentDataManagement({
     invitation.status === "withdrawn" ||
     (phase === "done" && outcome?.right === "withdraw_consent");
 
+  /*
+   * Signed in as a guardian who isn't the one who gave it (SCRUM-306): they
+   * didn't withdraw it, and they can't restore it - so neither "You withdrew"
+   * nor Lydia's restore line is true for them.
+   */
+  const notTheirsToRestore = invitation.canRestore === false;
+
   if (suspended) {
     return (
       <Shell>
+        {notice ? (
+          <p role="status" className={NOTE}>
+            {notice}
+          </p>
+        ) : null}
         <div className={CARD}>
           <h2 className={H3}>{childLead}&rsquo;s account is suspended</h2>
           {/* One expression rather than text-expression-text. Not for spacing -
@@ -220,13 +280,43 @@ export function ParentDataManagement({
               gets the third wrong, emitting " on " with nothing in it and
               rendering "You withdrew consent on , so ...". Composing the whole
               sentence from the FORMATTED value collapses that to two states. */}
-          <p className={BODY}>
-            {withdrawalSentence(invitation.decidedAt)}
-          </p>
-          <p className={BODY}>
-            To restore access, contact {schoolPhrase(invitation)}. The school
-            will work with Nevo to reactivate the account.
-          </p>
+          {notTheirsToRestore ? (
+            <>
+              <p className={BODY}>
+                Consent for {child} has been withdrawn, so they can no longer
+                access Nevo.
+              </p>
+              <p className={BODY}>Only the guardian who gave it can restore it.</p>
+            </>
+          ) : (
+            <>
+              <p className={BODY}>
+                {withdrawalSentence(invitation.decidedAt)}
+              </p>
+              <p className={BODY}>{RESTORE_LINE}</p>
+              {restore && !notTheirs ? (
+                <button
+                  type="button"
+                  className={PRIMARY}
+                  disabled={restoring === "sending"}
+                  onClick={() => void giveBack()}
+                >
+                  {restoring === "sending" ? "Restoring…" : "Restore consent"}
+                </button>
+              ) : null}
+              {notTheirs ? (
+                <p role="alert" className={NOTE}>
+                  {notTheirs}
+                </p>
+              ) : null}
+              {restoring === "failed" ? (
+                <p role="alert" className={NOTE}>
+                  We couldn&rsquo;t send that just now. Nothing has changed - please
+                  try again in a moment.
+                </p>
+              ) : null}
+            </>
+          )}
         </div>
         <div className={`${CARD} mt-3.5`}>
           <h3 className={H3}>Request {child}&rsquo;s Data</h3>
@@ -258,6 +348,11 @@ export function ParentDataManagement({
 
   return (
     <Shell>
+      {notice ? (
+        <p role="status" className={`${NOTE} mt-0 mb-3.5`}>
+          {notice}
+        </p>
+      ) : null}
       <div className={CARD}>
         <h1 className="text-[21px] font-semibold tracking-[-0.015em] text-nevo-near-black">
           {childLead}&rsquo;s data on Nevo
@@ -418,12 +513,9 @@ export function ParentDataManagement({
           <>
             <p className={BODY}>
               This will immediately suspend {child}&rsquo;s access to Nevo. They
-              will not be able to use the platform until consent is restored
-              through your school.
+              will not be able to use the platform until consent is restored.
             </p>
-            <p className={BODY}>
-              To restore access later, contact {schoolPhrase(invitation)}.
-            </p>
+            <p className={BODY}>{RESTORE_LINE}</p>
             <button
               type="button"
               className={PRIMARY}
@@ -457,11 +549,6 @@ export function ParentDataManagement({
   );
 }
 
-/**
- * "your child's school" or its actual name - never a blank where a name should
- * be. The school's own phone and email are null for most schools today, so
- * this stays prose rather than becoming a link that might go nowhere.
- */
 /**
  * Capitalise a leading word without touching the rest.
  *
@@ -501,10 +588,6 @@ function withdrawalSentence(decidedAt: string | null): string {
   return when
     ? `You withdrew consent on ${when}, so they can no longer access Nevo.`
     : "You withdrew consent, so they can no longer access Nevo.";
-}
-
-function schoolPhrase(inv: DataSubject | null): string {
-  return inv?.schoolName ?? "your child’s school";
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
