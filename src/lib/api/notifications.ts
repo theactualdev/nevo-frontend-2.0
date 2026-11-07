@@ -58,8 +58,9 @@ export type NotificationType =
   /** "Payment received", to billing admins (category billing). */
   | "payment_cleared"
   /**
-   * "A teacher needs help with a learner account", to every active admin,
-   * linking to the deactivated child's record (category account).
+   * "A teacher needs help with a learner account", linking to the deactivated
+   * child's record. Category `messages`, to roster-scope admins - or to every
+   * admin when none holds roster (Teslim's item 20, live 7 Nov).
    */
   | "deactivated_student_support_requested";
 

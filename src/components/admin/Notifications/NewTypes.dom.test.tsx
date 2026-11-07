@@ -14,13 +14,13 @@ import { NotificationRow } from "./NotificationRow";
  * - `payment_cleared`: "Payment received", to billing admins, category
  *   billing, linking to Billing. Reads right as it is.
  * - `deactivated_student_support_requested`: "A teacher needs help with a
- *   learner account", to EVERY active admin, category account, linking to the
- *   child's record. Two things read wrong:
- *   1. category `account` is named Platform here ("Maintenance, changes to
- *      screens you use, and policy updates"), so the row carried no label
- *      that fits;
- *   2. a billing-only or IT admin can't open a student's record, so the row
- *      was a link to a refusal.
+ *   learner account", linking to the child's record. Since Teslim's item 20
+ *   (live 7 Nov) it is category `messages`, sent to roster-scope admins - or
+ *   to every admin when a school has no roster holder. So:
+ *   1. it reads as Messages, the server's own category (it was `account`,
+ *      named Platform here, which didn't fit);
+ *   2. a billing-only or IT admin who gets it can't open a student's record,
+ *      so the row isn't a link to a refusal.
  */
 
 vi.mock("next/navigation", () => ({
@@ -62,7 +62,7 @@ const asAdmin = (scopes: PermissionScope[], n: Notification) =>
 
 const support = note({
   type: "deactivated_student_support_requested",
-  category: "account",
+  category: "messages",
   title: "A teacher needs help with a learner account",
   description: "Amara Obi's deactivated account needs an administrator's review.",
   navigatesTo: "/admin/students/s1",
@@ -80,9 +80,10 @@ describe("a payment that cleared", () => {
 });
 
 describe("a teacher asking for help with a deactivated learner", () => {
-  it("isn't labelled Platform - a teacher asking about a child is not maintenance or policy", () => {
+  it("reads as Messages, the server's category since item 20 - never Platform", () => {
     const { container } = asAdmin(["roster"], support);
     expect(visibleText(container)).toMatch(/A teacher needs help with a learner account/);
+    expect(visibleText(container)).toMatch(/Messages/);
     expect(visibleText(container)).not.toMatch(/Platform/i);
   });
 

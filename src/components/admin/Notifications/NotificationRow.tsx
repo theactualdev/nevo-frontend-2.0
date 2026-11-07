@@ -104,11 +104,12 @@ export function NotificationRow({
   const router = useRouter();
   const unread = !notification.read;
   /*
-   * NO LINK TO A REFUSAL - the rule the Overview's rows already keep. The
-   * server sends some notices to every admin whatever they hold: "A teacher
-   * needs help with a learner account" links to the child's record, which a
-   * billing-only or IT admin can't open. Such a row still says what happened;
-   * it just isn't a link.
+   * NO LINK TO A REFUSAL - the rule the Overview's rows already keep. A
+   * notice can reach an admin who can't open where it points: "A teacher
+   * needs help with a learner account" goes to roster admins, but to EVERY
+   * admin when a school has no roster holder (item 20, 7 Nov) - and it links
+   * to the child's record, which a billing-only or IT admin can't open. Such
+   * a row still says what happened; it just isn't a link.
    */
   const mayOpen = useCanOpen();
   const target =
@@ -150,9 +151,9 @@ export function NotificationRow({
         <div className="flex items-center gap-[7px]">
           {/* The category's name (backend B34, 1 Oct), or nothing - never
               the raw type. See `categoryLabel`. */}
-          {categoryLabel(notification.category, notification.type) ? (
+          {categoryLabel(notification.category) ? (
             <span className="text-[10.5px] font-semibold uppercase tracking-[0.04em] text-nevo-near-black/45">
-              {categoryLabel(notification.category, notification.type)}
+              {categoryLabel(notification.category)}
             </span>
           ) : null}
           {unread ? (
