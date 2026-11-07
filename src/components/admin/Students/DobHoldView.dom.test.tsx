@@ -269,3 +269,52 @@ describe("both checks done and it still holds (S5, design cb527bf)", () => {
     expect(said).toMatch(/the parent’s doesn’t match it\./);
   });
 });
+
+/**
+ * ITEM 17 (Teslim, 7 Nov): a child can be held for a ROSTER GAP - the dates
+ * agree, but no single year group is recorded (`enrolled_age_band_unavailable`,
+ * `differs` false). Nothing may say the dates differ for that child (Lydia's
+ * 4 Nov principle: an untrue state is worse than a missing one).
+ */
+describe("a roster gap on Date of birth checks (item 17)", () => {
+  const gap = (over: Partial<AgeCheck> = {}) =>
+    check({
+      id: "ac-gap",
+      studentId: "s-gap",
+      studentFirstName: "Kemi",
+      differs: false,
+      holdReasons: ["enrolled_age_band_unavailable"],
+      clearable: true,
+      ...over,
+    });
+
+  it("is 'On hold', never 'date of birth difference', and isn't under the 'differs' heading", async () => {
+    held.mockResolvedValue([gap()]);
+    getStudent.mockResolvedValue({ id: "s-gap", firstName: "Kemi", lastName: "Ade", classIds: [] });
+    const { container } = render(<DobHoldView />);
+    expect(await screen.findByText("Kemi Ade")).toBeInTheDocument();
+    expect(screen.getByText("On hold")).toBeInTheDocument();
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/date of birth difference/);
+    expect(text).not.toMatch(/date of birth a parent gave differs/);
+  });
+
+  it("keeps the 'differs' heading for the children whose dates do differ, with the gap below it", async () => {
+    held.mockResolvedValue([gap(), check()]);
+    getStudent.mockImplementation(async (id: string) =>
+      id === "s-gap"
+        ? { id: "s-gap", firstName: "Kemi", lastName: "Ade", classIds: [] }
+        : { id: "s-tunde", firstName: "Tunde", lastName: "Adeyemi", classIds: ["c-2a"] },
+    );
+    const { container } = render(<DobHoldView />);
+    await screen.findByText("Kemi Ade");
+    await screen.findByText("Tunde Adeyemi");
+    const differing = screen.getByRole("list", { name: "Dates that differ" });
+    expect(differing).toHaveTextContent("Tunde Adeyemi");
+    expect(differing).toHaveTextContent("On hold · date of birth difference");
+    expect(differing).not.toHaveTextContent("Kemi Ade");
+    const text = container.textContent ?? "";
+    expect(text.indexOf("date of birth a parent gave differs")).toBeLessThan(text.indexOf("Tunde Adeyemi"));
+    expect(text.indexOf("Tunde Adeyemi")).toBeLessThan(text.indexOf("Kemi Ade"));
+  });
+});
