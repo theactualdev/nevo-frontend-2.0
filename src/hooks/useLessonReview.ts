@@ -64,6 +64,8 @@ export interface LessonReviewState {
    */
   signedOff: boolean | null;
   missingKeyPoints: number;
+  /** The review as read, for screens that draw more of it (C07j LU-04). */
+  review: LessonReview | null;
 }
 
 export function useLessonReview(
@@ -198,5 +200,6 @@ export function useLessonReview(
     signedOff:
       typeof review?.reviewComplete === "boolean" ? review.reviewComplete : null,
     missingKeyPoints: review?.missingKeyPointSegmentIds?.length ?? 0,
+    review,
   };
 }

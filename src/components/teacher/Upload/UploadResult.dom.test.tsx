@@ -226,11 +226,13 @@ describe("assigning from the finish screen", () => {
 
     expect(await screen.findByText("Review this lesson to assign it.")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Assign to a class" })).not.toBeInTheDocument();
-    // Backlog item 19: and the way in, rather than a line with nothing to press.
-    expect(screen.getByRole("link", { name: "Review in five steps" })).toHaveAttribute(
+    // Backlog item 19: and the way in, rather than a line with nothing to press -
+    // C07j LU-04's own "Review lesson" since 6 Nov, so not offered twice.
+    expect(screen.getByRole("link", { name: "Review lesson" })).toHaveAttribute(
       "href",
       "/teacher/lessons/l-1/review",
     );
+    expect(screen.queryByRole("link", { name: "Review in five steps" })).not.toBeInTheDocument();
   });
 
   it("offers no way into the review while the verdict is still on its way", () => {
