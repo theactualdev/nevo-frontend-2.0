@@ -120,14 +120,15 @@ export function TransferSets({
  * says; that line and the refusal lines are ours, for her.
  *
  * What it adds is a four-part set (SCRUM-295), and the set view draws all
- * four. The line names the situations and the shared question, not the
- * judgement question; that is for Lydia's words, not a claim it makes.
+ * four. The line above the press and the refusal lines are Lydia's (7 Nov,
+ * 6b to 6d).
  */
 const WRITE_REFUSED: Record<string, string> = {
-  concept_has_no_source_section: "Nevo couldn't find a section that teaches this, so it can't write one.",
-  transfer_generation_unavailable: "Nevo can't write one right now. Try again in a moment.",
+  // Lydia's words, 7 Nov (6c and 6d).
+  concept_has_no_source_section: "None of your sections teach this idea, so Nevo has nothing to build the question from.",
+  transfer_generation_unavailable: "Nevo is busy right now. Try again in a moment.",
   transfer_generation_invalid_output: "Nevo couldn't write one that works this time. Try again.",
-  transfer_items_exist: "This already has a transfer question.",
+  transfer_items_exist: "This check already has a transfer question.",
 };
 
 function WriteTransfer({ name, onWrite }: { name: string; onWrite: () => Promise<string | null> }) {
@@ -137,8 +138,9 @@ function WriteTransfer({ name, onWrite }: { name: string; onWrite: () => Promise
     <div className="rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px] shadow-elevation-1 xl:px-6">
       <span className="text-[13.5px] text-nevo-near-black/55">{name ? `${name} · transfer question` : "Transfer question"}</span>
       <p className="mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/72 xl:text-[14px]">
-        Nevo can write two unlike situations that need this idea, and a question about what they
-        share, from your sections. They join the checks, so you accept them with the others.
+        {/* Lydia's words, 7 Nov (6b). */}
+        Nevo can take two unlike situations from your sections that both need this idea, then ask
+        what they share. The question joins the checks, so you accept it with the others.
       </p>
       <div className="mt-3.5 flex flex-wrap items-center gap-3">
         <button

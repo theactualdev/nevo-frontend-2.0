@@ -227,9 +227,9 @@ describe("the press that writes a transfer set (held for its frame)", () => {
   });
 
   it.each([
-    [503, "transfer_generation_unavailable", "Nevo can't write one right now. Try again in a moment."],
+    [503, "transfer_generation_unavailable", "Nevo is busy right now. Try again in a moment."],
     [502, "transfer_generation_invalid_output", "Nevo couldn't write one that works this time. Try again."],
-    [409, "concept_has_no_source_section", "Nevo couldn't find a section that teaches this, so it can't write one."],
+    [409, "concept_has_no_source_section", "None of your sections teach this idea, so Nevo has nothing to build the question from."],
   ])("says plainly when the server refuses with %s %s, and can be pressed again", async (status, code, line) => {
     withConcepts("c-prop", null);
     api.generateTransferItems.mockRejectedValue(refusal(status, code));
