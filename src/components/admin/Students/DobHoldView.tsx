@@ -444,9 +444,10 @@ function WaitingCard({
   check: AgeCheck;
   person: Person;
   done: Done | null;
-  onResent: (next: AgeCheck) => void;
+  /** Optional, so a card drawn elsewhere on this page needn't wire it. */
+  onResent?: (next: AgeCheck) => void;
   /** The server says it is no longer held: read the list again. */
-  onGone: () => void;
+  onGone?: () => void;
 }) {
   const removal = longDay(check.deletionDueAt);
   const asked = Boolean(check.parentNotifiedAt);
@@ -463,12 +464,12 @@ function WaitingCard({
       .resendParentNotice(check.id)
       .then((next) => {
         setResent(true);
-        onResent(next);
+        onResent?.(next);
       })
       .catch((err: unknown) => {
         const code = ageCheckRefusal(err);
         if (code === AGE_CHECK_NOT_PENDING) {
-          onGone();
+          onGone?.();
           return;
         }
         setRefusal(
@@ -495,23 +496,28 @@ function WaitingCard({
         {done?.kind === "corrected" && longDate(done.to)
           ? `Your record now reads ${longDate(done.to)}. `
           : ""}
+        {/*
+          * LYDIA'S WORDS, SCRUM-321 (7 Nov). "This notice went to everyone
+          * linked to {name}" - the server notifies every linked parent with an
+          * active account, not one named adult. The "activates on its own as
+          * soon as the two dates agree" sentence is gone: not the whole rule.
+          * Her replacement ("The hold can clear once…") is asked about - its
+          * "yours" reads oddly on the school's screen - so it waits.
+          */}
         {asked ? (
           <>
-            We&rsquo;ve asked {person.first}&rsquo;s parent to enter it again
-            {sentOn ? `, sent ${sentOn}` : ""}. If the two dates now
-            agree, {person.first}&rsquo;s account activates on its own. If they still differ,
-            we&rsquo;ll let you know - there&rsquo;s nothing more for you to do here for now.
+            This notice went to everyone linked to {person.first}.
+            {sentOn ? ` Sent ${sentOn}.` : ""}
           </>
         ) : (
-          <>
-            {person.first}&rsquo;s parent now needs to enter the date again. If the two dates agree,{" "}
-            {person.first}&rsquo;s account activates on its own.
-          </>
+          <>{person.first}&rsquo;s parent now needs to enter the date again.</>
         )}
       </p>
       <p className="m-0 mt-3 text-[13px] leading-[1.5] text-nevo-near-black/58">
         Not active yet - waiting on the parent.
-        {removal ? ` Record removed on ${removal} if unresolved.` : ""}
+        {/* SCRUM-321: the date only, with nothing implying a resend moves it.
+            "their", as this page says it for every child. */}
+        {removal ? ` ${person.first} will be removed from their class on ${removal}.` : ""}
       </p>
       {asked ? (
         <div className="mt-3.5">

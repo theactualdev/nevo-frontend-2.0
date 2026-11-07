@@ -88,10 +88,13 @@ describe("a hold waiting on the school", () => {
     fireEvent.click(within(await card()).getByRole("button", { name: "This date is correct" }));
     await waitFor(() => expect(schoolRecheck).toHaveBeenCalledWith("ac-tunde", "2013-03-14"));
     expect(await screen.findByRole("heading", { name: "You’ve confirmed Tunde’s date of birth" })).toBeInTheDocument();
-    expect(screen.getByText(/Not active yet - waiting on the parent\. Record removed on 19 November 2026 if unresolved\./)).toBeInTheDocument();
+    // SCRUM-321: the date only - "removed from their class", nothing about a resend.
+    expect(
+      screen.getByText(/Not active yet - waiting on the parent\. Tunde will be removed from their class on 19 November 2026\./),
+    ).toBeInTheDocument();
   });
 
-  it("says the parent has been asked, in D30's words, when the server says so", async () => {
+  it("says the notice went to everyone linked to the child, in Lydia's words, when the server says so (SCRUM-321)", async () => {
     // The re-check asks every linked parent and stamps parentNotifiedAt (66be3b8).
     schoolRecheck.mockResolvedValue(
       check({ schoolRecheckedAt: "2026-10-21T09:00:00Z", parentNotifiedAt: "2026-10-21T09:00:01Z" }),
@@ -99,10 +102,10 @@ describe("a hold waiting on the school", () => {
     render(<DobHoldView />);
     fireEvent.click(within(await card()).getByRole("button", { name: "This date is correct" }));
     expect(
-      await screen.findByText(
-        /We’ve asked Tunde’s parent to enter it again, sent 21 October 2026\. If the two dates now agree, Tunde’s account activates on its own\. If they still differ, we’ll let you know - there’s nothing more for you to do here for now\./,
-      ),
+      await screen.findByText(/This notice went to everyone linked to Tunde\. Sent 21 October 2026\./),
     ).toBeInTheDocument();
+    // "as soon as the two dates agree" is not the whole rule (SCRUM-321).
+    expect(document.body.textContent).not.toMatch(/activates on its own|We’ve asked/);
   });
 
   it("doesn't say anyone was asked when no parent account was there to ask", async () => {
@@ -192,13 +195,13 @@ describe("waiting on the parent", () => {
     resendParentNotice.mockResolvedValue(asked({ parentNotifiedAt: "2026-11-04T12:00:00Z" }));
     render(<DobHoldView />);
     const c = await card();
-    expect(c).toHaveTextContent("sent 21 October 2026");
+    expect(c).toHaveTextContent("Sent 21 October 2026");
     fireEvent.click(within(c).getByRole("button", { name: "Resend the request" }));
     expect(await within(c).findByText("Request resent")).toBeInTheDocument();
     expect(resendParentNotice).toHaveBeenCalledWith("ac-tunde");
-    expect(c).toHaveTextContent("sent 4 November 2026");
+    expect(c).toHaveTextContent("Sent 4 November 2026");
     // The removal date stays the date the server sends - a resend doesn't move it.
-    expect(c).toHaveTextContent("Record removed on 19 November 2026 if unresolved.");
+    expect(c).toHaveTextContent("Tunde will be removed from their class on 19 November 2026.");
     expect(c.textContent).not.toMatch(/days from today|Mr\./);
   });
 
