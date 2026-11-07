@@ -42,8 +42,16 @@ export function ClassRoute({
 
   // A real class is only ever itself. This is checked before the fixtures so
   // that a live class can never be answered with a fixture of the same name.
-  const assigned = liveClasses.find((c) => c.classId === classId);
-  if (assigned) return <LiveClassDetail klass={assigned} />;
+  // One row per subject the teacher teaches here (8 Oct), so the class can
+  // appear more than once; the header names every subject among them.
+  const assignments = liveClasses.filter((c) => c.classId === classId);
+  const assigned = assignments[0];
+  if (assigned) {
+    const subjects = [
+      ...new Set(assignments.map((a) => a.subject?.trim()).filter((s): s is string => Boolean(s))),
+    ];
+    return <LiveClassDetail klass={assigned} subjects={subjects} />;
+  }
 
   // Fixtures back the designed screens only while there is no live data -
   // and "no live data" must not include "not back yet". `live` is false for
