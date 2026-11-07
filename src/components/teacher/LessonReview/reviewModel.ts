@@ -489,10 +489,10 @@ export function checksView(review: LessonReview, segments: LessonSegment[]): Che
 }
 
 /**
- * One concept's transfer set, as C25 draws it (1397ec4): two situations and
- * the question that asks what they share. The server writes four items; the
- * fourth, `diagnosis`, is HELD (Lydia, 5 Nov: "Draw the three and leave the
- * fourth" until Teslim says what it is for).
+ * One concept's transfer set, as C25 draws it (1397ec4) and SCRUM-295 rules
+ * it: two situations, the question that asks what they share, and the
+ * judgement question - find the fault or choose the better approach and say
+ * why. All four are drawn, because all four are accepted and served together.
  */
 export interface TransferSet {
   /** The section the set was written from - its concept's first. */
@@ -500,14 +500,17 @@ export interface TransferSet {
   /** That section's name, for when the concept's own name is not to hand. */
   label: string;
   conceptId: string | null;
+  /** The concept's name as the review sends it (8c078a8), when it does. */
+  conceptName: string | null;
   one: CheckRow | null;
   two: CheckRow | null;
   question: CheckRow | null;
+  judgement: CheckRow | null;
   /**
-   * `diagnosis`, and any kind the frame does not draw: NOT DRAWN. The one
-   * press still signs them, which is why this view is held (see the PR).
+   * Any further item of the set - a kind the server has not named, or a
+   * second of one kind. Drawn too: nothing the press accepts goes unseen.
    */
-  held: CheckRow[];
+  others: CheckRow[];
 }
 
 /**
@@ -530,18 +533,21 @@ function transferSets(
       set = {
         key: source,
         label: segment ? labelOf(source, segment.title) : "",
-        conceptId: segment?.conceptId ?? null,
+        conceptId: segment?.conceptId ?? row.check.conceptId ?? null,
+        conceptName: row.check.conceptName?.trim() || null,
         one: null,
         two: null,
         question: null,
-        held: [],
+        judgement: null,
+        others: [],
       };
       sets.set(source, set);
     }
     if (row.transferKind === "application_a" && !set.one) set.one = row;
     else if (row.transferKind === "application_b" && !set.two) set.two = row;
     else if (row.transferKind === "comparison" && !set.question) set.question = row;
-    else set.held.push(row);
+    else if (row.transferKind === "judgement" && !set.judgement) set.judgement = row;
+    else set.others.push(row);
   }
   return [...sets.values()];
 }

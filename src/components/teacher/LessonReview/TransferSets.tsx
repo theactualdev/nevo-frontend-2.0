@@ -17,11 +17,12 @@ import { Answer } from "./StepChecks";
  * questions, and signed by the checks step's ONE press with every other
  * check. So:
  *  - each part shows its question, with the answer one tap away;
- *  - the fourth item the server writes, `diagnosis`, is HELD and not drawn
- *    (Lydia, 5 Nov: "Draw the three and leave the fourth") until Teslim says
- *    what it is for. The one press would still sign it, so this whole view
- *    is held with it: a teacher must never accept a question they were not
- *    shown (her 2 Nov rule);
+ *  - the fourth part is the JUDGEMENT question (Lydia, SCRUM-295, 7 Nov):
+ *    find the fault in working, or choose the better approach and say why.
+ *    It was "diagnosis" until 2dfddfe, and held while nobody could say what
+ *    it was for; now it is drawn with the other three, because it is
+ *    accepted and served with them, and a teacher never accepts a question
+ *    they were not shown (her 2 Nov rule). Any further item is drawn too;
  *  - no "These work as a set": a set signs off with the checks (Lydia,
  *    5 Nov). Replacing one part is ruled in and waits on Teslim's route, so
  *    "Change one" and the line that the parts "stand or change together"
@@ -38,9 +39,10 @@ export function TransferSets({ sets }: { sets: TransferSet[] }) {
   return (
     <div className="mt-6 flex flex-col gap-8">
       {sets.map((set) => {
-        // The concept's own name, or the section the set came from - never
-        // an id, and nothing at all when neither is to hand.
-        const name = (set.conceptId && names[set.conceptId]) || set.label;
+        // The concept's own name - as the review sends it, else as read -
+        // or the section the set came from. Never an id.
+        const name = set.conceptName || (set.conceptId && names[set.conceptId]) || set.label;
+        const parts = [set.one, set.two, set.question, set.judgement, ...set.others].filter(Boolean).length;
         return (
           <section key={set.key} aria-label={name ? `${name} · transfer question` : "Transfer question"}>
             <span className="text-[13.5px] text-nevo-near-black/55">
@@ -50,8 +52,11 @@ export function TransferSets({ sets }: { sets: TransferSet[] }) {
               One idea, two unlike situations
             </h3>
             <p className="mt-2 text-[13.5px] leading-[1.55] text-nevo-near-black/64 xl:text-[14.5px]">
-              Read all three together. The two situations should feel different on the surface but
-              need the same idea; the question should point at that idea.
+              {/* The frame says "Read all three together"; a set is four
+                  parts since SCRUM-295, so the count is the set's own. */}
+              {`Read all ${parts === 4 ? "four" : parts === 3 ? "three" : "of them"} together. `}
+              The two situations should feel different on the surface but need the same idea; the
+              question should point at that idea.
             </p>
             <div className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated px-5 py-5 shadow-elevation-1 xl:px-6">
               {(set.one || set.two) && (
@@ -74,6 +79,17 @@ export function TransferSets({ sets }: { sets: TransferSet[] }) {
                   <ShowAnswer row={set.question} />
                 </div>
               )}
+              {/* SCRUM-295's fourth part. No frame draws it: drawn as a part
+                  like the others, under Lydia's own name for it. */}
+              {[set.judgement, ...set.others].filter((r): r is CheckRow => r !== null).map((row) => (
+                <div key={row.key} className={cn(PART, "mt-3.5")}>
+                  <span className={cn(PART_TAG, "text-nevo-violet-text")}>
+                    {row === set.judgement ? "The judgement question" : "Also in this set"}
+                  </span>
+                  <p className="mt-2.5 text-[14.5px] leading-[1.55] text-nevo-near-black">{row.prompt}</p>
+                  <ShowAnswer row={row} />
+                </div>
+              ))}
             </div>
           </section>
         );

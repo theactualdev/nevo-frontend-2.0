@@ -39,15 +39,12 @@ import { clearSession, setSession } from "@/lib/auth/session";
  * C25, Transfer Question Review (1397ec4; Lydia's test 5), as far as the
  * server goes on 5 Nov (backend #8).
  *
- * What is pinned: a concept's transfer items are drawn as the frame's set -
- * situation one, situation two, the question - under the concept's name;
- * the fourth (diagnosis) is held and not drawn (Lydia, 5 Nov); none is drawn
- * twice; each part's answer is a tap away; the heading never shows an id;
- * and nothing approves a set apart (a set signs off with the checks) or
- * replaces a part (ruled in, no route yet).
- *
- * The one press still counts - and signs - the held diagnosis item, which is
- * why this PR is HELD: a teacher must not accept a question they never saw.
+ * What is pinned: a concept's transfer items are drawn as the set - situation
+ * one, situation two, the question, and the judgement question (SCRUM-295,
+ * 7 Nov) - under the concept's name; none is drawn twice, and the one press
+ * counts all four; each part's answer is a tap away; the heading never shows
+ * an id; and nothing approves a set apart (a set signs off with the checks)
+ * or replaces a part (ruled in, no route yet).
  */
 
 const HASH_K = "a".repeat(64);
@@ -154,7 +151,7 @@ beforeEach(() => {
 });
 
 const transfer = (
-  kind: "application_a" | "application_b" | "comparison" | "diagnosis",
+  kind: "application_a" | "application_b" | "comparison" | "judgement",
   prompt: string,
   over: Partial<CheckReviewItem> = {},
 ): CheckReviewItem =>
@@ -182,7 +179,7 @@ const SET = [
   transfer("application_a", "A recipe for 4 uses 200 g of rice. How much for 6?"),
   transfer("application_b", "On a map 2 cm is 5 km. How far is 7 cm?"),
   transfer("comparison", "What is the same about how you'd work out both?"),
-  transfer("diagnosis", "Which step went wrong in this working?"),
+  transfer("judgement", "Which step went wrong in this working?"),
 ];
 
 const withConcepts = () => {
@@ -217,12 +214,31 @@ describe("a transfer set", () => {
     expect(api.concept).toHaveBeenCalledWith("c-prop");
   });
 
-  /* Lydia, 5 Nov: "Draw the three and leave the fourth." */
-  it("holds the fourth item back - drawn neither in the set nor in the lists", async () => {
+  /*
+   * SCRUM-295 (Lydia, 7 Nov): the fourth part is the judgement question, and
+   * the review draws all four - they are accepted and served together.
+   */
+  it("draws the judgement question as its fourth part, and says to read all four", async () => {
     await open(3);
 
-    await screen.findByRole("region", { name: "Proportion · transfer question" });
-    expect(screen.queryByText(/Which step went wrong/)).toBeNull();
+    const set = await screen.findByRole("region", { name: "Proportion · transfer question" });
+    expect(within(set).getByText("The judgement question").closest("div")).toHaveTextContent(
+      "Which step went wrong in this working?",
+    );
+    expect(within(set).getByText(/Read all four together./)).toBeInTheDocument();
+    expect(screen.getAllByText("Which step went wrong in this working?")).toHaveLength(1);
+    expect(screen.queryByText(/diagnos/i)).toBeNull();
+  });
+
+  it("takes the concept's name from the review when it sends one", async () => {
+    api.review.mockResolvedValue(
+      reviewOf({
+        checks: [check(1), ...SET.map((c) => ({ ...c, conceptId: "c-prop", conceptName: "Ratio and proportion" }))],
+      }),
+    );
+    await open(3);
+
+    expect(await screen.findByRole("region", { name: "Ratio and proportion · transfer question" })).toBeInTheDocument();
   });
 
   it("is not drawn a second time in the lists", async () => {
@@ -232,10 +248,7 @@ describe("a transfer set", () => {
     expect(screen.getAllByText("A recipe for 4 uses 200 g of rice. How much for 6?")).toHaveLength(1);
   });
 
-  /*
-   * The server's count, held item included: the press signs all six. That is
-   * the catch this PR is held on, pinned so it cannot pass unnoticed.
-   */
+  /* The server's count: the press signs all six - two checks and the set. */
   it("is counted in what the one press accepts", async () => {
     await open(3);
 

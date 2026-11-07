@@ -592,8 +592,14 @@ export type CheckAnswerKey =
  */
 export type MasteryLevel = "knowledge" | "application" | "analysis";
 
-/** Which of the four parts of a transfer set an item is. */
-export type TransferKind = "application_a" | "application_b" | "comparison" | "diagnosis";
+/**
+ * Which of the four parts of a transfer set an item is. The fourth was
+ * "diagnosis" until 7 Nov (2dfddfe): a prohibited term, so generation was
+ * refused every time. Lydia, SCRUM-295: it is a JUDGEMENT question - find the
+ * fault or choose the better approach and say why - and nothing is called
+ * diagnosis.
+ */
+export type TransferKind = "application_a" | "application_b" | "comparison" | "judgement";
 
 /** One in-lesson check, as the review shows it (`CheckReviewItem`). */
 export interface CheckReviewItem {
@@ -617,6 +623,9 @@ export interface CheckReviewItem {
    * on a check whose answer came from the file.
    */
   masteryLevelAuthoredBy?: "person" | "nevo" | null;
+  /** The concept the check is about, where the parser named one (8c078a8). */
+  conceptId?: string | null;
+  conceptName?: string | null;
   /** Set only on a transfer item: which part of its set it is. */
   transferKind?: TransferKind | null;
   /** The situation a transfer item sets the concept in. */
