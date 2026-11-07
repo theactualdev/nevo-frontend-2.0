@@ -1431,6 +1431,10 @@ export function lessonFromContent(
     // PRESENCE, and an empty object would light a button that opens nothing.
     ...(assessment ? { assessment } : {}),
     ...(summary ? { summary } : {}),
+    // A saved copy's key versions (9b): what an answer marked offline names.
+    ...(res.markingKeyVersions
+      ? { markingKeyVersions: res.markingKeyVersions }
+      : {}),
   };
 }
 

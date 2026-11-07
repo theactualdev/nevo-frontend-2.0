@@ -720,6 +720,14 @@ export interface LessonDetailResponse extends LessonSummary {
    * ungrouped, which is what the separate call's failure already meant.
    */
   modules?: LessonModule[];
+  /**
+   * The offline package's `markingKeyVersions` (9b), kept with a saved copy:
+   * one version of each question's answer key, keyed as the server keys them
+   * (`markingKeyFor`). The detail read never sends it; only a lesson saved
+   * from its package has it, and only an answer marked on the device sends
+   * one back.
+   */
+  markingKeyVersions?: Record<string, string>;
 }
 
 /**
@@ -1073,6 +1081,16 @@ export interface LessonQuestionAttemptWrite {
    * (B28's `after_hint`), as 1 - "at least one" is all it knows.
    */
   hintCount?: number;
+  /**
+   * 9B: THE DEVICE MARKED THIS ANSWER, from the lesson package's key, because
+   * no reply could come (Teslim, 41c2f83, migration 0137). Sent only with
+   * `markingKeyVersion` and the answer's own `clientAttemptId` - the server
+   * refuses it otherwise - and only for an answer held from a lesson whose
+   * package gave a version for it (`asOfflineMarked`).
+   */
+  offlineMarked?: boolean;
+  /** The package's `markingKeyVersions` entry for this answer: 64 hex characters. */
+  markingKeyVersion?: string;
 }
 
 /** `LessonQuestionAttemptResponse` - one stored answer, marked server-side. */

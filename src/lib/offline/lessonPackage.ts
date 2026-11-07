@@ -8,6 +8,7 @@ import {
 } from "@/lib/api/lessons";
 import type { SegmentVariants } from "@/lib/api/variants";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
+import { isMarkingKeyVersion } from "@/lib/lessons/offlineMark";
 import { readZipFile, ZipUnsupported } from "./zip";
 
 /**
@@ -149,6 +150,8 @@ export interface OfflinePackage {
   recap?: string | null;
   assessment?: ComprehensionCheckpoint[];
   segments?: OfflinePackageSegment[];
+  /** One version of each question's answer key (9b, Teslim 41c2f83). */
+  markingKeyVersions?: Record<string, unknown>;
 }
 
 export interface OfflinePackageSegment {
@@ -264,7 +267,7 @@ export function detailFromPackage(
 ): LessonDetailResponse {
   type Packaged = Pick<
     LessonDetailResponse,
-    "id" | "title" | "modules" | "recap" | "assessment"
+    "id" | "title" | "modules" | "recap" | "assessment" | "markingKeyVersions"
   > & {
     segments: Omit<
       LessonSegment,
@@ -278,6 +281,9 @@ export function detailFromPackage(
     // Null is sent and kept: it is the lesson saying it has no recap.
     ...(pkg.recap !== undefined ? { recap: pkg.recap } : {}),
     ...(Array.isArray(pkg.assessment) ? { assessment: pkg.assessment } : {}),
+    // The versions the device marks against offline (9b): only those the
+    // server would take back, and none at all from a package that sent none.
+    ...versionsFrom(pkg.markingKeyVersions),
     segments: pkg.segments.map((s) => {
       const v = s.modalityVariants;
       return {
@@ -300,6 +306,17 @@ export function detailFromPackage(
     }),
   };
   return packaged as LessonDetailResponse;
+}
+
+/** A package's `markingKeyVersions`, kept only as the server writes them. */
+function versionsFrom(
+  sent: unknown,
+): { markingKeyVersions?: Record<string, string> } {
+  if (!isObj(sent)) return {};
+  const kept = Object.fromEntries(
+    Object.entries(sent).filter(([, v]) => isMarkingKeyVersion(v)),
+  ) as Record<string, string>;
+  return Object.keys(kept).length > 0 ? { markingKeyVersions: kept } : {};
 }
 
 /**

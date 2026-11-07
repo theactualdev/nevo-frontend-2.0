@@ -671,6 +671,12 @@ export interface Lesson {
   assessment?: Assessment;
   /** Recap shown on the post-lesson summary screen (frame 18). */
   summary?: CompletionSummary;
+  /**
+   * The package's version of each question's answer key (9b), for a lesson
+   * opened from its saved copy - see `asOfflineMarked`. Absent for a lesson
+   * opened online.
+   */
+  markingKeyVersions?: Readonly<Record<string, string>>;
 }
 
 // ── Adaptation plan (personalization overlay — §4) ──────────────────────────

@@ -108,6 +108,7 @@ import {
   type Verdict,
   type VerdictReply,
 } from "@/lib/lessons/verdict";
+import { asOfflineMarked } from "@/lib/lessons/offlineMark";
 import { holdAnswer, retryable } from "@/lib/lessons/pendingProgress";
 import {
   answersBefore,
@@ -3049,18 +3050,32 @@ export function LessonPlayer({
   const saveAttempt = (
     answer: Omit<LessonQuestionAttemptWrite, "sessionId"> | null,
     onStored?: (stored: LessonQuestionAttempt) => void,
-    /** The answer's own id, kept by a retry so the server stores it once. */
-    clientAttemptId: string = randomId(),
+    {
+      clientAttemptId = randomId(),
+      markedHere = false,
+    }: {
+      /** The answer's own id, kept by a retry so the server stores it once. */
+      clientAttemptId?: string;
+      /**
+       * The screen moves on this answer's mark (`markAttempt`): held, the
+       * package's key is what marked it, and it goes up saying so (9b).
+       */
+      markedHere?: boolean;
+    } = {},
   ): Promise<LessonQuestionAttempt | null> | null => {
     if (!live || !answer) return null;
     const body = { ...answer, clientAttemptId };
+    /** What is held when it cannot go: flagged, where the device marked it. */
+    const held = markedHere
+      ? asOfflineMarked(body, lesson.markingKeyVersions)
+      : body;
     const id = progress.sessionId;
     // Taken now: a 401 clears the session before its failure arrives.
     const owner = getSession()?.userId ?? null;
     if (!id) {
       holdAnswer(
         lesson.id,
-        { sessionId: null, localId: progress.localId, body },
+        { sessionId: null, localId: progress.localId, body: held },
         owner,
       );
       return null;
@@ -3074,7 +3089,7 @@ export function LessonPlayer({
       },
       (cause: unknown) => {
         if (retryable(cause)) {
-          holdAnswer(lesson.id, { sessionId: id, body }, owner);
+          holdAnswer(lesson.id, { sessionId: id, body: held }, owner);
         }
         return null;
       },
@@ -3112,7 +3127,7 @@ export function LessonPlayer({
       heard = true;
       onStored?.(stored);
     };
-    const first = saveAttempt(answer, once, clientAttemptId);
+    const first = saveAttempt(answer, once, { clientAttemptId, markedHere: true });
     if (!first) return packageMark();
     let settle: (mark: Verdict) => void = () => {};
     const reply: PendingVerdict = new Promise<Verdict>((resolve) => {
@@ -3122,7 +3137,7 @@ export function LessonPlayer({
       void write.then((stored) => settle(verdictOf(stored, packageMark)));
     landed(first);
     reply.retry = () => {
-      const again = saveAttempt(answer, once, clientAttemptId);
+      const again = saveAttempt(answer, once, { clientAttemptId, markedHere: true });
       if (again) landed(again);
       else settle(packageMark());
     };
