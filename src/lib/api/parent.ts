@@ -176,6 +176,12 @@ export interface ConsentHeld {
   decidedAt: string | null;
   /** Whether withdrawing this one suspends the child's account. */
   stopsAccess: boolean;
+  /**
+   * Whether THIS parent may withdraw it (SCRUM-306): the guardian who gave it,
+   * or the linked adult the school recorded as holder of a paper form. A
+   * guardian added afterwards sees it and can't withdraw it.
+   */
+  canWithdraw: boolean;
 }
 
 /** `GET /api/v1/parents/me/consents`: what a signed-in parent agreed to, per child. */

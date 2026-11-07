@@ -258,6 +258,13 @@ export interface WrittenConsentDraft {
   signedOn: string;
   /** The photograph or PDF of the signed page. Optional on the contract. */
   form?: File | null;
+  /**
+   * WHICH LINKED ADULT GAVE IT (SCRUM-306; Teslim b74b5e8, 7 Nov): a
+   * `ParentLink` id for this child. Withdrawal is then that adult's alone.
+   * Optional on the contract only until this screen shipped - Lydia's ruling
+   * is that the screen requires it, so the type does too.
+   */
+  consentHolderLinkId: string;
 }
 
 /** What the backend recorded (201). */
@@ -274,6 +281,8 @@ export interface WrittenConsentRecord {
   uploadedAt: string;
   /** True when the parent was told, so withdrawing stays as easy as consenting. */
   parentNotified: boolean;
+  /** The linked adult recorded as the one who gave it (SCRUM-306). */
+  consentHolderLinkId?: string | null;
 }
 
 /** What a parent asked for, as the rights log records it. */
@@ -328,6 +337,7 @@ export const consentsApi = {
     body.append("parentName", draft.parentName.trim());
     body.append("parentRelationship", draft.parentRelationship.trim());
     body.append("signedOn", draft.signedOn);
+    body.append("consentHolderLinkId", draft.consentHolderLinkId);
     for (const type of REQUESTED_CONSENT_TYPES) body.append("consentTypes", type);
     if (draft.form) body.append("form", draft.form);
     return api.post<WrittenConsentRecord>(

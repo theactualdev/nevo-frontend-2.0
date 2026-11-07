@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ChildConsents, ParentChild } from "@/lib/api/parent";
+import { ApiError } from "@/lib/api/client";
 
 const { myChildren, myConsents, myWithdraw, myObjection, myDataRequest, exerciseRight, search } =
   vi.hoisted(() => ({
@@ -46,7 +47,7 @@ const consents = (studentId: string, over: Partial<ChildConsents["consents"][num
   studentId,
   studentFirstName: null,
   consents: [
-    { consentType: "data_processing", status: "confirmed", decidedAt: "2026-09-01T09:00:00Z", stopsAccess: true, ...over },
+    { consentType: "data_processing", status: "confirmed", decidedAt: "2026-09-01T09:00:00Z", stopsAccess: true, canWithdraw: true, ...over },
   ],
 });
 
@@ -178,5 +179,55 @@ describe("when the page can't be read", () => {
     expect(await screen.findByText(/isn’t linked to a child yet/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     expect(screen.getByRole("link", { name: "Back to home" })).toHaveAttribute("href", "/parent-portal");
+  });
+});
+
+/**
+ * SCRUM-306 (Lydia, 7 Nov): a consent is withdrawn by the guardian who gave
+ * it. A guardian added afterwards sees what a parent sees, and the route to
+ * withdraw is ABSENT for them - not present and refused. The server says
+ * which with `canWithdraw` on each consent; withdrawing takes them all, so the
+ * control is theirs only when every one is.
+ */
+describe("withdrawal belongs to the guardian who gave it (SCRUM-306)", () => {
+  it("is theirs when every consent held is", () => {
+    expect(subjectFor(AMARA, consents("s-1")).canWithdraw).toBe(true);
+  });
+
+  it("isn't when any one isn't, or when none is held", () => {
+    const mixed: ChildConsents = {
+      ...consents("s-1"),
+      consents: [
+        ...consents("s-1").consents,
+        { consentType: "cross_border_transfer", status: "confirmed", decidedAt: null, stopsAccess: false, canWithdraw: false },
+      ],
+    };
+    expect(subjectFor(AMARA, mixed).canWithdraw).toBe(false);
+    expect(subjectFor(AMARA, null).canWithdraw).toBe(false);
+  });
+
+  it("a guardian who didn't give it sees no Withdraw Consent at all, and keeps their other rights", async () => {
+    myConsents.mockResolvedValue([consents("s-1", { canWithdraw: false })]);
+    render(<ParentMyData />);
+    expect(await screen.findByRole("button", { name: /Object to processing/i })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Withdraw Consent" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Withdraw consent/i })).toBeNull();
+  });
+
+  it("a refusal says whose it is, in the server's words, and offers nothing to try again", async () => {
+    myWithdraw.mockRejectedValue(
+      new ApiError(403, "Forbidden", {
+        detail: {
+          code: "consent_decision_belongs_to_another_guardian",
+          message: "Only the guardian who gave this consent can withdraw it.",
+        },
+      }),
+    );
+    render(<ParentMyData />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Withdraw consent$/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /Withdraw consent/i }).at(-1)!);
+    expect(await screen.findByText("Only the guardian who gave this consent can withdraw it.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Withdraw consent/i })).toBeNull();
+    expect(screen.queryByText(/couldn.t send that just now/i)).toBeNull();
   });
 });

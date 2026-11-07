@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import {
   parentApi,
   type ParentInvitation,
@@ -95,6 +95,14 @@ export type DataSubject = Pick<
 > & {
   /** Named only on a tokenised link, which can be forwarded. */
   parentName?: string | null;
+  /**
+   * SCRUM-306: whether this parent may withdraw. Signed in, it is the
+   * server's `canWithdraw`, and when false the Withdraw Consent card is
+   * ABSENT - the ruling says absent, not present and refused. A tokenised
+   * link's read doesn't carry it, so there it is undefined and the card
+   * shows as before (raised: the token route doesn't ask yet).
+   */
+  canWithdraw?: boolean;
 };
 
 /** Exercise one right; the page says what came back. */
@@ -126,6 +134,12 @@ export function ParentDataManagement({
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState("");
+  /**
+   * The server said this consent is another guardian's to withdraw (403,
+   * SCRUM-306) - its own words, or its plainest. Trying again can't work, so
+   * the card goes and this stands in its place.
+   */
+  const [notTheirs, setNotTheirs] = useState<string | null>(null);
 
   async function exercise(right: ParentRightType) {
     const withReason = right === "object" ? reason : undefined;
@@ -142,6 +156,19 @@ export function ParentDataManagement({
       });
       setPhase("done");
     } catch (e) {
+      const code = e instanceof ApiError ? apiErrorCode(e.detail) : null;
+      if (
+        code === "consent_decision_belongs_to_another_guardian" ||
+        code === "consent_belongs_to_another_guardian"
+      ) {
+        setNotTheirs(
+          (e instanceof ApiError ? apiErrorMessage(e.detail) : null) ??
+            "Only the guardian who gave this consent can withdraw it.",
+        );
+        setConfirming(false);
+        setPhase("idle");
+        return;
+      }
       // "This link is no longer active" is about a link; signed in, there is none.
       setPhase(!act && e instanceof ApiError && e.status === 404 ? "gone" : "failed");
     }
@@ -367,6 +394,11 @@ export function ParentDataManagement({
         )}
       </div>
 
+      {invitation.canWithdraw === false ? null : notTheirs ? (
+        <p role="alert" className={NOTE}>
+          {notTheirs}
+        </p>
+      ) : (
       <div className={`${CARD} mt-3.5`}>
         <h3 className={H3}>Withdraw Consent</h3>
         {!confirming ? (
@@ -411,6 +443,7 @@ export function ParentDataManagement({
           </>
         )}
       </div>
+      )}
 
       {phase === "failed" && (
         <p role="alert" className={NOTE}>
