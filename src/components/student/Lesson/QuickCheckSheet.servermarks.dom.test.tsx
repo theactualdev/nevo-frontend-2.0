@@ -3,7 +3,11 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { ComponentProps, ReactNode } from "react";
 import { QuickCheckSheet, RECOVERY_LINE, RETEACH_COPY } from "./QuickCheckSheet";
 import type { ReteachingResponse } from "@/lib/api/lessons";
-import type { Verdict } from "@/lib/lessons/verdict";
+import {
+  LONG_HOLD_MS,
+  type PendingVerdict,
+  type Verdict,
+} from "@/lib/lessons/verdict";
 import type { QuickCheck } from "@/lib/types";
 
 /**
@@ -171,9 +175,11 @@ describe("the re-teach box's retry", () => {
     fireEvent.click(screen.getByRole("button", { name: RETEACH_COPY.check }));
     expect(screen.getByText(RETEACH_COPY.title)).toBeInTheDocument();
     expect(screen.queryByText(RETEACH_COPY.done)).toBeNull();
+    // Pressable while marked (SCRUM-315): never reads as disabled, and a
+    // second Check does nothing.
     expect(
       screen.getByRole("button", { name: RETEACH_COPY.check }),
-    ).toHaveAttribute("aria-disabled", "true");
+    ).toHaveAttribute("aria-disabled", "false");
     fireEvent.click(screen.getByRole("button", { name: RETEACH_COPY.check }));
     expect(props.onAnswered).toHaveBeenCalledTimes(2);
 
@@ -189,5 +195,134 @@ describe("the re-teach box's retry", () => {
 
     expect(screen.queryByText(RETEACH_COPY.done)).toBeNull();
     expect(screen.getByText(RETEACH_COPY.again)).toBeInTheDocument();
+  });
+});
+
+/**
+ * SCRUM-315 (Lydia, 7 Nov): the pick holds visibly chosen and the control
+ * stays PRESSABLE - never disabled - with no spinner, no progress and no
+ * verdict before the server's; and one extra state for a hold long enough to
+ * look broken: a retry and nothing else.
+ */
+describe("a pick held for its mark (SCRUM-315)", () => {
+  /** A reply on its way that can be sent again, as the player's is. */
+  function retryable() {
+    let land: (mark: Verdict) => void = () => {};
+    const reply: PendingVerdict = new Promise<Verdict>((resolve) => {
+      land = resolve;
+    });
+    reply.retry = vi.fn();
+    return { reply, land: (mark: Verdict) => act(async () => land(mark)) };
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("keeps every option pressable: none reads as disabled", () => {
+    const mark = retryable();
+    mount(() => mark.reply);
+    tapOption("Carbon dioxide");
+
+    for (const label of ["Carbon dioxide", "Oxygen"]) {
+      expect(screen.getByRole("button", { name: label })).toBeEnabled();
+      expect(screen.getByRole("button", { name: label })).not.toHaveAttribute(
+        "aria-disabled",
+        "true",
+      );
+    }
+    // The pick is the one held, visibly.
+    expect(
+      screen.getByRole("button", { name: "Carbon dioxide" }).className,
+    ).toContain("border-nevo-navy");
+    expect(
+      screen.getByRole("button", { name: "Oxygen" }).className,
+    ).not.toContain("border-nevo-navy");
+  });
+
+  it("offers Try again, and nothing else, once the hold has lasted long enough to look broken", () => {
+    vi.useFakeTimers();
+    const mark = retryable();
+    mount(() => mark.reply);
+    tapOption("Carbon dioxide");
+    const tryAgain = () => screen.queryByRole("button", { name: "Try again" });
+
+    act(() => {
+      vi.advanceTimersByTime(LONG_HOLD_MS - 1);
+    });
+    expect(tryAgain()).toBeNull();
+    const before = document.body.textContent;
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(tryAgain()).toBeInTheDocument();
+    // Nothing else: no line, no verdict, no way on.
+    expect(document.body.textContent).toBe(`${before}Try again`);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(wayOn()).toBeNull();
+  });
+
+  it("sends the same answer again on Try again, and is a new hold from there", () => {
+    vi.useFakeTimers();
+    const mark = retryable();
+    const { props } = mount(() => mark.reply);
+    tapOption("Carbon dioxide");
+    act(() => {
+      vi.advanceTimersByTime(LONG_HOLD_MS);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(mark.reply.retry).toHaveBeenCalledOnce();
+    // The same answer, not a new one: the host's retry sends it.
+    expect(props.onAnswered).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(LONG_HOLD_MS);
+    });
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("goes as the mark lands, Try again with it", async () => {
+    vi.useFakeTimers();
+    const mark = retryable();
+    mount(() => mark.reply);
+    tapOption("Carbon dioxide");
+    act(() => {
+      vi.advanceTimersByTime(LONG_HOLD_MS);
+    });
+
+    await mark.land(true);
+
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(wayOn()).toBeInTheDocument();
+  });
+
+  it("offers nothing where the reply cannot be sent again", () => {
+    vi.useFakeTimers();
+    mount(() => new Promise<Verdict>(() => {}));
+    tapOption("Carbon dioxide");
+    act(() => {
+      vi.advanceTimersByTime(LONG_HOLD_MS * 2);
+    });
+
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("offers Try again on the re-teach box's retry too, under Check", () => {
+    vi.useFakeTimers();
+    const retry = retryable();
+    const marks: (Verdict | PendingVerdict)[] = [false, retry.reply];
+    mount(() => marks.shift() ?? null, { reteaching: RETEACHING });
+    tapOption("Oxygen");
+    tapOption("Carbon dioxide");
+    fireEvent.click(screen.getByRole("button", { name: RETEACH_COPY.check }));
+    act(() => {
+      vi.advanceTimersByTime(LONG_HOLD_MS);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(retry.reply.retry).toHaveBeenCalledOnce();
   });
 });

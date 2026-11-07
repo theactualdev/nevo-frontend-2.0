@@ -21,7 +21,13 @@ import type {
   ScaffoldQuantity,
 } from "@/lib/types";
 import { isStoredAnswer } from "@/lib/lessons/storedAnswer";
-import { onVerdict, type Verdict, type VerdictReply } from "@/lib/lessons/verdict";
+import {
+  onVerdict,
+  retryOf,
+  type Verdict,
+  type VerdictReply,
+} from "@/lib/lessons/verdict";
+import { HoldRetry, useLongHold } from "./HoldRetry";
 import { cn } from "@/lib/utils";
 import { NO_SOUND, PressedLine } from "./PressedLine";
 import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
@@ -307,6 +313,14 @@ export function CalculationSolver({
   const [marking, setMarking] = useState(false);
   /** Which commit a mark answers, so one for a step since left lands nowhere. */
   const markAsk = useRef(0);
+  /**
+   * The reply on its way, and the holds started: held long enough to look
+   * broken, the step offers "Try again" and nothing else (SCRUM-315).
+   */
+  const [pending, setPending] = useState<VerdictReply | null>(null);
+  const [hold, setHold] = useState(0);
+  const longHold = useLongHold(marking ? hold : null);
+  const retry = marking ? retryOf(pending) : null;
   /**
    * Once the child has started the narration, each new step is read as it
    * arrives (17b §5, "re-reads whenever the step advances"). Never before:
@@ -636,7 +650,11 @@ export function CalculationSolver({
         : (onStepGiven?.(given, packageMark) as VerdictReply | undefined);
     const reply: VerdictReply = sent === undefined ? packageMark : sent;
     const mine = ++markAsk.current;
-    if (reply instanceof Promise) setMarking(true);
+    if (reply instanceof Promise) {
+      setMarking(true);
+      setPending(reply);
+      setHold((h) => h + 1);
+    }
     onVerdict(reply, (mark) => {
       if (markAsk.current !== mine) return;
       setMarking(false);
@@ -1246,6 +1264,15 @@ export function CalculationSolver({
               />
             )}
             </div>
+            )}
+            {/* A mark long on its way: "Try again", and nothing else. */}
+            {longHold && retry && (
+              <HoldRetry
+                onRetry={() => {
+                  retry();
+                  setHold((h) => h + 1);
+                }}
+              />
             )}
           </>
         )}

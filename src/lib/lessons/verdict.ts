@@ -19,13 +19,38 @@
  *
  * A component handed a verdict SYNCHRONOUSLY applies it at once - there was
  * nothing to wait for. A promise is waited for with the child's pick held
- * quietly: no new words, no spinner (rule 7). Lydia is asked whether that
- * moment is drawn; if it is, it slots in where the pick is held.
+ * quietly (SCRUM-315, Lydia, 7 Nov): the pick visibly chosen, the control
+ * still pressable, no spinner, no progress and no verdict before the
+ * server's. A hold long enough to look broken offers a retry and nothing
+ * else (`LONG_HOLD_MS`, `HoldRetry`).
  */
 export type Verdict = boolean | null;
 
+/**
+ * A mark on its way that can be asked for again: `retry` sends the same
+ * answer once more (the same attempt id, so the server keeps one), and the
+ * reply settles on whichever answer lands first.
+ */
+export type PendingVerdict = Promise<Verdict> & { retry?: () => void };
+
 /** What an answer handler gives back: a mark now, or one on its way. */
-export type VerdictReply = Verdict | Promise<Verdict>;
+export type VerdictReply = Verdict | PendingVerdict;
+
+/**
+ * HOW LONG A HELD PICK WAITS BEFORE IT OFFERS A RETRY (SCRUM-315, Lydia, 7
+ * Nov: "one extra state for a hold long enough to look broken: a retry and
+ * nothing else"). PROVISIONAL: 8 seconds, chosen here and named for her to
+ * change. A reply normally lands in well under a second; the outage of 6 Nov
+ * failed reads after about 10.7 seconds, so a hold of 8 has already outlasted
+ * any reply that was coming soon.
+ */
+export const LONG_HOLD_MS = 8_000;
+
+/** The retry a reply on its way offers, or null where there is none. */
+export function retryOf(reply: VerdictReply | null | undefined): (() => void) | null {
+  if (!(reply instanceof Promise)) return null;
+  return typeof reply.retry === "function" ? reply.retry : null;
+}
 
 /**
  * Wait for a reply's verdict, however it came. A synchronous one is applied

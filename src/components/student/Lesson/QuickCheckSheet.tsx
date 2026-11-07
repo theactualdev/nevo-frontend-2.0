@@ -11,7 +11,13 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/shared";
 import type { ReteachingResponse } from "@/lib/api/lessons";
 import type { WayIn } from "@/lib/lessons/waysIn";
-import { onVerdict, type Verdict, type VerdictReply } from "@/lib/lessons/verdict";
+import {
+  onVerdict,
+  retryOf,
+  type Verdict,
+  type VerdictReply,
+} from "@/lib/lessons/verdict";
+import { HoldRetry, useLongHold } from "./HoldRetry";
 import type { QuickCheck } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AnswerCheck, AnswerOption } from "./AnswerOption";
@@ -232,6 +238,17 @@ export function QuickCheckSheet({
   const [verdict, setVerdict] = useState<Verdict | undefined>(undefined);
   /** Which ask a mark answers, so one for a pick since let go lands nowhere. */
   const ask = useRef(0);
+  /**
+   * THE REPLY ON ITS WAY, and a count of the holds started - each pick, each
+   * retry and each "Try again" a new one - which the long hold is timed from
+   * (SCRUM-315).
+   */
+  const [pending, setPending] = useState<VerdictReply | null>(null);
+  const [hold, setHold] = useState(0);
+  const startHold = (reply: VerdictReply) => {
+    setPending(reply);
+    setHold((h) => h + 1);
+  };
   const resolved = chosenId !== null && verdict !== undefined;
   const correct = resolved && verdict === true;
   /** Marked wrong: the only mark that holds the child. */
@@ -291,15 +308,14 @@ export function QuickCheckSheet({
     setChosenId(id);
     const responseTimeMs = msSince(askedAt.current);
     const mine = ++ask.current;
-    onVerdict(
-      onAnswered({
-        selectedId: id,
-        ...(responseTimeMs === null ? {} : { responseTimeMs }),
-      }),
-      (mark) => {
-        if (ask.current === mine) setVerdict(mark);
-      },
-    );
+    const reply = onAnswered({
+      selectedId: id,
+      ...(responseTimeMs === null ? {} : { responseTimeMs }),
+    });
+    startHold(reply);
+    onVerdict(reply, (mark) => {
+      if (ask.current === mine) setVerdict(mark);
+    });
   };
 
   /** Tapped out: the check is asked afresh next time, unless it was passed. */
@@ -310,6 +326,7 @@ export function QuickCheckSheet({
       setChosenId(null);
       setVerdict(undefined);
       setBox(null);
+      setPending(null);
     }
     onTapOut();
   };
@@ -338,11 +355,13 @@ export function QuickCheckSheet({
     const responseTimeMs = msSince(askedAt.current);
     const mine = ++ask.current;
     setBox({ ...box, marking: true });
+    const reply = onAnswered({
+      selectedId: pick,
+      ...(responseTimeMs === null ? {} : { responseTimeMs }),
+    });
+    startHold(reply);
     onVerdict(
-      onAnswered({
-        selectedId: pick,
-        ...(responseTimeMs === null ? {} : { responseTimeMs }),
-      }),
+      reply,
       (mark) => {
         if (ask.current !== mine) return;
         if (mark === null) {
@@ -409,9 +428,31 @@ export function QuickCheckSheet({
     if (!cancelled && e.clientY - p.from >= SWIPE_CLOSES_AT_PX) tapOut();
   };
 
+  /**
+   * A MARK ON ITS WAY (SCRUM-315): the pick holds visibly chosen, everything
+   * stays pressable, and nothing is said - no spinner, no progress, no
+   * verdict before the server's. Held long enough to look broken, it offers
+   * "Try again" and nothing else.
+   */
+  const holding =
+    (chosenId !== null && verdict === undefined) || box?.marking === true;
+  const longHold = useLongHold(holding ? hold : null);
+  const retry = holding ? retryOf(pending) : null;
+  const holdRetry =
+    longHold && retry ? (
+      <HoldRetry
+        onRetry={() => {
+          retry();
+          setHold((h) => h + 1);
+        }}
+      />
+    ) : null;
+
   const tone = (id: string) => {
-    // Held from the tap: while its mark is on its way, as after.
     if (chosenId === null) return "idle";
+    // Held: the pick chosen, the rest as they were - nothing reads as
+    // disabled while its mark is on its way.
+    if (verdict === undefined) return id === chosenId ? "navy" : "idle";
     if (id !== chosenId) return "muted";
     // Right or not, the pick is held in navy: `qc-recovery` puts no verdict
     // on a miss.
@@ -503,6 +544,7 @@ export function QuickCheckSheet({
             onKeepGoing={onContinue}
             onTakeWay={(way) => onTakeWay?.(way)}
             onTakeBreak={onTakeBreak}
+            retry={holdRetry}
           />
         ) : (
           <>
@@ -513,6 +555,7 @@ export function QuickCheckSheet({
               label={option.label}
               reading={reading}
               tone={tone(option.id)}
+              pressable={holding}
               trailing={
                 correct && option.id === chosenId ? <AnswerCheck /> : undefined
               }
@@ -553,6 +596,7 @@ export function QuickCheckSheet({
                 : "Finish"}
           </Button>
         )}
+        {holdRetry}
           </>
         )}
       </SheetContent>
@@ -576,6 +620,7 @@ function ReteachBox({
   onKeepGoing,
   onTakeWay,
   onTakeBreak,
+  retry,
 }: {
   box: {
     held: string;
@@ -593,6 +638,8 @@ function ReteachBox({
   onKeepGoing: () => void;
   onTakeWay: (way: WayIn) => void;
   onTakeBreak: () => void;
+  /** The long hold's "Try again", while the retry's mark is long on its way. */
+  retry?: React.ReactNode;
 }) {
   const asking = box.after === "asking";
   const right = box.after === "right";
@@ -694,7 +741,10 @@ function ReteachBox({
           <button
             type="button"
             onClick={onCheck}
-            aria-disabled={box.pick === null || box.marking === true}
+            // Quiet until a pick, and pressable while that pick is marked
+            // (SCRUM-315): a second Check then does nothing, but never reads
+            // as disabled.
+            aria-disabled={box.pick === null}
             className={cn(
               "mt-3.5 flex h-[52px] w-full cursor-pointer items-center justify-center rounded-[10px] text-[15.5px] font-semibold",
               box.pick === null
@@ -704,6 +754,7 @@ function ReteachBox({
           >
             {RETEACH_COPY.check}
           </button>
+          {retry}
         </>
       )}
       {right && (

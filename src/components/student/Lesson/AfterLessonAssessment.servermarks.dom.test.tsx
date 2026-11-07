@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AfterLessonAssessment } from "./AfterLessonAssessment";
-import type { Verdict } from "@/lib/lessons/verdict";
+import { LONG_HOLD_MS, type PendingVerdict, type Verdict } from "@/lib/lessons/verdict";
 import type { Assessment } from "@/lib/types";
 
 /**
@@ -93,5 +93,29 @@ describe("the end-of-lesson questions move on their host's mark", () => {
 
     await act(async () => land(false));
     expect(screen.getByText("Here is how 1 works.")).toBeInTheDocument();
+  });
+});
+
+describe("a hold long enough to look broken (SCRUM-315)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("keeps the pick pressable, then offers Try again, which sends it again", () => {
+    vi.useFakeTimers();
+    const reply: PendingVerdict = new Promise<Verdict>(() => {});
+    reply.retry = vi.fn();
+    mount(() => reply);
+    confirm("Key says right");
+
+    expect(screen.getByRole("button", { name: "Key says right" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(LONG_HOLD_MS);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(reply.retry).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("status")).toBeNull();
   });
 });

@@ -104,6 +104,7 @@ import { answerFor, calculationAttemptFor } from "@/lib/lessons/attempts";
 import {
   onVerdict,
   verdictOf,
+  type PendingVerdict,
   type Verdict,
   type VerdictReply,
 } from "@/lib/lessons/verdict";
@@ -3048,9 +3049,11 @@ export function LessonPlayer({
   const saveAttempt = (
     answer: Omit<LessonQuestionAttemptWrite, "sessionId"> | null,
     onStored?: (stored: LessonQuestionAttempt) => void,
+    /** The answer's own id, kept by a retry so the server stores it once. */
+    clientAttemptId: string = randomId(),
   ): Promise<LessonQuestionAttempt | null> | null => {
     if (!live || !answer) return null;
-    const body = { ...answer, clientAttemptId: randomId() };
+    const body = { ...answer, clientAttemptId };
     const id = progress.sessionId;
     // Taken now: a 401 clears the session before its failure arrives.
     const owner = getSession()?.userId ?? null;
@@ -3096,10 +3099,34 @@ export function LessonPlayer({
     packageMark: () => boolean,
     onStored?: (stored: LessonQuestionAttempt) => void,
   ): VerdictReply => {
-    const write = saveAttempt(answer, onStored);
-    return write
-      ? write.then((stored) => verdictOf(stored, packageMark))
-      : packageMark();
+    /*
+     * ONE ANSWER, HOWEVER OFTEN IT IS SENT. "Try again" on a long hold
+     * (SCRUM-315) sends it again under the same attempt id, so the server
+     * stores it once; the mark is whichever reply lands first, and what the
+     * reply leads to (a hand-off, re-teaching, the gate) happens once.
+     */
+    const clientAttemptId = randomId();
+    let heard = false;
+    const once = (stored: LessonQuestionAttempt) => {
+      if (heard) return;
+      heard = true;
+      onStored?.(stored);
+    };
+    const first = saveAttempt(answer, once, clientAttemptId);
+    if (!first) return packageMark();
+    let settle: (mark: Verdict) => void = () => {};
+    const reply: PendingVerdict = new Promise<Verdict>((resolve) => {
+      settle = resolve;
+    });
+    const landed = (write: Promise<LessonQuestionAttempt | null>) =>
+      void write.then((stored) => settle(verdictOf(stored, packageMark)));
+    landed(first);
+    reply.retry = () => {
+      const again = saveAttempt(answer, once, clientAttemptId);
+      if (again) landed(again);
+      else settle(packageMark());
+    };
+    return reply;
   };
 
   /*

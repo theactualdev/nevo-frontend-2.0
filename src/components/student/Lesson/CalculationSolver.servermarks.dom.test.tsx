@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { CalculationSolver, type StepGiven } from "./CalculationSolver";
 import { calculationFromVariant } from "@/lib/lessons/fromContent";
 import type { CalculationVariant } from "@/lib/api/variants";
-import type { Verdict, VerdictReply } from "@/lib/lessons/verdict";
+import { LONG_HOLD_MS, type PendingVerdict, type Verdict, type VerdictReply } from "@/lib/lessons/verdict";
 import type { CalculationSegment } from "@/lib/types";
 
 /**
@@ -126,5 +126,27 @@ describe("while a step's mark is on its way", () => {
     await act(async () => land(true));
     expect(props.onStepAnswered).toHaveBeenCalledWith("s1", true);
     expect(props.onSolved).toHaveBeenCalled();
+  });
+});
+
+describe("a hold long enough to look broken (SCRUM-315)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("offers Try again under the step, which sends the same answer again", () => {
+    vi.useFakeTimers();
+    const reply: PendingVerdict = new Promise<Verdict>(() => {});
+    reply.retry = vi.fn();
+    show(() => reply);
+    answer("3");
+
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(LONG_HOLD_MS);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(reply.retry).toHaveBeenCalledOnce();
   });
 });
