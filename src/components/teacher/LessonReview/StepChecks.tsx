@@ -3,12 +3,13 @@
 import { useState } from "react";
 import type {
   CalculationPartsReviewItem,
+  MasteryLevel,
   CheckAnswerKey,
   CheckOption,
   GuidedCheckStep,
 } from "@/lib/api/lessons";
 import { cn } from "@/lib/utils";
-import { answerText, type CheckRow, type ChecksView } from "./reviewModel";
+import { answerText, LEVELS, levelWords, type CheckRow, type ChecksView } from "./reviewModel";
 
 /**
  * C07k step 3, the checks (SCRUM-291).
@@ -102,8 +103,11 @@ export function StepChecks({
   onAcceptParts,
   acceptingParts = false,
   partsRefusal = null,
+  onChangeLevel,
 }: {
   view: ChecksView;
+  /** C24's "Change level". Absent, the level is shown and not offered. */
+  onChangeLevel?: (row: CheckRow, level: MasteryLevel) => Promise<boolean>;
   /** Nothing in this step waits for a sign-off any more. */
   signed: boolean;
   readLeaks: ReadonlySet<string>;
@@ -163,6 +167,7 @@ export function StepChecks({
             view.levelsToSign ? "What Nevo wrote, yours to accept" : "Answers Nevo wrote - yours to accept"
           }
           rows={view.toSign}
+          onChangeLevel={onChangeLevel}
         />
       )}
       {view.reviewed.length > 0 && (
@@ -171,6 +176,7 @@ export function StepChecks({
             view.signoff?.kind === "checks" ? "The checks" : "Answers from your file - nothing to accept"
           }
           rows={view.reviewed}
+          onChangeLevel={onChangeLevel}
         />
       )}
       {view.guidedOnly.length > 0 && <CheckList label="Guiding questions" rows={view.guidedOnly} />}
@@ -281,7 +287,15 @@ function RevealParts({
  * Opening a row still gives the section, the full question, every choice and
  * the guiding questions, for the one that needs a closer look.
  */
-function CheckList({ label, rows }: { label: string; rows: CheckRow[] }) {
+function CheckList({
+  label,
+  rows,
+  onChangeLevel,
+}: {
+  label: string;
+  rows: CheckRow[];
+  onChangeLevel?: (row: CheckRow, level: MasteryLevel) => Promise<boolean>;
+}) {
   const [open, setOpen] = useState<Set<string>>(() => new Set());
   return (
     <div className="mt-6">
@@ -332,16 +346,12 @@ function CheckList({ label, rows }: { label: string; rows: CheckRow[] }) {
                     <p className={cn(ROW_TEXT, "mt-0.5 leading-[1.5]")}>{row.prompt}</p>
                   </div>
                   {row.type && <Answer type={row.type} options={row.options} answerKey={row.answerKey} />}
-                  {/* C24 (1397ec4): the level, under the answer. Shown only,
-                      not changed: no route writes a check's level, and the
-                      one press accepts it with the answer - and always will:
-                      Lydia, 5 Nov, no separate level sign-off. "Change level"
-                      is ruled in, as an edit, and waits on Teslim's route. */}
+                  {/* C24 (1397ec4): the level, under the answer, and the
+                      teacher may change it (41c2f83). An edit, not an
+                      approval: the one press still accepts it with the
+                      answer (Lydia, 5 Nov). */}
                   {row.level && (
-                    <div>
-                      <span className={TAG}>The level</span>
-                      <p className={cn(DETAIL, "mt-1 font-semibold text-nevo-near-black")}>{row.level}</p>
-                    </div>
+                    <LevelBlock row={row} onChange={onChangeLevel} />
                   )}
                   {row.guided && row.guided.steps.length > 0 && (
                     <div>
@@ -507,6 +517,101 @@ function LeakCard({
           <button type="button" onClick={onRead} className={MINI_PRIMARY}>
             Looks right
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * C24's level, with "Change level" (41c2f83). The frame draws the picker:
+ * "Which level does this check ask for?" and the three levels, the current
+ * one marked. It draws no Save, so choosing a level saves it; choosing the
+ * current one, or "Change level" again, closes it. While it saves, the chosen
+ * one reads "Saving…", and a failure says the level is as it was (ours, for
+ * Lydia). The server re-opens the checks sign-off on a change, so an Accept
+ * already pressed comes back - the step follows the server, as it does after
+ * any edit.
+ */
+function LevelBlock({
+  row,
+  onChange,
+}: {
+  row: CheckRow;
+  onChange?: (row: CheckRow, level: MasteryLevel) => Promise<boolean>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState<MasteryLevel | null>(null);
+  const [failed, setFailed] = useState(false);
+  const canChange = Boolean(onChange && row.masteryLevel && row.questionId);
+  const choose = async (level: MasteryLevel) => {
+    if (!onChange || saving) return;
+    if (level === row.masteryLevel) {
+      setOpen(false);
+      return;
+    }
+    setSaving(level);
+    setFailed(false);
+    const ok = await onChange(row, level);
+    setSaving(null);
+    if (ok) setOpen(false);
+    else setFailed(true);
+  };
+  return (
+    <div>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className={TAG}>The level</span>
+        {canChange && (
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => {
+              setOpen((o) => !o);
+              setFailed(false);
+            }}
+            className="cursor-pointer border-none bg-transparent p-0 text-[12.5px] font-semibold text-nevo-navy underline-offset-2 hover:underline"
+          >
+            Change level
+          </button>
+        )}
+      </div>
+      <p className={cn(DETAIL, "mt-1 font-semibold text-nevo-near-black")}>{row.level}</p>
+      {open && canChange && (
+        <div role="group" aria-label="Which level does this check ask for?" className="mt-3">
+          <p className="text-[13px] font-semibold text-nevo-near-black">
+            Which level does this check ask for?
+          </p>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {LEVELS.map((level) => {
+              const current = level === row.masteryLevel;
+              return (
+                <button
+                  key={level}
+                  type="button"
+                  aria-pressed={current}
+                  disabled={saving !== null}
+                  onClick={() => void choose(level)}
+                  className={cn(
+                    "flex h-11 cursor-pointer items-center gap-2.5 rounded-[10px] px-3.5 text-left text-[14px] disabled:cursor-default",
+                    current
+                      ? "bg-nevo-navy font-semibold text-nevo-cream"
+                      : "border-[1.5px] border-nevo-near-black/16 bg-nevo-cream font-medium text-nevo-near-black",
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className={cn("size-[9px] shrink-0 rounded-full", current ? "bg-nevo-cream" : "bg-nevo-navy/30")}
+                  />
+                  {saving === level ? "Saving…" : levelWords(level)}
+                </button>
+              );
+            })}
+          </div>
+          {failed && (
+            <p role="alert" className="mt-2 text-[13px] leading-[1.45] text-nevo-violet-text">
+              That didn&rsquo;t save, so the level is as it was. Try again in a moment.
+            </p>
+          )}
         </div>
       )}
     </div>

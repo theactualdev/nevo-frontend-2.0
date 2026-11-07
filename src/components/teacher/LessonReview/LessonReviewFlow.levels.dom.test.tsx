@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type {
   CheckReviewItem,
   LessonReview,
@@ -17,6 +17,7 @@ const api = vi.hoisted(() => ({
   amendKeyPoint: vi.fn(),
   resolveMissingKeyPoint: vi.fn(),
   editRewrite: vi.fn(),
+  setCheckLevel: vi.fn(),
 }));
 vi.mock("@/lib/api/lessons", () => ({ lessonsApi: api }));
 // No new captions here (Q10's are tested in the media file); never the network.
@@ -248,18 +249,104 @@ describe("what the one press accepts", () => {
   });
 
   /*
-   * Lydia, 5 Nov: no separate level sign-off, ever. "Change level" is ruled
-   * in as an edit, and waits on Teslim's route.
+   * Lydia, 5 Nov: no separate level sign-off, ever. "Change level" is an
+   * edit (below), never an approval of its own.
    */
-  it("offers no way to change a level or accept it apart from its answer", async () => {
+  it("offers no way to accept a level apart from its answer", async () => {
     api.review.mockResolvedValue(
       reviewOf({ checks: [check(1, { masteryLevel: "application", masteryLevelAuthoredBy: "nevo" })] }),
     );
     await open(3);
     openCheck(1);
 
-    expect(screen.queryByRole("button", { name: /change level/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /looks right/i })).toBeNull();
     expect(screen.queryByText(/separate calls/i)).toBeNull();
+  });
+});
+
+/*
+ * C24's "Change level" (41c2f83; Lydia, 5 Nov: "yes to a teacher being able
+ * to change one ... an edit on an item, not a new approval act").
+ */
+describe("changing a check's level", () => {
+  const withLevel = (over: Partial<CheckReviewItem> = {}) =>
+    reviewOf({ checks: [check(1, { masteryLevel: "application", masteryLevelAuthoredBy: "nevo", ...over })] });
+
+  it("opens the frame's picker, the current level marked", async () => {
+    api.review.mockResolvedValue(withLevel());
+    await open(3);
+    openCheck(1);
+    fireEvent.click(screen.getByRole("button", { name: "Change level" }));
+
+    const picker = screen.getByRole("group", { name: "Which level does this check ask for?" });
+    expect(within(picker).getByRole("button", { name: "Application" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(picker).getByRole("button", { name: "Knowing & understanding" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(picker).getByRole("button", { name: "Analysis & evaluation" })).toBeInTheDocument();
+  });
+
+  it("saves a section's check with its section, and shows what the server now says", async () => {
+    api.review.mockResolvedValue(withLevel());
+    api.setCheckLevel.mockResolvedValue(withLevel({ masteryLevel: "analysis", masteryLevelAuthoredBy: "person" }));
+    await open(3);
+    openCheck(1);
+    fireEvent.click(screen.getByRole("button", { name: "Change level" }));
+    fireEvent.click(screen.getByRole("button", { name: "Analysis & evaluation" }));
+
+    await waitFor(() =>
+      expect(api.setCheckLevel).toHaveBeenCalledWith("l-1", "q-1", {
+        scope: "checkpoint",
+        masteryLevel: "analysis",
+        segmentId: "s-1",
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole("group", { name: /Which level/ })).toBeNull());
+    expect(screen.getByText("Analysis & evaluation")).toBeInTheDocument();
+  });
+
+  /* 422 assessment_has_no_segment: an end-of-lesson question names no section. */
+  it("sends no section for an end-of-lesson question", async () => {
+    api.review.mockResolvedValue(withLevel({ scope: "assessment", segmentId: "l-1" }));
+    api.setCheckLevel.mockResolvedValue(withLevel({ scope: "assessment", segmentId: "l-1", masteryLevel: "knowledge" }));
+    await open(3);
+    openCheck(1);
+    fireEvent.click(screen.getByRole("button", { name: "Change level" }));
+    fireEvent.click(screen.getByRole("button", { name: "Knowing & understanding" }));
+
+    await waitFor(() =>
+      expect(api.setCheckLevel).toHaveBeenCalledWith("l-1", "q-1", { scope: "assessment", masteryLevel: "knowledge" }),
+    );
+  });
+
+  it("says when it didn't save, and the level stays as it was", async () => {
+    api.review.mockResolvedValue(withLevel());
+    api.setCheckLevel.mockRejectedValue(new Error("409"));
+    await open(3);
+    openCheck(1);
+    fireEvent.click(screen.getByRole("button", { name: "Change level" }));
+    fireEvent.click(screen.getByRole("button", { name: "Knowing & understanding" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That didn’t save, so the level is as it was. Try again in a moment.",
+    );
+    expect(screen.getByRole("button", { name: "Application" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("closes without saving when the current level is chosen", async () => {
+    api.review.mockResolvedValue(withLevel());
+    await open(3);
+    openCheck(1);
+    fireEvent.click(screen.getByRole("button", { name: "Change level" }));
+    fireEvent.click(screen.getByRole("button", { name: "Application" }));
+
+    expect(screen.queryByRole("group", { name: /Which level/ })).toBeNull();
+    expect(api.setCheckLevel).not.toHaveBeenCalled();
+  });
+
+  it("is not offered on a check with no level", async () => {
+    api.review.mockResolvedValue(reviewOf({ checks: [check(1)] }));
+    await open(3);
+    openCheck(1);
+
+    expect(screen.queryByRole("button", { name: "Change level" })).toBeNull();
   });
 });
