@@ -132,15 +132,46 @@ describe("when the send fails", () => {
   it("says so, and does not report a referral", async () => {
     create.mockRejectedValueOnce(new Error("500"));
     const { onSent } = show();
-    // "your SENCo" only once the read has said someone holds it (SCRUM-305).
     await screen.findByText(/A note goes to your SENCo/);
     type("She has gone very quiet.");
     send();
 
+    // SCRUM-321 (Lydia, 7 Nov): with no administrator named, the school.
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      /Nothing has reached your SENCo/i,
+      "This didn’t send, so nothing has reached your school.",
     );
     expect(onSent).not.toHaveBeenCalled();
+  });
+
+  it("names the administrator when it was going to one the server named", async () => {
+    holders.mockResolvedValue({
+      holders: [],
+      viewerHoldsIt: false,
+      fallbackRecipient: { userId: "u-adm", name: "Mrs. Adebayo" },
+    });
+    create.mockRejectedValueOnce(new Error("500"));
+    show();
+    type("She has gone very quiet.");
+    fireEvent.click(await screen.findByRole("button", { name: "Send to Mrs. Adebayo" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This didn’t reach Mrs. Adebayo, so nothing has been sent.",
+    );
+  });
+
+  /* SCRUM-321: "Both need a Try again beside them." */
+  it("offers Try again beside the line, and it sends the same note", async () => {
+    create.mockRejectedValueOnce(new Error("500"));
+    const { onSent } = show();
+    type("Please take a look.");
+    send();
+    await screen.findByRole("alert");
+
+    create.mockResolvedValueOnce({ id: "e-2", routedTo: "learning_support" });
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    await vi.waitFor(() => expect(onSent).toHaveBeenCalledTimes(1));
+    expect(create).toHaveBeenLastCalledWith({ studentId: "s-1", note: "Please take a look." });
   });
 
   it("keeps the teacher's words so they are not retyped", async () => {

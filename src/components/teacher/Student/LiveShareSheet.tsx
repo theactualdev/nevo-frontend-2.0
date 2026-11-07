@@ -183,13 +183,14 @@ export function LiveShareSheet({
         setNoRecipient(true);
         return;
       }
-      // Back to the form: the error says the note "is still here", so it is.
+      // Back to the form, the note still in the box. SCRUM-321's words
+      // (Lydia, 7 Nov): the administrator by name where the server named
+      // one, and otherwise the school - never "your SENCo", whom nothing
+      // here knows to be one. Each has its Try again beside it.
       setError(
-        route.kind === "holder"
-          ? `We couldn${"’"}t send that just now. Nothing has reached your SENCo, so your note is still here to try again.`
-          : route.kind === "admin"
-            ? `We couldn${"’"}t send that just now. Nothing has reached ${route.name}, so your note is still here to try again.`
-            : `We couldn${"’"}t send that just now. Nothing has been sent, so your note is still here to try again.`,
+        route.kind === "admin"
+          ? `This didn${"’"}t reach ${route.name}, so nothing has been sent.`
+          : `This didn${"’"}t send, so nothing has reached your school.`,
       );
     } finally {
       setBusy(false);
@@ -319,12 +320,21 @@ export function LiveShareSheet({
         </div>
 
         {error && (
-          <p
-            role="alert"
-            className="mt-3 text-[13.5px] leading-[1.5] text-nevo-navy"
-          >
-            {error}
-          </p>
+          <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <p role="alert" className="text-[13.5px] leading-[1.5] text-nevo-navy">
+              {error}
+            </p>
+            {/* SCRUM-321: "Both need a Try again beside them." It sends the
+                same note again; the confirm step was already answered. */}
+            <button
+              type="button"
+              disabled={!ready}
+              onClick={() => void send()}
+              className="cursor-pointer border-none bg-transparent p-0 text-[13.5px] font-semibold text-nevo-navy underline underline-offset-2 disabled:cursor-default disabled:opacity-55"
+            >
+              {busy ? `Sending${"…"}` : "Try again"}
+            </button>
+          </div>
         )}
           </>
         )}
