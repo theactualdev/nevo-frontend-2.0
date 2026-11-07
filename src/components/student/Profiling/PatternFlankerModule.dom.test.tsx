@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { PatternFlankerModule, PRACTICE_COPY } from "./PatternFlankerModule";
-import { PRACTICE_FEEDBACK_MS } from "./useTrialRunner";
+import { PatternFlankerModule } from "./PatternFlankerModule";
 import { BaselineCapture } from "@/lib/profiling/capture";
 
 /**
@@ -323,10 +322,9 @@ describe("Word Conflict, after 2B, for SS alone", () => {
     const asked: { word: string | null; arrow: string | null }[] = [];
     for (let i = 0; i < 40; i++) {
       asked.push(shown());
-      // Always Left: right on a LEFT trial, wrong on a RIGHT one. A practice
-      // trial's feedback is read before the next.
+      // Always Left: right on a LEFT trial, wrong on a RIGHT one.
       fireEvent.click(screen.getByRole("button", { name: "Left" }));
-      act(() => void vi.advanceTimersByTime(i < 8 ? PRACTICE_FEEDBACK_MS + 100 : 500));
+      act(() => void vi.advanceTimersByTime(500));
     }
     act(() => void vi.advanceTimersByTime(2000));
 
@@ -355,73 +353,43 @@ describe("Word Conflict, after 2B, for SS alone", () => {
     expect(done).toHaveBeenCalledTimes(1);
   }, 30_000);
 
-  /** Through the eight practice trials, to the first scored one. */
-  const throughThePractice = () => {
-    for (let i = 0; i < 8; i++) {
-      fireEvent.click(screen.getByRole("button", { name: "Left" }));
-      act(() => void vi.advanceTimersByTime(PRACTICE_FEEDBACK_MS + 100));
-    }
-  };
-
-  it("says nothing about whether a scored tap matched, and labels no scored trial", () => {
+  it("says nothing about whether a tap matched", () => {
     render(<PatternFlankerModule band="ss" onComplete={() => {}} />);
     toTheWords();
-    throughThePractice();
 
-    expect(document.querySelector("[data-practice-label]")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Right" }));
 
-    expect(document.querySelector("[data-practice-feedback]")).toBeNull();
-    expect(document.body.textContent).not.toMatch(
-      /correct|wrong|right!|try again|well done|that's the one|go by the word/i,
-    );
+    expect(document.body.textContent).not.toMatch(/correct|wrong|right!|try again|well done/i);
   });
 
   /*
-   * PRACTICE HELPS AS IT GOES (Lydia, 4-5 Nov; the Word Conflict frame).
+   * LYDIA, 7 NOV (copy pass, part four), reversing #1023: after a practice
+   * tap "the child sees NOTHING, right or wrong, and nothing judges it. The
+   * trial just moves to the next." The 29 Oct ruling stands: the device does
+   * not compute correctness, and it needs no words.
    */
-  it("labels each practice trial as the frame does", () => {
+  it("shows nothing after a practice tap, right or wrong, and says nothing about practice", () => {
     render(<PatternFlankerModule band="ss" onComplete={() => {}} />);
     toTheWords();
+    const before = document.body.textContent;
 
-    expect(screen.getByText(PRACTICE_COPY.label)).toBeInTheDocument();
-    expect(PRACTICE_COPY.label).toBe("Practice - we help as you go");
-  });
-
-  it("says so when a practice tap goes with the word", () => {
-    render(<PatternFlankerModule band="ss" onComplete={() => {}} />);
-    toTheWords();
-    const word = shown().word === "LEFT" ? "Left" : "Right";
-
-    fireEvent.click(screen.getByRole("button", { name: word }));
-
-    expect(document.querySelector("[data-practice-feedback]")).toHaveTextContent(
-      "Yes - you went with the word. That's the one.",
-    );
-  });
-
-  it("says how to do it, naming the word, when a practice tap goes with the arrow", () => {
-    render(<PatternFlankerModule band="ss" onComplete={() => {}} />);
-    toTheWords();
-    const word = shown().word;
-    const other = word === "LEFT" ? "Right" : "Left";
-
-    fireEvent.click(screen.getByRole("button", { name: other }));
-
-    expect(document.querySelector("[data-practice-feedback]")).toHaveTextContent(
-      `That's the way the arrow points. This time, go by the word - it says ${word === "LEFT" ? "Left" : "Right"}.`,
-    );
-  });
-
-  it("holds a practice trial's feedback before the next trial, and a scored trial not at all", () => {
-    render(<PatternFlankerModule band="ss" onComplete={() => {}} />);
-    toTheWords();
+    // One tap each way: one of them follows the word and one does not.
     fireEvent.click(screen.getByRole("button", { name: "Left" }));
-
+    expect(document.body.textContent).toBe(before);
+    // The instruction is the only thing that speaks: no line after a tap.
+    expect(screen.getAllByRole("status").map((el) => el.textContent)).toEqual([
+      "Tap what the word says, not the way the arrow points.",
+    ]);
     act(() => void vi.advanceTimersByTime(500));
-    expect(document.querySelector("[data-practice-feedback]")).toBeInTheDocument();
-    act(() => void vi.advanceTimersByTime(PRACTICE_FEEDBACK_MS - 500));
-    expect(document.querySelector("[data-practice-feedback]")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
+
+    // The instruction is the only thing that speaks: no line after a tap.
+    expect(screen.getAllByRole("status").map((el) => el.textContent)).toEqual([
+      "Tap what the word says, not the way the arrow points.",
+    ]);
+    expect(document.body.textContent).not.toMatch(
+      /practice|we help|went with the word|go by the word|that's the one/i,
+    );
   });
 
   it.each(["p13", "p46", "jss"] as const)("is not run for %s", (band) => {

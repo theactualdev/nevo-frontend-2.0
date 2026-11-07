@@ -10,12 +10,6 @@ import type { BaselineCapture } from "@/lib/profiling/capture";
  * 1 Oct (D14).
  */
 const PICK_BEAT_MS = 440;
-/**
- * How long a practice trial's feedback stays before the next trial: Lydia's
- * own measure for one short line, "long enough to land, short enough not to
- * feel like a penalty" (D1, 26 Oct). No frame says; raised with the build.
- */
-export const PRACTICE_FEEDBACK_MS = 1800;
 /** Every module ends on the shared "That's it." settle (D136). */
 const SETTLE_MS = 1700;
 
@@ -107,8 +101,6 @@ export function useTrialRunner({
   const pick = (
     choice: number,
     detail?: Record<string, unknown>,
-    /** The trial is a practice one, whose feedback is read before moving on. */
-    { practice = false }: { practice?: boolean } = {},
   ) => {
     if (settling || picked !== -1) return;
     const now = performance.now();
@@ -146,7 +138,7 @@ export function useTrialRunner({
         setActIdx(a);
         setTrial(t);
         setPicked(-1);
-      }, practice ? PRACTICE_FEEDBACK_MS : PICK_BEAT_MS),
+      }, PICK_BEAT_MS),
     );
   };
 
