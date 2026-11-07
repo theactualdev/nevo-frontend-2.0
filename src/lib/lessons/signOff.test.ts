@@ -10,7 +10,9 @@ import { awaitingSignOff, notReviewedTail } from "./signOff";
  * own "no" holds a lesson; a review that could not be read holds nothing.
  */
 describe("awaitingSignOff", () => {
-  beforeEach(() => review.mockReset());
+  beforeEach(() => {
+    review.mockReset();
+  });
 
   it("holds only the lessons the server says are not signed off", async () => {
     review.mockImplementation(async (id: string) => ({

@@ -83,7 +83,9 @@ describe("applyToAssignments", () => {
  * the row - so it is safe now, where it used to drop the record.
  */
 describe("cancelling with a reason", () => {
-  beforeEach(() => del.mockReset());
+  beforeEach(() => {
+    del.mockReset();
+  });
 
   it("sends the reason in the body, for each assignment", async () => {
     del.mockResolvedValue(undefined);

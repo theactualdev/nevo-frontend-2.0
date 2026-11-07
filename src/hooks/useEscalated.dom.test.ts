@@ -16,7 +16,9 @@ import { useEscalated } from "./useEscalated";
 
 const row = (studentId: string) => ({ id: `e-${studentId}`, studentId });
 
-beforeEach(() => h.allOpen.mockReset());
+beforeEach(() => {
+  h.allOpen.mockReset();
+});
 
 describe("useEscalated", () => {
   it("asks the server for one class's open escalations", async () => {
