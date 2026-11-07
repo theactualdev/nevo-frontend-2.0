@@ -20,8 +20,7 @@ import {
   CANNOT_HELP_LINE,
   contextForPath,
   contextIdsFor,
-  liveContextFor,
-  liveStripFor,
+  namedContextFor,
   OUT_OF_SCOPE,
   stripForPath,
 } from "@/lib/mocks/teacherAskNevo";
@@ -29,7 +28,7 @@ import { useHasSession } from "@/hooks/useHasSession";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { MOCK_TEACHER } from "./teacherNav";
 import { OPEN_ASK_NEVO } from "./phoneLayouts";
-import { useAskNevoClass } from "./askNevoScope";
+import { useAskNevoClass, useAskNevoRecord } from "./askNevoScope";
 
 /**
  * Ask Nevo (`Nevo Teacher Ask`) - a reusable overlay dropped onto every
@@ -123,6 +122,7 @@ export function AskNevo() {
   const pathname = usePathname() ?? "";
   /** A class chosen in place on the open screen - Insights' pills (T182). */
   const screenClass = useAskNevoClass();
+  const pageRecord = useAskNevoRecord();
   /**
    * THE SERVER'S thread id, not one we made up.
    *
@@ -173,8 +173,18 @@ export function AskNevo() {
   // The frame's people stay on the walkthrough. A signed-in teacher is shown
   // the screen and "this student", never an invented name - see
   // `liveContextFor`.
-  const data = signedIn ? liveContextFor(context) : ASK_NEVO_CONTEXTS[context];
-  const strip = signedIn ? liveStripFor(context) : stripForPath(context, pathname);
+  // Named only where the page beneath has published the record on the
+  // address (backlog item 32) - never a name beside a different record.
+  const ids = contextIdsFor(pathname);
+  const onAddress =
+    pageRecord &&
+    ((pageRecord.kind === "student" && context === "student" && ids.studentId === pageRecord.id) ||
+      (pageRecord.kind === "lesson" && context === "lesson" && ids.lessonId === pageRecord.id))
+      ? pageRecord
+      : null;
+  const named = signedIn ? namedContextFor(context, onAddress) : null;
+  const data = named ? named.data : ASK_NEVO_CONTEXTS[context];
+  const strip = named ? named.strip : stripForPath(context, pathname);
 
   // Closing resets the transcript, per the frame - and with it the thread, or
   // the next question would silently continue a conversation the teacher

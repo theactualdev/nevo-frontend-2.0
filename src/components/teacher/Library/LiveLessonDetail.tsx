@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PublishAskNevoRecord } from "@/components/teacher/Shell/PublishAskNevoRecord";
 import type { Assignment } from "@/lib/api/assignments";
 import { AssignmentSchedule } from "./AssignmentSchedule";
 import type {
@@ -424,6 +425,8 @@ export function LiveLessonDetail({
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[820px]">
+        {/* Ask Nevo names this lesson, from this page's own read (item 32). */}
+        <PublishAskNevoRecord kind="lesson" id={lesson.id} name={lesson.title} />
         <Link
           href="/teacher/lessons"
           className="inline-flex cursor-pointer items-center gap-[7px] text-sm text-nevo-near-black/60 transition-transform active:scale-[0.99]"

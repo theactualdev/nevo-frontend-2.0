@@ -238,6 +238,39 @@ export function liveContextFor(context: AskNevoContext): AskNevoContextData {
   return base;
 }
 
+/**
+ * THE SAME CONTEXT, NAMED (backlog item 32), where the page has published the
+ * record's own name and it is the record on the address. The words are the
+ * frame's with the real name in them: "You're viewing: {name}", "Ask me about
+ * {first}.", "What's going on with {first}?". Without a first name the
+ * student's prompts stay "this student".
+ */
+export function namedContextFor(
+  context: AskNevoContext,
+  named: { name: string; firstName?: string | null } | null,
+): { data: AskNevoContextData; strip: string | null } {
+  const data = liveContextFor(context);
+  if (!named || (context !== "student" && context !== "lesson")) {
+    return { data, strip: liveStripFor(context) };
+  }
+  const strip = `You're viewing: ${named.name}`;
+  const first = named.firstName?.trim();
+  if (context !== "student" || !first) return { data, strip };
+  return {
+    strip,
+    data: {
+      ...data,
+      lead: `Ask me about ${first}.`,
+      sub: `${first}${"’"}s recent sessions, and what Nevo has noticed.`,
+      chips: [
+        `What${"’"}s going on with ${first}?`,
+        "What has Nevo noticed this week?",
+        `Which lesson comes next for ${first}?`,
+      ],
+    },
+  };
+}
+
 /** The strip for a signed-in teacher: the screen, never a record it cannot name. */
 export function liveStripFor(context: AskNevoContext): string | null {
   if (context === "student" || context === "lesson") return null;
