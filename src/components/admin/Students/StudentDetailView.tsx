@@ -145,12 +145,30 @@ export function StudentDetailView({
    * hold. A deactivated child is deactivated whatever the checks say.
    */
   const [held, setHeld] = useState<boolean | null>(null);
+  /**
+   * WHY it holds, in the server's own terms (item 17): the dates DIFFER, a
+   * roster GAP (dates agree, no single year group recorded -
+   * `enrolled_age_band_unavailable`), or the dates AGREE but fall outside the
+   * year group. Only the first may say the parent gave a different date.
+   */
+  const [holdKind, setHoldKind] = useState<"differs" | "gap" | "agree" | null>(null);
   useEffect(() => {
     let alive = true;
     ageChecksApi
       .held()
       .then((rows) => {
-        if (alive) setHeld(rows.some((r) => r.studentId === studentId));
+        if (!alive) return;
+        const mine = rows.find((r) => r.studentId === studentId);
+        setHeld(Boolean(mine));
+        setHoldKind(
+          !mine
+            ? null
+            : mine.differs === true
+              ? "differs"
+              : mine.holdReasons?.includes("enrolled_age_band_unavailable")
+                ? "gap"
+                : "agree",
+        );
       })
       .catch(() => {
         if (alive) setHeld(null);
@@ -393,9 +411,27 @@ export function StudentDetailView({
               <path d="M3 9h18M8 2.5v4M16 2.5v4" />
             </svg>
             <span className="text-[13.5px] leading-[1.6] text-nevo-near-black/66">
-              {firstName}&rsquo;s date of birth differs from the one the parent gave, so this
-              account is on hold and hasn&rsquo;t started yet. The parent&rsquo;s date is never
-              shown. Check and resolve it in{" "}
+              {holdKind === "gap" ? (
+                // Lydia's 2 Nov line, as Date of birth checks already says it.
+                <>
+                  {firstName}&rsquo;s date of birth is confirmed, but no year group is recorded
+                  for them. Check the enrolment on their record.{" "}
+                </>
+              ) : holdKind === "agree" ? (
+                // Lydia's 31 Oct (Q12) words, from the both-checks card.
+                <>
+                  The dates now agree, but the date of birth does not match the year group{" "}
+                  {firstName} is enrolled in, and the school needs to check the enrolment rather
+                  than the date.{" "}
+                </>
+              ) : (
+                <>
+                  {firstName}&rsquo;s date of birth differs from the one the parent gave, so this
+                  account is on hold and hasn&rsquo;t started yet. The parent&rsquo;s date is never
+                  shown.{" "}
+                </>
+              )}
+              Check and resolve it in{" "}
               <Link
                 href={withBack("/admin/students/date-of-birth", {
                   href: `/admin/students/${studentId}`,
