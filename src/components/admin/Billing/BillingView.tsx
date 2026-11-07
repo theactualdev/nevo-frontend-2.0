@@ -19,7 +19,7 @@ import { NextCharge } from "./NextCharge";
 import { overdueHeadline, overdueLine, overduePanel } from "./overdue";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
-import { BillingContactSheet } from "./BillingContactSheet";
+import { BillingContacts } from "./BillingContacts";
 import { CostSheet } from "./CostSheet";
 import { PlanOptions } from "./PlanOptions";
 import { HowToPayPanel } from "./HowToPayPanel";
@@ -104,8 +104,8 @@ export function BillingView() {
   const [invoicesFailed, setInvoicesFailed] = useState(false);
   const [upcoming, setUpcoming] = useState<UpcomingCharge | null>(null);
   const [upcomingFailed, setUpcomingFailed] = useState(false);
+  /** The PRIMARY billing contact, for the list's pill. */
   const [contact, setContact] = useState<BillingContact | null>(null);
-  const [editing, setEditing] = useState(false);
   const [account, setAccount] = useState<ReceivingAccount | null>(null);
   /** The owed invoice's own account and reference, when that read answers. */
   const [payDetails, setPayDetails] = useState<InvoiceTransferDetails | null>(
@@ -120,6 +120,14 @@ export function BillingView() {
    * which is never wrong, only less complete.
    */
   const [reports, setReports] = useState<Record<string, TransferReport>>({});
+
+  /** Adding or removing a contact can move the primary; read it again. */
+  const rereadPrimary = useCallback(() => {
+    billingApi
+      .subscription()
+      .then((s) => setContact(s.billingContact))
+      .catch(() => undefined);
+  }, []);
 
   const load = useCallback(() => {
     // The subscription read owns the page - it carries the school name and the
@@ -419,53 +427,9 @@ export function BillingView() {
             )}
           </div>
 
-          <h2 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
-            Billing contact
-          </h2>
-          <div className={cn(CARD, "mt-3 px-6 py-[22px]")}>
-            {contact ? (
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0 text-[14px] leading-[1.6] text-nevo-near-black/78">
-                  <p className="m-0 font-semibold text-nevo-near-black">
-                    {contact.email}
-                  </p>
-                  {contact.phone && <p className="m-0">{contact.phone}</p>}
-                  <p className="m-0 mt-1.5">
-                    {[
-                      contact.addressLine1,
-                      contact.addressLine2,
-                      contact.city,
-                      contact.region,
-                      contact.postalCode,
-                      contact.country,
-                    ]
-                      .filter(Boolean)
-                      .join(", ")}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="shrink-0 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
-                >
-                  Edit
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <p className="m-0 text-[14.5px] text-nevo-near-black/62">
-                  No billing contact on file.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="shrink-0 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
-                >
-                  Add one
-                </button>
-              </div>
-            )}
-          </div>
+          {/* D11b "Who gets the invoices": several contacts, each emailed every
+              invoice and reminder (e8b70bd). See `BillingContacts`. */}
+          <BillingContacts primaryId={contact?.id ?? null} onChanged={rereadPrimary} />
 
           {/*
             * ONLY WHEN SOMETHING IS OWED. This rendered whatever the upcoming
@@ -507,16 +471,6 @@ export function BillingView() {
         </>
       )}
 
-      {editing && (
-        <BillingContactSheet
-          contact={contact}
-          onClose={() => setEditing(false)}
-          onSaved={(next) => {
-            setContact(next);
-            setEditing(false);
-          }}
-        />
-      )}
     </div>
   );
 }
