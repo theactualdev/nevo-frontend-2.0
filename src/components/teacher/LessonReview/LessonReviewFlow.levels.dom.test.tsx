@@ -326,7 +326,7 @@ describe("changing a check's level", () => {
     fireEvent.click(screen.getByRole("button", { name: "Knowing & understanding" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "That didn’t save, so the level is as it was. Try again in a moment.",
+      "That didn’t save, so the level is as it was. Try again.",
     );
     expect(screen.getByRole("button", { name: "Application" })).toHaveAttribute("aria-pressed", "true");
   });

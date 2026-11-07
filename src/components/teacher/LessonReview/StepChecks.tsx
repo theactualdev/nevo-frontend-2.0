@@ -528,10 +528,10 @@ function LeakCard({
  * "Which level does this check ask for?" and the three levels, the current
  * one marked. It draws no Save, so choosing a level saves it; choosing the
  * current one, or "Change level" again, closes it. While it saves, the chosen
- * one reads "Saving…", and a failure says the level is as it was (ours, for
- * Lydia). The server re-opens the checks sign-off on a change, so an Accept
- * already pressed comes back - the step follows the server, as it does after
- * any edit.
+ * one reads "Saving…"; a failure reads "That didn't save, so the level is as
+ * it was. Try again." (SCRUM-320). It is an edit: nothing here says review,
+ * approval or pending. SCRUM-308 keeps the checks sign-off across a level
+ * change - which the server's route must actually do before this merges.
  */
 function LevelBlock({
   row,
@@ -609,7 +609,7 @@ function LevelBlock({
           </div>
           {failed && (
             <p role="alert" className="mt-2 text-[13px] leading-[1.45] text-nevo-violet-text">
-              That didn&rsquo;t save, so the level is as it was. Try again in a moment.
+              That didn&rsquo;t save, so the level is as it was. Try again.
             </p>
           )}
         </div>
