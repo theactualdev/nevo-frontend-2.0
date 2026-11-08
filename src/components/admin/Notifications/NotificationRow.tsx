@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { Notification } from "@/lib/api/notifications";
 import { categoryLabel } from "./categories";
+import { useCanOpen } from "../Shell/useCanOpen";
 import { cn } from "@/lib/utils";
 
 /**
@@ -102,7 +103,19 @@ export function NotificationRow({
 }) {
   const router = useRouter();
   const unread = !notification.read;
-  const target = notification.navigatesTo;
+  /*
+   * NO LINK TO A REFUSAL - the rule the Overview's rows already keep. A
+   * notice can reach an admin who can't open where it points: "A teacher
+   * needs help with a learner account" goes to roster admins, but to EVERY
+   * admin when a school has no roster holder (item 20, 7 Nov) - and it links
+   * to the child's record, which a billing-only or IT admin can't open. Such
+   * a row still says what happened; it just isn't a link.
+   */
+  const mayOpen = useCanOpen();
+  const target =
+    notification.navigatesTo && mayOpen(notification.navigatesTo)
+      ? notification.navigatesTo
+      : null;
   const clickable = Boolean(target);
 
   const go = () => {
