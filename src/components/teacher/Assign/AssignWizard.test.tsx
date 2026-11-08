@@ -1343,3 +1343,54 @@ describe("the library's own sign-off", () => {
     expect(screen.queryByText(/aren’t listed here/)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Live test, 8 Nov: after POST /api/v1/assignments answered 201, the button
+ * went from "Assigning…" back to "Confirm assignment" for a moment before the
+ * library opened, and a second tap there could assign the lesson twice -
+ * there is no idempotency key on the endpoint.
+ */
+describe("between the 201 and the library opening", () => {
+  const toConfirm = () => {
+    render(
+      <SystemMessagesProvider>
+        <AssignWizard preselect="l-1" />
+      </SystemMessagesProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    onlyClasses(/JSS 2A/);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  };
+
+  it("keeps the button held once it has assigned, so a second tap sends nothing", async () => {
+    toConfirm();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith("/teacher/lessons"));
+    expect(screen.queryByRole("button", { name: "Confirm assignment" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Assigning…" }));
+
+    await act(async () => {});
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends once for two quick taps", async () => {
+    toConfirm();
+    const confirmButton = screen.getByRole("button", { name: "Confirm assignment" });
+    fireEvent.click(confirmButton);
+    fireEvent.click(confirmButton);
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalled());
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives the button back when the send failed, so it can be tried again", async () => {
+    create.mockRejectedValue(new Error("500"));
+    toConfirm();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
+
+    expect(await screen.findByRole("button", { name: "Confirm assignment" })).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+});
