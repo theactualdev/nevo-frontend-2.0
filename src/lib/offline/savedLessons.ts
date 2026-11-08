@@ -1,4 +1,5 @@
 import type { LessonDetailResponse } from "@/lib/api/lessons";
+import { keepingKeys } from "./keepKeys";
 
 /**
  * Lessons a child saved to open without a connection.
@@ -187,6 +188,12 @@ export function saveLesson(
  * child opens offline is the latest one they had online. Never saves a lesson
  * they did not choose to keep. The size and the word on media stay as the
  * manifest gave them: they describe the download, which this does not redo.
+ *
+ * NEVER A DOWNGRADE (Lydia, 5 Nov, test 9). The online read has its answer
+ * keys held back (41c2f83) and the package does not, so the keys the read
+ * left out are kept from the copy it replaces, for each question that has
+ * not changed since - see `keepingKeys`. Without that, one online open took
+ * every check out of the lesson offline.
  */
 export function refreshSavedLesson(
   userId: string,
@@ -198,7 +205,7 @@ export function refreshSavedLesson(
   shelf[detail.id] = {
     ...held,
     title: detail.title,
-    detail: withoutChoices(detail),
+    detail: withoutChoices(keepingKeys(detail, held.detail)),
   };
   write(userId, shelf);
 }
