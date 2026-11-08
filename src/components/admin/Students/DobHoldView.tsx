@@ -97,6 +97,16 @@ interface Person {
 /** What the admin just did here, so the card can say it in their terms. */
 type Done = { kind: "confirmed" } | { kind: "corrected"; to: string };
 
+/**
+ * A hold for a missing year group (item 17): the dates agree, and no single
+ * year group is recorded. Lydia's label for it (SCRUM-321), which says nothing
+ * about dates.
+ */
+function missingYearGroup(c: AgeCheck): boolean {
+  return c.differs !== true && (c.holdReasons ?? []).includes("enrolled_age_band_unavailable");
+}
+const NO_YEAR_GROUP_LABEL = "No year group on the roster";
+
 export function DobHoldView({ back = null }: { back?: Back | null }) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [held, setHeld] = useState<AgeCheck[]>([]);
@@ -150,10 +160,22 @@ export function DobHoldView({ back = null }: { back?: Back | null }) {
     setHeld((rows) => (next.blocksAccess ? rows.map((r) => (r.id === next.id ? next : r)) : rows.filter((r) => r.id !== next.id)));
   };
 
-  const toDo = held.filter((c) => holdStage(c) === "school");
-  const waiting = held.filter((c) => holdStage(c) === "parent");
+  /*
+   * HELD FOR A MISSING YEAR GROUP (item 17; Lydia, SCRUM-321): the dates
+   * agree, but no single year group is recorded (`enrolled_age_band_unavailable`,
+   * `differs` false). Those children get their own group, whatever stage
+   * their check is at, under her heading - and nothing there says anything
+   * about dates, because for them the dates aren't the problem.
+   */
+  const gap = held.filter(missingYearGroup);
+  const rest = held.filter((c) => !missingYearGroup(c));
+  const toDo = rest.filter((c) => holdStage(c) === "school");
+  // Item 17: only checks whose dates DIFFER sit under the "differs" heading.
+  const toDoDiffer = toDo.filter((c) => c.differs === true);
+  const toDoOther = toDo.filter((c) => c.differs !== true);
+  const waiting = rest.filter((c) => holdStage(c) === "parent");
   // Both have checked and it still holds: never the re-check again.
-  const settled = held.filter((c) => holdStage(c) === "both");
+  const settled = rest.filter((c) => holdStage(c) === "both");
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
@@ -206,15 +228,62 @@ export function DobHoldView({ back = null }: { back?: Back | null }) {
           </div>
         ) : (
           <>
-            {toDo.length > 0 || waiting.length > 0 ? (
+            {/*
+              * "...because the date of birth a parent gave differs" heads only
+              * the checks whose dates the server says DIFFER. A roster gap
+              * (dates agree, no single year group recorded - item 17) sits in
+              * its own list below, under no heading: its card says what's true
+              * (Lydia's words for those children are asked for, 7 Nov).
+              */}
+            {toDoDiffer.length > 0 || (toDo.length === 0 && waiting.length > 0) ? (
               <p className="mt-2 max-w-[68ch] text-[15px] leading-[1.6] text-nevo-near-black/64">
-                {toDo.length > 0
+                {toDoDiffer.length > 0
                   ? "These accounts can’t start yet because the date of birth a parent gave differs from your admissions record. Check each one against your record, then confirm it’s right or correct it."
                   : "You’ve done your part on these. They’re waiting on the parent now; nothing else is needed from you."}
               </p>
             ) : null}
+            {toDoDiffer.length > 0 ? (
+              <ul className="m-0 mt-6 flex list-none flex-col gap-3.5 p-0" aria-label="Dates that differ">
+                {toDoDiffer.map((c) => (
+                  <RecheckCard
+                    key={c.id}
+                    check={c}
+                    person={personFor(c)}
+                    onRechecked={onRechecked}
+                    onGone={read}
+                  />
+                ))}
+              </ul>
+            ) : null}
+            {gap.length > 0 ? (
+              <>
+                <h3 className="m-0 mt-8 text-[15px] font-semibold text-nevo-near-black">
+                  Held for a missing year group
+                </h3>
+                <ul
+                  className="m-0 mt-3.5 flex list-none flex-col gap-3.5 p-0"
+                  aria-label="Held for a missing year group"
+                >
+                  {gap.map((c) =>
+                    holdStage(c) === "school" ? (
+                      <RecheckCard
+                        key={c.id}
+                        check={c}
+                        person={personFor(c)}
+                        onRechecked={onRechecked}
+                        onGone={read}
+                      />
+                    ) : holdStage(c) === "parent" ? (
+                      <WaitingCard key={c.id} check={c} person={personFor(c)} done={done[c.id] ?? null} />
+                    ) : (
+                      <BothCheckedCard key={c.id} check={c} person={personFor(c)} />
+                    ),
+                  )}
+                </ul>
+              </>
+            ) : null}
             <ul className="m-0 mt-6 flex list-none flex-col gap-3.5 p-0">
-              {toDo.map((c) => (
+              {toDoOther.map((c) => (
                 <RecheckCard
                   key={c.id}
                   check={c}
@@ -293,7 +362,16 @@ function RecheckCard({
           ) : null}
         </div>
         <span className="inline-flex flex-none items-center whitespace-nowrap rounded-full bg-nevo-violet/24 px-3 py-[5px] text-[12.5px] font-semibold text-nevo-navy">
-          {cannotClear ? "On hold · needs a correction" : "On hold · date of birth difference"}
+          {/* "date of birth difference" only on the server's `differs`: a roster
+              gap (item 17) holds with the dates agreeing. Then it's "On hold" -
+              the words the roster and the record already use. */}
+          {missingYearGroup(check)
+            ? NO_YEAR_GROUP_LABEL
+            : cannotClear
+              ? "On hold · needs a correction"
+              : check.differs
+                ? "On hold · date of birth difference"
+                : "On hold"}
         </span>
       </div>
 
@@ -477,7 +555,7 @@ function BothCheckedCard({ check, person }: { check: AgeCheck; person: Person })
           ) : null}
         </div>
         <span className="inline-flex flex-none items-center whitespace-nowrap rounded-full bg-nevo-violet/24 px-3 py-[5px] text-[12.5px] font-semibold text-nevo-navy">
-          On hold · both checks done
+          {missingYearGroup(check) ? NO_YEAR_GROUP_LABEL : "On hold · both checks done"}
         </span>
       </div>
 
