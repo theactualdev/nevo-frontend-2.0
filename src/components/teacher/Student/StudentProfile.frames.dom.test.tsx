@@ -17,6 +17,15 @@ import { OBSERVATION_COPY } from "@/lib/constants/observations";
 describe("the sample profile's What Nevo has noticed", () => {
   const amara = getStudentProfile("amara-okafor");
 
+  // Rule 1 holds signed out too: the walkthrough says what the live profile
+  // says, and never the frame's "based on how each student learns".
+  it("introduces Amara's adaptations without learning-styles framing", () => {
+    render(<StudentProfile student={amara!} />);
+
+    expect(screen.getByText("Here is what has changed for Amara.")).toBeInTheDocument();
+    expect(screen.queryByText(/how each student learns|recently\./)).not.toBeInTheDocument();
+  });
+
   it("draws C08's four cards, the fourth included", () => {
     render(<StudentProfile student={amara!} />);
 

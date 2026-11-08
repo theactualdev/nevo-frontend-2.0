@@ -416,7 +416,10 @@ export function StudentProfile({
               {ADAPTATIONS_LABEL}
             </h3>
             <p className="mt-2 text-[13px] text-nevo-near-black/60">
-              {`Nevo quietly adjusts lessons based on how each student learns. Here is what has happened for ${student.name.split(" ")[0]} recently.`}
+              {/* The walkthrough says what the live profile says. The frame's
+                  "based on how each student learns" is learning-styles
+                  framing (rule 1; SCRUM-253), signed out or not. */}
+              {`Here is what has changed for ${student.name.split(" ")[0]}.`}
             </p>
             <div className="mt-3.5 flex flex-col gap-2 xl:mt-4">
               {(STUDENT_ADAPTATIONS[student.id] ?? []).map((entry) => (

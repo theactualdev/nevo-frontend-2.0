@@ -726,8 +726,14 @@ export function LiveStudentProfile({
           based on how each student learns" is the learning-styles framing
           Lydia ruled off the product (SCRUM-253, 17 Oct; architecture rule 1)
           - the same reason the review's last step drops "suits how they
-          learn". And "recently" dates rows the read does not window. What
-          stays is the part that is true: here is what has happened.
+          learn". And "recently" dates rows the read does not window.
+
+          LYDIA'S LINE, REDUCED (copy pass, 7 Nov; Hub, 8 Nov): she gave
+          "Here is what has changed for {first}, and why." Each row is the
+          server's `adaptation` - what changed - and nothing says why: the
+          only reason on the row is `trigger`, the engine's own signal names,
+          which stay off the page (Zero-Tag). So "and why" waits until the
+          server writes a plain reason per row (asked of Teslim).
         */}
         {!state.learningSupport && (
           <section aria-labelledby="adapted-heading">
@@ -736,7 +742,7 @@ export function LiveStudentProfile({
             </h3>
             {adaptations.length > 0 && (
               <p className="mt-2 max-w-[640px] text-[14px] leading-[1.55] text-nevo-near-black/60">
-                {`Here is what has happened for ${first}.`}
+                {`Here is what has changed for ${first}.`}
               </p>
             )}
             {adaptationList}
