@@ -256,7 +256,10 @@ export interface Subscription {
   contractEnd: string | null;
   renewalBannerVisible: boolean;
   renewalMessage: string | null;
+  /** The PRIMARY billing contact - the school's `billing_contact_id`. */
   billingContact: BillingContact | null;
+  /** Every billing contact (a16224d). Each gets every invoice and reminder (e8b70bd). */
+  billingContacts?: BillingContact[];
   paymentMethod: PaymentMethod | null;
   pricing: Pricing;
 }
@@ -383,8 +386,20 @@ export const billingApi = {
   subscription: () => api.get<Subscription>("/api/billing/subscription"),
   invoices: () => api.get<Invoice[]>("/api/billing/invoices"),
   upcoming: () => api.get<UpcomingCharge>("/api/billing/upcoming"),
-  updateContact: (draft: BillingContactDraft) =>
-    api.put<BillingContact>("/api/billing/billing-contact", draft),
+  /*
+   * SEVERAL BILLING CONTACTS (Teslim a16224d; Lydia, 4 Nov: yes). Since
+   * e8b70bd every contact on this list is EMAILED each invoice as it's issued
+   * (with the PDF) and a reminder 7 days before it's due and on the day -
+   * nothing after the due date, and nothing once it's paid. 409
+   * `billing_contact_exists` for an address already on the list.
+   */
+  contacts: () => api.get<BillingContact[]>("/api/billing/billing-contacts"),
+  addContact: (draft: BillingContactDraft) =>
+    api.post<BillingContact>("/api/billing/billing-contacts", draft),
+  editContact: (id: string, draft: BillingContactDraft) =>
+    api.put<BillingContact>(`/api/billing/billing-contacts/${encodeURIComponent(id)}`, draft),
+  removeContact: (id: string) =>
+    api.del<void>(`/api/billing/billing-contacts/${encodeURIComponent(id)}`),
   /**
    * One invoice's account and reference. Null on an incomplete answer, for the
    * reason on `ReceivingAccount`: a partial account is worse than none.
