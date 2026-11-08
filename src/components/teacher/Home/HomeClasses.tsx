@@ -115,7 +115,7 @@ export function HomeClasses() {
             </div>
             {counts ? (
               <div className="mt-3 flex items-center gap-2 xl:mt-3.5 xl:gap-[9px]">
-                <SummaryDot tone={summaryTone(counts, false)} />
+                <SummaryDot tone={summaryTone(counts)} />
                 <span className="text-[12.5px] text-nevo-near-black/70 xl:text-[13.5px]">
                   <span className="xl:hidden">{homeSummary(counts, true)}</span>
                   <span className="hidden xl:inline">{homeSummary(counts)}</span>

@@ -197,7 +197,7 @@ export function ClassesList() {
                 </span>
                 {counts ? (
                   <div className="mt-[18px] flex items-center gap-[9px] border-t border-nevo-near-black/8 pt-4">
-                    <SummaryDot tone={summaryTone(counts, true)} />
+                    <SummaryDot tone={summaryTone(counts)} />
                     <span className="text-sm text-nevo-near-black/72">
                       {listSummary(counts)}
                     </span>
@@ -262,7 +262,7 @@ export function ClassesList() {
                 </div>
                 {counts ? (
                   <div className="flex shrink-0 items-center gap-2">
-                    <SummaryDot tone={summaryTone(counts, true)} />
+                    <SummaryDot tone={summaryTone(counts)} />
                     <span className="text-[13.5px] text-nevo-near-black/70">
                       {listSummary(counts)}
                     </span>

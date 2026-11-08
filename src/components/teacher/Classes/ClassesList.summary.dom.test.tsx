@@ -16,7 +16,7 @@ import { ClassesList } from "./ClassesList";
 /**
  * C05's live class cards (backlog item 6, 2 Nov audit): one per class, the
  * subjects and headcount, and the summary row the class page's own header
- * counts give - including who can't sign in, which Home leaves out.
+ * counts give - including who can't sign in, which Home counts too since 7 Nov.
  */
 
 const assignment = (classId: string, className: string, subject: string | null) => ({
