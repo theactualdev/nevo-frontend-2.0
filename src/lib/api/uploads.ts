@@ -131,7 +131,11 @@ export interface UploadStructure {
    */
   lessonId: string | null;
   modules: StructureModule[];
-  /** Free-form in the contract; not rendered. */
+  /**
+   * Free-form in the contract. Only `question_unusable` notes are rendered -
+   * the server's sentence and the questions it left out (`QuestionsLeftOut`);
+   * the rest are technical notes and stay off the page.
+   */
   reviewNotes?: unknown[];
 }
 
