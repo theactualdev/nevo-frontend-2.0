@@ -27,7 +27,7 @@ import {
 import { Letterbox } from "./Letterbox";
 import { doorAfterLostSession } from "./lostSession";
 import { MOCK_STUDENT, STUDENT_NAV, STUDENT_PROFILE_HREF } from "./studentNav";
-import { StudentAvatar } from "./StudentAvatar";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
 import { useAvatarLook } from "./useAvatarLook";
 import { useDisplayName } from "./useDisplayName";
 

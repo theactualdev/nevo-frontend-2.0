@@ -12,7 +12,7 @@ import {
   saveChosenName,
   useDisplayName,
 } from "@/components/student/Shell/useDisplayName";
-import { StudentAvatar } from "@/components/student/Shell/StudentAvatar";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
 import { useAvatarLook } from "@/components/student/Shell/useAvatarLook";
 import { PREFERRED_NAME_MAX } from "@/lib/api/users";
 import { useAccessibility } from "@/context/AccessibilityContext";

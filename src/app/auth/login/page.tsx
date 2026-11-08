@@ -31,7 +31,7 @@ import {
   type PickerEntry,
   type RememberedChild,
 } from "@/lib/auth/deviceRoster";
-import { StudentAvatar } from "@/components/student/Shell/StudentAvatar";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
 import { avatarLook } from "@/lib/profile/avatarLook";
 import { PinBox } from "@/components/student/Auth/PinBox";
 import { ProfilePicker } from "@/components/student/Auth/ProfilePicker";

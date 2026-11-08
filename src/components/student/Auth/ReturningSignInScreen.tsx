@@ -21,7 +21,7 @@ import {
   rememberLook,
   rememberedChildren,
 } from "@/lib/auth/deviceRoster";
-import { StudentAvatar } from "@/components/student/Shell/StudentAvatar";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
 import {
   avatarLook,
   DEFAULT_AVATAR_LOOK,

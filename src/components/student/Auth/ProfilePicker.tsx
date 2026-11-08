@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { PickerEntry } from "@/lib/auth/deviceRoster";
-import { StudentAvatar } from "@/components/student/Shell/StudentAvatar";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
 import { avatarLook } from "@/lib/profile/avatarLook";
 
 /**

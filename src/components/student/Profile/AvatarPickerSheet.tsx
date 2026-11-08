@@ -1,7 +1,7 @@
 "use client";
 
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { StudentAvatar } from "@/components/student/Shell/StudentAvatar";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
 import { AVATAR_LOOKS, type AvatarLook } from "@/lib/profile/avatarLook";
 import { cn } from "@/lib/utils";
 

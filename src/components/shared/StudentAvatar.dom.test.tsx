@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
-import { StudentAvatar } from "./StudentAvatar";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
 import { avatarLook } from "@/lib/profile/avatarLook";
 
 /**
