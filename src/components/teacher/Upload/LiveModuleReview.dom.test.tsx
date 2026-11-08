@@ -488,3 +488,37 @@ describe("an edit not yet saved", () => {
     expect(leavingAsks()).toBe(true);
   });
 });
+
+/*
+ * THE LINE AND THE LIST AGREE (Olayinka, 8 Nov, Density's retry upload
+ * 887e4ecd). With no sections proposed - a text-fallback parse is this shape -
+ * the screen said "It will play as one continuous flow." over three listed
+ * parts, each "needs a look", and read as a contradiction.
+ */
+describe("a lesson Nevo proposed no sections for", () => {
+  const noSections = () =>
+    show({
+      lessons: [
+        {
+          lessonId: "l-1",
+          title: "Density",
+          sequenceOrder: 1,
+          modules: [],
+          segmentIds: ["s1", "s2", "s3"],
+        } as never,
+      ],
+    });
+
+  it("says the listed segments are what plays, in order, with no section breaks", () => {
+    noSections();
+
+    expect(screen.getByText("Nevo didn’t propose any sections for this lesson.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /^It will play as one continuous flow, with no section breaks: these 4 segments, in this order\./,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^It will play as one continuous flow\. /)).toBeNull();
+    expect(screen.getByText("What plants need to live")).toBeInTheDocument();
+  });
+});
