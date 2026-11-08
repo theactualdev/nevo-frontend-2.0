@@ -394,8 +394,18 @@ export function LiveModuleReview({
                   Nevo didn&rsquo;t propose any sections for this lesson.
                 </div>
                 <p className="mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/66">
-                  It will play as one continuous flow. You can add sections
-                  yourself if you&rsquo;d like to give it named parts.
+                  {/*
+                   * SAY WHAT THE LIST BELOW IS (Olayinka, 8 Nov). "It will play
+                   * as one continuous flow" sat above "1 Density / 2 Floating
+                   * and sinking / 3 Summary" and read as a contradiction: one
+                   * flow, three parts. Both are true - no SECTION breaks, and
+                   * those are the segments that play - so the line now says so,
+                   * in the flat state's own words. A text-fallback lesson
+                   * (\`ai_parse_fallback\`) is the same shape and reads the same.
+                   */}
+                  {rows.length >= 2
+                    ? `It will play as one continuous flow, with no section breaks: these ${rows.length} segments, in this order. You can add sections yourself if you’d like to give it named parts.`
+                    : `It will play as one continuous flow, with no section breaks. You can add sections yourself if you’d like to give it named parts.`}
                 </p>
                 <button
                   type="button"
