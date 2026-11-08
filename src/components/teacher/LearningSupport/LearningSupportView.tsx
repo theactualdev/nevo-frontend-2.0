@@ -8,6 +8,7 @@ import { escalationsApi, type Escalation } from "@/lib/api/escalations";
 import { learningSupportApi, type LearningSupportHolders } from "@/lib/api/learningSupport";
 import { SummaryChip } from "@/components/teacher/shared/SummaryChip";
 import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
+import { seenLine } from "@/components/teacher/shared/seenLine";
 
 /**
  * C20's Learning Support page (design, 12 Oct): "children with an open
@@ -15,14 +16,19 @@ import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
  * child's profile.
  *
  * THE LIST IS THE SERVER'S. For a holder, `GET /api/v1/escalations` returns the
- * whole school's open escalations, and since 4 Nov each one carries the
- * child's name, their class and who raised it. So the rows are read, never
- * assembled: nothing here filters by class or matches against a roster.
+ * whole school's escalations, and since 4 Nov each one carries the child's
+ * name, their class and who raised it. So the rows are read, never assembled:
+ * nothing here filters by class or matches against a roster.
  *
- * OPEN MEANS NOT YET ACKNOWLEDGED (Hub, 3 Nov, for the Flagged chip, and
- * `openOnly` is that). Two of C20's drawn rows are not that, and wait on
- * Lydia: one acknowledged concern carrying its "saw this" line, and one
- * sudden change, which is Nevo's flag rather than a concern a teacher raised.
+ * A SEEN CONCERN STAYS (Lydia, copy pass, 7 Nov: "acknowledged concerns STAY
+ * on the list"), with C08's "saw this" line under it, as C20 draws one.
+ * Nothing closes a concern (SCRUM-304), so the list reads every one, seen or
+ * not. The teacher's note is shown in their own words, never paraphrased.
+ *
+ * NOT YET: C20's sudden-change row. It is Nevo's flag, not a concern a teacher
+ * raised, and the flags read names a child by id only - no name, no class. A
+ * row would be "One of your school's students" with no class, or names matched
+ * on the device. Raised for the server to send both (8 Nov).
  *
  * "Nothing open right now" is said only over a read that reached its end. A
  * list that stopped short says so instead of being counted.
@@ -35,19 +41,27 @@ import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
 interface ConcernsRead {
   holders: LearningSupportHolders;
   /** Null for a viewer without the role - their list is never asked for. */
-  concerns: { open: Escalation[]; complete: boolean } | null;
+  concerns: { concerns: Escalation[]; complete: boolean } | null;
 }
 
-/** One row per child, their most recent open concern. */
-function byChild(open: readonly Escalation[]): Escalation[] {
-  const latest = new Map<string, Escalation>();
-  for (const e of open) {
-    const seen = latest.get(e.studentId);
-    if (!seen || Date.parse(e.generatedAt) > Date.parse(seen.generatedAt)) {
-      latest.set(e.studentId, e);
-    }
+/** An unseen concern outranks a seen one; then the newer outranks the older. */
+function outranks(a: Escalation, b: Escalation): boolean {
+  if (a.acknowledged !== b.acknowledged) return !a.acknowledged;
+  return Date.parse(a.generatedAt) > Date.parse(b.generatedAt);
+}
+
+/**
+ * One row per child: their most recent concern nobody has seen yet, else
+ * their most recent one. A seen concern never stands in front of one that is
+ * still waiting - the row would say "saw this" over a concern nobody has.
+ */
+function byChild(all: readonly Escalation[]): Escalation[] {
+  const pick = new Map<string, Escalation>();
+  for (const e of all) {
+    const held = pick.get(e.studentId);
+    if (!held || outranks(e, held)) pick.set(e.studentId, e);
   }
-  return [...latest.values()].sort(
+  return [...pick.values()].sort(
     (a, b) => Date.parse(b.generatedAt) - Date.parse(a.generatedAt),
   );
 }
@@ -69,14 +83,14 @@ export function LearningSupportView() {
     const holders = await learningSupportApi.holders();
     return {
       holders,
-      concerns: holders.viewerHoldsIt ? await escalationsApi.allOpen(10) : null,
+      concerns: holders.viewerHoldsIt ? await escalationsApi.all(10) : null,
     };
   }, []);
   const { data, failed, loading } = useLiveQuery<ConcernsRead>(run, []);
 
   if (data && !data.holders.viewerHoldsIt) notFound();
 
-  const rows = data?.concerns ? byChild(data.concerns.open) : [];
+  const rows = data?.concerns ? byChild(data.concerns.concerns) : [];
   const complete = data?.concerns?.complete === true;
 
   return (
@@ -152,6 +166,16 @@ export function LearningSupportView() {
                         <span className="mt-1 line-clamp-2 block text-[14px] leading-[1.5] text-nevo-near-black/72">
                           {`“${e.note}”`}
                         </span>
+                        {/* C20's seen row: C08's line, smaller and quieter
+                            than the note above it. */}
+                        {e.acknowledged && (
+                          <span className="mt-[5px] block text-[13px] leading-[1.45] text-nevo-near-black/55">
+                            {seenLine({
+                              by: e.acknowledgedByName?.trim() || null,
+                              on: e.acknowledgedAt ?? null,
+                            })}
+                          </span>
+                        )}
                       </span>
                       {day && (
                         <span className="shrink-0 pt-0.5 text-[13px] whitespace-nowrap text-nevo-near-black/55">

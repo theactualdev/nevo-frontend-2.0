@@ -8,6 +8,7 @@ import { useStudentFlags } from "@/hooks/useStudentFlags";
 import { useEscalated } from "@/hooks/useEscalated";
 import { SummaryChip } from "@/components/teacher/shared/SummaryChip";
 import { profileChip } from "@/components/teacher/shared/summaryState";
+import { seenLine } from "@/components/teacher/shared/seenLine";
 import { useStudentSessions } from "@/hooks/useStudentSessions";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { useRosterObservations } from "@/hooks/useRosterObservations";
@@ -94,21 +95,6 @@ function initialsOf(first: string | null, last: string | null): string {
   const a = first?.trim()?.[0] ?? "";
   const b = last?.trim()?.[0] ?? "";
   return (a + b).toUpperCase() || "?";
-}
-
-/**
- * C08's "A flag Learning Support has acknowledged": plain text under the flag,
- * "Adaora from learning support saw this on 12 October." Where no name is
- * sent, "Learning support saw this on 12 October." The name is the server's
- * as sent (their chosen name, else their full name). With no date we can
- * read, the line says only that it was seen.
- */
-function seenLine(seen: { by: string | null; on: string | null }): string {
-  const who = seen.by ? `${seen.by} from learning support` : "Learning support";
-  const at = seen.on ? new Date(seen.on) : null;
-  return at && !Number.isNaN(at.getTime())
-    ? `${who} saw this on ${at.toLocaleDateString("en-GB", { day: "numeric", month: "long" })}.`
-    : `${who} has seen this.`;
 }
 
 export function LiveStudentProfile({
