@@ -492,6 +492,86 @@ export function levelWords(level: string | null | undefined): string | null {
   return (level && LEVEL_WORDS[level]) || null;
 }
 
+/** C07k's five steps, in order. The review's step bar and C07j LU-04b draw these. */
+export const REVIEW_STEPS = ["What I made", "Key points", "Checks", "Rewrites", "Live"] as const;
+
+/**
+ * C07j LU-04 / 04b / 04c: where a freshly uploaded lesson's review stands,
+ * from the SERVER's sign-offs alone - the finish screen has no visit of its
+ * own to go on.
+ *
+ * - `unstarted`: nothing signed yet (LU-04, "ready for your review").
+ * - `partway`: something signed, not complete (LU-04b).
+ * - `reviewed`: the server's `reviewComplete` (LU-04c).
+ *
+ * A step is done when the server holds what it needs: no picture or
+ * recording waiting for approval; the key points signed; no checks or
+ * guiding questions waiting; the rewrites signed, or none; the review
+ * complete. `next` is the first step that isn't, which "Continue review"
+ * opens.
+ */
+export interface FinishView {
+  stage: "unstarted" | "partway" | "reviewed";
+  done: boolean[];
+  next: number;
+  /**
+   * C07j LU-04b's step line (design ac1e61c), only where it is exactly so:
+   * "You've been through the overview and are on the key points.", then "...
+   * approved the key points and are on the checks.", then "... approved the
+   * checks and are on the rewrites." Anything it cannot name falls back to
+   * "You're part-way through reviewing this." - "naming the wrong step is
+   * worse than naming none".
+   */
+  stepLine: string;
+  /** "Reviewed by Ms. Adeyemi · 4 November", from the sign-offs on record. */
+  reviewedBy: string | null;
+}
+
+export function finishView(review: LessonReview, segments: LessonSegment[]): FinishView {
+  const checks = checksView(review, segments);
+  const media = mediaView(review, segments);
+  const noRewrites = (review.rewriteCount ?? rewriteRows(segments).length) === 0;
+  const complete = review.reviewComplete === true;
+  const done = [
+    media.awaiting.length === 0,
+    review.keyPointApproval?.current === true,
+    !checks.checksPending && !checks.guidedPending,
+    review.rewriteApproval?.current === true || noRewrites,
+    complete,
+  ];
+  const records: Pick<ReviewSignoff, "approvedByName" | "approvedAt">[] = [
+    ...mediaApprovals(review),
+    ...[
+      review.keyPointApproval,
+      review.checksApproval,
+      review.guidedStepsApproval,
+      review.rewriteApproval,
+    ].filter((r): r is ReviewSignoff => r?.current === true),
+  ].sort((a, b) => Date.parse(a.approvedAt) - Date.parse(b.approvedAt));
+  const open = done.findIndex((d) => !d);
+  const next = open < 0 ? REVIEW_STEPS.length : open + 1;
+  const stage = complete ? "reviewed" : records.length > 0 ? "partway" : "unstarted";
+  const names = [...new Set(records.map((r) => r.approvedByName).filter(Boolean))];
+  const day = records.length > 0 ? onDay(records[records.length - 1].approvedAt) : "";
+  return {
+    stage,
+    done,
+    next,
+    stepLine:
+      next === 2 && done[0]
+        ? "You’ve been through the overview and are on the key points."
+        : next === 3 && done[1]
+          ? "You’ve approved the key points and are on the checks."
+          : // A lesson with no checks approved nothing at step 3, so this line
+            // needs the checks sign-off itself, not only nothing pending.
+            next === 4 && done[2] && review.checksApproval?.current === true
+            ? "You’ve approved the checks and are on the rewrites."
+            : "You’re part-way through reviewing this.",
+    reviewedBy:
+      names.length > 0 ? [`Reviewed by ${listed(names)}`, day].filter(Boolean).join(" · ") : null,
+  };
+}
+
 /** "a", "a and b", "a, b and c". */
 export function listed(parts: string[]): string {
   return parts.length <= 1

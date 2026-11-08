@@ -66,6 +66,8 @@ export interface LessonReviewState {
   missingKeyPoints: number;
   /** SCRUM-307: the steps still holding Assign, by the server's names. */
   outstandingSteps: string[];
+  /** The review as read, for screens that draw more of it (C07j LU-04). */
+  review: LessonReview | null;
 }
 
 export function useLessonReview(
@@ -201,5 +203,6 @@ export function useLessonReview(
       typeof review?.reviewComplete === "boolean" ? review.reviewComplete : null,
     missingKeyPoints: review?.missingKeyPointSegmentIds?.length ?? 0,
     outstandingSteps: review?.outstandingReviewSteps ?? [],
+    review,
   };
 }
