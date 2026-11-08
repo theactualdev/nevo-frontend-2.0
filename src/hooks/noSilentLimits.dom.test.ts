@@ -94,11 +94,14 @@ describe("the attention flags", () => {
     expect(result.current.complete).toBe(false);
   });
 
-  it("still leaves out the acknowledged ones", async () => {
+  // Lydia, copy pass, 7 Nov: the roster keeps a seen flag's marker, so the
+  // hook carries it, marked, and Home leaves it out itself.
+  it("carries the acknowledged ones, marked as seen by learning support", async () => {
     api.allFlags.mockResolvedValue({ flags: [flag("1"), flag("2", true)], complete: true });
     const { result } = renderHook(() => useTeacherFlags());
 
-    await waitFor(() => expect(result.current.flags).toHaveLength(1));
+    await waitFor(() => expect(result.current.flags).toHaveLength(2));
+    expect(result.current.flags.map((f) => f.acknowledged)).toEqual([false, true]);
   });
 });
 

@@ -14,8 +14,11 @@ import { useStudentDirectory } from "./useStudentDirectory";
  * description is the substance, and dropping a flag because we could not
  * label it would hide the very thing the teacher is meant to see.
  *
- * Acknowledged flags are filtered out - the section is what still needs the
- * teacher, not a history.
+ * ACKNOWLEDGED FLAGS ARE CARRIED, NOT FILTERED (Lydia, copy pass, 7 Nov:
+ * "the roster keeps a seen marker for Learning Support"). Home's section
+ * leaves them out, because it is what still needs the teacher, not a history.
+ * The class roster keeps their marker, because Learning Support seeing a flag
+ * does not close it.
  *
  * WHAT THE CARD LOSES. C03 pairs each flag with a five-bar evidence sparkline,
  * an evidence caption and two actions. None has a source: the flag carries no
@@ -30,8 +33,8 @@ import { useStudentDirectory } from "./useStudentDirectory";
  * tapping the card marked the flag seen; Lydia ruled on 13 Oct that a class
  * teacher's tap means "I have read this" and clears the card from their own
  * view only, while acknowledging is learning support's act. So the card no
- * longer acknowledges (see `LiveFlagCard`), and this filter still drops a
- * flag once learning support has acknowledged it.
+ * longer acknowledges (see `LiveFlagCard`), and Home still leaves a flag out
+ * once learning support has acknowledged it.
  *
  * THE VIEWER'S OWN READ IS ON THE FLAG NOW (SCRUM-252: `seenByMe`, set by
  * `POST …/seen`). It is carried, not filtered here: it clears a card from
@@ -66,6 +69,11 @@ export interface TeacherFlag {
   isSudden: boolean;
   /** This teacher has read it - their Home no longer shows it. */
   seenByMe?: boolean;
+  /**
+   * Learning Support has seen it. Home no longer shows it; the roster keeps
+   * its marker, because the flag is still open (Lydia, 7 Nov).
+   */
+  acknowledged?: boolean;
 }
 
 /**
@@ -125,22 +133,21 @@ export function useTeacherFlags(): TeacherFlags {
 
   const byId = new Map(students.map((s) => [s.studentId, s]));
   return {
-    flags: data
-      .filter((f) => !f.acknowledged)
-      .map((f) => {
-        const student = byId.get(f.studentId);
-        return {
-          id: f.id,
-          studentId: f.studentId,
-          name: student?.name ?? null,
-          context: student?.className ?? null,
-          classId: student?.classId ?? null,
-          note: f.description,
-          generatedAt: f.generatedAt,
-          isSudden: suddenish(f.flagType),
-          seenByMe: f.seenByMe === true,
-        };
-      }),
+    flags: data.map((f) => {
+      const student = byId.get(f.studentId);
+      return {
+        id: f.id,
+        studentId: f.studentId,
+        name: student?.name ?? null,
+        context: student?.className ?? null,
+        classId: student?.classId ?? null,
+        note: f.description,
+        generatedAt: f.generatedAt,
+        isSudden: suddenish(f.flagType),
+        seenByMe: f.seenByMe === true,
+        acknowledged: f.acknowledged === true,
+      };
+    }),
     live: true,
     failed: false,
     loading: false,
