@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { emailConfirmationApi } from "@/lib/api/emailConfirmation";
 import type { TeacherAssignmentRole } from "@/lib/api/classes";
 import { cn } from "@/lib/utils";
 import { useSetupGate } from "@/hooks";
@@ -64,11 +65,67 @@ export const TEXT_ACTION =
  * Renders nothing unless the gate KNOWS writes are paused; it fails open.
  */
 export function PausedNote({ className }: { className?: string }) {
-  const { writesPaused, note } = useSetupGate();
+  const { writesPaused, note, pause, email } = useSetupGate();
   if (!writesPaused || !note) return null;
+  if (pause === "email_unconfirmed") return <ResendLine className={className} email={email} />;
   return (
     <p className={cn("m-0 text-[13px] leading-[1.5] text-nevo-near-black/55", className)}>
       {note}
+    </p>
+  );
+}
+
+/**
+ * D01c, "CONFIRM YOUR EMAIL" RESEND, PLACED (design 1397ec4, Lydia's item 28):
+ * one calm line with a Resend link, in a soft-violet panel, directly under
+ * the action it pauses - on Classes, Teachers, Students, and every other
+ * surface that pauses a write for an unconfirmed address. The same words as
+ * AC-05's Overview placement (#946), and the banner's own sent and failed
+ * lines, so one reason keeps one wording.
+ *
+ * Built reduced: the frame has each paused action "pressable but paused -
+ * never greyed out". A control that does nothing when pressed is a dead
+ * control, so the actions stay greyed with this line beside them until
+ * design says what pressing one should do (raised, 5 Nov). Billing's
+ * placement is left out: the server doesn't pause billing-contact writes for
+ * an unconfirmed admin, so drawing it paused would be untrue.
+ */
+function ResendLine({ className, email }: { className?: string; email: string | null }) {
+  const [resend, setResend] = useState<"idle" | "sending" | "sent" | "failed">("idle");
+  const again = () => {
+    if (resend === "sending") return;
+    setResend("sending");
+    emailConfirmationApi
+      .resend()
+      .then(() => setResend("sent"))
+      .catch(() => setResend("failed"));
+  };
+  return (
+    <p
+      className={cn(
+        "m-0 rounded-[10px] bg-nevo-violet/[0.14] px-3.5 py-2.5 text-[13px] leading-[1.5] text-nevo-navy",
+        className,
+      )}
+    >
+      Confirm your email first -{" "}
+      {email ? `we sent a link to ${email}.` : "we’ve sent you a link."}{" "}
+      {resend === "sent" ? (
+        "Sent. It may take a minute to arrive."
+      ) : resend === "failed" ? (
+        "We couldn’t send that just now. Your first link is still valid - try again in a moment."
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={again}
+            disabled={resend === "sending"}
+            className="cursor-pointer font-semibold underline underline-offset-2 hover:opacity-75 disabled:cursor-default disabled:opacity-60"
+          >
+            {resend === "sending" ? "Sending…" : "Resend it"}
+          </button>
+          .
+        </>
+      )}
     </p>
   );
 }
