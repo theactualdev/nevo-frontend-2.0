@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import {
+  headlineFor,
   PROCESSING_STAGES,
   ProcessingStages,
   stageOf,
@@ -150,6 +151,39 @@ describe("what the ladder shows", () => {
     );
 
     expect(container.textContent).not.toMatch(/\d+\s*%|\d+\s*of\s*\d+/);
+  });
+});
+
+/**
+ * Backlog item 35. LU-01's headline under the lesson's name says what is
+ * running, in the present tense: "Finding the sections…".
+ */
+describe("the headline", () => {
+  it("says the running stage in the present tense, as LU-01 draws it", () => {
+    render(<ProcessingStages lessonName="Quadratic Graphs.pdf" current="sections" />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Finding the sections…");
+  });
+
+  it("moves on with the ladder, and is announced when it does", () => {
+    const { rerender } = render(<ProcessingStages lessonName="L" current="sections" />);
+    rerender(<ProcessingStages lessonName="L" current="adapting" />);
+
+    const headline = screen.getByRole("status");
+    expect(headline).toHaveTextContent("Preparing the adaptations…");
+    expect(headline).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("drops the ellipsis once nothing is still running", () => {
+    render(<ProcessingStages lessonName="L" current="ready" />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(/^Ready to review$/);
+  });
+
+  it("only ever names a stage the ladder draws", () => {
+    for (const s of PROCESSING_STAGES) {
+      expect(headlineFor(s.key).replace(/…$/, "")).toBe(s.label);
+    }
   });
 });
 
