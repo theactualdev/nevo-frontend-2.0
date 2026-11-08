@@ -258,6 +258,13 @@ export interface UploadCreated {
   uploadId: string;
   status: UploadStatus;
   stage: UploadStage;
+  /**
+   * The server handed back an upload this teacher already made of the same
+   * file, scope and school (`find_reusable_upload`) - one still processing,
+   * or one already `ready` with its lesson prepared. Not new work.
+   */
+  reused?: boolean;
+  reviewReady?: boolean;
 }
 
 /** One file's outcome inside a batch. */

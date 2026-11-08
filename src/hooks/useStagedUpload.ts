@@ -197,6 +197,15 @@ export function useStagedUpload(): StagedUpload {
   const startedAt = useRef<number | null>(null);
   /** Status requests that have failed in a row. Only a success clears it. */
   const pollFailures = useRef(0);
+  /**
+   * THE UPLOAD HAS BEEN READ AT LEAST ONCE. A REUSED upload comes back from
+   * the create already `ready` (the same file, teacher, school and scope:
+   * `find_reusable_upload`) - and the poll below stopped on `ready` before it
+   * had ever asked for that upload's structure, sections or title. The wizard
+   * sat on "Getting it ready" for good (Olayinka, 8 Nov, live as the E2E
+   * teacher). A settled status from the create is read once, at once.
+   */
+  const [read, setRead] = useState(false);
 
   const reset = useCallback(() => {
     setUploadId(null);
@@ -215,6 +224,7 @@ export function useStagedUpload(): StagedUpload {
     setIncident(null);
     setSlow(false);
     setTick(0);
+    setRead(false);
     startedAt.current = null;
     pollFailures.current = 0;
   }, []);
@@ -294,8 +304,11 @@ export function useStagedUpload(): StagedUpload {
   // stops on failed or cancelled with the server's reason kept.
   useEffect(() => {
     if (!uploadId) return;
-    if (status === "ready" || status === "confirmed") return;
-    if (status === "failed" || status === "cancelled") return;
+    const settled =
+      status === "ready" || status === "confirmed" || status === "failed" || status === "cancelled";
+    // Settled AND read is the end. Settled but never read - a reused upload
+    // that came back ready - is read once, straight away.
+    if (settled && read) return;
     let cancelled = false;
     const tick = setTimeout(() => {
       void uploadsApi
@@ -303,6 +316,7 @@ export function useStagedUpload(): StagedUpload {
         .then((res) => {
           if (cancelled) return;
           pollFailures.current = 0;
+          setRead(true);
           setStatus(res.status);
           setStage(res.stage);
           setStructure(res.structure ?? null);
@@ -348,13 +362,13 @@ export function useStagedUpload(): StagedUpload {
           setFailureKind("request");
           setIncident(incidentId(err instanceof ApiError ? err.detail : null));
         });
-    }, POLL_MS);
+    }, settled ? 0 : POLL_MS);
     return () => {
       cancelled = true;
       clearTimeout(tick);
     };
-    // `tick` is what guarantees the next poll; `status` is what stops it.
-  }, [uploadId, status, tick]);
+    // `tick` is what guarantees the next poll; `status` and `read` stop it.
+  }, [uploadId, status, tick, read]);
 
   return {
     uploadId,
