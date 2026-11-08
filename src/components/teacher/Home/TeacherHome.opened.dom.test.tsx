@@ -21,7 +21,7 @@ import { TeacherHome } from "./TeacherHome";
  * may not then say everyone is moving along.
  */
 
-const flag = (id: string, seenByMe: boolean) => ({
+const flag = (id: string, seenByMe: boolean, acknowledged = false) => ({
   id,
   studentId: `s-${id}`,
   name: "Amara Okafor",
@@ -30,6 +30,7 @@ const flag = (id: string, seenByMe: boolean) => ({
   generatedAt: "2026-11-01T08:00:00Z",
   isSudden: false,
   seenByMe,
+  acknowledged,
 });
 
 const flagsRead = (flags: ReturnType<typeof flag>[]) => ({
@@ -89,5 +90,31 @@ describe("Home, with flags the teacher has opened", () => {
         "1 thing is worth your eye before first period. Everything else is running smoothly.",
       ),
     ).toBeInTheDocument();
+  });
+});
+
+/**
+ * The flags read now CARRIES a flag learning support has seen, because the
+ * roster keeps its marker (Lydia, copy pass, 7 Nov). Home still leaves it out,
+ * exactly as it did when the read dropped it.
+ */
+describe("Home, with a flag learning support has seen", () => {
+  it("leaves it out of the cards and the count", () => {
+    h.flags.mockReturnValue(flagsRead([flag("1", false), flag("2", false, true)]));
+    render(<TeacherHome />);
+
+    expect(
+      screen.getByText(
+        "1 thing is worth your eye before first period. Everything else is running smoothly.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the calm card when it's the only one", () => {
+    h.flags.mockReturnValue(flagsRead([flag("1", false, true)]));
+    render(<TeacherHome />);
+
+    expect(screen.getByRole("heading", { name: "Nothing needs you right now" })).toBeInTheDocument();
+    expect(screen.queryByText(/opened everything/)).toBeNull();
   });
 });

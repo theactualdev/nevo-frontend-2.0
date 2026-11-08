@@ -101,9 +101,12 @@ export function TeacherHome() {
   const showFixtureFlags = !flagsLive && !signedIn;
   const homeUnread = signedIn && homeFailed && !homeLive;
   const flagsUnread = signedIn && flagsFailed && !flagsLive;
+  // A flag Learning Support has seen leaves Home: the section is what still
+  // needs this teacher. The roster keeps its marker (Lydia, 7 Nov).
+  const open = noClasses ? [] : liveFlags.filter((f) => !f.acknowledged);
   // A card this teacher has already opened is read, and leaves THEIR Home
   // (SCRUM-252; Lydia, 13 Oct: "clears the card from their own view only").
-  const flags = noClasses ? [] : liveFlags.filter((f) => !f.seenByMe);
+  const flags = open.filter((f) => !f.seenByMe);
   /*
    * OPENED IS NOT CLOSED (4 Nov sweep). The cards this teacher has opened
    * leave their Home, but the flags are still open. With every one opened,
@@ -111,7 +114,7 @@ export function TeacherHome() {
    * own pace" over children Nevo had flagged - and "Everything else is
    * running smoothly" beside the cards still waiting.
    */
-  const openedOpen = noClasses ? 0 : liveFlags.length - flags.length;
+  const openedOpen = open.length - flags.length;
   const fixtureFlags = noClasses || !showFixtureFlags ? [] : HOME_FLAGS;
   const flagCount = flags.length + fixtureFlags.length;
   const hasFlags = flagCount > 0;

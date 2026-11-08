@@ -185,6 +185,22 @@ describe("the two markers", () => {
     expect(screen.getByText("Worth a glance")).toBeInTheDocument();
   });
 
+  // Lydia, copy pass, 7 Nov: "the roster keeps a seen marker for Learning
+  // Support". Seeing a flag doesn't close it, so its row keeps the marker.
+  it("keeps the marker of a flag learning support has seen", () => {
+    useTeacherFlags.mockReturnValue({
+      flags: [
+        { id: "f-1", studentId: "s-1", name: "Amara", context: null, note: "", generatedAt: "", isSudden: false, acknowledged: true },
+      ],
+      live: true,
+      failed: false,
+    });
+
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByText("Worth a glance")).toBeInTheDocument();
+  });
+
   it("distinguishes a sudden change from an ordinary glance", () => {
     useTeacherFlags.mockReturnValue({
       flags: [{ id: "f-1", studentId: "s-1", name: "Amara", context: null, note: "", generatedAt: "", isSudden: true }],
