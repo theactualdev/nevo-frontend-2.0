@@ -35,9 +35,9 @@ const concern = (studentId: string, generatedAt: string, over: Record<string, un
   ...over,
 });
 
-const read = (open: unknown[], complete = true) => {
+const read = (concerns: unknown[], complete = true) => {
   query.value = {
-    data: { holders: { holders: [], viewerHoldsIt: true }, concerns: { open, complete } },
+    data: { holders: { holders: [], viewerHoldsIt: true }, concerns: { concerns, complete } },
     failed: false,
     loading: false,
   };
@@ -76,6 +76,52 @@ describe("the Learning Support list", () => {
     expect(screen.queryByText(/An older note/)).not.toBeInTheDocument();
     // The count of a list read to its end.
     expect(screen.getByText("2")).toBeInTheDocument();
+  });
+
+  // Lydia, copy pass, 7 Nov: "acknowledged concerns STAY on the list" - with
+  // C08's line, as C20 draws Fatima's row.
+  it("keeps a concern learning support has seen, with who saw it and when", () => {
+    read([
+      concern("s-1", "2026-10-06T09:00:00Z", {
+        studentName: "Fatima Bello",
+        acknowledged: true,
+        acknowledgedByName: "Adaora",
+        acknowledgedAt: "2026-10-10T12:00:00Z",
+      }),
+    ]);
+    render(<LearningSupportView />);
+
+    const row = within(screen.getByRole("listitem"));
+    expect(row.getByText("Fatima Bello")).toBeInTheDocument();
+    expect(row.getByText("Flagged")).toBeInTheDocument();
+    expect(row.getByText("“His written work has dropped off this fortnight.”")).toBeInTheDocument();
+    expect(row.getByText("Adaora from learning support saw this on 10 October.")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing open right now")).not.toBeInTheDocument();
+  });
+
+  it("says no one saw a concern nobody has", () => {
+    read([concern("s-1", "2026-11-03T09:00:00Z")]);
+    render(<LearningSupportView />);
+
+    expect(screen.queryByText(/saw this|has seen this/)).not.toBeInTheDocument();
+  });
+
+  it("puts a concern still waiting in front of a newer one that was seen", () => {
+    read([
+      concern("s-1", "2026-11-03T09:00:00Z", {
+        note: "Seen already.",
+        acknowledged: true,
+        acknowledgedByName: "Adaora",
+        acknowledgedAt: "2026-11-04T09:00:00Z",
+      }),
+      concern("s-1", "2026-10-20T09:00:00Z", { note: "Still waiting." }),
+    ]);
+    render(<LearningSupportView />);
+
+    const row = within(screen.getByRole("listitem"));
+    expect(row.getByText("“Still waiting.”")).toBeInTheDocument();
+    expect(row.queryByText(/saw this/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Seen already/)).not.toBeInTheDocument();
   });
 
   it("says nothing is open only over a read that reached its end", () => {

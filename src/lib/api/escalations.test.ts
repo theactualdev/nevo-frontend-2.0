@@ -56,4 +56,38 @@ describe("escalationsApi.allOpen", () => {
     expect(open).toHaveLength(200);
     expect(complete).toBe(false);
   });
+
+  it("passes the server's own filter through", async () => {
+    get.mockResolvedValueOnce([]);
+    await escalationsApi.allOpen(10, { classId: "c-1" });
+    expect(get).toHaveBeenCalledWith("/api/v1/escalations", {
+      params: { classId: "c-1", openOnly: true, limit: 100, offset: 0 },
+    });
+  });
+});
+
+/**
+ * `all` is the Learning Support list's read: seen concerns INCLUDED (Lydia,
+ * copy pass, 7 Nov: "acknowledged concerns stay on the list").
+ */
+describe("escalationsApi.all", () => {
+  it("asks for every concern, seen ones too, and stops at a short page", async () => {
+    get.mockResolvedValueOnce(page(100)).mockResolvedValueOnce(page(1, 100));
+    const { concerns, complete } = await escalationsApi.all();
+    expect(concerns).toHaveLength(101);
+    expect(complete).toBe(true);
+    expect(get).toHaveBeenNthCalledWith(1, "/api/v1/escalations", {
+      params: { limit: 100, offset: 0 },
+    });
+    expect(get).toHaveBeenNthCalledWith(2, "/api/v1/escalations", {
+      params: { limit: 100, offset: 100 },
+    });
+  });
+
+  it("says it isn't complete when the pages run out on a full one", async () => {
+    get.mockResolvedValue(page(100));
+    const { concerns, complete } = await escalationsApi.all(2);
+    expect(concerns).toHaveLength(200);
+    expect(complete).toBe(false);
+  });
 });

@@ -94,6 +94,23 @@ export const CONCERN_RECIPIENT_UNAVAILABLE = "concern_recipient_unavailable";
  */
 const OPEN_PAGE = 100;
 
+/** Read `GET /api/v1/escalations` to a short page, or say it stopped short. */
+async function pages(
+  maxPages: number,
+  params: Record<string, string | boolean | undefined>,
+): Promise<{ rows: Escalation[]; complete: boolean }> {
+  const rows: Escalation[] = [];
+  for (let page = 0; page < maxPages; page += 1) {
+    const batch = await api.get<Escalation[]>("/api/v1/escalations", {
+      params: { ...params, limit: OPEN_PAGE, offset: page * OPEN_PAGE },
+    });
+    if (!Array.isArray(batch)) return { rows, complete: false };
+    rows.push(...batch);
+    if (batch.length < OPEN_PAGE) return { rows, complete: true };
+  }
+  return { rows, complete: false };
+}
+
 export const escalationsApi = {
   /** Raise a concern with the SENCo. 201 on success; 422 on a rejected body. */
   create: (payload: EscalationCreate) =>
@@ -117,16 +134,19 @@ export const escalationsApi = {
     maxPages = 10,
     filter: { studentId?: string; classId?: string } = {},
   ): Promise<{ open: Escalation[]; complete: boolean }> => {
-    const open: Escalation[] = [];
-    for (let page = 0; page < maxPages; page += 1) {
-      const batch = await api.get<Escalation[]>("/api/v1/escalations", {
-        params: { ...filter, openOnly: true, limit: OPEN_PAGE, offset: page * OPEN_PAGE },
-      });
-      if (!Array.isArray(batch)) return { open, complete: false };
-      open.push(...batch);
-      if (batch.length < OPEN_PAGE) return { open, complete: true };
-    }
-    return { open, complete: false };
+    const { rows, complete } = await pages(maxPages, { ...filter, openOnly: true });
+    return { open: rows, complete };
+  },
+
+  /**
+   * Every concern this viewer may see, seen ones INCLUDED, page by page - the
+   * Learning Support list's read (Lydia, copy pass, 7 Nov: "acknowledged
+   * concerns stay on the list"). Nothing closes a concern (SCRUM-304); being
+   * seen is not being closed. `complete` as for `allOpen`.
+   */
+  all: async (maxPages = 10): Promise<{ concerns: Escalation[]; complete: boolean }> => {
+    const { rows, complete } = await pages(maxPages, {});
+    return { concerns: rows, complete };
   },
 
   /**
