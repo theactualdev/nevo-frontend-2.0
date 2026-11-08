@@ -78,7 +78,19 @@ function shortDate(iso: string | null | undefined): string {
     : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
+export function LiveClassDetail({
+  klass,
+  subjects = [],
+}: {
+  klass: AssignedClass;
+  /**
+   * What this teacher teaches this class, from their own assignments (one per
+   * subject since 8 Oct). C05 leads the header with the subjects
+   * ("Mathematics · English · 16 students"); with none recorded - older
+   * assignments carry none - it says the teacher's role, as it always did.
+   */
+  subjects?: string[];
+}) {
   /**
    * TWO TABS, NOT THREE. Design ruled on 16 Sep: the Lessons tab ships because
    * the library cannot be filtered by class, so nothing else answers "what has
@@ -108,6 +120,7 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
   const [askFor, setAskFor] = useState<{ studentId: string; firstName: string } | null>(null);
   const say = useSystemMessages();
   const role = klass.role === "co_teacher" ? "Co-teacher" : "Primary teacher";
+  const lead = subjects.length > 0 ? subjects.join(" · ") : role;
   const { students, loading, failed } = useClassRoster(klass.classId);
   const observed = students.filter(
     (s) => s.profileStatus === "observed",
@@ -164,8 +177,8 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
             </h1>
             <span className="mt-1 block text-sm text-nevo-near-black/60 xl:mt-[5px] xl:text-[14.5px]">
               {students.length > 0
-                ? `${role} · ${students.length} ${students.length === 1 ? "student" : "students"}`
-                : `${role} · Synced from your school`}
+                ? `${lead} · ${students.length} ${students.length === 1 ? "student" : "students"}`
+                : `${lead} · Synced from your school`}
             </span>
           </div>
           {students.length > 0 && (

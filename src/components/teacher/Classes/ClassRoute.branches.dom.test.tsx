@@ -13,7 +13,9 @@ vi.mock("next/navigation", () => ({
   },
 }));
 vi.mock("./LiveClassDetail", () => ({
-  LiveClassDetail: ({ klass }: { klass: { className: string } }) => <p>{`live ${klass.className}`}</p>,
+  LiveClassDetail: ({ klass, subjects = [] }: { klass: { className: string }; subjects?: string[] }) => (
+    <p>{`live ${klass.className}${subjects.length ? ` [${subjects.join("|")}]` : ""}`}</p>
+  ),
 }));
 vi.mock("./ClassDetail", () => ({ ClassDetail: () => <p>sample class</p> }));
 
@@ -120,5 +122,25 @@ describe("a visitor who is not signed in", () => {
 
   it("is not-found where there is no designed class", () => {
     expect(() => render(<ClassRoute fixture={null} classId="c-1" />)).toThrow("NEXT_NOT_FOUND");
+  });
+});
+
+/* Backlog item 26: one assignment per subject, so every subject reaches the header. */
+describe("a class taught in more than one subject", () => {
+  it("hands the header every subject this teacher teaches it, once each", () => {
+    signIn();
+    classes({
+      live: true,
+      liveClasses: [
+        { ...REAL, subject: "Mathematics" },
+        { ...REAL, subject: "English" },
+        { ...REAL, subject: "Mathematics" },
+        { classId: "c-2", className: "Other", classCode: "O", subject: "Science" },
+      ],
+    });
+
+    render(<ClassRoute fixture={null} classId="c-1" />);
+
+    expect(screen.getByText("live Year 7 Blue [Mathematics|English]")).toBeInTheDocument();
   });
 });

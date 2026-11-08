@@ -316,3 +316,23 @@ describe("a deactivated child", () => {
     expect(screen.getByRole("dialog", { name: "Ask an admin about Amara’s account?" })).toBeInTheDocument();
   });
 });
+
+/*
+ * Backlog item 26 (C05): the header leads with what this teacher teaches the
+ * class - "Mathematics · English · 16 students" - from their own
+ * assignments. With no subject recorded it says their role, as before.
+ */
+describe("the class header", () => {
+  it("names the subjects this teacher teaches the class", () => {
+    render(<LiveClassDetail klass={klass} subjects={["Mathematics", "English"]} />);
+
+    expect(screen.getByText("Mathematics · English · 1 student")).toBeInTheDocument();
+    expect(screen.queryByText(/Primary teacher/)).not.toBeInTheDocument();
+  });
+
+  it("says the role when no assignment carries a subject", () => {
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByText("Primary teacher · 1 student")).toBeInTheDocument();
+  });
+});
