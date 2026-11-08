@@ -30,7 +30,10 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
     },
   };
 });
-vi.mock("@/lib/api/classes", () => ({ classesApi: { list: async () => [] } }));
+// The child's look comes from their class roster (#1055's useChildLook).
+vi.mock("@/lib/api/classes", () => ({
+  classesApi: { list: async () => [], classStudents: async () => [] },
+}));
 vi.mock("@/lib/api/ageChecks", () => ({ ageChecksApi: { held, list, history } }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),

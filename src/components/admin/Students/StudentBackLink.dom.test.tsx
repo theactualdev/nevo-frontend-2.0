@@ -36,6 +36,8 @@ vi.mock("@/lib/api/classes", () => ({
     list: async () => [
       { id: "c-2a", name: "JSS 2A", yearGroup: "jss2", archivedAt: null, subjects: [] },
     ],
+    // The child's look comes from their class roster (#1055's useChildLook).
+    classStudents: async () => [],
   },
 }));
 vi.mock("next/navigation", () => ({

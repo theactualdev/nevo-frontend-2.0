@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { classesApi } from "@/lib/api/classes";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { consentsApi, type WrittenConsentRecord } from "@/lib/api/consents";
-import { studentsApi, type AdminStudentDetail } from "@/lib/api/students";
+import { studentsApi, type AdminStudentDetail, type ParentLink } from "@/lib/api/students";
 import { yearGroupLabel } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -33,6 +33,14 @@ import { ChildAvatar, useChildLook } from "../Roster/ChildAvatar";
  * - Consent types: none are asked. The printed form has one tick box, to use
  *   Nevo, which is `REQUESTED_CONSENT_TYPES` - the consent the console asks
  *   for everywhere.
+ *
+ * WHO GAVE IT, FROM THE ROSTER (SCRUM-306; Lydia and Teslim, 7 Nov). Under
+ * paper consent only the adult the school recorded as the consenting adult
+ * can withdraw - not whichever linked adult sets up an account first. So the
+ * form REQUIRES one of the child's linked adults (`GET /parent-links`) and
+ * sends it as `consentHolderLinkId`. With one adult on the record it is
+ * chosen already: a school with one guardian behaves as it did. The frame
+ * doesn't draw this field; it is built to the ruling and raised to design.
  *
  * A WITHDRAWN CHILD GETS NO FORM. The backend would set consent back to
  * confirmed, and SCRUM-80 makes withdrawal the parent's to lift - so the page
@@ -89,6 +97,11 @@ export function WrittenConsentView({
   const [signedOn, setSignedOn] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  /** The child's linked adults: null while reading. */
+  const [links, setLinks] = useState<ParentLink[] | "failed" | "denied" | null>(null);
+  const [linksRead, setLinksRead] = useState(0);
+  /** The linked adult who gave this consent (SCRUM-306). */
+  const [holder, setHolder] = useState("");
 
   const [save, setSave] = useState<"idle" | "saving" | "failed">("idle");
   const [note, setNote] = useState<string | null>(null);
@@ -135,18 +148,43 @@ export function WrittenConsentView({
     };
   }, [studentId]);
 
+  useEffect(() => {
+    let alive = true;
+    studentsApi
+      .parentLinks(studentId)
+      .then((rows) => {
+        if (!alive) return;
+        setLinks(rows);
+        // One adult on the record: it can only be them.
+        setHolder((h) => h || (rows.length === 1 ? rows[0].id : ""));
+      })
+      .catch((err: unknown) => {
+        if (alive) setLinks(err instanceof ApiError && err.status === 403 ? "denied" : "failed");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [studentId, linksRead]);
+
+  const readLinksAgain = () => {
+    setLinks(null);
+    setLinksRead((n) => n + 1);
+  };
+
   const name =
     [student?.firstName, student?.lastName].filter(Boolean).join(" ") || "This student";
   const firstName = student?.firstName?.trim() || "this student";
   const relation = relationship === OTHER ? otherRelationship.trim() : relationship;
+  const chosen = Array.isArray(links) ? links.find((l) => l.id === holder) : undefined;
   const valid =
+    Boolean(chosen) &&
     parentName.trim().length >= 2 &&
     relation.length >= 2 &&
     Boolean(signedOn) &&
     signedOn <= max;
 
   const submit = () => {
-    if (!valid || save === "saving") return;
+    if (!valid || !chosen || save === "saving") return;
     setSave("saving");
     setNote(null);
     consentsApi
@@ -155,6 +193,7 @@ export function WrittenConsentView({
         parentRelationship: relation,
         signedOn,
         form: file,
+        consentHolderLinkId: chosen.id,
       })
       .then((record) => {
         setSaved(record);
@@ -164,6 +203,16 @@ export function WrittenConsentView({
         if (err instanceof ApiError && apiErrorCode(err.detail) === "consent_withdrawn") {
           setWithdrawnNow(true);
           setSave("idle");
+          return;
+        }
+        if (err instanceof ApiError && apiErrorCode(err.detail) === "consent_holder_not_linked") {
+          // Unlinked since the page read them: read again, and choose again.
+          setHolder("");
+          readLinksAgain();
+          setNote(
+            `The adult you chose is no longer linked to ${firstName}, so nothing has been recorded. Choose again.`,
+          );
+          setSave("failed");
           return;
         }
         setNote(err instanceof ApiError ? apiErrorMessage(err.detail) : null);
@@ -312,6 +361,74 @@ export function WrittenConsentView({
                     />
                   </div>
                 ) : null}
+                <fieldset className="m-0 min-w-0 border-0 p-0">
+                  <legend className={cn(LABEL, "p-0")}>Who gave this consent</legend>
+                  <p className="m-0 mb-2.5 text-[12.5px] leading-[1.5] text-nevo-near-black/58">
+                    The adult on {firstName}&rsquo;s record who signed the form. Only they will be
+                    able to withdraw it.
+                  </p>
+                  {links === null ? (
+                    <div className="h-12 animate-pulse rounded-[10px] bg-nevo-near-black/5" aria-busy="true" />
+                  ) : links === "failed" ? (
+                    <div>
+                      <FailureLine>
+                        We couldn&rsquo;t load the adults linked to {firstName}, so this can&rsquo;t
+                        be saved yet.
+                      </FailureLine>
+                      <button
+                        type="button"
+                        onClick={readLinksAgain}
+                        className="mt-2 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  ) : links === "denied" ? (
+                    <p className="m-0 text-[13.5px] leading-[1.55] text-nevo-near-black/68">
+                      Choosing who gave consent needs roster or SENCo / Learning Support access.
+                    </p>
+                  ) : links.length === 0 ? (
+                    <p className="m-0 text-[13.5px] leading-[1.55] text-nevo-near-black/68">
+                      No parent or guardian is linked to {firstName} yet, so there&rsquo;s no one to
+                      record this consent against.
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {links.map((l) => {
+                        const who = l.parentName.trim() || l.parentContact;
+                        return (
+                          <label
+                            key={l.id}
+                            className={cn(
+                              "flex cursor-pointer items-start gap-3 rounded-[10px] border-[1.5px] bg-nevo-cream-elevated px-4 py-3",
+                              holder === l.id ? "border-nevo-navy" : "border-nevo-near-black/16",
+                            )}
+                          >
+                            <input
+                              type="radio"
+                              name="wc-holder"
+                              value={l.id}
+                              checked={holder === l.id}
+                              onChange={() => setHolder(l.id)}
+                              disabled={save === "saving"}
+                              className="mt-[3px] cursor-pointer accent-nevo-navy"
+                            />
+                            <span className="min-w-0">
+                              <span className="block truncate text-[14.5px] font-semibold text-nevo-near-black">
+                                {who}
+                              </span>
+                              {l.parentName.trim() && l.parentContact ? (
+                                <span className="block truncate text-[12.5px] text-nevo-near-black/60">
+                                  {l.parentContact}
+                                </span>
+                              ) : null}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </fieldset>
               </div>
             </div>
 

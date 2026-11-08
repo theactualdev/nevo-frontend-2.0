@@ -35,7 +35,7 @@ export function ChildAvatar({ look, size }: { look: AvatarLook | null; size: num
  * The look for one child on a record page. The single-student read carries no
  * avatar fields (raised), so it comes from the child's class roster, the read
  * that does. Null while reading, when the child is in no class, or when the
- * read fails - never a guessed look.
+ * read fails or throws - never a guessed look, and never an error on the page.
  */
 export function useChildLook(studentId: string, classIds: readonly string[] | undefined): AvatarLook | null {
   const classId = classIds?.[0] ?? null;
@@ -45,8 +45,10 @@ export function useChildLook(studentId: string, classIds: readonly string[] | un
   useEffect(() => {
     if (!classId) return;
     let live = true;
-    classesApi
-      .classStudents(classId)
+    // Called inside the promise, so a read that throws - or isn't there at
+    // all - lands in the catch below as the plain tile, never as an error.
+    Promise.resolve()
+      .then(() => classesApi.classStudents(classId))
       .then((rows) => {
         const mine = rows.find((r) => r.studentId === studentId);
         if (live) setFound({ key, look: mine ? lookOfChild(mine) : null });

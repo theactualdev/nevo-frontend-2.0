@@ -89,3 +89,15 @@ describe("useChildLook, for a record page", () => {
     expect(failed.result.current).toBeNull();
   });
 });
+
+describe("useChildLook never puts an error on the page", () => {
+  it("a read that throws outright - or isn't there - is the plain tile", async () => {
+    classStudents.mockImplementation(() => {
+      throw new TypeError("classesApi.classStudents is not a function");
+    });
+    const { result } = renderHook(() => useChildLook("s-1", ["c-1"]));
+    await waitFor(() => expect(classStudents).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+    expect(result.current).toBeNull();
+  });
+});

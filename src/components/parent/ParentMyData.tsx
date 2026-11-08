@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { TryAgain } from "./TryAgain";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
 import {
   parentApi,
   type ChildConsents,
@@ -38,6 +39,7 @@ export function subjectFor(child: ParentChild, consents: ChildConsents | null): 
   const held = consents?.consents ?? [];
   // Suspended on arrival, as on the link: a consent withdrawn that stops access.
   const withdrawn = held.find((c) => c.status === "withdrawn" && c.stopsAccess);
+  const withdrawnAll = held.filter((c) => c.status === "withdrawn");
   return {
     studentFirstName: child.firstName?.trim() || consents?.studentFirstName?.trim() || "your child",
     schoolName: child.schoolName,
@@ -46,6 +48,13 @@ export function subjectFor(child: ParentChild, consents: ChildConsents | null): 
     parentName: null,
     status: withdrawn ? "withdrawn" : "confirmed",
     decidedAt: withdrawn?.decidedAt ?? null,
+    // SCRUM-306: withdrawing takes every consent held, and the server refuses
+    // it if any one isn't this parent's. So the control is theirs only when
+    // every one is - the server's `canWithdraw`, never a rule of our own.
+    // None held: nothing the server has said yes to, so no control.
+    canWithdraw: held.length > 0 && held.every((c) => c.canWithdraw === true),
+    // The restore route asks the same question of the withdrawn ones.
+    canRestore: withdrawnAll.length > 0 && withdrawnAll.every((c) => c.canWithdraw === true),
   };
 }
 
@@ -55,6 +64,8 @@ export function ParentMyData() {
   const [read, setRead] = useState<Read>({ kind: "loading" });
   /** Bumped by Try again, to read the children and consents again. */
   const [attempt, setAttempt] = useState(0);
+  /** The server's words after a restore, shown once on the page read again. */
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -129,10 +140,29 @@ export function ParentMyData() {
     return { requestId: res.requestId, reasonRecorded: Boolean(note) };
   };
 
+  /*
+   * The way back (SCRUM-321): the parent's own, from their account. The page
+   * is then read again from the server, so what it shows is what is now true
+   * - not a state this page decided.
+   */
+  const restore = async () => {
+    try {
+      const res = await parentApi.myRestore(studentId);
+      setNotice(res.effect);
+    } catch (e) {
+      // Nothing withdrawn to give back: the page was out of date. Read it again.
+      if (!(e instanceof ApiError && apiErrorCode(e.detail) === "nothing_to_restore")) throw e;
+    }
+    setRead({ kind: "loading" });
+    setAttempt((a) => a + 1);
+  };
+
   return (
     <ParentDataManagement
       invitation={subjectFor(read.child, read.consents)}
       act={act}
+      restore={restore}
+      notice={notice}
     />
   );
 }

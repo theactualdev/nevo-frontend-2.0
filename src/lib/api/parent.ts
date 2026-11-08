@@ -33,14 +33,16 @@ import type { LoginResponse } from "./auth";
  */
 
 /**
- * The three rights, from the deployed `ParentRightType` enum.
+ * The rights, from the deployed `ParentRightType` enum. `restore_consent` is
+ * the signed-in parent's own way back after a withdrawal (`.../restore`); the
+ * emailed link deliberately can't do it.
  *
  * These used to be undiscoverable - `requestType` was a bare `string` and the
  * only way to learn the values was to send a bad one and read the rejection.
  * The schema enumerates them now, so this union is checkable rather than
  * remembered.
  */
-export type ParentRightType = "request_data" | "object" | "withdraw_consent";
+export type ParentRightType = "request_data" | "object" | "withdraw_consent" | "restore_consent";
 
 /**
  * What a parent must be told before they can consent informedly
@@ -176,6 +178,12 @@ export interface ConsentHeld {
   decidedAt: string | null;
   /** Whether withdrawing this one suspends the child's account. */
   stopsAccess: boolean;
+  /**
+   * Whether THIS parent may withdraw it (SCRUM-306): the guardian who gave it,
+   * or the linked adult the school recorded as holder of a paper form. A
+   * guardian added afterwards sees it and can't withdraw it.
+   */
+  canWithdraw: boolean;
 }
 
 /** `GET /api/v1/parents/me/consents`: what a signed-in parent agreed to, per child. */
@@ -192,6 +200,7 @@ export interface RightOutcome {
   studentId: string;
   effect: string;
   withdrawnTypes?: ConsentType[];
+  restoredTypes?: ConsentType[];
   recordedAt: string;
 }
 
@@ -408,6 +417,14 @@ export const parentApi = {
   myConsents: () => api.get<ChildConsents[]>("/api/v1/parents/me/consents"),
   myWithdraw: (studentId: string, reason?: string) =>
     api.post<RightOutcome>("/api/v1/parents/me/consents/withdraw", reason ? { studentId, reason } : { studentId }),
+  /**
+   * Give back a consent this parent withdrew (`POST .../consents/restore`).
+   * The way back is the parent's own, like the way out: the school cannot do
+   * it (SCRUM-321, Lydia's D01c comment, 7 Nov). Refused with 403 for a
+   * guardian who isn't the one who gave it, as withdrawal is.
+   */
+  myRestore: (studentId: string) =>
+    api.post<RightOutcome>("/api/v1/parents/me/consents/restore", { studentId }),
   myObjection: (studentId: string, reason?: string) =>
     api.post<RightOutcome>("/api/v1/parents/me/objections", reason ? { studentId, reason } : { studentId }),
   myDataRequest: (studentId: string) =>
