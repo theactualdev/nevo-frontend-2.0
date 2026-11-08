@@ -142,3 +142,34 @@ describe("what the screen must not show", () => {
     expect(tile.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
   });
 });
+
+/**
+ * SCRUM-324 and 28c (928cf30): "a child's avatar is a shape and a tone
+ * together, the pair they picked in 27 Profile and Settings, and it belongs to
+ * the child rather than to the tile they happen to sit in". Drawn by the one
+ * `StudentAvatar`.
+ */
+describe("each tile's avatar", () => {
+  const lookOf = (name: string) =>
+    screen
+      .getByRole("button", { name })
+      .querySelector("[data-avatar-look]")
+      ?.getAttribute("data-avatar-look");
+
+  it("is the child's own look, wherever they sit in the list", () => {
+    show([
+      { ...entry("1", 0, "Ada"), look: "star-near_black" },
+      { ...entry("2", 1, "Kofi"), look: "hexagon-cream_elevated" },
+    ]);
+
+    expect(lookOf("Ada")).toBe("star-near_black");
+    expect(lookOf("Kofi")).toBe("hexagon-cream_elevated");
+  });
+
+  it("is the nothing-chosen navy circle for a child this tablet has not learnt a look for - never the tile's slot", () => {
+    // Slot 5 was a hexagon before; the slot no longer decides anything.
+    show([entry("6", 5, "Tobi")]);
+
+    expect(lookOf("Tobi")).toBe("circle-navy");
+  });
+});

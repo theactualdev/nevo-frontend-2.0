@@ -20,11 +20,10 @@ const page = async (query: { next?: string; child?: string }) =>
 
 /** Remember two children, as a shared tablet would, and return Ada's id. */
 function rememberAdaAndKofi(): string {
-  rememberChild({ schoolCode: "NEVO-1", loginIdentifier: "kofi.b", initials: "KB" });
+  rememberChild({ schoolCode: "NEVO-1", loginIdentifier: "kofi.b" });
   const roster = rememberChild({
     schoolCode: "NEVO-1",
     loginIdentifier: "ada.o",
-    initials: "AO",
   });
   return roster.find((c) => c.loginIdentifier === "ada.o")!.id;
 }

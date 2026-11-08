@@ -6,6 +6,7 @@ import {
   closeRememberedChild,
   pickerEntries,
   rememberChild,
+  rememberLook,
   rememberedChildren,
   retireLegacyProfile,
 } from "./deviceRoster";
@@ -31,7 +32,6 @@ const LEGACY = "nevo.auth.profile";
 const child = (loginIdentifier: string, displayName?: string) => ({
   schoolCode: "NEVO-1",
   loginIdentifier,
-  initials: "XX",
   ...(displayName ? { displayName } : {}),
 });
 
@@ -51,7 +51,6 @@ const entry = (
   id,
   schoolCode: "NEVO-1",
   loginIdentifier,
-  initials: "XX",
   shapeIndex: 0,
   lastUsedAt,
   ...(displayName ? { displayName } : {}),
@@ -240,6 +239,8 @@ describe("a device that already remembered somebody", () => {
 
     expect(pickerEntries().map((e) => e.name)).toEqual(["Ada"]);
     expect(childById(pickerEntries()[0].id)?.loginIdentifier).toBe("ada.o");
+    // Its initials are not carried in (Lydia, 4 Nov).
+    expect(window.localStorage.getItem(KEY)).not.toContain("initials");
   });
 
   it("ignores a legacy profile that is only half a credential", () => {
@@ -301,14 +302,12 @@ describe("a child who signs in with their admission number", () => {
     schoolCode: "NEVO-1",
     loginIdentifier: "ada.o",
     displayName: "Ada",
-    initials: "AD",
     userId: "u-ada",
   };
   /** What 00c remembers: the identifier typed, stand-in initials, no name. */
   const BY_ADMISSION_NUMBER = {
     schoolCode: "NEVO-1",
     loginIdentifier: "BGA/2031",
-    initials: "B2",
     userId: "u-ada",
   };
 
@@ -325,7 +324,6 @@ describe("a child who signs in with their admission number", () => {
       id: before.id,
       loginIdentifier: "BGA/2031",
       displayName: "Ada",
-      initials: "AD",
       userId: "u-ada",
     });
   });
@@ -335,13 +333,11 @@ describe("a child who signs in with their admission number", () => {
     seed([
       {
         ...entry("e-named", "ada.o", daysAgo(3), "Ada"),
-        initials: "AD",
         shapeIndex: 2,
         userId: "u-ada",
       },
       {
         ...entry("e-nameless", "BGA/2031", latest),
-        initials: "B2",
         shapeIndex: 0,
         userId: "u-ada",
       },
@@ -352,7 +348,6 @@ describe("a child who signs in with their admission number", () => {
     expect(childById("e-named")).toMatchObject({
       loginIdentifier: "BGA/2031",
       displayName: "Ada",
-      initials: "AD",
       shapeIndex: 2,
       lastUsedAt: latest,
     });
@@ -519,7 +514,6 @@ describe("the old single remembered profile, at sign-out", () => {
     schoolCode: "NEVO-1",
     loginIdentifier: "ada.o",
     displayName: "Ada",
-    initials: "AO",
   };
 
   it("is deleted, and the roster still remembers the child", () => {
@@ -559,5 +553,70 @@ describe("the old single remembered profile, at sign-out", () => {
     retireLegacyProfile();
 
     expect(window.localStorage.getItem(LEGACY)).not.toBeNull();
+  });
+});
+
+/**
+ * NO INITIALS ON THE DEVICE (Lydia, 4 Nov: "Initials put a child's name on a
+ * screen anyone nearby can read"; the hub, 6 Nov). A child's avatar is their
+ * shape everywhere, so nothing reads two letters of their name - and a shared
+ * tablet keeps none.
+ */
+describe("a child's initials", () => {
+  it("are shed from an entry stored with them, and the roster is written back without them", () => {
+    seed([
+      { ...entry("e-ada", "ada.o", daysAgo(1), "Ada"), initials: "AO" },
+      { ...entry("e-ben", "ben.k", daysAgo(2), "Ben"), initials: "BK" },
+    ]);
+
+    expect(pickerEntries().map((e) => e.name)).toEqual(["Ada", "Ben"]);
+    expect(childById("e-ada")).not.toHaveProperty("initials");
+    expect(window.localStorage.getItem(KEY)).not.toContain("initials");
+  });
+
+  it("are never written, even by a caller that still passes them", () => {
+    rememberChild({
+      ...child("ada.o", "Ada"),
+      initials: "AO",
+    } as Parameters<typeof rememberChild>[0]);
+
+    expect(rememberedChildren()[0]).not.toHaveProperty("initials");
+    expect(window.localStorage.getItem(KEY)).not.toContain("initials");
+  });
+});
+
+/**
+ * THE CHILD'S OWN LOOK, KEPT FOR THE PICKER (28c, SCRUM-324): learnt when their
+ * account is read or they choose on this device, and kept across sign-ins.
+ */
+describe("a child's look on this device", () => {
+  it("is kept on their entry, by account, and reaches the picker", () => {
+    rememberChild({ ...child("ada.o", "Ada"), userId: "u-ada" });
+    rememberChild({ ...child("ben.k", "Ben"), userId: "u-ben" });
+
+    rememberLook("u-ada", "star-near_black");
+
+    const byName = Object.fromEntries(pickerEntries().map((e) => [e.name, e.look]));
+    expect(byName).toEqual({ Ada: "star-near_black", Ben: undefined });
+  });
+
+  it("stays theirs across a sign-in, and does not move them up the list", () => {
+    rememberChild({ ...child("ada.o", "Ada"), userId: "u-ada" });
+    rememberChild({ ...child("ben.k", "Ben"), userId: "u-ben" });
+    const before = pickerEntries().map((e) => e.name);
+
+    rememberLook("u-ada", "hexagon-cream_elevated");
+    expect(pickerEntries().map((e) => e.name)).toEqual(before);
+
+    rememberChild({ ...child("ada.o"), userId: "u-ada" });
+    expect(pickerEntries().find((e) => e.name === "Ada")?.look).toBe(
+      "hexagon-cream_elevated",
+    );
+  });
+
+  it("is nothing for an account this device does not remember", () => {
+    rememberLook("u-nobody", "star-navy");
+
+    expect(window.localStorage.getItem(KEY)).toBeNull();
   });
 });

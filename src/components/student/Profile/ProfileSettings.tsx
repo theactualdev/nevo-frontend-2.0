@@ -12,7 +12,8 @@ import {
   saveChosenName,
   useDisplayName,
 } from "@/components/student/Shell/useDisplayName";
-import { useAvatarTone } from "@/components/student/Shell/useAvatarTone";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
+import { useAvatarLook } from "@/components/student/Shell/useAvatarLook";
 import { PREFERRED_NAME_MAX } from "@/lib/api/users";
 import { useAccessibility } from "@/context/AccessibilityContext";
 import { cn } from "@/lib/utils";
@@ -66,13 +67,13 @@ export function ProfileSettings() {
   const sso = user?.method === "sso";
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [lookOpen, setLookOpen] = useState(false);
-  const { tone, choose: chooseTone } = useAvatarTone();
+  const { look, choose: chooseLook } = useAvatarLook();
 
-  // Editable display name (product frame: tap Change → inline input; initials
-  // derive from the name). Saved against the account - see `saveChosenName`.
+  // Editable display name (product frame: tap Change → inline input). Saved
+  // against the account - see `saveChosenName`.
   const stored = useDisplayName();
-  // Signed out, the name and initials are the fixture child's ("Ada"), so the
-  // row is marked - the same gate the shell's identity uses.
+  // Signed out, the name is the fixture child's ("Ada"), so the row is
+  // marked - the same gate the shell's identity uses.
   const signedIn = useHasSession();
   const hydrated = useHydrated();
   const showingFixtureIdentity = hydrated && !signedIn;
@@ -82,14 +83,6 @@ export function ProfileSettings() {
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   /** The name as it was before this edit, which a refused save goes back to. */
   const nameBefore = useRef("");
-  const initials =
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((w) => w[0])
-      .slice(0, 2)
-      .join("")
-      .toUpperCase() || stored.initials;
 
   const {
     reducedMotion,
@@ -205,15 +198,15 @@ export function ProfileSettings() {
       <SectionHeading>Account</SectionHeading>
       <MaybeSample showing={showingFixtureIdentity} kind="student:identity">
       <div className="flex items-center gap-3.5 py-3">
-        {/* The disc opens "Choose your look" (frame 27). */}
+        {/* The child's shape, never their initials (Lydia, 4 Nov). It opens
+            "Choose your look" (frame 27). */}
         <button
           type="button"
           aria-label="Choose your look"
           onClick={() => setLookOpen(true)}
-          style={{ background: tone.background, color: tone.text }}
-          className="flex size-14 shrink-0 cursor-pointer items-center justify-center rounded-full text-xl font-semibold transition-[filter] hover:brightness-110"
+          className="flex size-14 shrink-0 cursor-pointer rounded-full transition-[filter] hover:brightness-110"
         >
-          {initials}
+          <StudentAvatar look={look} className="size-full" />
         </button>
         {editingName ? (
           <input
@@ -267,7 +260,10 @@ export function ProfileSettings() {
           />
         ) : (
           <>
-            <span className="min-w-0 flex-1 truncate text-[15px] text-nevo-near-black">
+            <span
+              data-profile-name
+              className="min-w-0 flex-1 truncate text-[15px] text-nevo-near-black"
+            >
               {name || stored.name}
             </span>
             <button
@@ -340,14 +336,13 @@ export function ProfileSettings() {
       <AvatarPickerSheet
         open={lookOpen}
         onOpenChange={setLookOpen}
-        initials={initials}
-        current={tone}
+        current={look}
         onChoose={(next) => {
           setLookOpen(false);
           // "Saved" only once the account holds it. The disc changes at once
           // either way; on a failed write it quietly goes back, which is the
           // truth about what was kept.
-          chooseTone(next.id).then(flashSaved, () => {});
+          chooseLook(next.id).then(flashSaved, () => {});
         }}
       />
       </MaybeSample>

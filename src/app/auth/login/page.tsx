@@ -31,7 +31,8 @@ import {
   type PickerEntry,
   type RememberedChild,
 } from "@/lib/auth/deviceRoster";
-import { ChildAvatar } from "@/components/student/Auth/ChildAvatar";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
+import { avatarLook } from "@/lib/profile/avatarLook";
 import { PinBox } from "@/components/student/Auth/PinBox";
 import { ProfilePicker } from "@/components/student/Auth/ProfilePicker";
 import { useAuth } from "@/hooks";
@@ -604,8 +605,8 @@ export default function LoginPage() {
             in the room can see name a child to a stranger just as well as a
             face does.
           */}
-          <ChildAvatar
-            shapeIndex={chosen.shapeIndex}
+          <StudentAvatar
+            look={avatarLook(chosen.look)}
             className="size-[104px] sm:size-[120px] lg:landscape:size-[132px] max-lg:[@media(max-height:800px)]:size-14"
           />
           <h2

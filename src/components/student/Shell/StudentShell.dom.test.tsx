@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StudentShell, fillsScreen, scalesWithTextSize } from "./StudentShell";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { AccessibilityProvider } from "@/context/AccessibilityContext";
@@ -159,6 +159,32 @@ describe("the way into Profile", () => {
     for (const link of links) {
       expect(link).toHaveAttribute("href", "/student/profile");
     }
+  });
+
+  it("draws the child's shape on both, never their initials", async () => {
+    /*
+     * Lydia, 4 Nov: "Initials put a child's name on a screen anyone nearby
+     * can read." Signed out is the walkthrough's fixture child, the one
+     * identity here with initials to leak ("AK"); the frames draw the navy
+     * circle until a look is chosen.
+     */
+    clearSession();
+    at("/student/dashboard");
+
+    // The fixture identity is drawn - and marked - once hydrated.
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-nevo-sample="student:identity"]'),
+      ).not.toBeNull(),
+    );
+    const links = screen.getAllByRole("link", { name: "Profile" });
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(
+        link.querySelector("[data-avatar-shape]")?.getAttribute("data-avatar-shape"),
+      ).toBe("circle");
+    }
+    expect(screen.queryByText("AK")).toBeNull();
   });
 
   it("is not a tab: the nav carries the frames' five and no more", () => {

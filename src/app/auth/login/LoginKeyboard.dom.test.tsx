@@ -35,8 +35,8 @@ const roster = vi.hoisted(() => ({
   ],
 }));
 vi.mock("@/lib/auth/deviceRoster", () => ({
-  // `ChildAvatar` imports this from the same module, so a partial mock blanks
-  // the tile and takes the render down with it.
+  // The whole module is replaced, so anything the page reads from it must be
+  // here: a partial mock blanks the tile and takes the render down with it.
   SHAPE_COUNT: 6,
   pickerEntries: () => roster.entries,
   childById: (id: string) =>
@@ -46,7 +46,6 @@ vi.mock("@/lib/auth/deviceRoster", () => ({
           schoolCode: "NEVO-1",
           loginIdentifier: "ada.o",
           displayName: "Ada",
-          initials: "AO",
           shapeIndex: 0,
           lastUsedAt: new Date().toISOString(),
         }

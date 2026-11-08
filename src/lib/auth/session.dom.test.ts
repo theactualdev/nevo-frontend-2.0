@@ -75,7 +75,6 @@ describe("session store", () => {
       schoolCode: "NEVO-BGA4827",
       loginIdentifier: "amara.k7",
       displayName: "Amara",
-      initials: "AK",
     });
     setSession(session(future()));
     clearSession();
@@ -151,7 +150,6 @@ describe("the name a child is called on a shared tablet", () => {
       schoolCode: "NEVO-1",
       loginIdentifier,
       displayName,
-      initials: displayName.slice(0, 2).toUpperCase(),
       ...(userId ? { userId } : {}),
     });
 
@@ -178,7 +176,7 @@ describe("the name a child is called on a shared tablet", () => {
     remember("bayo.k", "Bayo", "bayo");
     as("ada");
 
-    setStoredDisplayName("Adaeze", "AD");
+    setStoredDisplayName("Adaeze");
 
     expect(getStoredDisplayName()).toBe("Adaeze");
     as("bayo");

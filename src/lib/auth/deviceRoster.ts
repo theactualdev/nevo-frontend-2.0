@@ -58,6 +58,19 @@ export interface RememberedChild extends RememberedProfile {
    */
   id: string;
   /**
+   * THE CHILD'S OWN LOOK, as their account keeps it (SCRUM-324; 28c, 928cf30:
+   * "a child's avatar is a shape and a tone together, the pair they picked in
+   * 27 Profile and Settings, and it belongs to the child rather than to the
+   * tile they happen to sit in"). Learnt when their account is read, or they
+   * choose, on this device (`rememberLook`); absent until then, and the tile
+   * draws the nothing-chosen look. A "<shape>-<colourway>" id - see
+   * `avatarLook`.
+   */
+  look?: string;
+  /**
+   * NO LONGER DRAWN (SCRUM-324): the tile draws the child's own `look`. Kept
+   * on the entry so an older build reading this roster still finds one.
+   *
    * Which avatar shape this child gets, fixed when they are first remembered.
    *
    * THE FRAME ASSIGNS THIS BY LIST POSITION, and that cannot be right once the
@@ -102,6 +115,8 @@ export interface PickerEntry {
   /** First name only, and absent when the name was never fetched (28c-4). */
   name?: string;
   shapeIndex: number;
+  /** The child's own look, where this device has learnt it - see `look`. */
+  look?: string;
 }
 
 function read(): RememberedChild[] {
@@ -110,9 +125,12 @@ function read(): RememberedChild[] {
     const raw = window.localStorage.getItem(ROSTER_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : null;
     if (!Array.isArray(parsed)) return migrateLegacy();
-    const children = parsed.filter(isChild);
+    const stored = parsed.filter(isChild);
+    // An entry from before 6 Nov sheds the initials it was stored with.
+    const children = stored.map(withoutInitials);
+    const shed = children.some((c, i) => c !== stored[i]);
     const merged = mergeSameAccount(children);
-    if (merged.length !== children.length) write(merged);
+    if (shed || merged.length !== children.length) write(merged);
     return merged;
   } catch {
     // Private mode, refused storage, or something that is not our JSON. An
@@ -134,7 +152,7 @@ const stamp = (c: RememberedChild): number => {
  * Entries already stored that way are folded into one here, and written back.
  *
  * The tile the child knows stays: a named one before a nameless one, the
- * latest used among them, with its id, its shape, its name and initials. It
+ * latest used among them, with its id, its shape and its name. It
  * takes the newest identifier and last-used time, since that is the pair
  * that last signed in. Closed if any of them is: the account is one account.
  *
@@ -174,6 +192,19 @@ function mergeSameAccount(children: RememberedChild[]): RememberedChild[] {
   return out;
 }
 
+/**
+ * NO INITIALS KEPT (Lydia, 4 Nov; the hub, 6 Nov). A child's avatar is their
+ * shape everywhere, and two letters of their name on a shared tablet were a
+ * finer record of them than anything drew. Gone from every entry as it is
+ * read, and never written again.
+ */
+function withoutInitials<T extends object>(entry: T): T {
+  if (!("initials" in entry)) return entry;
+  const rest = { ...entry } as T & { initials?: unknown };
+  delete rest.initials;
+  return rest;
+}
+
 function isChild(v: unknown): v is RememberedChild {
   if (typeof v !== "object" || v === null) return false;
   const c = v as Record<string, unknown>;
@@ -203,7 +234,7 @@ function migrateLegacy(): RememberedChild[] {
     if (!p?.schoolCode || !p?.loginIdentifier) return [];
     const migrated: RememberedChild[] = [
       {
-        ...p,
+        ...withoutInitials(p),
         id: newId(),
         shapeIndex: 0,
         // Unknown, and "now" is the safe guess: it gives the child the full
@@ -300,7 +331,24 @@ export function pickerEntries(): PickerEntry[] {
     id: c.id,
       ...(c.displayName?.trim() ? { name: c.displayName.trim() } : {}),
       shapeIndex: c.shapeIndex,
+      ...(c.look ? { look: c.look } : {}),
     }));
+}
+
+/**
+ * The look the account `userId` keeps, learnt on this device: kept on that
+ * child's entry for the picker to draw (28c). Nothing for a child this
+ * device does not remember. Not a sign-in: the entry keeps its place and its
+ * last-used time.
+ */
+export function rememberLook(userId: string, look: string): void {
+  if (!userId || !look) return;
+  const all = read();
+  const at = all.findIndex((c) => c.userId === userId);
+  if (at < 0 || all[at].look === look) return;
+  const next = [...all];
+  next[at] = { ...all[at], look };
+  write(next);
 }
 
 /** Which remembered child an `account_closed` was about, as each place knows it. */
@@ -351,9 +399,8 @@ export function childById(id: string): RememberedChild | null {
  * a second, nameless tile for the same account. An entry found by its
  * account takes the identifier that signed in now.
  *
- * An existing child keeps their id, their shape, their name and its initials
- * - a write without a name brings only stand-in initials - and moves to the
- * front. A
+ * An existing child keeps their id, their shape and their name, and moves to
+ * the front. A
  * new child joins the front, and if that makes seven, the least recently used
  * drops off. Signing out does not call this and does not remove anybody, which
  * is 28c's rule: *"signing out does not remove a child"*.
@@ -375,15 +422,11 @@ export function rememberChild(profile: RememberedProfile): RememberedChild[] {
         c.schoolCode === schoolCode && c.loginIdentifier === loginIdentifier,
     );
   const rest = existing.filter((c) => c !== match);
-  const named = Boolean(profile.displayName?.trim());
 
   const updated: RememberedChild = {
-    ...profile,
+    ...withoutInitials(profile),
     schoolCode,
     loginIdentifier,
-    // Initials go with the name they were made from: a write without one
-    // brings the identifier's stand-in ("B2"), not the child's.
-    initials: !named && match?.initials ? match.initials : profile.initials,
     id: match?.id ?? newId(),
     // Kept across sign-ins so a child's shape is the same every morning. A new
     // child takes the lowest slot nobody on the device is using, so a full
@@ -405,6 +448,8 @@ export function rememberChild(profile: RememberedProfile): RememberedChild[] {
       : match?.displayName
         ? { displayName: match.displayName }
         : {}),
+    // The child's own look stays theirs across sign-ins (28c).
+    ...(match?.look ? { look: match.look } : {}),
   };
 
   /*

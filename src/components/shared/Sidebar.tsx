@@ -34,8 +34,12 @@ export function Sidebar({
     name: string;
     subtitle?: string;
     initials: string;
-    /** The disc's colours, when the person chose them. Navy otherwise. */
-    tone?: { background: string; text: string };
+    /**
+     * The console's own avatar, drawn in place of the initials disc. The
+     * student console passes the child's chosen shape: a child's initials are
+     * never drawn (Lydia, 4 Nov). Sized by this row.
+     */
+    avatar?: React.ReactNode;
     /**
      * Where the row leads: the person's own profile. `Nevo Sidebar Rail`
      * draws this row AS the way into Profile, with the same active state as a
@@ -180,16 +184,11 @@ export function Sidebar({
       )}
       {user && (
         <UserRow href={user.href} active={userActive} collapsed={collapsed}>
-          <span
-            style={
-              user.tone
-                ? { background: user.tone.background, color: user.tone.text }
-                : undefined
-            }
-            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-sm font-semibold text-nevo-cream"
-          >
-            {user.initials}
-          </span>
+          {user.avatar ?? (
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-sm font-semibold text-nevo-cream">
+              {user.initials}
+            </span>
+          )}
           {!collapsed && (
             <div className="flex flex-col">
               <span

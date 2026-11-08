@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { usersApi } from "@/lib/api/users";
-import { getToken } from "@/lib/auth/session";
-import { avatarTone, type AvatarTone } from "@/lib/profile/avatarTone";
+import { getSession, getToken } from "@/lib/auth/session";
+import { rememberLook } from "@/lib/auth/deviceRoster";
+import { avatarLook, type AvatarLook } from "@/lib/profile/avatarLook";
 
 /**
- * The look the signed-in child chose, shared by every disc that draws it.
+ * The look the signed-in child chose, shared by every avatar that draws it.
+ * Kept in `users/me`'s `avatarTone` as "<shape>-<colourway>" - see
+ * `avatarLook`, which also reads an old colour-only id as the default look.
  *
  * ONE STORE, NOT ONE STATE PER DISC. The shell's disc and the Profile screen's
  * are on screen together; a choice made on one has to move the other at the
@@ -64,6 +67,9 @@ function load(owner: string) {
       const stored: unknown = res.avatarTone;
       state = { owner, id: typeof stored === "string" ? stored : null };
       emit();
+      // The tile on this device's picker draws it from now on (28c).
+      const userId = getSession()?.userId;
+      if (userId) rememberLook(userId, avatarLook(stored).id);
     })
     .catch(() => {
       // No read, no choice: the default disc, which is what the child had
@@ -74,8 +80,8 @@ function load(owner: string) {
     });
 }
 
-export function useAvatarTone(): {
-  tone: AvatarTone;
+export function useAvatarLook(): {
+  look: AvatarLook;
   /** Resolves once the account holds it; rejects, and puts the old look back, if not. */
   choose: (id: string) => Promise<void>;
 } {
@@ -95,6 +101,8 @@ export function useAvatarTone(): {
     if (owner === GUEST) return;
     try {
       await usersApi.updateMe({ avatarTone: next });
+      const userId = getSession()?.userId;
+      if (userId) rememberLook(userId, avatarLook(next).id);
     } catch (cause) {
       // Only undo OUR choice - a later tap may already have replaced it.
       if (state.owner === owner && state.id === next) {
@@ -105,5 +113,5 @@ export function useAvatarTone(): {
     }
   }, []);
 
-  return { tone: avatarTone(id), choose };
+  return { look: avatarLook(id), choose };
 }

@@ -399,14 +399,12 @@ describe("a child paused mid-lesson", () => {
         schoolCode: "NEVO-1",
         loginIdentifier: "ada.o",
         displayName: "Ada",
-        initials: "AO",
         userId: "student-1",
       });
       roster.rememberChild({
         schoolCode: "NEVO-1",
         loginIdentifier: "kofi.b",
         displayName: "Kofi",
-        initials: "KB",
         userId: "student-2",
       });
       vi.stubGlobal(
@@ -441,7 +439,6 @@ describe("a child paused mid-lesson", () => {
       schoolCode: "NEVO-1",
       loginIdentifier: "ada.o",
       displayName: "Ada",
-      initials: "AO",
       userId: "student-1",
     });
     vi.stubGlobal("fetch", paused());
