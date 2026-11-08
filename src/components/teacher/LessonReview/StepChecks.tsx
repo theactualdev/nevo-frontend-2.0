@@ -120,11 +120,12 @@ export function StepChecks({
     : !signed
       ? hasGuided
         ? view.hasLevels
-          ? "For each check, the answer Nevo will mark against, the level it asks for, and the guiding questions it asks a child who misses it. Read any you like - Accept keeps them all."
+          ? "Each check shows the answer Nevo will mark against, the level it asks for, and the guiding questions it asks a child who misses it. Read any you like - Accept keeps them all."
           : "Each check shows the answer Nevo marks it against, and the guiding questions it asks a child who misses it. Read any you like - Accept keeps them all."
         : view.hasLevels
           ? // Lydia, 5 Nov: "will mark against" tells the teacher what accepting does.
-            "For each check, the answer Nevo will mark against and the level it asks for. Read any you like - Accept keeps them all."
+            // 7 Nov (6a): "Each check shows ...", her final words.
+            "Each check shows the answer Nevo will mark against and the level it asks for. Read any you like - Accept keeps them all."
           : "Each check shows the answer Nevo marks it against. Read any you like - Accept keeps them all."
       : view.signoff
         ? "Accepted. Open any to read it again."

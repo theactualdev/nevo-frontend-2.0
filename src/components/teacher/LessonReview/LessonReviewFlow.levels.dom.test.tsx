@@ -216,8 +216,35 @@ describe("the level a check asks for", () => {
     await open(3);
 
     expect(
-      // Lydia's words, 5 Nov.
-      screen.getByText(/^For each check, the answer Nevo will mark against and the level it asks for\./),
+      // Lydia's words, 7 Nov (6a).
+      screen.getByText(/^Each check shows the answer Nevo will mark against and the level it asks for\./),
+    ).toBeInTheDocument();
+  });
+
+  /* Lydia's 6a (7 Nov), word for word, where the checks also have guiding questions. */
+  it("is Lydia's 6a where the checks have guiding questions too", async () => {
+    api.review.mockResolvedValue(
+      reviewOf({
+        checks: [check(1, { masteryLevel: "knowledge", masteryLevelAuthoredBy: "nevo" })],
+        guidedSteps: [
+          {
+            segmentId: "s-1",
+            segmentTitle: "Part 1",
+            questionId: "q-1",
+            questionPrompt: "What do leaves need, question 1?",
+            reviewStatus: "pending_review",
+            steps: [{ id: "g-1", prompt: "Where does energy come from?", answerType: "text", answerKey: "the sun" }],
+            answerLeakageStepIds: [],
+          },
+        ],
+      }),
+    );
+    await open(3);
+
+    expect(
+      screen.getByText(
+        /^Each check shows the answer Nevo will mark against, the level it asks for, and the guiding questions it asks a child who misses it\./,
+      ),
     ).toBeInTheDocument();
   });
 });
