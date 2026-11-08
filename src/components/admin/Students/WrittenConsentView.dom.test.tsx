@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { ApiError } from "@/lib/api/client";
 import type { WrittenConsentDraft, WrittenConsentRecord } from "@/lib/api/consents";
-import type { AdminStudentDetail } from "@/lib/api/students";
+import type { AdminStudentDetail, ParentLink } from "@/lib/api/students";
 import { WrittenConsentView } from "./WrittenConsentView";
 
 /**
@@ -14,6 +14,7 @@ import { WrittenConsentView } from "./WrittenConsentView";
 
 const record = vi.fn<(id: string, d: WrittenConsentDraft) => Promise<WrittenConsentRecord>>();
 let student: AdminStudentDetail;
+const parentLinks = vi.fn<(id: string) => Promise<ParentLink[]>>();
 
 vi.mock("@/lib/api/consents", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/consents")>();
@@ -28,7 +29,14 @@ vi.mock("@/lib/api/consents", async (importOriginal) => {
 });
 vi.mock("@/lib/api/students", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/students")>();
-  return { ...actual, studentsApi: { ...actual.studentsApi, get: async () => student } };
+  return {
+    ...actual,
+    studentsApi: {
+      ...actual.studentsApi,
+      get: async () => student,
+      parentLinks: (id: string) => parentLinks(id),
+    },
+  };
 });
 vi.mock("@/lib/api/classes", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/classes")>();
@@ -56,8 +64,21 @@ const saved = (over: Partial<WrittenConsentRecord> = {}): WrittenConsentRecord =
   ...over,
 });
 
+const link = (over: Partial<ParentLink> = {}): ParentLink => ({
+  id: "pl-1",
+  schoolId: "sch-1",
+  studentId: "s-1",
+  parentId: null,
+  parentName: "Ngozi Okafor",
+  parentContact: "ngozi.okafor@example.com",
+  contactMethod: "email",
+  accountCreated: false,
+  ...over,
+});
+
 beforeEach(() => {
   record.mockReset().mockResolvedValue(saved());
+  parentLinks.mockReset().mockResolvedValue([link()]);
   student = {
     id: "s-1",
     firstName: "Amara",
@@ -78,6 +99,7 @@ function set(label: RegExp | string, value: string) {
 
 async function fillValid() {
   await screen.findByRole("heading", { name: "Record written consent" });
+  await screen.findAllByRole("radio");
   set(/Parent.s full name/, "Mrs. Ngozi Okafor");
   set("Relationship to child", "Mother");
   set("Date signed", "2026-10-01");
@@ -106,6 +128,7 @@ describe("Record written consent", () => {
       parentRelationship: "Mother",
       signedOn: "2026-10-01",
       form: photo,
+      consentHolderLinkId: "pl-1",
     });
     expect(
       await screen.findByRole("heading", { name: "Written consent recorded for Amara Okafor" }),
@@ -117,6 +140,7 @@ describe("Record written consent", () => {
   it("will not save until the form's name, relationship and date are in", async () => {
     render(<WrittenConsentView studentId="s-1" />);
     await screen.findByRole("heading", { name: "Record written consent" });
+    await screen.findAllByRole("radio");
     const saveBtn = screen.getByRole("button", { name: "Save consent record" });
     expect(saveBtn).toBeDisabled();
     set(/Parent.s full name/, "Mrs. Ngozi Okafor");
@@ -201,5 +225,96 @@ describe("a form refused because the parent has since withdrawn", () => {
     expect(screen.getByText(/Only the parent who withdrew can restore it/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save consent record" })).toBeNull();
     expect(screen.queryByText(/Try again/)).toBeNull();
+  });
+});
+
+/**
+ * SCRUM-306 (Lydia and Teslim, 7 Nov): under paper consent only the adult the
+ * school recorded as the consenting adult can withdraw. The form REQUIRES one
+ * of the child's linked adults and sends it as `consentHolderLinkId`.
+ */
+describe("who gave this consent (SCRUM-306)", () => {
+  const two = [
+    link(),
+    link({ id: "pl-2", parentName: "Chinedu Okafor", parentContact: "chinedu@example.com" }),
+  ];
+
+  it("with two adults on the record, chooses neither, and won't save until one is chosen", async () => {
+    parentLinks.mockResolvedValue(two);
+    render(<WrittenConsentView studentId="s-1" />);
+    await fillValid();
+    const radios = screen.getAllByRole("radio");
+    expect(radios).toHaveLength(2);
+    expect(radios.every((r) => !(r as HTMLInputElement).checked)).toBe(true);
+    const saveBtn = screen.getByRole("button", { name: "Save consent record" });
+    expect(saveBtn).toBeDisabled();
+    fireEvent.click(screen.getByRole("radio", { name: /Chinedu Okafor/ }));
+    expect(saveBtn).toBeEnabled();
+    fireEvent.click(saveBtn);
+    await waitFor(() =>
+      expect(record).toHaveBeenCalledWith("s-1", expect.objectContaining({ consentHolderLinkId: "pl-2" })),
+    );
+  });
+
+  it("with one adult on the record, has them chosen already - as a one-guardian school works today", async () => {
+    const { container } = render(<WrittenConsentView studentId="s-1" />);
+    await fillValid();
+    expect(screen.getByRole("radio", { name: /Ngozi Okafor/ })).toBeChecked();
+    expect(visibleText(container)).toMatch(/Only they will be able to withdraw it\./);
+    fireEvent.click(screen.getByRole("button", { name: "Save consent record" }));
+    await waitFor(() =>
+      expect(record).toHaveBeenCalledWith("s-1", expect.objectContaining({ consentHolderLinkId: "pl-1" })),
+    );
+  });
+
+  it("names an adult with no name on the record by their contact", async () => {
+    parentLinks.mockResolvedValue([link({ parentName: "  " })]);
+    render(<WrittenConsentView studentId="s-1" />);
+    expect(await screen.findByRole("radio", { name: "ngozi.okafor@example.com" })).toBeInTheDocument();
+  });
+
+  it("with no adult on the record, says so and offers no Save", async () => {
+    parentLinks.mockResolvedValue([]);
+    const { container } = render(<WrittenConsentView studentId="s-1" />);
+    await screen.findByRole("heading", { name: "Record written consent" });
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(
+        /No parent or guardian is linked to Amara yet, so there.s no one to record this consent against\./,
+      ),
+    );
+    set(/Parent.s full name/, "Mrs. Ngozi Okafor");
+    set("Relationship to child", "Mother");
+    set("Date signed", "2026-10-01");
+    expect(screen.getByRole("button", { name: "Save consent record" })).toBeDisabled();
+  });
+
+  it("when the adults can't be read, says so and reads again on Try again", async () => {
+    parentLinks.mockRejectedValueOnce(new Error("offline"));
+    const { container } = render(<WrittenConsentView studentId="s-1" />);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/We couldn.t load the adults linked to Amara/),
+    );
+    expect(screen.getByRole("button", { name: "Save consent record" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("radio", { name: /Ngozi Okafor/ })).toBeChecked();
+    expect(parentLinks).toHaveBeenCalledTimes(2);
+  });
+
+  it("when the chosen adult was unlinked meanwhile, reads the adults again and asks to choose again", async () => {
+    parentLinks.mockResolvedValueOnce(two).mockResolvedValue([two[0]]);
+    record.mockRejectedValue(
+      new ApiError(422, "Unprocessable", { detail: { code: "consent_holder_not_linked" } }),
+    );
+    const { container } = render(<WrittenConsentView studentId="s-1" />);
+    await fillValid();
+    fireEvent.click(screen.getByRole("radio", { name: /Chinedu Okafor/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save consent record" }));
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(
+        /The adult you chose is no longer linked to Amara, so nothing has been recorded\. Choose again\./,
+      ),
+    );
+    await waitFor(() => expect(screen.getAllByRole("radio")).toHaveLength(1));
+    expect(screen.queryByRole("radio", { name: /Chinedu Okafor/ })).toBeNull();
   });
 });

@@ -46,6 +46,11 @@ export function subjectFor(child: ParentChild, consents: ChildConsents | null): 
     parentName: null,
     status: withdrawn ? "withdrawn" : "confirmed",
     decidedAt: withdrawn?.decidedAt ?? null,
+    // SCRUM-306: withdrawing takes every consent held, and the server refuses
+    // it if any one isn't this parent's. So the control is theirs only when
+    // every one is - the server's `canWithdraw`, never a rule of our own.
+    // None held: nothing the server has said yes to, so no control.
+    canWithdraw: held.length > 0 && held.every((c) => c.canWithdraw === true),
   };
 }
 
