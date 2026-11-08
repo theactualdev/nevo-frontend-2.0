@@ -90,6 +90,23 @@ import { MaybeSample, SampleRegion } from "@/components/shared/SampleRegion";
  */
 export function faintPagesLine(pages: number[]): string {
   const many = pages.length > 1;
+  return (
+    `${many ? "Pages" : "Page"} ${pageList(pages)} didn\u2019t come through clearly, ` +
+    `so nothing from ${many ? "them" : "it"} is in what you see below.`
+  );
+}
+
+/**
+ * C07f's retry, naming the pages it retries: "Retry page 4", "Retry pages 15
+ * and 16", "Retry pages 1 to 27" (backlog item 38). The pages are the
+ * server's, in the order it sent them, as the line above says them.
+ */
+export function retryPagesLabel(pages: number[]): string {
+  return `Retry ${pages.length > 1 ? "pages" : "page"} ${pageList(pages)}`;
+}
+
+/** "4", "4 and 7", "3 to 5, 9, 11 and 12" - the server's pages, in its order. */
+function pageList(pages: number[]): string {
   /*
    * A run of three or more pages in a row is said as a range: "Pages 1 to
    * 27", not twenty-seven numbers (upload test, 15 Oct). Only runs the server
@@ -106,13 +123,55 @@ export function faintPagesLine(pages: number[]): string {
     }
     i = j + 1;
   }
-  const list =
-    items.length > 1
-      ? `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`
-      : (items[0] ?? "");
+  return items.length > 1
+    ? `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`
+    : (items[0] ?? "");
+}
+
+/**
+ * C07f's partly-read file, as far as the contract can say it (backlog item
+ * 38). The upload's status names the pages that didn't come through
+ * (`failedPages`) and nothing else about the file, so:
+ *
+ * - KEPT FROM C07f: "Nothing you did is lost - you can retry just those
+ *   pages.", the retry named by its pages ("Retry pages 15-16", said as the
+ *   line says them), and "Retrying…".
+ * - NOT SAID: "We read most of this, but a few pages didn't come through" and
+ *   "Pages 1-14 parsed cleanly" - there is no page total to make "most", "a
+ *   few" or the clean range true - and "too faint to read", a cause the server
+ *   doesn't give. Our line names exactly the pages it sent instead.
+ * - NOT DRAWN: "Continue with what we have". The review sits right below this
+ *   notice, so continuing is already what the page does.
+ *
+ * One notice for both paths (the single lesson's review and the unit's tree),
+ * where there used to be two copies of the same card.
+ */
+function PartialReadNotice({
+  pages,
+  retrying,
+  onRetry,
+}: {
+  pages: number[];
+  retrying: boolean;
+  onRetry: () => void;
+}) {
   return (
-    `${many ? "Pages" : "Page"} ${list} didn\u2019t come through clearly, ` +
-    `so nothing from ${many ? "them" : "it"} is in what you see below.`
+    <div className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
+      <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
+        {faintPagesLine(pages)}{" "}
+        {pages.length > 1
+          ? "Nothing you did is lost - you can retry just those pages."
+          : "Nothing you did is lost - you can retry just that page."}
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        disabled={retrying}
+        className="mt-3 inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 bg-nevo-cream-elevated px-[18px] text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
+      >
+        {retrying ? "Retrying…" : retryPagesLabel(pages)}
+      </button>
+    </div>
   );
 }
 
@@ -675,23 +734,11 @@ export function UploadWizard() {
           segments={staged.segments}
           banner={
             staged.failedPages.length > 0 ? (
-              <div className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
-                <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
-                  {faintPagesLine(staged.failedPages)}
-                </p>
-                <button
-                  type="button"
-                  onClick={staged.retryFailedPages}
-                  disabled={staged.retrying}
-                  className="mt-3 inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 bg-nevo-cream-elevated px-[18px] text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
-                >
-                  {staged.retrying
-                    ? "Reading them again…"
-                    : staged.failedPages.length === 1
-                      ? "Read that page again"
-                      : "Read those pages again"}
-                </button>
-              </div>
+              <PartialReadNotice
+                pages={staged.failedPages}
+                retrying={staged.retrying}
+                onRetry={staged.retryFailedPages}
+              />
             ) : null
           }
           onBack={() => {
@@ -745,30 +792,16 @@ export function UploadWizard() {
               and had nothing to ask for, because the page numbers
               only exist in the field nobody was reading.
 
-              NOT DRAWN BY DESIGN. C07f covers a parse that failed
-              outright, not one that came back with holes in it, so
-              this is the honest minimum - what is missing, and the
-              one action that fixes it - and it is raised rather than
-              invented further.
+              C07f now draws a partly-read file too, and the notice
+              takes the words of it the contract can make true - see
+              `PartialReadNotice` (backlog item 38).
             */
             staged.failedPages.length > 0 ? (
-              <div className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
-                <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
-                  {faintPagesLine(staged.failedPages)}
-                </p>
-                <button
-                  type="button"
-                  onClick={staged.retryFailedPages}
-                  disabled={staged.retrying}
-                  className="mt-3 inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 bg-nevo-cream-elevated px-[18px] text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
-                >
-                  {staged.retrying
-                    ? "Reading them again…"
-                    : staged.failedPages.length === 1
-                      ? "Read that page again"
-                      : "Read those pages again"}
-                </button>
-              </div>
+              <PartialReadNotice
+                pages={staged.failedPages}
+                retrying={staged.retrying}
+                onRetry={staged.retryFailedPages}
+              />
             ) : null
           }
         />

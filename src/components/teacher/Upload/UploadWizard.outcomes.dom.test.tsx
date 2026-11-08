@@ -887,11 +887,31 @@ describe("where a unit's reading is drawn", () => {
     stagedState({ ...READY, failedPages: [3] });
     startUnitUpload();
 
-    const retry = screen.getByRole("button", { name: "Read that page again" });
+    const retry = screen.getByRole("button", { name: "Retry page 3" });
     const scroll = retry.closest("[class*='overflow-y-auto']");
 
     expect(scroll).not.toBeNull();
     expect(scroll).toContainElement(screen.getByDisplayValue("Rivers"));
+  });
+
+  // Backlog item 38: C07f's words, where the contract can make them true.
+  it("says it in C07f's words, without claiming how much of the file was read", () => {
+    stagedState({ ...READY, failedPages: [15, 16] });
+    startUnitUpload();
+
+    expect(
+      screen.getByText(/Nothing you did is lost - you can retry just those pages\./),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry pages 15 and 16" })).toBeInTheDocument();
+    // No page total is sent, so neither "most of this" nor a clean range is.
+    expect(screen.queryByText(/most of this|parsed cleanly|too faint/)).not.toBeInTheDocument();
+  });
+
+  it("says Retrying… while the pages are read again", () => {
+    stagedState({ ...READY, failedPages: [15, 16], retrying: true });
+    startUnitUpload();
+
+    expect(screen.getByRole("button", { name: "Retrying…" })).toBeDisabled();
   });
 
   it("centres the live ladder in a full-height column", () => {
