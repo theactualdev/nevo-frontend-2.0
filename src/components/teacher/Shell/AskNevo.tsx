@@ -154,6 +154,28 @@ export function AskNevo() {
   const signedIn = useHasSession();
   const identity = useCurrentUser();
   const [draft, setDraft] = useState("");
+  /*
+   * THE DAY'S ALLOWANCE, AS THE SERVER COUNTS IT (SCRUM-56: "The compose input
+   * disables until reset"). It stayed usable at the cap, so a teacher typed a
+   * question only to be told the day was spent. Read when the drawer opens;
+   * a read that fails leaves the box usable, and the server still says no.
+   * No "nearly at the limit" indicator: when that starts would be our
+   * threshold, not the server's.
+   */
+  const [capReached, setCapReached] = useState(false);
+  useEffect(() => {
+    if (!open || !getToken()) return;
+    let alive = true;
+    askNevoApi
+      .allowance("teacher")
+      .then((a) => {
+        if (alive && a.exhausted) setCapReached(true);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [open]);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [thinking, setThinking] = useState(false);
   const alive = useRef(true);
@@ -252,9 +274,10 @@ export function AskNevo() {
     return { kind: "answer", text: data.answer, action: data.action };
   };
 
+  const spentToday = capReached || turns.some((t) => t.kind === "spent");
   const ask = (raw: string) => {
     const question = raw.trim();
-    if (!question || thinking) return;
+    if (!question || thinking || spentToday) return;
     setDraft("");
     // "with the prompt field still there to start something new" - asking from
     // a past conversation starts a NEW one rather than appending to the
@@ -668,9 +691,17 @@ export function AskNevo() {
 
             {/* Input */}
             <div className="shrink-0 border-t border-nevo-near-black/8 px-[18px] pt-3.5 pb-[18px]">
+              {/* At the cap, said once above the box - unless the refusal
+                  that said it is already the last thing in the thread. */}
+              {spentToday && turns[turns.length - 1]?.kind !== "spent" && (
+                <p className="mb-2.5 text-[13.5px] leading-[1.5] text-nevo-near-black/68">
+                  {ALLOWANCE_SPENT}
+                </p>
+              )}
               <div className="flex h-[46px] items-center gap-2 rounded-full border-[1.5px] border-nevo-near-black/16 bg-nevo-cream pr-2 pl-4 transition-colors focus-within:border-nevo-navy">
                 <input
                   data-autofocus
+                  disabled={spentToday}
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
@@ -698,8 +729,9 @@ export function AskNevo() {
                 <button
                   type="button"
                   aria-label="Send"
+                  disabled={spentToday}
                   onClick={() => ask(draft)}
-                  className="flex size-[34px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-nevo-navy transition-transform duration-[120ms] active:scale-[0.98]"
+                  className="flex size-[34px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-nevo-navy transition-transform duration-[120ms] active:scale-[0.98] disabled:cursor-default disabled:opacity-40"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f7f1e6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                     <path d="M22 2L11 13" />
