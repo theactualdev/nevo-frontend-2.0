@@ -67,6 +67,12 @@ describe("what a child has strengthened", () => {
     expect(learningEvidence).toHaveBeenCalledWith("s-1");
   });
 
+  it("says what each row means in Lydia's words (SCRUM-321): the child crossed the mark", async () => {
+    render(<ParentChanges />);
+    await screen.findByText("Equivalent fractions");
+    expect(screen.getAllByText("Amara crossed the mark on this idea.")).toHaveLength(2);
+  });
+
   it("claims nothing the server doesn't say - no 'since', subject, 'new this week' or 'holding onto it'", async () => {
     const { container } = render(<ParentChanges />);
     await screen.findByText("Equivalent fractions");
@@ -89,6 +95,9 @@ describe("what a child has strengthened", () => {
     const { container } = render(<ParentChanges />);
     expect(await screen.findByText(/See all Amara.s subjects/)).toBeInTheDocument();
     expect(screen.queryByRole("listitem")).toBeNull();
+    // Lydia's one state for "starting out" and "nothing yet", which the read
+    // can't tell apart (SCRUM-321) - a kept link or Back can land here empty.
+    expect(screen.getByText("Nothing has strengthened here yet.")).toBeInTheDocument();
     expect(visibleText(container)).not.toMatch(/just getting started|nothing to compare/i);
   });
 
