@@ -43,7 +43,9 @@ const page = (unsaved: boolean, about?: UnsavedAbout) =>
 const click = (init: MouseEventInit = {}) =>
   fireEvent.click(screen.getByRole("link", { name: "Insights" }), init);
 
-beforeEach(() => push.mockReset());
+beforeEach(() => {
+  push.mockReset();
+});
 
 describe("leaving mid-edit from the sidebar", () => {
   it("asks first, in design's words", () => {

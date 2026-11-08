@@ -27,7 +27,9 @@ const row = (id: string): Escalation => ({
 });
 const page = (n: number, from = 0) => Array.from({ length: n }, (_, i) => row(`e${from + i}`));
 
-beforeEach(() => get.mockReset());
+beforeEach(() => {
+  get.mockReset();
+});
 
 describe("escalationsApi.allOpen", () => {
   it("asks for open ones only, and stops at a short page", async () => {
