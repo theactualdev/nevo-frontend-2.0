@@ -192,9 +192,31 @@ describe("assigning from the finish screen", () => {
   it("waits, and says what is left, while the server says not yet", async () => {
     render(<UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} />);
 
+    // SCRUM-319: pressable, never disabled; the reason comes with the tap.
+    fireEvent.click(await screen.findByRole("button", { name: "Assign to a class" }));
     expect(await screen.findByText("1 section still to check")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Assign to a class" })).not.toBeInTheDocument();
-    expect(screen.getByText("Assign to a class")).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("names the step that holds it after the tap, and goes back to it (SCRUM-319)", async () => {
+    review.mockResolvedValue({
+      lessonId: "l-1",
+      keyPoints: [],
+      outstandingCount: 0,
+      readyToAssign: false,
+      reviewComplete: false,
+      outstandingReviewSteps: ["rewrites"],
+    });
+    render(<UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Assign to a class" }));
+    expect(
+      await screen.findByText("It can’t be assigned until its review is done: rewrites still to sign off."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Go to the rewrites" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1/review?step=4",
+    );
   });
 
   it("goes to the assign wizard with this lesson once it can", async () => {
@@ -224,6 +246,7 @@ describe("assigning from the finish screen", () => {
     } as LessonDetailResponse;
     render(<UploadResult lesson={settled} fileName="fractions.pdf" onUploadAnother={vi.fn()} />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Assign to a class" }));
     expect(await screen.findByText("Review this lesson to assign it.")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Assign to a class" })).not.toBeInTheDocument();
     // Backlog item 19: and the way in, rather than a line with nothing to press.
@@ -244,8 +267,9 @@ describe("assigning from the finish screen", () => {
     review.mockReturnValue(new Promise(() => {}));
     render(<UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} />);
 
-    expect(screen.getByText("Assign to a class")).toHaveAttribute("aria-disabled", "true");
-    expect(screen.queryByText(/still to check|Still being checked/)).not.toBeInTheDocument();
+    // Pressable even now (SCRUM-319), but there is no reason to give yet.
+    fireEvent.click(screen.getByRole("button", { name: "Assign to a class" }));
+    expect(screen.queryByText(/still to check|Still being checked|still to sign off/)).not.toBeInTheDocument();
   });
 
   it("keeps the lesson itself one press away, where the checking happens", () => {

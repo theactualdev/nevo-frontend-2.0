@@ -196,6 +196,8 @@ describe("four screens, not one page", () => {
         keyPoints: [point("kp-2", "s-2")],
         missingKeyPointSegmentIds: [],
         reviewComplete: true,
+        // SCRUM-307: ready is the sign-off AND readyToAssign.
+        readyToAssign: true,
       }),
     );
     await open(1);
@@ -419,6 +421,8 @@ describe("the rewrites", () => {
         keyPointApproval: signoff("key_points"),
         rewriteApproval: signoff("rewrites"),
         reviewComplete: true,
+        // SCRUM-307: ready is the sign-off AND readyToAssign.
+        readyToAssign: true,
       }),
     );
     await open(4);
@@ -446,6 +450,8 @@ describe("live", () => {
         keyPointApproval: signoff("key_points"),
         rewriteApproval: signoff("rewrites", rewriteBy),
         reviewComplete: true,
+        // SCRUM-307: ready is the sign-off AND readyToAssign.
+        readyToAssign: true,
       }),
     );
 
@@ -541,5 +547,35 @@ describe("a review that could not be read", () => {
       "href",
       "/teacher/lessons/l-1",
     );
+  });
+});
+
+/*
+ * SCRUM-307: waiting calculation pieces hold Assign, and the server's
+ * `reviewComplete` leaves them out. The live step went on `reviewComplete`,
+ * so a lesson whose only wait was its pieces read "This lesson is ready" over
+ * an Assign the server then refused.
+ */
+describe("live, with only the pieces waiting", () => {
+  it("is not live, names the pieces, and goes to them", async () => {
+    api.review.mockResolvedValue(
+      reviewOf({
+        missingKeyPointSegmentIds: [],
+        keyPointApproval: signoff("key_points"),
+        rewriteApproval: signoff("rewrites"),
+        reviewComplete: true,
+        readyToAssign: false,
+        outstandingReviewSteps: ["calculation_parts"],
+      }),
+    );
+    await open(5);
+
+    expect(screen.queryByRole("heading", { name: "This lesson is ready" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Not live yet" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Accept the pieces, and it goes into your library ready to assign."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to the pieces" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Assign to classes" })).toBeNull();
   });
 });

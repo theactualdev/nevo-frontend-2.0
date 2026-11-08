@@ -488,6 +488,12 @@ export interface LessonReview {
    * ready is how this started."
    */
   readyToAssign: boolean;
+  /**
+   * SCRUM-307 (252e0d6): the review steps still holding Assign, by the
+   * server's own names - key_points, media, checks, guided_steps,
+   * calculation_parts, rewrites. Empty when `readyToAssign`.
+   */
+  outstandingReviewSteps?: string[];
   keyPoints: KeyPoint[];
   /*
    * C07K, THE LESSON-WIDE REVIEW (Lydia and Teslim, 19 Oct). Everything below

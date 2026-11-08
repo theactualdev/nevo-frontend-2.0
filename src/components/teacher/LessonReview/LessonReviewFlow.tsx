@@ -144,7 +144,13 @@ export function LessonReviewFlow({
     () => [...lesson.segments].sort((a, b) => a.sequenceOrder - b.sequenceOrder),
     [lesson.segments],
   );
-  const complete = review.reviewComplete === true;
+  /*
+   * "Ready" is the server's whole answer: its sign-off AND its
+   * `readyToAssign`. Since SCRUM-307 the second holds calculation pieces the
+   * first leaves out, so a lesson whose only wait was its pieces read
+   * "This lesson is ready" over an Assign the server then refused.
+   */
+  const complete = review.reviewComplete === true && review.readyToAssign !== false;
   const media = mediaView(review, segments);
   /*
    * MEDIA HAS ITS OWN PRESS, in step 1, and nothing else signs it. Teslim's
@@ -1242,7 +1248,7 @@ function StepLive({
   captionsWaiting: number;
   onGo: (step: Step) => void;
 }) {
-  if (review.reviewComplete !== true) {
+  if (review.reviewComplete !== true || review.readyToAssign === false) {
     /*
      * WHAT IS STILL WAITING, IN STEP ORDER, from the server's own sign-offs.
      * This said "Accept the rewrites" to a lesson whose rewrites were signed
@@ -1256,7 +1262,17 @@ function StepLive({
         go: "Go to the checks",
       },
       !rewritesSigned && { step: 4 as Step, words: "the rewrites", go: "Go to the rewrites" },
-    ].filter((w): w is { step: Step; words: string; go: string } => Boolean(w));
+    ]
+      .concat(
+        /* SCRUM-307: waiting pieces hold Assign now, and step 3 is where they
+           are accepted. "The pieces", as the group's own press says it. */
+        (review.outstandingReviewSteps ?? []).includes("calculation_parts") &&
+          !(checks.checksPending || checks.guidedPending)
+          ? [{ step: 3 as Step, words: "the pieces", go: "Go to the pieces" }]
+          : [],
+      )
+      .filter((w): w is { step: Step; words: string; go: string } => Boolean(w))
+      .sort((a, b) => a.step - b.step);
     return (
       <div className="flex flex-col items-center pt-2.5 text-center">
         <h2 className="text-[21px] font-semibold tracking-[-0.012em] text-nevo-near-black xl:text-[24px]">

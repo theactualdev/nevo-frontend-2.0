@@ -1,15 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { LessonDetailActions } from "./LessonDetailActions";
 
 /**
- * SCRUM-153, LR-04: assign is visible but inactive while a review is
- * outstanding, and says what is left.
- *
- * THE GATE IS REAL. The backend answers 409 `lesson_not_approved` at both
- * assignment doors, so a pressable button here is an invitation to a failure
- * the screen already knows about - and the teacher then meets that refusal in
- * a takeover, two steps from the cards that would clear it.
+ * SCRUM-319 (Lydia, 7 Nov), replacing SCRUM-153 LR-04's inactive button: the
+ * control STAYS PRESSABLE while the server holds the lesson, and the refusal
+ * is explained after the tap - naming the step that holds it, with the way
+ * back to it. Never a disabled button.
  *
  * WHOSE ANSWER "READY" IS, and this changed on 21 Sep. This component decided
  * it from a count of outstanding sections. Backend then made the rule its own
@@ -21,6 +18,9 @@ import { LessonDetailActions } from "./LessonDetailActions";
  * server that says ready wins over a count, and a server that says no wins
  * over an empty one.
  */
+
+/** A held Assign is a real button; pressing it is how the reason is asked for. */
+const press = () => fireEvent.click(screen.getByRole("button", { name: "Assign to a class" }));
 
 describe("whose answer ready is", () => {
   it("takes the server's yes even while cards are still listed", () => {
@@ -49,6 +49,7 @@ describe("whose answer ready is", () => {
     expect(
       screen.queryByRole("link", { name: "Assign to a class" }),
     ).not.toBeInTheDocument();
+    press();
     expect(screen.getByText("Still being checked.")).toBeInTheDocument();
   });
 
@@ -72,6 +73,7 @@ describe("what is left to check", () => {
         outstandingKeyPoints={2}
       />,
     );
+    press();
     expect(screen.getByText("2 key points still to check")).toBeInTheDocument();
 
     rerender(
@@ -92,6 +94,7 @@ describe("what is left to check", () => {
         outstandingSections={1}
       />,
     );
+    press();
 
     expect(screen.getByText("1 section still to check")).toBeInTheDocument();
   });
@@ -110,6 +113,7 @@ describe("what is left to check", () => {
         outstandingSections={1}
       />,
     );
+    press();
 
     expect(
       screen.getByText("2 key points and 1 section still to check"),
@@ -175,7 +179,12 @@ describe("the lesson-wide sign-off", () => {
     render(<LessonDetailActions lessonId="l-1" ready signedOff={false} />);
 
     expect(screen.queryByRole("link", { name: "Assign to a class" })).not.toBeInTheDocument();
-    expect(screen.getByText("Assign to a class")).toHaveAttribute("aria-disabled", "true");
+    // SCRUM-319: pressable, never disabled - and the reason comes with the tap.
+    const assign = screen.getByRole("button", { name: "Assign to a class" });
+    expect(assign).toBeEnabled();
+    expect(assign).not.toHaveAttribute("aria-disabled");
+    expect(screen.queryByText("Review this lesson to assign it.")).not.toBeInTheDocument();
+    press();
     // The teacher's review is what waits, not Nevo.
     expect(screen.getByText("Review this lesson to assign it.")).toBeInTheDocument();
     expect(screen.queryByText("Still being checked.")).not.toBeInTheDocument();
@@ -204,7 +213,54 @@ describe("the lesson-wide sign-off", () => {
         outstandingKeyPoints={2}
       />,
     );
+    press();
 
     expect(screen.getByText("2 key points still to check")).toBeInTheDocument();
+  });
+});
+
+/*
+ * SCRUM-319: "names the outstanding step ... The route from the refusal back
+ * to the outstanding step is part of this." The step comes from SCRUM-307's
+ * `outstandingReviewSteps`, in the server's own words.
+ */
+describe("the step that holds it", () => {
+  it("names the step after the tap, and goes back to it", () => {
+    render(
+      <LessonDetailActions lessonId="l-1" ready={false} signedOff={false} outstandingSteps={["rewrites", "checks"]} />,
+    );
+    press();
+
+    expect(
+      screen.getByText("It can’t be assigned until its review is done: checks and rewrites still to sign off."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Go to the checks" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1/review?step=3",
+    );
+  });
+
+  it("calls the media step the pictures, and opens step 1", () => {
+    render(<LessonDetailActions lessonId="l-1" ready={false} outstandingSteps={["media"]} />);
+    press();
+
+    expect(screen.getByRole("link", { name: "Go to the pictures" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1/review?step=1",
+    );
+  });
+
+  it("says nothing until it is pressed", () => {
+    render(<LessonDetailActions lessonId="l-1" ready={false} outstandingSteps={["checks"]} />);
+
+    expect(screen.queryByText(/still to sign off/)).toBeNull();
+    expect(screen.queryByRole("link", { name: /Go to the/ })).toBeNull();
+  });
+
+  it("says nothing while the verdict is still on its way, even pressed", () => {
+    render(<LessonDetailActions lessonId="l-1" ready={false} checking outstandingSteps={["checks"]} />);
+    press();
+
+    expect(screen.queryByText(/still to sign off|still to check|Still being checked/)).toBeNull();
   });
 });

@@ -21,6 +21,7 @@ import {
   UNREVIEWED_LEFT_OFF,
 } from "@/lib/lessons/signOff";
 import { TryAgain } from "@/components/teacher/shared/ReadFailed";
+import { assignRefusal } from "@/lib/lessons/signOff";
 
 /**
  * C07i Lesson Assignment: four steps, each a direct question - conversational
@@ -319,6 +320,8 @@ export function AssignWizard({
    * that names a destination makes it reachable in one click.
    */
   const [errorHref, setErrorHref] = useState("");
+  /** SCRUM-319: what the way back is called - the step, where one is named. */
+  const [errorLink, setErrorLink] = useState("Open the lesson and check them");
   /*
    * THE SAME HOLE AS THE CLASS LIST, IN THE LIST BESIDE IT. QA, 22 Sep:
    * "fodder lessons flash before the real ones."
@@ -670,7 +673,21 @@ export function AssignWizard({
        * than picking a lesson for them.
        */
       const single = lessonIds.length === 1 ? lessonIds[0] : null;
-      setErrorHref(notApproved && single ? `/teacher/lessons/${single}` : "");
+      /*
+       * SCRUM-319: back to the STEP that holds it. The 409 names each
+       * lesson's outstanding steps (SCRUM-307, `lessons[].outstandingReviewSteps`);
+       * with none named, the lesson page, as before.
+       */
+      const refusedSteps =
+        refusal && refusal.status === "rejected"
+          ? (((refusal.reason as ApiError).detail as {
+              detail?: { lessons?: { lessonId?: string; outstandingReviewSteps?: string[] }[] };
+            } | undefined)?.detail?.lessons?.find((l) => l.lessonId === single)?.outstandingReviewSteps ?? [])
+          : [];
+      const back = single ? assignRefusal(single, refusedSteps) : null;
+      const stepNamed = Boolean(back && refusedSteps.length > 0);
+      setErrorHref(notApproved && single ? (stepNamed && back ? back.href : `/teacher/lessons/${single}`) : "");
+      setErrorLink(stepNamed && back ? back.label : "Open the lesson and check them");
       setError(
         notApproved
           ? named
@@ -1232,7 +1249,7 @@ export function AssignWizard({
                   href={errorHref}
                   className="font-semibold text-nevo-navy underline-offset-2 hover:underline"
                 >
-                  Open the lesson and check them
+                  {errorLink}
                 </Link>
               </>
             )}

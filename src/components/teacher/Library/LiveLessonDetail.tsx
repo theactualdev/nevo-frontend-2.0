@@ -553,6 +553,7 @@ export function LiveLessonDetail({
             checking={!settled}
             outstandingKeyPoints={outstandingPoints}
             outstandingSections={outstandingSections}
+            outstandingSteps={review.outstandingSteps}
           />
           )}
         </div>

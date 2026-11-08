@@ -214,8 +214,9 @@ export function StepChecks({
 /**
  * A calculation step's reveal parts (8c4ccef), with their own press.
  *
- * ITS OWN PRESS, not the checks': the parts never hold back Assign, so the
- * step's footer and the last step say nothing of them. ALL OR NONE, because
+ * ITS OWN PRESS, not the checks'. Since SCRUM-307 (7 Nov) waiting pieces DO
+ * hold back Assign - the last step names them ("Accept the pieces", from
+ * `outstandingReviewSteps`), and Lydia confirmed it is intended. ALL OR NONE, because
  * the server has no per-step route - a teacher who disagrees with one step
  * cannot accept the rest (raised with Lydia, 29 Oct; she approved it as is,
  * 2 Nov).

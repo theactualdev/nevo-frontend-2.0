@@ -64,6 +64,8 @@ export interface LessonReviewState {
    */
   signedOff: boolean | null;
   missingKeyPoints: number;
+  /** SCRUM-307: the steps still holding Assign, by the server's names. */
+  outstandingSteps: string[];
 }
 
 export function useLessonReview(
@@ -198,5 +200,6 @@ export function useLessonReview(
     signedOff:
       typeof review?.reviewComplete === "boolean" ? review.reviewComplete : null,
     missingKeyPoints: review?.missingKeyPointSegmentIds?.length ?? 0,
+    outstandingSteps: review?.outstandingReviewSteps ?? [],
   };
 }

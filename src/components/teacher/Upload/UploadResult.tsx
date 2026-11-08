@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useLessonRegenerate } from "@/hooks/useLessonRegenerate";
 import { useLessonReview } from "@/hooks/useLessonReview";
 import { useSegmentReview } from "@/hooks/useSegmentReview";
@@ -12,7 +13,7 @@ import type {
 } from "@/lib/api/content";
 import { SplitSourceNotice } from "@/components/teacher/Library/SplitSourceNotice";
 import { stillToCheck } from "@/components/teacher/Library/LessonDetailActions";
-import { reviewHrefFor } from "@/lib/lessons/signOff";
+import { assignRefusal, reviewHrefFor } from "@/lib/lessons/signOff";
 import { cn } from "@/lib/utils";
 import { IncidentLine } from "./ParseFallback";
 
@@ -168,6 +169,9 @@ export function UploadResult({
   const blocked = !verdict.ready || awaitingReview || checking;
   const review = lesson.reviewSegmentCount;
   const rereading = regenerate.state === "running";
+  /* SCRUM-319: Assign stays pressable; a tap while held explains it. */
+  const [explained, setExplained] = useState(false);
+  const refusal = assignRefusal(lesson.id, verdict.outstandingSteps);
 
   return (
     <div className="mx-auto w-full max-w-[820px] px-6 pb-10">
@@ -246,12 +250,14 @@ export function UploadResult({
           </Link>
         )}
         {blocked ? (
-          <span
-            aria-disabled="true"
-            className="inline-flex h-[50px] items-center rounded-[10px] bg-nevo-navy/30 px-[22px] text-[15px] font-semibold text-nevo-cream"
+          <button
+            type="button"
+            onClick={() => setExplained(true)}
+            aria-expanded={explained}
+            className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[22px] text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
           >
             Assign to a class
-          </span>
+          </button>
         ) : (
           <Link
             href={`/teacher/lessons/assign?lesson=${lesson.id}`}
@@ -288,10 +294,19 @@ export function UploadResult({
         </button>
       </div>
 
-      {blocked && !checking && (
-        <p className="mt-2.5 text-[13px] font-medium text-nevo-navy">
-          {stillToCheck(verdict.outstanding, sections.remaining, awaitingReview)}
-        </p>
+      {blocked && !checking && explained && (
+        <div role="status" className="mt-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <p className="text-[13px] font-medium text-nevo-navy">
+            {refusal.line ?? stillToCheck(verdict.outstanding, sections.remaining, awaitingReview)}
+          </p>
+          {/* The route back to a NAMED step; with none named, Review in five
+              steps beside Assign is already the way in. */}
+          {refusal.line && (
+            <Link href={refusal.href} className="text-[13px] font-semibold text-nevo-navy underline underline-offset-2">
+              {refusal.label}
+            </Link>
+          )}
+        </div>
       )}
 
       {rereading && (
