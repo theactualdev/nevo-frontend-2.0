@@ -296,7 +296,12 @@ describe("a signed-in teacher's own lesson", () => {
     expect(screen.queryByText("NOR THIS")).not.toBeInTheDocument();
   });
 
-  it("says so when a section has no worked steps at all", () => {
+  /*
+   * C16d (design 928cf30): "THE CALCULATION TAB IS CONDITIONAL. A drawn tab
+   * states that the thing behind it exists", so a section with no
+   * calculation has no Calculation tab - not one that opens onto nothing.
+   */
+  it("draws no Calculation tab for a section with no calculation", () => {
     useLessonDetail.mockReturnValue(
       state({
         lesson: {
@@ -308,11 +313,32 @@ describe("a signed-in teacher's own lesson", () => {
     );
 
     render(<VariantReviewRoute fixture={null} lessonId="l-1" sectionIndex={1} />);
-    fireEvent.click(screen.getByRole("tab", { name: "Calculation" }));
+
+    expect(screen.queryByRole("tab", { name: "Calculation" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
+      "Text",
+      "Visual",
+      "Audio",
+      "Interactive",
+    ]);
+  });
+
+  /* C16d's line, sentences two and three word for word; the first is held. */
+  it("carries C16d's orientation line", () => {
+    useLessonDetail.mockReturnValue(
+      state({
+        lesson: { id: "l-1", title: "Solving linear equations", segments: [seg({ calculationVariant: null })] },
+      }),
+    );
+
+    render(<VariantReviewRoute fixture={null} lessonId="l-1" sectionIndex={1} />);
 
     expect(
-      screen.getByText(/has not generated worked steps/i),
+      screen.getByText(
+        "As the lesson runs, Nevo chooses which one a child gets from how they are working. You do not assign variants to individual students.",
+      ),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/for every segment/)).not.toBeInTheDocument();
   });
 
   it("renders the console's own copy for a review reason, never the raw token", () => {
