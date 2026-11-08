@@ -10,6 +10,7 @@ import {
 import { getSession, getToken } from "@/lib/auth/session";
 import { THREADS, type Message } from "@/lib/mocks/teacherConnect";
 import { useHasSession } from "./useHasSession";
+import type { AvatarLook } from "@/lib/profile/avatarLook";
 
 /**
  * Connect's conversations, live from `/api/messages/*`.
@@ -36,7 +37,13 @@ import { useHasSession } from "./useHasSession";
 export interface ConnectThread {
   id: string;
   studentName: string;
-  initials: string;
+  /**
+   * The child's avatar when this side already knows it - a fixture's sample,
+   * or the child picked for a thread just started. Null for a thread read
+   * from the server, which carries no avatar: the screen finds the child's
+   * look on their class roster by `recipientId` (SCRUM-317).
+   */
+  look: AvatarLook | null;
   /** The thread's class. Live since 31 Aug; "" only on fixtures. */
   className: string;
   preview: string;
@@ -56,14 +63,6 @@ export interface ConnectThread {
    * messages the teacher could not see.
    */
   loadFailed?: boolean;
-}
-
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  }
-  return (parts[0] ?? "?").slice(0, 2).toUpperCase();
 }
 
 /** The frame's compact list stamp: "2m", "4h", "Tue". */
@@ -93,7 +92,7 @@ function toThread(t: MessageThread): ConnectThread {
   return {
     id: t.threadId,
     studentName: t.title,
-    initials: initialsOf(t.title),
+    look: null,
     className: t.className ?? "",
     preview: t.latestPreview ?? "",
     time: shortStamp(t.lastMessageAt),
@@ -138,7 +137,7 @@ export interface ConnectState {
   send: (
     to: { recipientId: string; recipientType: RecipientType },
     content: string,
-    about?: { name: string; className?: string },
+    about?: { name: string; className?: string; look?: AvatarLook },
   ) => Promise<string | null>;
 }
 
@@ -252,7 +251,7 @@ export function useConnectThreads(): ConnectState {
        * does. A brand-new thread has no row of its own until the list is read
        * again, and the send response names only its AUTHOR.
        */
-      about?: { name: string; className?: string },
+      about?: { name: string; className?: string; look?: AvatarLook },
     ): Promise<string | null> => {
       try {
         const saved = await messagesApi.send({ ...to, content });
@@ -282,7 +281,7 @@ export function useConnectThreads(): ConnectState {
                * reload. The picker knew the child; it was not passed.
                */
               studentName: about?.name ?? "New conversation",
-              initials: initialsOf(about?.name ?? "?"),
+              look: about?.look ?? null,
               className: about?.className ?? "",
               preview: `You: ${content}`,
               time: "now",

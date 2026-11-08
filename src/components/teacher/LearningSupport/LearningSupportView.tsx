@@ -4,6 +4,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { useCallback } from "react";
 import { useLiveQuery } from "@/hooks/useLiveQuery";
+import { useStudentDirectory } from "@/hooks/useStudentDirectory";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
 import { escalationsApi, type Escalation } from "@/lib/api/escalations";
 import { learningSupportApi, type LearningSupportHolders } from "@/lib/api/learningSupport";
 import { SummaryChip } from "@/components/teacher/shared/SummaryChip";
@@ -66,11 +68,6 @@ function byChild(all: readonly Escalation[]): Escalation[] {
   );
 }
 
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";
-}
-
 function dayOf(iso: string): string | null {
   const at = new Date(iso);
   return Number.isNaN(at.getTime())
@@ -87,6 +84,11 @@ export function LearningSupportView() {
     };
   }, []);
   const { data, failed, loading } = useLiveQuery<ConcernsRead>(run, []);
+  /* The child's avatar (SCRUM-317). An escalation carries none, so it is the
+     look on the child's class roster, from this teacher's own classes; a
+     child from another class gets an empty slot, not a look they never chose
+     (asked of Teslim: the look on the escalation row itself). */
+  const { students: directory } = useStudentDirectory();
 
   if (data && !data.holders.viewerHoldsIt) notFound();
 
@@ -141,12 +143,14 @@ export function LearningSupportView() {
                       href={`/teacher/students/${e.studentId}${e.classId ? `?class=${e.classId}` : ""}`}
                       className="flex cursor-pointer items-start gap-4 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-[18px] shadow-elevation-1 transition-[filter] hover:brightness-[0.985] xl:pl-[26px]"
                     >
-                      <span
-                        aria-hidden
-                        className="flex size-10 shrink-0 items-center justify-center rounded-full bg-nevo-violet/24 text-[14px] font-semibold text-nevo-navy"
-                      >
-                        {initialsOf(name)}
-                      </span>
+                      {(() => {
+                        const look = directory.find((s) => s.studentId === e.studentId)?.look;
+                        return look ? (
+                          <StudentAvatar look={look} size={40} />
+                        ) : (
+                          <span aria-hidden className="size-10 shrink-0" />
+                        );
+                      })()}
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                           <span className="text-[15.5px] font-semibold text-nevo-near-black xl:text-base">

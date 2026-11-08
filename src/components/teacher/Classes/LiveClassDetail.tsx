@@ -23,6 +23,8 @@ import { SummaryChip, SummaryCount } from "@/components/teacher/shared/SummaryCh
 import { attentionByStudent, rosterCounts } from "@/components/teacher/shared/summaryState";
 import { TryAgain } from "@/components/teacher/shared/ReadFailed";
 import { UnfinishedChecks } from "./UnfinishedChecks";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
+import { lookOfChild } from "@/lib/profile/rosterLook";
 
 /**
  * A class the school assigned, drawn from what the backend actually serves:
@@ -316,7 +318,11 @@ export function LiveClassDetail({
                       "border-l-[3px] border-nevo-violet",
                   )}
                 >
-                  <div className="flex min-w-0 flex-col xl:w-[36%] xl:shrink-0">
+                  {/* C05 (928cf30): the avatar the child chose beside their
+                      name, never initials (SCRUM-317) - 36px, 32px on tablet. */}
+                  <div className="flex min-w-0 items-center gap-3 xl:w-[36%] xl:shrink-0 xl:gap-3.5">
+                  <StudentAvatar look={lookOfChild(student)} className="size-8 xl:size-9" glyphClassName="size-[58%]" />
+                  <div className="flex min-w-0 flex-col">
                     <span className="truncate text-[15px] font-semibold text-nevo-near-black">
                       {studentName(student)}
                     </span>
@@ -346,6 +352,7 @@ export function LiveClassDetail({
                         {student.seatContext}
                       </span>
                     )}
+                  </div>
                   </div>
                   <div className="mt-1.5 min-w-0 xl:mt-0 xl:flex-1">
                     {/*

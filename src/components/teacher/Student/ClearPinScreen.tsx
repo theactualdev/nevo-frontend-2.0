@@ -6,6 +6,8 @@ import { studentName, useClassRoster } from "@/hooks/useClassRoster";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { studentsApi } from "@/lib/api/students";
 import { accountStatus } from "@/lib/constants/accountStatus";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
+import { lookOfChild } from "@/lib/profile/rosterLook";
 
 /**
  * C19 B3 / B3b, "Clear PIN - one thumb" (design, 12 Oct): "Clear PIN is the
@@ -149,14 +151,9 @@ function WithRoster({ studentId, classId }: { studentId: string; classId: string
       <BackBar href={back} label={backLabel} />
       <div className="flex flex-1 flex-col justify-center px-1.5">
         <div className="flex items-center gap-[13px]">
-          <span className="flex size-[50px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-[17px] font-semibold text-nevo-cream">
-            {name
-              .split(/\s+/)
-              .map((w) => w[0])
-              .slice(0, 2)
-              .join("")
-              .toUpperCase()}
-          </span>
+          {/* C19 B3: the avatar the child chose, from their roster row - the
+              marker the waiting child sees too (SCRUM-317). */}
+          <StudentAvatar look={lookOfChild(student)} size={50} />
           <div className="min-w-0">
             <h1 className="truncate text-[21px] font-semibold tracking-[-0.015em] text-nevo-near-black">
               {name}

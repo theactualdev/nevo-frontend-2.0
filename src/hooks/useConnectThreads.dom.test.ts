@@ -17,6 +17,7 @@ vi.mock("@/lib/api/messages", async (importOriginal) => {
 
 import { useConnectThreads } from "./useConnectThreads";
 import { clearSession, setSession } from "@/lib/auth/session";
+import { avatarLookOf } from "@/lib/profile/avatarLook";
 
 /**
  * A thread whose body could not be read.
@@ -94,23 +95,33 @@ describe("a thread the teacher starts", () => {
     createdAt: "2026-10-08T09:00:00Z",
   };
 
-  it("is titled with the child it is to, and their class", async () => {
+  it("is titled with the child it is to, their class and their own look", async () => {
     send.mockResolvedValue(SAVED);
     const { result } = renderHook(() => useConnectThreads());
     await waitFor(() => expect(result.current.threads[0]?.id).toBe("t-1"));
 
+    const look = avatarLookOf("star", "near_black");
     await act(async () => {
       await result.current.send(
         { recipientId: "s-2", recipientType: "student" },
         "Well done on the quiz.",
-        { name: "Tunde Bello", className: "Year 7 Blue" },
+        { name: "Tunde Bello", className: "Year 7 Blue", look },
       );
     });
 
     const started = result.current.threads.find((t) => t.id === "t-new");
     expect(started?.studentName).toBe("Tunde Bello");
-    expect(started?.initials).toBe("TB");
+    // SCRUM-317: the child's avatar, never their initials.
+    expect(started?.look).toEqual(look);
+    expect(started).not.toHaveProperty("initials");
     expect(started?.className).toBe("Year 7 Blue");
+  });
+
+  it("knows no look for a thread read from the server, which carries none", async () => {
+    const { result } = renderHook(() => useConnectThreads());
+    await waitFor(() => expect(result.current.threads[0]?.id).toBe("t-1"));
+
+    expect(result.current.threads[0].look).toBeNull();
   });
 
   it("is never titled with the teacher's own name", async () => {

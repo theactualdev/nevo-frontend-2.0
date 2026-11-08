@@ -18,6 +18,9 @@ import { KeptDraftNotice } from "@/components/shared/KeptDraftNotice";
 import { ComposeModal } from "./ComposeModal";
 import { MaybeSample } from "@/components/shared/SampleRegion";
 import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
+import { useStudentDirectory } from "@/hooks/useStudentDirectory";
+import type { AvatarLook } from "@/lib/profile/avatarLook";
 
 /**
  * C10 Connect - individual threads between a teacher and their students, and
@@ -107,6 +110,18 @@ export function ConnectView() {
     send: sendLive,
     markThreadRead,
   } = useConnectThreads();
+  /*
+   * THE CHILD'S AVATAR, NEVER INITIALS (SCRUM-317). A thread read from the
+   * server names its child only by `recipientId`, so the look is the one on
+   * that child's class roster, from the teacher's own classes. A child not
+   * found there gets no tile at all - never a look they did not choose.
+   */
+  const { students: directory } = useStudentDirectory();
+  const lookOf = (t: (typeof threads)[number]): AvatarLook | null =>
+    t.look ??
+    (t.recipientType === "student" && t.recipientId
+      ? (directory.find((s) => s.studentId === t.recipientId)?.look ?? null)
+      : null);
   const params = useSearchParams();
   /*
    * C19 B4 (design, 12 Oct): a reply notification opens ONE thread on a
@@ -206,7 +221,7 @@ export function ConnectView() {
     to: { recipientId: string; recipientType: "student" | "class" },
     text: string,
     toast = true,
-    about?: { name: string; className?: string },
+    about?: { name: string; className?: string; look?: AvatarLook },
   ) => {
     const threadId = await sendLive(to, text, about);
     if (!threadId) {
@@ -261,7 +276,7 @@ export function ConnectView() {
       { recipientId: student.studentId, recipientType: "student" },
       text,
       false,
-      { name: student.name, className: student.className },
+      { name: student.name, className: student.className, look: student.look },
     );
   };
 
@@ -387,9 +402,16 @@ export function ConnectView() {
                     : "hover:bg-nevo-navy/5",
                 )}
               >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-nevo-navy/10 text-xs font-semibold text-nevo-navy xl:size-10 xl:text-[13px]">
-                  {t.initials}
-                </span>
+                {(() => {
+                  const look = lookOf(t);
+                  return look ? (
+                    <StudentAvatar look={look} className="size-9 xl:size-10" glyphClassName="size-[58%]" />
+                  ) : (
+                    // Not found on the teacher's rosters: an empty slot keeps
+                    // the names in line, and draws no look nobody chose.
+                    <span aria-hidden className="size-9 shrink-0 xl:size-10" />
+                  );
+                })()}
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-2">
                     <span
@@ -447,9 +469,18 @@ export function ConnectView() {
                       <path d="M15 6l-6 6 6 6" />
                     </svg>
                   </Link>
-                  <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-xs font-semibold text-nevo-cream max-md:size-[30px] max-md:text-[11.5px] xl:size-[38px] xl:text-[13px]">
-                    {active.initials}
-                  </span>
+                  {/* The child's avatar in the thread's head (C10b, C19's
+                      app bar at 30px); nothing where their look is unknown. */}
+                  {(() => {
+                    const look = lookOf(active);
+                    return look ? (
+                      <StudentAvatar
+                        look={look}
+                        className="size-[34px] max-md:size-[30px] xl:size-[38px]"
+                        glyphClassName="size-[58%]"
+                      />
+                    ) : null;
+                  })()}
                   <div className="min-w-0">
                     <span className="truncate text-[15px] font-semibold text-nevo-near-black max-md:text-[17px] max-md:tracking-[-0.01em] xl:text-base">
                       {active.studentName}

@@ -133,3 +133,15 @@ describe("what the screen says when it cannot clear", () => {
     expect(screen.queryByRole("button", { name: /Clear/ })).not.toBeInTheDocument();
   });
 });
+
+/** SCRUM-317 on C19's Clear PIN: the avatar the waiting child sees, not initials. */
+describe("who the PIN is for", () => {
+  it("is drawn with the child's own look beside their name", () => {
+    roster([row({ avatarTone: "hexagon-near_black" })]);
+    const { container } = render(<ClearPinScreen studentId="s-1" classId="c-1" />);
+
+    expect(container.querySelector("[data-avatar-look]")?.getAttribute("data-avatar-look")).toBe(
+      "hexagon-near_black",
+    );
+  });
+});
