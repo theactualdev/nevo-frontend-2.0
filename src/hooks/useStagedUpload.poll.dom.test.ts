@@ -238,3 +238,52 @@ describe("trying again after the connection failed", () => {
     expect(result.current.failed).toBe(true);
   });
 });
+
+/*
+ * A REUSED UPLOAD (Olayinka, 8 Nov, live as the E2E teacher). The same file,
+ * teacher, school and scope comes back from the create as the upload already
+ * made - and when that one is READY, the poll stopped on "ready" before it had
+ * ever read it. No structure, no sections, no title: the wizard sat on
+ * "Getting it ready" for good.
+ */
+describe("a reused upload that comes back already ready", () => {
+  beforeEach(() => {
+    create.mockReset().mockResolvedValue({
+      uploadId: "f797428f-2674-4584-81f6-919b28110e5d",
+      status: "ready",
+      stage: "ready_to_assign",
+      reused: true,
+      reviewReady: true,
+    });
+  });
+
+  it("reads that upload straight away, and then stops", async () => {
+    status.mockResolvedValue({ ...READY, id: "f797428f-2674-4584-81f6-919b28110e5d", lessonTitle: "Density" });
+    const result = await staged();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(status).toHaveBeenCalledTimes(1);
+    expect(status).toHaveBeenCalledWith("f797428f-2674-4584-81f6-919b28110e5d");
+    expect(result.current.status).toBe("ready");
+    expect(result.current.structure).toEqual(READY.structure);
+
+    await poll();
+    await poll();
+    expect(status).toHaveBeenCalledTimes(1);
+  });
+
+  it("still watches one that comes back processing, as before", async () => {
+    create.mockResolvedValue({ uploadId: "u-1", status: "processing", stage: "lessons", reused: true });
+    status.mockResolvedValueOnce(PROCESSING).mockResolvedValue(READY);
+    const result = await staged();
+
+    await poll();
+    await poll();
+
+    expect(result.current.status).toBe("ready");
+    expect(result.current.structure).toEqual(READY.structure);
+  });
+});
