@@ -637,7 +637,7 @@ export default function LoginPage() {
               boxClassName="size-12 sm:size-[58px]"
               className="mt-8 sm:mt-[34px] sm:gap-4 lg:landscape:mt-0 max-lg:[@media(max-height:800px)]:mt-4"
             />
-            <ThrottleNote />
+            <ThrottleNote until={pauseEnds} />
             <button
               type="button"
               onClick={(e) => {

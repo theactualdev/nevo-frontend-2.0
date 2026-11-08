@@ -79,11 +79,11 @@ describe("Let my teacher know", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Let my teacher know" }),
     );
-    expect(screen.queryByText("Your teacher knows")).toBeNull();
+    expect(screen.queryByText("Your school has been told.")).toBeNull();
     expect(screen.getByText("Forgot your PIN?")).toBeInTheDocument();
 
     accept({});
-    expect(await screen.findByText("Your teacher knows")).toBeInTheDocument();
+    expect(await screen.findByText("Your school has been told.")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Let my teacher know" }),
     ).toBeNull();
@@ -100,7 +100,7 @@ describe("Let my teacher know", () => {
     );
 
     expect(
-      await screen.findByRole("heading", { name: "Your teacher knows" }),
+      await screen.findByRole("heading", { name: "Your school has been told." }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -142,7 +142,7 @@ describe("Let my teacher know", () => {
     expect(
       screen.queryByRole("button", { name: "Let my teacher know" }),
     ).toBeNull();
-    expect(screen.queryByText("Your teacher knows")).toBeNull();
+    expect(screen.queryByText("Your school has been told.")).toBeNull();
 
     // A primary Try again, above a ghost way back.
     const retry = screen.getByRole("button", { name: "Try again" });
@@ -178,7 +178,7 @@ describe("Let my teacher know", () => {
     );
 
     accept({});
-    expect(await screen.findByText("Your teacher knows")).toBeInTheDocument();
+    expect(await screen.findByText("Your school has been told.")).toBeInTheDocument();
     expect(screen.queryByText("That didn't send")).toBeNull();
   });
 
@@ -210,7 +210,7 @@ describe("Let my teacher know", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Let my teacher know" }),
     );
-    await screen.findByText("Your teacher knows");
+    await screen.findByText("Your school has been told.");
 
     expect(document.body.textContent).not.toMatch(/ada\.o|NEVO-1|\d{4}/);
   });

@@ -157,11 +157,11 @@ describe("the card after a calculation miss", () => {
     expect(card()).toBeNull();
   });
 
-  it("gives the hint at strong with the picture already there, and no line - Lydia's lines name the picture", () => {
+  it("says only the hint at strong with the picture already there (Lydia, 7 Nov)", () => {
     show({ level: null, engineSupport: { stepId: "s1", level: "strong" } });
 
     expect(screen.getByText(HINT)).toBeInTheDocument();
-    expect(card()).toBeNull();
+    expect(card()).toHaveTextContent("Here's a hint for this step.");
   });
 
   it("never lowers the support the dots already give", () => {
@@ -172,14 +172,14 @@ describe("the card after a calculation miss", () => {
     expect(card()).toBeNull();
   });
 
-  it("says nothing when the calculation has no picture to draw", () => {
+  it("says only the hint when the calculation has no picture to draw (Lydia, 7 Nov)", () => {
     show({
       calc: build({ scaffold: null }),
       engineSupport: { stepId: "s1", level: "strong" },
     });
 
     expect(screen.queryByText("Picture it")).toBeNull();
-    expect(card()).toBeNull();
+    expect(card()).toHaveTextContent("Here's a hint for this step.");
   });
 
   it("says only the picture at strong when the step's hint has no words", () => {

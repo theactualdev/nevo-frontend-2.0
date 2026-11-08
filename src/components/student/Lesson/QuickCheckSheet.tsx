@@ -159,6 +159,25 @@ function centredCard(): boolean {
  * frame's "Next check", or "Finish" on the last; a miss is a single check's
  * miss, on this check alone. One check is the sheet as it always was.
  */
+/**
+ * SEVERAL CHECKS IN ONE SECTION: where the child is, WITHOUT A COUNT (Lydia,
+ * 7 Nov, copy pass). The frame's middle line, "Still going - one more after
+ * this", was untrue for a section of four or more, and "Check 2 of 3" was a
+ * count in front of a child. Her words hold for any number.
+ */
+export const SEVERAL_CHECKS_LINES = {
+  first: "A few quick checks on this section.",
+  middle: "Still going.",
+  last: "Last quick check for this section.",
+} as const;
+
+/** The line for where a check sits among its section's. */
+export function severalChecksLine(position: { at: number; of: number }): string {
+  if (position.at <= 1) return SEVERAL_CHECKS_LINES.first;
+  if (position.at >= position.of) return SEVERAL_CHECKS_LINES.last;
+  return SEVERAL_CHECKS_LINES.middle;
+}
+
 export function QuickCheckSheet({
   check,
   open,
@@ -525,7 +544,7 @@ export function QuickCheckSheet({
         </div>
         {position && (
           <p className="mt-2 text-[13.5px] font-medium text-nevo-violet-text">
-            Check {position.at} of {position.of}
+            {severalChecksLine(position)}
           </p>
         )}
         {check.promptAudio && (

@@ -110,7 +110,7 @@ export function ChangePinScreen() {
 
   if (step === "updated") return <Updated />;
 
-  if (pause !== undefined) return <PausedStep onBack={back} />;
+  if (pause !== undefined) return <PausedStep onBack={back} until={pause} />;
 
   if (step === "new") {
     return (
@@ -345,7 +345,14 @@ function isThrottled(cause: unknown): boolean {
  * boxes held where step 1's are, the note, and no pad - nothing to type into
  * until the server lifts it. Back to Profile, as on step 1.
  */
-function PausedStep({ onBack }: { onBack: () => void }) {
+function PausedStep({
+  onBack,
+  until,
+}: {
+  onBack: () => void;
+  /** When the server says the pause ends, if it said. */
+  until: number | null;
+}) {
   return (
     <PinFrame onBack={onBack}>
       <div className="flex flex-1 flex-col items-center justify-center px-10 pb-6 text-center">
@@ -353,7 +360,7 @@ function PausedStep({ onBack }: { onBack: () => void }) {
           {THROTTLED_PAUSE_COPY.heading}
         </h2>
         <HeldPinBoxes boxClassName="size-12 sm:size-[58px]" className="mt-9" />
-        <ThrottleNote />
+        <ThrottleNote until={until} />
       </div>
     </PinFrame>
   );

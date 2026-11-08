@@ -68,6 +68,11 @@ export const FEWER_LABEL = "ONE PIECE AT A TIME";
 export const CALC_SUPPORT_LINES = {
   standard: "Here it is as a picture.",
   strong: "Here it is as a picture, with a hint on the question.",
+  /**
+   * Only the hint is new - the picture was already on screen (Lydia, 7 Nov,
+   * copy pass). Neither line above is true then.
+   */
+  hintOnly: "Here's a hint for this step.",
 } as const;
 
 /** The frame's own Slower line (`presentSlower`), above the question. */
@@ -384,7 +389,9 @@ export function CalculationSolver({
     ? hintAppeared
       ? CALC_SUPPORT_LINES.strong
       : CALC_SUPPORT_LINES.standard
-    : null;
+    : hintAppeared
+      ? CALC_SUPPORT_LINES.hintOnly
+      : null;
 
   /*
    * SLOWER'S PIECES, EACH WHEN THE CHILD TAPS. A step with approved `parts` is

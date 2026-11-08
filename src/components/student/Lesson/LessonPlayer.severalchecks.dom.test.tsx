@@ -176,20 +176,20 @@ describe("several checks, one after another in the same sheet", () => {
   it("asks each in turn, saying where the child is, and goes on only after the last", async () => {
     await toTheChecks();
 
-    expect(within(sheet()).getByText("Check 1 of 3")).toBeTruthy();
+    expect(within(sheet()).getByText("A few quick checks on this section.")).toBeTruthy();
     expect(within(sheet()).getByText("Question 1?")).toBeTruthy();
     await pick("Right 1");
     press("Next check");
 
-    expect(within(sheet()).getByText("Check 2 of 3")).toBeTruthy();
+    expect(within(sheet()).getByText("Still going.")).toBeTruthy();
     expect(within(sheet()).getByText("Question 2?")).toBeTruthy();
     // Asked with nothing picked.
     expect(within(sheet()).queryByRole("status")).toBeNull();
     await pick("Right 2");
     press("Next check");
 
-    expect(within(sheet()).getByText("Check 3 of 3")).toBeTruthy();
-    await pick("Right 3");
+    expect(within(sheet()).getByText("Last quick check for this section.")).toBeTruthy();
+    pick("Right 3");
     expect(within(sheet()).queryByRole("button", { name: "Next check" })).toBeNull();
     press("Finish");
 
@@ -240,7 +240,7 @@ describe("each check gates on its own", () => {
     next();
 
     await screen.findByRole("dialog");
-    expect(within(sheet()).getByText("Check 2 of 3")).toBeTruthy();
+    expect(within(sheet()).getByText("Still going.")).toBeTruthy();
     expect(within(sheet()).getByText("Question 2?")).toBeTruthy();
     expect(within(sheet()).queryByRole("status")).toBeNull();
   });
@@ -254,7 +254,7 @@ describe("each check gates on its own", () => {
     next();
 
     await screen.findByRole("dialog");
-    expect(within(sheet()).getByText("Check 2 of 3")).toBeTruthy();
+    expect(within(sheet()).getByText("Still going.")).toBeTruthy();
   });
 
   it("hands off from a miss on check 2 though check 1 was answered right", async () => {
@@ -311,14 +311,14 @@ describe("the server's marks, read back as the sitting opens", () => {
     await reopened(["cp-1"]);
 
     await screen.findByRole("dialog");
-    expect(within(sheet()).getByText("Check 2 of 3")).toBeTruthy();
+    expect(within(sheet()).getByText("Still going.")).toBeTruthy();
   });
 
   it("counts only the run from the first: a later one passed alone is asked again", async () => {
     await reopened(["cp-2"]);
 
     await screen.findByRole("dialog");
-    expect(within(sheet()).getByText("Check 1 of 3")).toBeTruthy();
+    expect(within(sheet()).getByText("A few quick checks on this section.")).toBeTruthy();
   });
 
   it("asks none of a section whose every check is passed", async () => {

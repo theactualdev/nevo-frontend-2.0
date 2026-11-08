@@ -899,10 +899,11 @@ function WarmUpLoading({ onHome }: { onHome: () => void }) {
  *
  * NOT DRAWN. Rule 5 says render the nothing-state rather than fill the gap,
  * and the gap used to be filled with the weekday rotation's task - run, and
- * then submitted as a measurement. So: no task, no words of explanation (none
- * is designed, and none is true for every cause), and the done state's own
- * button, labelled "Home" here while D79 is open, because this route is
- * full-screen and a child must never be left on it with nothing to press.
+ * then submitted as a measurement. So: no task, Lydia's line (7 Nov, copy
+ * pass: "Nothing to do here today.", above the Home button), and the done
+ * state's own button, labelled "Home" here while D79 is open, because this
+ * route is full-screen and a child must never be left on it with nothing to
+ * press.
  * And for a P1-3 reading round on a device that cannot speak, which cannot be
  * presented honestly (D81). And when consent could not be read (19 Oct): a
  * task whose taps the device may not keep is not offered. The wait before an
@@ -929,9 +930,13 @@ function MotorIntro({ onStart }: { onStart: () => void }) {
   );
 }
 
+/** Lydia's line above the nothing-state's Home (7 Nov, copy pass). */
+export const WARM_UP_NOTHING_LINE = "Nothing to do here today.";
+
 function WarmUpNothing({ onHome }: { onHome: () => void }) {
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center px-5 pb-10 sm:px-7">
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-5 pb-10 text-center sm:px-7">
+      <p className={BADGE_TITLE}>{WARM_UP_NOTHING_LINE}</p>
       <HomeButton onClick={onHome} />
     </div>
   );

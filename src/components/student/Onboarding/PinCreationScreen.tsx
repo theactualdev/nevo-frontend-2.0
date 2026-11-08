@@ -15,6 +15,7 @@ import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { USER_ROLES } from "@/lib/constants/permissions";
 import { entryPinRefusal, type EntryPinElsewhere } from "@/lib/auth/firstPin";
 import { getSession } from "@/lib/auth/session";
+import { throttleEndsAt } from "@/lib/auth/loginFailure";
 import { cn } from "@/lib/utils";
 
 /**
@@ -183,6 +184,8 @@ export function PinCreationScreen({
     done: false,
   });
   const [phase, setPhase] = useState<SavePhase>("entry");
+  /** When the server says the pause ends (`retryAt`), if it said. */
+  const [pauseUntil, setPauseUntil] = useState<number | null>(null);
   /** Bumped by "Try again", which sends the same PIN once more. */
   const [attempt, setAttempt] = useState(0);
   /*
@@ -308,6 +311,7 @@ export function PinCreationScreen({
             if (cancelled) return;
             const refusal = entryPinRefusal(cause);
             if (refusal === "throttled" || refusal === "failed") {
+              setPauseUntil(refusal === "throttled" ? throttleEndsAt(cause) : null);
               setPhase(refusal);
               return;
             }
@@ -419,7 +423,7 @@ export function PinCreationScreen({
           <>
             {/* One row, held: the PIN frame's `throttled` draws one. */}
             <HeldPinBoxes boxClassName="size-12" className="mt-10 gap-3" />
-            <ThrottleNote />
+            <ThrottleNote until={pauseUntil} />
           </>
         )}
 

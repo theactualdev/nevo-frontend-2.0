@@ -155,7 +155,7 @@ describe("breaks are the engine's to offer", () => {
       vi.advanceTimersByTime(25 * 60_000);
     });
 
-    expect(screen.queryByText("Want a break?")).toBeNull();
+    expect(screen.queryByText("Stand up and stretch for a moment.")).toBeNull();
     expect(sent("break_suggested")).toEqual([]);
   });
 
@@ -164,7 +164,7 @@ describe("breaks are the engine's to offer", () => {
     render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
 
-    expect(screen.getByText("Want a break?")).toBeInTheDocument();
+    expect(screen.getByText("Stand up and stretch for a moment.")).toBeInTheDocument();
     expect(sent("break_suggested")).toEqual([
       { breakType: "movement", trigger: "engine_offer" },
     ]);
@@ -195,7 +195,7 @@ describe("breaks are the engine's to offer", () => {
       { breakType: "movement", trigger: "engine_offer" },
     ]);
     expect(sent("break_taken")).toEqual([]);
-    expect(screen.queryByText("Want a break?")).toBeNull();
+    expect(screen.queryByText("Stand up and stretch for a moment.")).toBeNull();
   });
 
   it("says nothing was answered when the child moves on past it", () => {
@@ -233,7 +233,7 @@ describe("breaks are the engine's to offer", () => {
     render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
 
-    const ask = screen.getByText("Want a break?");
+    const ask = screen.getByText("Stand up and stretch for a moment.");
     const notNow = screen.getByRole("button", { name: "Not now" });
     const take = screen.getByRole("button", { name: "Take a break" });
     const after = (a: Node, b: Node) =>
@@ -265,7 +265,9 @@ describe("breaks are the engine's to offer", () => {
     rerender(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
 
-    // It used to be spent for the rest of the lesson after one offer.
+    // It used to be spent for the rest of the lesson after one offer. A
+    // micro break keeps the pill's own line (Lydia, 7 Nov: only movement and
+    // consolidation have their own).
     expect(screen.getByText("Want a break?")).toBeInTheDocument();
   });
 
@@ -274,7 +276,7 @@ describe("breaks are the engine's to offer", () => {
     render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
 
-    expect(screen.queryByText("Want a break?")).toBeNull();
+    expect(screen.queryByText("Stand up and stretch for a moment.")).toBeNull();
   });
 });
 

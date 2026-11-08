@@ -46,6 +46,7 @@ import { SCHOOL_CODE_LENGTH, placeSchoolCode } from "@/lib/auth/schoolCode";
 import { handSignInOver } from "@/lib/auth/signInHandoff";
 import { BUSY_REASON } from "@/lib/constants";
 import { openBusyWindow } from "@/lib/signals/busy";
+import { throttleEndsAt } from "@/lib/auth/loginFailure";
 import { cn, randomId } from "@/lib/utils";
 import { AgeCheckHold } from "./AgeCheckHold";
 import { NewPinAfterClear } from "./NewPinAfterClear";
@@ -247,6 +248,8 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
    * lasts until the child leaves by Back.
    */
   const [throttled, setThrottled] = useState(false);
+  /** When the server says the pause ends (`retryAt`), if it said. */
+  const [throttleUntil, setThrottleUntil] = useState<number | null>(null);
   /**
    * Matched, and held - by consent that has not come, by consent that has
    * gone (00e, D117), or by the age check - drawn in place.
@@ -450,6 +453,7 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
         if (!alive.current) return;
         if (isThrottle(err)) {
           setThrottled(true);
+          setThrottleUntil(throttleEndsAt(err));
           setStatus("idle");
           return;
         }
@@ -683,7 +687,7 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
       </div>
 
       {throttled ? (
-        <ThrottleNote className="mt-3 max-w-none" />
+        <ThrottleNote className="mt-3 max-w-none" until={throttleUntil} />
       ) : (
         <>
           <div role="status" className="mt-3 min-h-11">

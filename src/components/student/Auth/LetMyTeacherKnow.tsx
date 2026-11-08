@@ -96,7 +96,8 @@ export function LetMyTeacherKnow({
             />
           </span>
           <h1 className="mt-7 text-[23px] font-semibold tracking-[-0.01em] sm:mt-8 sm:text-[28px]">
-            Your teacher knows
+            {/* Lydia, 7 Nov, copy pass. */}
+            Your school has been told.
           </h1>
           <p className="mt-3.5 max-w-[300px] text-base leading-[1.55] text-pretty text-nevo-near-black/70 sm:mt-4 sm:max-w-[420px] sm:text-lg lg:max-w-[440px]">
             Once they&apos;ve cleared your old PIN, sign in again and choose

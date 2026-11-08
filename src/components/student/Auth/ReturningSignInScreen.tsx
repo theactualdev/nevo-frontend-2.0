@@ -800,7 +800,9 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
             )}
           </div>
 
-          {throttled && <ThrottleNote className="mt-0 max-w-none" />}
+          {throttled && (
+            <ThrottleNote className="mt-0 max-w-none" until={pauseEnds} />
+          )}
 
           {/*
             00c's error: a soft violet box with an info mark, the fields kept

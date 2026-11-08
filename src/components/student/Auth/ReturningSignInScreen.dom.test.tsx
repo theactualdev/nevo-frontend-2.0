@@ -1033,7 +1033,7 @@ describe("the form as 00c draws it", () => {
     ).toBeVisible();
   });
 
-  it("pauses on the server's 429, and lifts it here when its retryAt arrives (SCRUM-251)", async () => {
+  it("pauses on the server's 429, says when it ends (Lydia, 7 Nov), and lifts it here when its retryAt arrives (SCRUM-251)", async () => {
     loginPin.mockRejectedValue(
       new ApiError(429, "Too Many Requests", {
         detail: {
@@ -1048,7 +1048,7 @@ describe("the form as 00c draws it", () => {
     await signInNow();
 
     expect(
-      screen.getByText("Let's wait a little before trying again."),
+      screen.getByText("Try again in a minute."),
     ).toBeVisible();
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
 
@@ -1061,7 +1061,7 @@ describe("the form as 00c draws it", () => {
       await vi.advanceTimersByTimeAsync(1_500);
     });
     expect(
-      screen.queryByText("Let's wait a little before trying again."),
+      screen.queryByText("Try again in a minute."),
     ).toBeNull();
     expect(document.querySelector("[data-held-pin]")).toBeNull();
   });
