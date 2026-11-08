@@ -729,6 +729,20 @@ export interface LessonDetailResponse extends LessonSummary {
 }
 
 /**
+ * A lesson as a SAVED COPY carries it: the detail's fields, plus the offline
+ * package's `markingKeyVersions` (9b) - one version of each question's answer
+ * key, keyed as the server keys them (`markingKeyFor`).
+ *
+ * NOT ON `LessonDetailResponse`, because `GET /api/content/lessons/{id}` never
+ * sends it: only a lesson saved from its package has it, and only an answer
+ * marked on the device sends one back. A detail read is one of these with
+ * the field absent.
+ */
+export type SavedLessonDetail = LessonDetailResponse & {
+  markingKeyVersions?: Record<string, string>;
+};
+
+/**
  * How the parser grouped the segments.
  *
  * The two lesson-detail routes were once NOT interchangeable - the content
@@ -1079,6 +1093,16 @@ export interface LessonQuestionAttemptWrite {
    * (B28's `after_hint`), as 1 - "at least one" is all it knows.
    */
   hintCount?: number;
+  /**
+   * 9B: THE DEVICE MARKED THIS ANSWER, from the lesson package's key, because
+   * no reply could come (Teslim, 41c2f83, migration 0137). Sent only with
+   * `markingKeyVersion` and the answer's own `clientAttemptId` - the server
+   * refuses it otherwise - and only for an answer held from a lesson whose
+   * package gave a version for it (`asOfflineMarked`).
+   */
+  offlineMarked?: boolean;
+  /** The package's `markingKeyVersions` entry for this answer: 64 hex characters. */
+  markingKeyVersion?: string;
 }
 
 /** `LessonQuestionAttemptResponse` - one stored answer, marked server-side. */

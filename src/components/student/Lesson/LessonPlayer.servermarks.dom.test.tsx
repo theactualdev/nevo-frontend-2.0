@@ -292,6 +292,68 @@ describe("the error streak the engine is sent (#10)", () => {
   });
 });
 
+/**
+ * 9B: offline, the answer the package marked is held, and goes up saying so -
+ * `offlineMarked` with the version of the key it was marked against - where
+ * the lesson was opened from its saved package, which gives the versions.
+ */
+describe("an answer marked on the device (9b)", () => {
+  const VERSION = "c".repeat(64);
+  const HELD = "nevo.lesson.pendingAnswers.stu-1";
+  const held = () =>
+    Object.values(
+      JSON.parse(window.localStorage.getItem(HELD) ?? "{}") as Record<
+        string,
+        { body: Record<string, unknown> }
+      >,
+    ).map((h) => h.body);
+  const openWith = async (lesson: Lesson) => {
+    progress.opened = { sessionId: SESSION, resumed: true };
+    render(<LessonPlayer lesson={lesson} plan={null} live />);
+    await act(async () => {});
+  };
+
+  it("is held flagged, with its key's version, from a saved lesson", async () => {
+    api.saveAttempt.mockRejectedValue(new ApiError(0, "offline"));
+    await openWith({
+      ...LESSON,
+      markingKeyVersions: { [`checkpoint:${SEG_1}:cp-1`]: VERSION },
+    });
+    await pick("Key says right");
+
+    expect(held()).toEqual([
+      expect.objectContaining({
+        problemId: "cp-1",
+        offlineMarked: true,
+        markingKeyVersion: VERSION,
+        clientAttemptId: expect.any(String),
+      }),
+    ]);
+  });
+
+  it("is held plain from a lesson opened online, which has no versions", async () => {
+    api.saveAttempt.mockRejectedValue(new ApiError(0, "offline"));
+    await openWith(LESSON);
+    await pick("Key says right");
+
+    expect(held()).toHaveLength(1);
+    expect(held()[0]).not.toHaveProperty("offlineMarked");
+    expect(held()[0]).not.toHaveProperty("markingKeyVersion");
+  });
+
+  it("is never flagged when it went: the server marked it", async () => {
+    await openWith({
+      ...LESSON,
+      markingKeyVersions: { [`checkpoint:${SEG_1}:cp-1`]: VERSION },
+    });
+    await pick("Key says right");
+
+    const [, body] = api.saveAttempt.mock.calls[0];
+    expect(body).not.toHaveProperty("offlineMarked");
+    expect(held()).toEqual([]);
+  });
+});
+
 describe("Try again on a hold long enough to look broken (SCRUM-315)", () => {
   afterEach(() => {
     vi.useRealTimers();

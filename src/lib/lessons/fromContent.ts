@@ -3,6 +3,7 @@ import type {
   LessonModule as ContentModule,
   LessonSegment as ContentSegment,
   ReadingChunk,
+  SavedLessonDetail,
 } from "@/lib/api/lessons";
 import { toQuickCheck } from "@/lib/api/checkpoints";
 /*
@@ -1408,7 +1409,7 @@ function modulesFor(
  * and the caller should say so rather than open an empty spine.
  */
 export function lessonFromContent(
-  res: LessonDetailResponse,
+  res: SavedLessonDetail,
   modules: ContentModule[] = [],
 ): Lesson | null {
   const ordered = res.segments
@@ -1431,6 +1432,10 @@ export function lessonFromContent(
     // PRESENCE, and an empty object would light a button that opens nothing.
     ...(assessment ? { assessment } : {}),
     ...(summary ? { summary } : {}),
+    // A saved copy's key versions (9b): what an answer marked offline names.
+    ...(res.markingKeyVersions
+      ? { markingKeyVersions: res.markingKeyVersions }
+      : {}),
   };
 }
 
