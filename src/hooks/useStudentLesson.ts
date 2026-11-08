@@ -274,7 +274,10 @@ export function useStudentLesson(
         // online open. Only ever one they chose to save.
         const owner = getSession()?.userId;
         if (owner) refreshSavedLesson(owner, res);
-        const built = lessonFromContent(res, res.modules ?? []);
+        // Read online: the server holds the keys and marks (41c2f83).
+        const built = lessonFromContent(res, res.modules ?? [], {
+          serverMarks: true,
+        });
         setResolved(
           built
             ? {

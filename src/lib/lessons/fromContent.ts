@@ -559,9 +559,12 @@ function lineOf(value: unknown): string | undefined {
  * in a section can't be finished"). The sheet asks them one after another,
  * and each gates on its own - see the player.
  */
-function quickChecksFor(segment: ContentSegment): QuickCheck[] {
+function quickChecksFor(
+  segment: ContentSegment,
+  serverMarks: boolean,
+): QuickCheck[] {
   return segment.comprehensionCheckpoints.flatMap((checkpoint) => {
-    const check = toQuickCheck(checkpoint);
+    const check = toQuickCheck(checkpoint, { serverMarks });
     if (!check) return [];
     // The concept rides along for a review's scheduler write - see
     // `QuickCheck.conceptId`. Omitted rather than null, like the assessment.
@@ -598,6 +601,7 @@ function quickChecksFor(segment: ContentSegment): QuickCheck[] {
  */
 function calculationFor(
   segment: ContentSegment,
+  serverMarks: boolean,
 ): CalculationVerdict | undefined {
   const variant = segment.calculationVariant;
   if (!variant) {
@@ -612,7 +616,7 @@ function calculationFor(
    * error's kind goes in the reason: its message can quote what it read.
    */
   try {
-    return calculationVerdict(variant);
+    return calculationVerdict(variant, serverMarks);
   } catch (cause) {
     const kind = cause instanceof Error ? cause.name : typeof cause;
     return { refused: `the payload could not be read (${kind})` };
@@ -640,11 +644,12 @@ type CalculationVerdict =
 export function calculationFromVariant(
   variant: WireCalculationVariant,
 ): CalculationSegment | undefined {
-  return calculationVerdict(variant).calculation;
+  return calculationVerdict(variant, false).calculation;
 }
 
 function calculationVerdict(
   variant: WireCalculationVariant,
+  serverMarks: boolean,
 ): CalculationVerdict {
   if (!Array.isArray(variant.steps) || variant.steps.length === 0) {
     return { refused: "no steps" };
@@ -663,7 +668,7 @@ function calculationVerdict(
 
   const steps: CalculationStep[] = [];
   for (const [i, step] of variant.steps.entries()) {
-    const built = calcStepFor(step, manipulative);
+    const built = calcStepFor(step, manipulative, serverMarks);
     // By position, never by its words or its authored id.
     if (typeof built === "string") {
       return {
@@ -867,7 +872,10 @@ function storedAnswers(
  * any of those leaves the step with none: half a breakdown would be a step
  * with a piece left out.
  */
-function miniStepsFor(step: WireCalculationStep): CalcMiniStep[] {
+function miniStepsFor(
+  step: WireCalculationStep,
+  serverMarks: boolean,
+): CalcMiniStep[] {
   const given = Array.isArray(step.miniSteps) ? step.miniSteps.slice(0, 8) : [];
   const out: CalcMiniStep[] = [];
   for (const mini of given) {
@@ -880,15 +888,27 @@ function miniStepsFor(step: WireCalculationStep): CalcMiniStep[] {
       mini.answer === undefined || mini.answer === null
         ? ""
         : String(mini.answer).trim();
-    if (!answer) return [];
+    // Online the server holds the answer back and marks it (41c2f83).
+    if (!answer && !serverMarks) return [];
     if (mini.input === "choice") {
       const options = (mini.options ?? []).map((o) => ({
         value: String(o.value).trim(),
         label: o.label,
       }));
       if (options.length < 2) return [];
-      if (!options.some((o) => isStoredAnswer(o.value, [answer]))) return [];
-      out.push({ id, questionId, prompt, input: "choice", options, accepted: [answer] });
+      if (answer && !options.some((o) => isStoredAnswer(o.value, [answer]))) {
+        return [];
+      }
+      out.push({
+        id,
+        questionId,
+        prompt,
+        input: "choice",
+        options,
+        accepted: answer ? [answer] : [],
+      });
+    } else if (mini.input === "number" && !answer) {
+      out.push({ id, questionId, prompt, input: "number", accepted: [] });
     } else if (mini.input === "number") {
       const others = (mini.acceptedAnswers ?? [])
         .map((a) => String(a).trim())
@@ -904,6 +924,7 @@ function miniStepsFor(step: WireCalculationStep): CalcMiniStep[] {
 function calcStepFor(
   step: WireCalculationStep,
   manipulative: CalculationSegment["manipulative"],
+  serverMarks: boolean,
 ): CalculationStep | string {
   const accepted = storedAnswers(step, {
     alternatives: step.input === "number",
@@ -921,7 +942,7 @@ function calcStepFor(
     typeof step.conceptExplanation === "string"
       ? step.conceptExplanation.trim()
       : "";
-  const miniSteps = miniStepsFor(step);
+  const miniSteps = miniStepsFor(step, serverMarks);
   const base = {
     stepId: step.stepId,
     prompt: step.prompt,
@@ -945,8 +966,10 @@ function calcStepFor(
     // content is already parsed and a prompt with one choice is not a choice.
     if (options.length < 2) return "a choice with fewer than two options";
     // The same defect `toQuickCheck` refuses on a checkpoint: a key that names
-    // none of its own options is a question with no right answer.
-    if (!options.some((o) => isStoredAnswer(o.value, accepted))) {
+    // none of its own options is a question with no right answer. Online
+    // there is no key to name one - the server holds it, and marks (41c2f83).
+    const keyless = serverMarks && accepted.length === 0;
+    if (!keyless && !options.some((o) => isStoredAnswer(o.value, accepted))) {
       return "a choice whose stored answer names none of its options";
     }
     const confirm = step.confirmationText?.trim();
@@ -960,7 +983,9 @@ function calcStepFor(
   }
 
   if (step.input === "number") {
-    if (accepted.length === 0) return "a number step with no stored answer";
+    if (accepted.length === 0 && !serverMarks) {
+      return "a number step with no stored answer";
+    }
     const unit = step.unit?.trim();
     const keys = keysFor(step);
     return {
@@ -1300,13 +1325,14 @@ function narrationFor(step: WireCalculationStep): CalcNarration | undefined {
 function segmentFor(
   segment: ContentSegment,
   lessonTitle: string,
+  serverMarks: boolean,
 ): LessonSegment {
-  const quickChecks = quickChecksFor(segment);
+  const quickChecks = quickChecksFor(segment, serverMarks);
   const quickCheck = quickChecks[0];
   const visual = visualFor(segment, lessonTitle);
   const audio = audioFor(segment, lessonTitle);
   const interactive = interactiveFor(segment, lessonTitle);
-  const verdict = calculationFor(segment);
+  const verdict = calculationFor(segment, serverMarks);
   const calculation = verdict?.calculation;
   const modalities = modalitiesFor(segment, calculation);
   /*
@@ -1411,15 +1437,23 @@ function modulesFor(
 export function lessonFromContent(
   res: SavedLessonDetail,
   modules: ContentModule[] = [],
+  /**
+   * TRUE FOR A LESSON READ ONLINE, where the server holds every answer key
+   * back (41c2f83) and marks each answer itself (test 9): a one-tap check,
+   * an end-of-lesson question or a calculation step with no key is asked,
+   * and its attempt reply decides. False - the default - for a saved copy
+   * and its package, which the device marks, so the key gate stands.
+   */
+  { serverMarks = false }: { serverMarks?: boolean } = {},
 ): Lesson | null {
   const ordered = res.segments
     .slice()
     .sort((a, b) => a.sequenceOrder - b.sequenceOrder);
   if (ordered.length === 0) return null;
 
-  const segments = ordered.map((s) => segmentFor(s, res.title));
+  const segments = ordered.map((s) => segmentFor(s, res.title, serverMarks));
 
-  const assessment = assessmentFor(res);
+  const assessment = assessmentFor(res, serverMarks);
   const summary = summaryFor(res, ordered);
 
   return {
@@ -1464,7 +1498,10 @@ export function lessonFromContent(
  * answer (B26), and the player hands them to both screens - see
  * `lib/lessons/checkOutcome`. None is derivable here.
  */
-function assessmentFor(res: LessonDetailResponse): Assessment | undefined {
+function assessmentFor(
+  res: LessonDetailResponse,
+  serverMarks: boolean,
+): Assessment | undefined {
   const questions = (res.assessment ?? [])
     /*
      * Zipped with the checkpoint it came from, because `toQuickCheck` returns
@@ -1478,7 +1515,10 @@ function assessmentFor(res: LessonDetailResponse): Assessment | undefined {
      * `problemId` was raised with backend as a gap. It was never a gap.
      * `ComprehensionCheckpoint.id` is required on the wire and always was.
      */
-    .map((checkpoint) => ({ checkpoint, quick: toQuickCheck(checkpoint) }))
+    .map((checkpoint) => ({
+      checkpoint,
+      quick: toQuickCheck(checkpoint, { serverMarks }),
+    }))
     .filter(
       (
         pair,
@@ -1491,7 +1531,8 @@ function assessmentFor(res: LessonDetailResponse): Assessment | undefined {
       id: checkpoint.id,
       prompt: quick.question,
       options: quick.options,
-      correctId: quick.correctId,
+      // Absent online, where the server holds the key and marks.
+      ...(quick.correctId !== undefined ? { correctId: quick.correctId } : {}),
       // Omitted rather than null: every consumer tests for presence, and a
       // question with no concept simply cannot inform a review.
       ...(checkpoint.conceptId ? { conceptId: checkpoint.conceptId } : {}),

@@ -170,7 +170,12 @@ export interface QuickCheck {
   id?: string;
   question: string;
   options: AnswerChoice[];
-  correctId: string;
+  /**
+   * The option the lesson's key names. ABSENT ON A CHECK READ ONLINE, where
+   * the server holds the key back and marks the answer itself (41c2f83): the
+   * check is asked, and only the attempt reply's `correct` decides.
+   */
+  correctId?: string;
   /** Navy note on a correct answer. */
   correctNote: string;
   /** Soft-violet (never red) note on a miss — always reassures continuity. */
@@ -584,7 +589,8 @@ export interface AssessmentQuestion {
   id?: string;
   prompt: string;
   options: AnswerChoice[];
-  correctId: string;
+  /** Absent where the server holds the key - see `QuickCheck.correctId`. */
+  correctId?: string;
   /** Soft-violet recovery note (never a score). */
   recoveryNote?: string;
   /** A spoken question's recording - see `QuickCheck.promptAudio`. */

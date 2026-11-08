@@ -48,7 +48,7 @@ const calc = (): CalculationSegment => {
 };
 
 const show = (
-  onStepGiven: (given: StepGiven, packageMark: boolean) => VerdictReply | undefined,
+  onStepGiven: (given: StepGiven, packageMark: Verdict) => VerdictReply | undefined,
 ) => {
   const props = {
     onSolved: vi.fn(),

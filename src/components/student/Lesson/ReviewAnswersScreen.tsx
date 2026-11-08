@@ -6,6 +6,7 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/shared";
 import { lessonsApi } from "@/lib/api/lessons";
 import { mergePicks, picksFromAttempts } from "@/lib/lessons/reviewPicks";
+import { keyMark } from "@/lib/lessons/verdict";
 import type { AssessmentQuestion, Lesson } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { LessonLoadingSkeleton } from "./LessonLoadingSkeleton";
@@ -144,8 +145,17 @@ export function ReviewAnswersScreen({
                */
               const isCorrect =
                 pick?.correct === undefined
-                  ? picked === q.correctId
+                  ? keyMark(picked, q.correctId) !== false
                   : pick.correct !== false;
+              /*
+               * NO KEY, NO "THE IDEA" OR "THE ANSWER" (rule 5). A question read
+               * online carries no key - the server holds it (41c2f83) - so
+               * there is no right option here to name. A pick shows as the
+               * child's; a question they never answered shows its prompt
+               * alone.
+               */
+              const idea =
+                q.correctId === undefined ? undefined : labelFor(q, q.correctId);
               return (
                 <div
                   key={i}
@@ -165,21 +175,19 @@ export function ReviewAnswersScreen({
                           label="YOU CHOSE"
                           text={labelFor(q, picked)}
                         />
-                        <AnswerRow
-                          tone="check"
-                          label="THE IDEA"
-                          text={labelFor(q, q.correctId)}
-                        />
+                        {idea !== undefined && (
+                          <AnswerRow tone="check" label="THE IDEA" text={idea} />
+                        )}
                       </>
-                    ) : (
+                    ) : answered || idea !== undefined ? (
                       <AnswerRow
                         tone="check"
                         label={answered ? "YOUR ANSWER" : "THE ANSWER"}
                         // Their own pick where they made one: what the
                         // server marked, whichever option the key names.
-                        text={labelFor(q, answered ? picked : q.correctId)}
+                        text={answered ? labelFor(q, picked) : idea}
                       />
-                    )}
+                    ) : null}
                   </div>
                 </div>
               );

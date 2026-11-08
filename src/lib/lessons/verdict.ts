@@ -68,10 +68,26 @@ export function onVerdict(
   apply(reply);
 }
 
+/**
+ * The package's mark on a pick: whether it is the option the lesson's key
+ * names, or NULL WHERE THE LESSON CARRIES NO KEY. Online the server holds the
+ * keys back (Teslim's 41c2f83: `answerKey`, `acceptedAnswers`, `answer` and
+ * `explanation` are stripped from every online student lesson), so a check
+ * read online has none, and with no reply to go on the device has nothing to
+ * mark it against. Never wrong, then - unmarkable, which holds no one.
+ */
+export function keyMark(
+  picked: string | null | undefined,
+  correctId: string | undefined,
+): Verdict {
+  if (correctId === undefined) return null;
+  return picked === correctId;
+}
+
 /** The server's mark on a stored row, or the package's where it carries none. */
 export function verdictOf(
   stored: { correct?: boolean | null } | null | undefined,
-  packageMark: () => boolean,
+  packageMark: () => Verdict,
 ): Verdict {
   if (!stored || stored.correct === undefined) return packageMark();
   return stored.correct;
