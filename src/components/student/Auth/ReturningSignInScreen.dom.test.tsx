@@ -78,8 +78,13 @@ vi.mock("@/lib/api/consents", async (importOriginal) => {
 });
 
 const push = vi.hoisted(() => vi.fn());
+// ONE router for the whole file, as Next's own is: `useRouter()` reads a
+// context value, the same object every render. A new object per render
+// re-ran every effect that lists `router` - a second SSO handshake whose
+// redirect timer outlived the test and fired into the next one.
+const router = vi.hoisted(() => ({ push, replace: vi.fn(), back: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => router,
 }));
 
 const SESSION = {

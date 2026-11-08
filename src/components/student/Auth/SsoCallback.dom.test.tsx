@@ -36,8 +36,13 @@ const { ssoCallback, signIn, push, replace, params } = vi.hoisted(() => ({
   params: new URLSearchParams(),
 }));
 
+// ONE router for the whole file, as Next's own is: `useRouter()` reads a
+// context value, the same object every render. A new object per render
+// re-ran every effect that lists `router` - a second SSO handshake whose
+// redirect timer outlived the test and fired into the next one.
+const router = vi.hoisted(() => ({ push, replace }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, replace }),
+  useRouter: () => router,
   useSearchParams: () => params,
 }));
 vi.mock("@/lib/api/auth", () => ({ authApi: { ssoCallback } }));
@@ -316,6 +321,10 @@ describe("a held child arriving through their school", () => {
     render(<SsoCallback />);
 
     expect(await screen.findByText(/You.re in/)).toBeInTheDocument();
+    // One handshake for one code. A second one is what outlived this test:
+    // its redirect timer was set after unmount, never cleared, and fired
+    // `replace("/student/dashboard")` into the next test under load.
+    expect(ssoCallback).toHaveBeenCalledTimes(1);
   });
 
   it("holds a child whose consent could not be read, never You're in (D69)", async () => {

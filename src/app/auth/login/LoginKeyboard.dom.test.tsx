@@ -21,8 +21,13 @@ import { clearSession } from "@/lib/auth/session";
  * focusing it without that scrolls the whole page sideways to reveal it.
  */
 
+// ONE router for the whole file, as Next's own is: `useRouter()` reads a
+// context value, the same object every render. A new object per render
+// re-ran every effect that lists `router` - a second SSO handshake whose
+// redirect timer outlived the test and fired into the next one.
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => router,
 }));
 vi.mock("@/hooks", () => ({ useAuth: () => ({ signIn: vi.fn() }) }));
 vi.mock("@/lib/api", () => ({ authApi: { loginPin: vi.fn() } }));
