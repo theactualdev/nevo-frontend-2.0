@@ -94,6 +94,36 @@ export function withholdSignals(userId: string): void {
 }
 
 /**
+ * Children whose consent this page has read as allowing it (SCRUM-257: the
+ * device fails closed). What is held for a child is delivered only once they
+ * are here - still asking is not an answer, and nor is a read that failed.
+ * Until then it stays held, unsent. For the life of the page only, like
+ * `withheld`: the next page asks again.
+ */
+const allowed = new Set<string>();
+
+/**
+ * Children whose consent this page could not read. Their held events are not
+ * deleted - a failed read is not a withdrawal - but they get no last try when
+ * their session ends either.
+ */
+const unread = new Set<string>();
+
+/** `userId`'s consent was read and allows it: what is held for them may go. */
+export function allowSignals(userId: string): void {
+  if (!userId) return;
+  allowed.add(userId);
+  unread.delete(userId);
+}
+
+/** `userId`'s consent could not be read: nothing held for them goes. */
+export function pauseSignals(userId: string): void {
+  if (!userId) return;
+  allowed.delete(userId);
+  unread.add(userId);
+}
+
+/**
  * Children whose session ended on this page (19 Oct browser-storage audit).
  * What they left unsent has had its last try and is gone, and nothing more is
  * held for them here: a stream still open as they go - a pagehide, a failed
@@ -154,7 +184,7 @@ export function forgetSignals(userId: string, token: string): void {
   const theirs = all.filter((b) => b.userId === userId);
   if (theirs.length === 0) return;
   write(all.filter((b) => b.userId !== userId));
-  if (withheld.has(userId)) return;
+  if (withheld.has(userId) || unread.has(userId)) return;
   const now = Date.now();
   for (const held of theirs) {
     if (now - held.heldAt <= MAX_AGE_MS) lastTry(held.session, held.events, token);
@@ -208,6 +238,9 @@ async function deliver(): Promise<void> {
     withholdSignals(session.userId);
     return;
   }
+  // Nor before this page has read their consent as allowing it: kept, not
+  // sent (SCRUM-257).
+  if (!allowed.has(session.userId)) return;
   const now = Date.now();
   const all = read();
   const fresh = all.filter((b) => now - b.heldAt <= MAX_AGE_MS);
@@ -226,6 +259,14 @@ async function deliver(): Promise<void> {
     for (let i = 0; i < held.events.length; i += PER) {
       // A withdrawal reported while this ran stops the rest of it.
       if (withheld.has(session.userId)) return;
+      // A read that failed meanwhile puts the rest back, unsent.
+      if (!allowed.has(session.userId)) {
+        holdSignals(session.userId, held.session, held.events.slice(i));
+        for (const left of mine.slice(b + 1)) {
+          holdSignals(session.userId, left.session, left.events);
+        }
+        return;
+      }
       /*
        * SO DOES THE SESSION ENDING (19 Oct browser-storage audit). This read
        * the session once and sent batch after batch, so a 401 elsewhere left

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { useEffect } from "react";
 import type { SessionOutcome } from "./useSignals";
@@ -54,7 +54,7 @@ vi.mock("@/lib/api/consents", async (importOriginal) => {
 const { useSignals } = await import("./useSignals");
 const { ApiError } = await import("@/lib/api");
 const { clearSession, setSession } = await import("@/lib/auth/session");
-const { holdSignals } = await import("@/lib/signals/outbox");
+const { forgetSignals, holdSignals } = await import("@/lib/signals/outbox");
 const { announceSessionEnd } = await import("@/lib/auth/sessionEnd");
 const { openDoor } = await import("@/lib/auth/doorSession");
 
@@ -84,6 +84,15 @@ const signIn = () =>
     role: "student",
   });
 
+/**
+ * Let the consent gate's read answer, and what it sets off, settle. The
+ * stream sends nothing for a signed-in child before it has (SCRUM-257).
+ */
+const answered = () =>
+  act(async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  });
+
 beforeEach(() => {
   submitBatch.mockClear();
   clearSession();
@@ -97,6 +106,7 @@ describe("useSignals", () => {
     const { result } = renderHook(() =>
       useSignals(UUID, undefined, "onboarding"),
     );
+    await answered();
 
     await act(async () => {
       result.current.trackEvent("time_on_segment", { phase: "pre-auth" });
@@ -106,8 +116,10 @@ describe("useSignals", () => {
     // Nothing sent: a 401 batch would be dropped, taking the events with it.
     expect(submitBatch).not.toHaveBeenCalled();
 
-    // ...and the events are still held, so signing in delivers them.
+    // ...and the events are still held, so signing in delivers them - once
+    // that child's consent is read as allowing it (SCRUM-257).
     signIn();
+    await answered();
     await act(async () => {
       result.current.flush();
     });
@@ -123,6 +135,7 @@ describe("useSignals", () => {
     const { result } = renderHook(() =>
       useSignals(UUID, undefined, "onboarding"),
     );
+    await answered();
 
     await act(async () => {
       result.current.trackEvent("time_on_segment", {});
@@ -140,6 +153,7 @@ describe("useSignals", () => {
   it("sends the lesson id for a lesson stream", async () => {
     signIn();
     const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await answered();
 
     await act(async () => {
       result.current.trackEvent("time_on_segment", {});
@@ -156,6 +170,7 @@ describe("useSignals", () => {
     // A lesson session id arrives asynchronously. Sending before it lands
     // would post a batch the validator refuses, so the events wait.
     const { result } = renderHook(() => useSignals(UUID, undefined, "lesson"));
+    await answered();
 
     await act(async () => {
       result.current.trackEvent("time_on_segment", {});
@@ -167,6 +182,7 @@ describe("useSignals", () => {
   it("sends nothing when there is nothing to send", async () => {
     signIn();
     const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await answered();
     await act(async () => {
       result.current.flush();
     });
@@ -199,6 +215,7 @@ describe("the clock the engine measures latency from", () => {
 
     const { result } = renderHook(() => useSignals(UUID, LESSON));
     signIn();
+    await answered();
 
     act(() => result.current.trackEvent("time_on_segment", { step: 1 }));
     // 250ms of real time passes...
@@ -232,6 +249,7 @@ describe("the clock the engine measures latency from", () => {
 
     const { result } = renderHook(() => useSignals(UUID, LESSON));
     signIn();
+    await answered();
 
     act(() => result.current.trackEvent("time_on_segment", { step: 1 }));
     perf += 40;
@@ -265,6 +283,7 @@ describe("the last event before a component goes", () => {
         trackEvent("time_on_segment" as never, { segmentId: "last" }),
       );
     });
+    await answered();
 
     unmount();
     await act(async () => {});
@@ -286,6 +305,7 @@ function useEffectOnUnmount(fn: () => void) {
 describe("a backlog larger than one request", () => {
   it("goes in requests of at most 100, and all of it goes", async () => {
     const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await answered();
 
     // Signed out, so it is held - up to the held cap.
     act(() => {
@@ -293,6 +313,7 @@ describe("a backlog larger than one request", () => {
         result.current.trackEvent("time_on_segment", { i });
     });
     signIn();
+    await answered();
     await act(async () => {
       result.current.flush();
     });
@@ -321,6 +342,7 @@ describe("signals that outlive their screen", () => {
   it("sends as the tab is hidden, on a request that can outlive it", async () => {
     signIn();
     const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await answered();
     act(() => result.current.trackEvent("time_on_segment", { step: 1 }));
 
     Object.defineProperty(document, "visibilityState", {
@@ -345,6 +367,7 @@ describe("signals that outlive their screen", () => {
     const { result, unmount } = renderHook(() =>
       useSignals(UUID, LESSON, "lesson"),
     );
+    await answered();
     act(() => result.current.trackEvent("time_on_segment", { last: true }));
 
     unmount();
@@ -364,6 +387,7 @@ describe("signals that outlive their screen", () => {
   it("gives what a dying session could not send one last try, and keeps none of it", async () => {
     signIn();
     const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await answered();
     act(() => result.current.trackEvent("time_on_segment", { first: true }));
     await act(async () => {
       result.current.flush();
@@ -388,6 +412,7 @@ describe("signals that outlive their screen", () => {
   it("makes no try at another child's session ending", async () => {
     signIn();
     const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await answered();
     act(() => result.current.trackEvent("time_on_segment", { first: true }));
     await act(async () => {
       result.current.flush();
@@ -411,6 +436,7 @@ describe("signals that outlive their screen", () => {
     signIn();
     submitBatch.mockRejectedValueOnce(new ApiError(401, "expired"));
     const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await answered();
     act(() => result.current.trackEvent("time_on_segment", { late: true }));
 
     await act(async () => {
@@ -426,6 +452,7 @@ describe("signals that outlive their screen", () => {
     const { result, unmount } = renderHook(() =>
       useSignals(UUID, LESSON, "lesson"),
     );
+    await answered();
     act(() => result.current.trackEvent("time_on_segment", {}));
     await act(async () => {
       result.current.flush();
@@ -450,6 +477,7 @@ describe("the session envelope", () => {
         useSignals(UUID, LESSON, "lesson", outcome),
       { initialProps: { outcome: null as SessionOutcome | null } },
     );
+    await answered();
     act(() => {
       result.current.trackEvent("break_start", {});
       result.current.trackEvent("break_end", {});
@@ -472,6 +500,7 @@ describe("the session envelope", () => {
         useSignals(UUID, LESSON, "lesson", outcome),
       { initialProps: { outcome: null as SessionOutcome | null } },
     );
+    await answered();
     act(() => result.current.trackEvent("exit_attempt", {}));
     rerender({
       outcome: { completionStatus: "exited", exitPosition: "seg-3" },
@@ -488,6 +517,7 @@ describe("the session envelope", () => {
   it("claims no ending while the session is still going", async () => {
     signIn();
     const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await answered();
     act(() => result.current.trackEvent("time_on_segment", {}));
     await act(async () => {
       result.current.flush();
@@ -504,6 +534,7 @@ describe("the session envelope", () => {
     const { result } = renderHook(() =>
       useSignals(UUID, LESSON, "lesson", null, applied),
     );
+    await answered();
     act(() => result.current.trackEvent("time_on_segment", {}));
     await act(async () => {
       result.current.flush();
@@ -528,6 +559,7 @@ describe("the session's interpretation context", () => {
     signIn();
     setup();
     const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await answered();
     act(() => result.current.trackEvent("time_on_segment", {}));
     await act(async () => {
       result.current.flush();
@@ -589,6 +621,7 @@ describe("the session's interpretation context", () => {
       ({ id }: { id: string | null }) => useSignals(id, LESSON, "lesson"),
       { initialProps: { id: null as string | null } },
     );
+    await answered();
     act(() => result.current.trackEvent("time_on_segment", { n: 1 }));
     rerender({ id: UUID });
     act(() => result.current.trackEvent("time_on_segment", { n: 2 }));
@@ -611,6 +644,7 @@ describe("the session's interpretation context", () => {
       ({ id }: { id: string }) => useSignals(id, LESSON, "lesson"),
       { initialProps: { id: UUID } },
     );
+    await answered();
     act(() => {
       result.current.trackEvent("time_on_segment", {});
       result.current.trackEvent("time_on_segment", {});
@@ -665,6 +699,7 @@ describe("a withdrawn consent", () => {
     signInAs("child-w1");
     myConsentGate.mockResolvedValue(consentGate("withdrawn"));
     const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await answered();
     await settle();
 
     act(() => result.current.trackEvent("time_on_segment", {}));
@@ -682,6 +717,7 @@ describe("a withdrawn consent", () => {
     const { result, unmount } = renderHook(() =>
       useSignals(UUID, LESSON, "lesson"),
     );
+    await answered();
     act(() => result.current.trackEvent("time_on_segment", { early: true }));
 
     answer(consentGate("withdrawn"));
@@ -723,6 +759,7 @@ describe("a withdrawn consent", () => {
       signInAs(`child-${status}`);
       myConsentGate.mockResolvedValue(consentGate(status));
       const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+      await answered();
       await settle();
 
       act(() => result.current.trackEvent("time_on_segment", {}));
@@ -733,21 +770,214 @@ describe("a withdrawn consent", () => {
       expect(submitBatch).toHaveBeenCalledTimes(1);
     },
   );
+});
 
-  it("is not what a failed read is, which stops nothing either", async () => {
-    signInAs("child-unread");
+/*
+ * A CONSENT THAT CANNOT BE READ (SCRUM-257, Lydia, 20 Oct). The stream read a
+ * failed read as "not withdrawn" and ran on. It fails closed now: nothing is
+ * collected or sent for a signed-in child until an answer allows it, the read
+ * goes again, and the child sees nothing of it.
+ */
+describe("a consent that cannot be read", () => {
+  const OUTBOX = "nevo.signals.outbox";
+  const heldFor = () =>
+    (
+      JSON.parse(window.localStorage.getItem(OUTBOX) ?? "[]") as {
+        userId: string;
+      }[]
+    ).map((h) => h.userId);
+  const signInAs = (userId: string) =>
+    setSession({
+      token: "tok-test",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId,
+      role: "student",
+    });
+  const settle = () =>
+    act(async () => {
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+    });
+  const env = {
+    sessionId: UUID,
+    lessonId: LESSON,
+    sessionType: "lesson" as const,
+    startedAt: "2026-10-01T09:00:00.000Z",
+  };
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("collects and sends nothing, and keeps nothing for later", async () => {
+    signInAs("child-u1");
     myConsentGate.mockRejectedValue(new Error("network"));
-    const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    const { result, unmount } = renderHook(() =>
+      useSignals(UUID, LESSON, "lesson"),
+    );
+    await answered();
     await settle();
 
     act(() => result.current.trackEvent("time_on_segment", {}));
     await act(async () => {
       result.current.flush();
     });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("pagehide"));
+    });
+    unmount();
+    await act(async () => {});
+
+    expect(submitBatch).not.toHaveBeenCalled();
+    expect(heldFor()).not.toContain("child-u1");
+  });
+
+  it("sends nothing before the read has answered, and all of it once it allows", async () => {
+    signInAs("child-u2");
+    let answer!: (gate: unknown) => void;
+    myConsentGate.mockReturnValue(new Promise((r) => (answer = r)));
+    const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await answered();
+
+    act(() => result.current.trackEvent("time_on_segment", { early: true }));
+    await act(async () => {
+      result.current.flush();
+    });
+    expect(submitBatch).not.toHaveBeenCalled();
+
+    answer(consentGate("confirmed"));
+    await settle();
+    await act(async () => {
+      result.current.flush();
+    });
 
     expect(submitBatch).toHaveBeenCalledTimes(1);
+    const [, events] = submitBatch.mock.calls[0];
+    expect(events.some((e) => e.payload?.early === true)).toBe(true);
+  });
+
+  it("keeps nothing for later when the screen goes while it is still asking", async () => {
+    signInAs("child-u8");
+    myConsentGate.mockReturnValue(new Promise(() => {}));
+    const { result, unmount } = renderHook(() =>
+      useSignals(UUID, LESSON, "lesson"),
+    );
+    act(() => result.current.trackEvent("time_on_segment", {}));
+
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+    unmount();
+    await act(async () => {});
+
+    expect(submitBatch).not.toHaveBeenCalled();
+    expect(heldFor()).not.toContain("child-u8");
+  });
+
+  it("drops what it kept while asking when the read fails", async () => {
+    signInAs("child-u3");
+    let fail!: (cause: unknown) => void;
+    myConsentGate.mockReturnValue(new Promise((_, r) => (fail = r)));
+    const { result, unmount } = renderHook(() =>
+      useSignals(UUID, LESSON, "lesson"),
+    );
+    await answered();
+    act(() => result.current.trackEvent("time_on_segment", { early: true }));
+
+    fail(new Error("network"));
+    await settle();
+    await act(async () => {
+      result.current.flush();
+    });
+    unmount();
+    await act(async () => {});
+
+    expect(submitBatch).not.toHaveBeenCalled();
+    expect(heldFor()).not.toContain("child-u3");
+  });
+
+  it("asks again, and collects afresh once an answer allows it - nothing from the gap", async () => {
+    vi.useFakeTimers();
+    signInAs("child-u4");
+    let fail!: (cause: unknown) => void;
+    myConsentGate
+      .mockReturnValueOnce(new Promise((_, r) => (fail = r)))
+      .mockResolvedValue(consentGate("confirmed"));
+    const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    // Kept while asking, then the read fails: dropped, not sent later.
+    act(() => result.current.trackEvent("time_on_segment", { asking: true }));
+    fail(new Error("network"));
+    await settle();
+    act(() => result.current.trackEvent("time_on_segment", { gap: true }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    act(() => result.current.trackEvent("time_on_segment", { after: true }));
+    await act(async () => {
+      result.current.flush();
+    });
+
+    expect(myConsentGate).toHaveBeenCalledTimes(2);
+    expect(submitBatch).toHaveBeenCalledTimes(1);
+    const [, events] = submitBatch.mock.calls[0];
+    expect(events.some((e) => e.payload?.after === true)).toBe(true);
+    expect(events.some((e) => e.payload?.gap === true)).toBe(false);
+    expect(events.some((e) => e.payload?.asking === true)).toBe(false);
+    // ...and it opens with its own context, as any stream does (G6).
+    expect(events[0].type).toBe("session_context");
+  });
+
+  it("keeps what an earlier screen held for them, unsent, until an answer allows it", async () => {
+    holdSignals("child-u5", env, [
+      { type: "time_on_segment", timestamp: env.startedAt },
+    ]);
+    signInAs("child-u5");
+    myConsentGate
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValue(consentGate("confirmed"));
+    renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await settle();
+    // Another way delivery is set off: it must find them paused too.
+    window.dispatchEvent(new Event("online"));
+    await settle();
+    await settle();
+
+    expect(myConsentGate).toHaveBeenCalledTimes(2);
+    expect(submitBatch).toHaveBeenCalledTimes(1);
+    expect(heldFor()).not.toContain("child-u5");
+  });
+
+  it("holds them back while the read is failing, even when the device comes online", async () => {
+    holdSignals("child-u6", env, [
+      { type: "time_on_segment", timestamp: env.startedAt },
+    ]);
+    signInAs("child-u6");
+    myConsentGate.mockRejectedValue(new Error("network"));
+    renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await settle();
+    window.dispatchEvent(new Event("online"));
+    await settle();
+
+    expect(submitBatch).not.toHaveBeenCalled();
+    expect(heldFor()).toContain("child-u6");
+  });
+
+  it("makes no last try at a session's end before an answer has allowed it", async () => {
+    signInAs("child-u7");
+    myConsentGate.mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await settle();
+    act(() => result.current.trackEvent("time_on_segment", {}));
+
+    act(() =>
+      announceSessionEnd({ userId: "child-u7", role: "student", token: "tok-test" }),
+    );
+    await act(async () => {});
+
+    expect(submitBatch).not.toHaveBeenCalled();
   });
 });
+
 
 /*
  * A STREAM ON A DOOR (19 Oct browser-storage audit). A refused SSO sign-in's
@@ -770,6 +1000,7 @@ describe("a stream on a door, with another child's session stored", () => {
     const { result, unmount } = renderHook(() =>
       useSignals(UUID, undefined, "sso"),
     );
+    await answered();
     act(() => result.current.trackEvent("time_on_segment", { refused: true }));
     await act(async () => {
       result.current.flush();
@@ -790,6 +1021,7 @@ describe("a stream on a door, with another child's session stored", () => {
     signIn();
     const close = openDoor();
     const { result } = renderHook(() => useSignals(UUID, undefined, "sso"));
+    await answered();
     act(() => result.current.trackEvent("time_on_segment", { mine: true }));
 
     setSession({
@@ -798,6 +1030,7 @@ describe("a stream on a door, with another child's session stored", () => {
       userId: "sso-child",
       role: "student",
     });
+    await answered();
     await act(async () => {
       result.current.flush();
     });
@@ -806,5 +1039,52 @@ describe("a stream on a door, with another child's session stored", () => {
     expect(submitBatch).toHaveBeenCalledTimes(1);
     const [, events] = submitBatch.mock.calls[0];
     expect(events.some((e) => e.payload?.mine === true)).toBe(true);
+  });
+
+  it("does not take the held child's consent for unreadable: their own events keep their last try", async () => {
+    /*
+     * 05's hand-over (19 Oct). The client sends nothing with a held token,
+     * so the consent read for it fails on the device (`heldAtDoor`). That is
+     * a refusal to ask, not a consent that could not be read (SCRUM-257): the
+     * outgoing child's own unsent events still get the last try any
+     * sign-out gives them.
+     */
+    setSession({
+      token: "tok-held",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId: "held-child",
+      role: "student",
+    });
+    holdSignals(
+      "held-child",
+      {
+        sessionId: UUID,
+        lessonId: LESSON,
+        sessionType: "lesson",
+        startedAt: "2026-10-19T09:00:00.000Z",
+      },
+      [
+        {
+          type: "feeling_checkin",
+          timestamp: "2026-10-19T09:00:01.000Z",
+          payload: { theirs: true },
+        },
+      ],
+    );
+    myConsentGate.mockRejectedValue(
+      new ApiError(0, "held", { heldAtDoor: true }),
+    );
+    const close = openDoor();
+    renderHook(() => useSignals(UUID, undefined, "sso"));
+    await answered();
+    await act(async () => {});
+
+    forgetSignals("held-child", "tok-held");
+    close();
+
+    expect(submitBatch).toHaveBeenCalledTimes(1);
+    const [, events, options] = submitBatch.mock.calls[0];
+    expect(events.some((e) => e.payload?.theirs === true)).toBe(true);
+    expect(options).toMatchObject({ keepalive: true, token: "tok-held" });
   });
 });
