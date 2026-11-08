@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   lessonsOf,
   namedSegments,
@@ -12,6 +12,8 @@ import {
 } from "@/lib/api/uploads";
 import { cn } from "@/lib/utils";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
+import { useKeptDraft } from "@/hooks/useKeptDraft";
+import { KeptDraftNotice } from "@/components/shared/KeptDraftNotice";
 
 /**
  * The SCRUM-101 module review (`Nevo Upload Module Step`) for a REAL upload.
@@ -118,6 +120,14 @@ export function LiveModuleReview({
   useUnsavedGuard(dirty, "lesson");
   const [saving, setSaving] = useState<Saving>("idle");
   const [error, setError] = useState("");
+  /*
+   * AND THEY SURVIVE A LAPSED SESSION OR LEAVING (SCRUM-246; backlog item 44),
+   * as the unit tree's do: kept for this upload on the device and offered
+   * back, never laid over the saved sections until the teacher says so. Its
+   * own key, since the tree keeps a different shape under `upload-structure:`.
+   */
+  const keptValue = useMemo(() => ({ lessons, setAside }), [lessons, setAside]);
+  const kept = useKeptDraft(`upload-sections:${uploadId}`, keptValue, dirty);
 
   const modules = lessons[0]?.modules ?? [];
   const flat = modules.length === 0 && setAside !== null;
@@ -364,6 +374,22 @@ export function LiveModuleReview({
         {/* The console's reading column: 820px, centred (design system, 8 Oct). */}
         <div className="mx-auto max-w-[820px]">
           {banner}
+
+          {kept.kept && (
+            <KeptDraftNotice
+              className="mb-3.5"
+              onRestore={() => {
+                const back = kept.restore();
+                if (!back) return;
+                setLessons(back.lessons);
+                setSetAside(back.setAside);
+                setDirty(true);
+                setSaving("idle");
+                setError("");
+              }}
+              onDiscard={kept.discard}
+            />
+          )}
 
           {flat && (
             <div className="flex flex-col gap-2.5">
