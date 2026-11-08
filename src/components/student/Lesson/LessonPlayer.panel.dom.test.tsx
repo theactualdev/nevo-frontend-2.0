@@ -161,6 +161,8 @@ const handedOff = async () => {
   next();
   next();
   await miss();
+  // Offered, and taken (her 12): the panel opens only on the child's tap.
+  fireEvent.click(await screen.findByRole("button", { name: "Talk it through" }));
   await screen.findByText(PROMPT);
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 };

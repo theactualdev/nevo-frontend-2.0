@@ -278,6 +278,8 @@ describe("each check gates on its own", () => {
 
     await pick("Wrong 2");
 
+    // Offered, and taken (her 12).
+    fireEvent.click(await screen.findByRole("button", { name: "Talk it through" }));
     expect(await screen.findByText("What does a leaf need?")).toBeTruthy();
   });
 

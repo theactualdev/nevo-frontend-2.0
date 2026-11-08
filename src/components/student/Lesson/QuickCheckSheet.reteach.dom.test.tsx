@@ -263,3 +263,56 @@ describe("a miss the server does not re-teach", () => {
     expect(screen.getByText(RETEACH_COPY.title)).toBeInTheDocument();
   });
 });
+
+describe("Talk it through (Lydia, 7 Nov, her 12; SCRUM-315)", () => {
+  const talk = () => screen.queryByRole("button", { name: RETEACH_COPY.talk });
+
+  it("is absent at the second miss, with nothing in its place", () => {
+    mount();
+    pickFirst("Oxygen");
+    fireEvent.click(option("Nitrogen"));
+    fireEvent.click(checkButton());
+
+    expect(screen.getByText(RETEACH_COPY.again)).toBeInTheDocument();
+    expect(talk()).toBeNull();
+  });
+
+  it("is in the box's ways when it is offered, and the child's tap takes it", () => {
+    const talkItThrough = vi.fn();
+    mount({ talkItThrough });
+    pickFirst("Oxygen");
+    fireEvent.click(option("Nitrogen"));
+    fireEvent.click(checkButton());
+
+    fireEvent.click(talk()!);
+    expect(talkItThrough).toHaveBeenCalledOnce();
+  });
+
+  it("is in the box while it still asks, too", () => {
+    mount({ talkItThrough: vi.fn() });
+    pickFirst("Oxygen");
+
+    expect(screen.getByText(RETEACH_COPY.title)).toBeInTheDocument();
+    expect(talk()).toBeInTheDocument();
+  });
+
+  it("stands under a miss with no box, and the sheet does not give way from it", () => {
+    vi.useFakeTimers();
+    const props = mount({ reteaching: null, talkItThrough: vi.fn() }).props;
+    pickFirst("Oxygen");
+
+    act(() => {
+      vi.advanceTimersByTime(GIVES_WAY_AFTER_MS * 2);
+    });
+    expect(props.onGiveWay).not.toHaveBeenCalled();
+    expect(talk()).toBeInTheDocument();
+    expect(screen.getByText(RECOVERY_LINE)).toBeInTheDocument();
+  });
+
+  it("is never offered over a right answer", () => {
+    mount({ talkItThrough: vi.fn() });
+    pickFirst("Carbon dioxide");
+
+    expect(talk()).toBeNull();
+  });
+});
