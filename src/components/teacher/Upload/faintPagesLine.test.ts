@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { faintPagesLine } from "./UploadWizard";
+import { faintPagesLine, retryPagesLabel } from "./UploadWizard";
 
 /**
  * How the faint pages are said.
@@ -50,5 +50,21 @@ describe("the faint-pages line", () => {
     // A teacher who reads only the first half must still learn that the tree
     // below is incomplete.
     expect(faintPagesLine([4])).toContain("is in what you see below");
+  });
+});
+
+/**
+ * Backlog item 38: C07f's retry names the pages it retries ("Retry pages
+ * 15-16"), said exactly as the line above says them.
+ */
+describe("the retry's label", () => {
+  it("names one page in the singular", () => {
+    expect(retryPagesLabel([4])).toBe("Retry page 4");
+  });
+
+  it("names the pages as the line does", () => {
+    expect(retryPagesLabel([15, 16])).toBe("Retry pages 15 and 16");
+    expect(retryPagesLabel([3, 4, 5, 9])).toBe("Retry pages 3 to 5 and 9");
+    expect(faintPagesLine([3, 4, 5, 9])).toContain("Pages 3 to 5 and 9 ");
   });
 });
