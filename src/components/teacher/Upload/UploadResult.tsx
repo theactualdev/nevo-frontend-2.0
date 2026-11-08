@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLessonRegenerate } from "@/hooks/useLessonRegenerate";
+import { splitLine } from "./splitLine";
 import { useLessonReview } from "@/hooks/useLessonReview";
 import { useSegmentReview } from "@/hooks/useSegmentReview";
 import type { LessonDetailResponse } from "@/lib/api/lessons";
@@ -175,7 +176,7 @@ export function UploadResult({
         {lesson.title}
       </h2>
       <p className="mt-[5px] text-[14.5px] text-nevo-near-black/60">
-        {`From ${fileName} · ${lesson.segmentCount} ${lesson.segmentCount === 1 ? "section" : "sections"}`}
+        {`From ${fileName} · ${splitLine(lesson)}`}
       </p>
 
       {/* The first place a teacher meets the lesson, so the first place this
@@ -208,10 +209,10 @@ export function UploadResult({
                 so. It counted flagged sections alone, and sat above "2 key
                 points still to check" (4 Nov sweep). */}
             {review > 0
-              ? `Nevo read your file and split it into ${lesson.segmentCount} sections. ${review} ${review === 1 ? "is worth" : "are worth"} a look before you assign it.`
+              ? `Nevo read your file and split it into ${lesson.segmentCount} ${lesson.segmentCount === 1 ? "segment" : "segments"}. ${review} ${review === 1 ? "is worth" : "are worth"} a look before you assign it.`
               : !checking && !verdict.failed && verdict.ready && !awaitingReview
-                ? "Nevo read your file and split it into sections. Nothing needs your attention."
-                : "Nevo read your file and split it into sections."}
+                ? "Nevo read your file and split it into segments. Nothing needs your attention."
+                : "Nevo read your file and split it into segments."}
           </p>
         </div>
       </div>
