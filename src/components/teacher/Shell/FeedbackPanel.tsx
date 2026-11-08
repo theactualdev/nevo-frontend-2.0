@@ -175,7 +175,14 @@ export function FeedbackPanel({
             </svg>
           </span>
           <h3 className="mt-4 text-[17px] font-semibold text-nevo-near-black">
-            Thank you - that&rsquo;s on its way
+            {/* A parent's note is stored with their account, not on their
+                child's record, and goes nowhere else - so their thanks claims
+                nothing about where it sits or goes (Lydia, 13f, 7 Nov). */}
+            {parent ? (
+              <>Thank you. We&rsquo;ve got your note.</>
+            ) : (
+              <>Thank you - that&rsquo;s on its way</>
+            )}
           </h3>
           <p className="mt-[7px] text-sm leading-[1.55] text-nevo-near-black/62">
             The panel closes on its own. You can share more any time.
