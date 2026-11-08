@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { PinBox } from "./PinBox";
@@ -75,7 +75,23 @@ export function HeldPinBoxes({
  * `box-content`: D154's 280px is the text's width, with the padding outside
  * it, as the frame's own box is measured. Here it was 280 overall.
  */
-export function ThrottleNote({ className }: { className?: string }) {
+export function ThrottleNote({
+  className,
+  until = null,
+}: {
+  className?: string;
+  /**
+   * When the server says the pause ends (`retryAt`, `throttleEndsAt`), in
+   * epoch ms. With it the note says when (Lydia, 7 Nov, copy pass: "Try again
+   * in {time}." only once the server sends the retry time); without it, the
+   * note as before. Said once, as the pause begins: never a countdown.
+   */
+  until?: number | null;
+}) {
+  // Read once, as the pause starts: a line that changed under the child
+  // would be the countdown D154 rules out.
+  const [now] = useState(() => Date.now());
+  const wait = until === null ? null : Math.ceil((until - now) / 1000);
   return (
     <p
       role="status"
@@ -84,9 +100,20 @@ export function ThrottleNote({ className }: { className?: string }) {
         className,
       )}
     >
-      {THROTTLED_PAUSE_COPY.note}
+      {wait !== null && wait > 0
+        ? `Try again in ${pauseLength(wait)}.`
+        : THROTTLED_PAUSE_COPY.note}
     </p>
   );
+}
+
+/**
+ * "a minute" / "5 minutes": a wait a child can act on, rounded UP, so the
+ * door is open when they come back (as the admin's email wait reads).
+ */
+export function pauseLength(seconds: number): string {
+  if (seconds <= 60) return "a minute";
+  return `${Math.ceil(seconds / 60)} minutes`;
 }
 
 /**

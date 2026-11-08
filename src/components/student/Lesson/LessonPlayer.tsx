@@ -4253,6 +4253,7 @@ export function LessonPlayer({
       {showBreakOffer && (
         <BreakOfferPill
           key={`break-offer-${segment.id}`}
+          kind={breakOffered}
           onShown={() =>
             trackEvent(SIGNAL_EVENT_TYPES.BREAK_SUGGESTED, {
               breakType: breakOffered,

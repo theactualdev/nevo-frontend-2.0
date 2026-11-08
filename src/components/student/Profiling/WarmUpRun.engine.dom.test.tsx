@@ -115,6 +115,8 @@ describe("WarmUpRun — without the engine's answer", () => {
     await settle(5000);
 
     expect(screen.queryAllByRole("button")).toHaveLength(1);
+    // Lydia's line above Home (7 Nov, copy pass).
+    expect(screen.getByText("Nothing to do here today.")).toBeInTheDocument();
     // Told nothing is not still asking.
     expect(screen.queryByText("Getting your warm-up ready")).toBeNull();
     expect(screen.queryByTestId("warmup-loading-mark")).toBeNull();

@@ -17,6 +17,16 @@ const OPEN_DELAY_MS = 1500;
 const COPY = "Want a break?";
 
 /**
+ * THE SERVER'S OTHER TWO KINDS, in Lydia's words (7 Nov, copy pass): it sends
+ * five (micro, movement, consolidation, full, stop for the day). Movement and
+ * consolidation say what the break is; the others keep the pill's own line.
+ */
+export const BREAK_OFFER_LINES: Partial<Record<string, string>> = {
+  movement: "Stand up and stretch for a moment.",
+  consolidation: "Let's go back over what you just did.",
+};
+
+/**
  * The system's break OFFER (B.7 / §4) - the plan naming a break to offer, or
  * the engine suggesting one mid-lesson - as frame 38 §3 draws it: a quiet pill
  * at the foot of the lesson. Round-ended, cream, a violet edge; "Not now" as
@@ -43,10 +53,13 @@ const COPY = "Want a break?";
  * whole and "Want a break?" is what wraps. Both raised with design.
  */
 export function BreakOfferPill({
+  kind,
   onAccept,
   onDismiss,
   onShown,
 }: {
+  /** The kind the server offered (`breakType`), for its own line. */
+  kind?: string | null;
   onAccept: () => void;
   onDismiss: () => void;
   /** The pill has actually appeared, after its beat. */
@@ -81,7 +94,7 @@ export function BreakOfferPill({
             or a larger text size zooming the player - the two buttons wrap
             together under the question rather than crushing it. */}
         <span className="flex-1 text-[15px] leading-tight font-medium text-nevo-near-black">
-          {COPY}
+          {(kind ? BREAK_OFFER_LINES[kind] : undefined) ?? COPY}
         </span>
         <div className="ml-auto flex gap-2.5">
           <button
