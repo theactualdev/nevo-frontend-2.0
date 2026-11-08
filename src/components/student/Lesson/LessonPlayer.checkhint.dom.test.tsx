@@ -256,8 +256,8 @@ describe("the engine's hint while a check is open (SCRUM-275 #2)", () => {
     await hintArrivesInCheck();
     expect(screen.getByText(HINT).closest('[role="dialog"]')).not.toBeNull();
 
-    // The server hands the child off on the next miss: the sheet closes, and
-    // the child stays on the section.
+    // The server hands the child off on the next miss, and the child takes
+    // "Talk it through" (her 12): the sheet closes, and they stay on the section.
     saveAttempt.mockResolvedValue(
       reply({
         attemptNumber: 3,
@@ -268,6 +268,7 @@ describe("the engine's hint while a check is open (SCRUM-275 #2)", () => {
     );
     await askAgain();
     await miss();
+    fireEvent.click(await screen.findByRole("button", { name: "Talk it through" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
     const hint = screen.getByText(HINT);

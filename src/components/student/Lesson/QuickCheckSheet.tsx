@@ -60,6 +60,8 @@ export const RETEACH_COPY = {
   waysLine:
     "Here are some other ways to look at it. Take any of them, as many times as you like.",
   shortBreak: "Take a short break",
+  /** 17f's fourth way: the Socratic panel, offered at the third miss. */
+  talk: "Talk it through",
 } as const;
 
 /** 17f's names for the ways in it draws, beside a second miss. */
@@ -172,6 +174,7 @@ export function QuickCheckSheet({
   reteaching = null,
   ways = [],
   onTakeWay,
+  talkItThrough,
 }: {
   check: QuickCheck;
   /**
@@ -187,6 +190,16 @@ export function QuickCheckSheet({
   ways?: readonly WayIn[];
   /** One of those ways, taken from the box: the sheet closes for it. */
   onTakeWay?: (way: WayIn) => void;
+  /**
+   * "TALK IT THROUGH", OFFERED, NEVER OPENED FOR THE CHILD (Lydia, 7 Nov, her
+   * 12: "The box offers, the child takes it"). Present once the server has
+   * handed this check off at the third miss (B94): the sheet shows the
+   * button - in the re-teach box, or under the miss where there is no box -
+   * and stays, rather than giving way, so the offer is never taken away.
+   * Absent at the second miss and before, with nothing in its place
+   * (SCRUM-315).
+   */
+  talkItThrough?: () => void;
   /**
    * Where this check is among its section's, counted from 1, where the
    * section has more than one. Absent for a section's only check.
@@ -377,8 +390,9 @@ export function QuickCheckSheet({
     );
   };
 
-  // A miss is held - not marked - and then gives way, unless the box opens.
-  const recovering = missed && !box;
+  // A miss is held - not marked - and then gives way, unless the box opens or
+  // "Talk it through" is on offer, which stays until the child takes it.
+  const recovering = missed && !box && !talkItThrough;
   const giveWay = useRef(onGiveWay);
   useEffect(() => {
     giveWay.current = onGiveWay;
@@ -545,6 +559,7 @@ export function QuickCheckSheet({
             onTakeWay={(way) => onTakeWay?.(way)}
             onTakeBreak={onTakeBreak}
             retry={holdRetry}
+            talk={talkItThrough}
           />
         ) : (
           <>
@@ -585,6 +600,22 @@ export function QuickCheckSheet({
           </p>
         )}
 
+        {/* The hand-off on offer where there is no box (her 12): under the
+            miss, and there too when the check is asked again before the
+            child has taken it. */}
+        {talkItThrough && !through && (
+          <div className="mt-[13px] flex flex-wrap gap-2">
+            <button
+              type="button"
+              data-talk-it-through
+              onClick={talkItThrough}
+              className="inline-flex h-10 cursor-pointer items-center rounded-full border-[1.5px] border-nevo-navy/30 bg-nevo-cream px-[15px] text-[13.5px] font-semibold text-nevo-navy"
+            >
+              {RETEACH_COPY.talk}
+            </button>
+          </div>
+        )}
+
         {/* The way on, and only after a right answer - or one the server
             could not mark, which holds no one. */}
         {through && (
@@ -621,6 +652,7 @@ function ReteachBox({
   onTakeWay,
   onTakeBreak,
   retry,
+  talk,
 }: {
   box: {
     held: string;
@@ -640,6 +672,8 @@ function ReteachBox({
   onTakeBreak: () => void;
   /** The long hold's "Try again", while the retry's mark is long on its way. */
   retry?: React.ReactNode;
+  /** "Talk it through", on offer at the third miss (her 12). */
+  talk?: () => void;
 }) {
   const asking = box.after === "asking";
   const right = box.after === "right";
@@ -690,7 +724,7 @@ function ReteachBox({
             {explanation}
           </p>
         )}
-        {box.after === "again" && ways.length > 0 && (
+        {box.after === "again" && (ways.length > 0 || talk) && (
           <>
             <p className="mt-2.5 text-[13.5px] leading-[1.5] text-nevo-near-black/66">
               {RETEACH_COPY.waysLine}
@@ -706,8 +740,32 @@ function ReteachBox({
                   {label}
                 </button>
               ))}
+              {/* 17f's fourth way, at the third miss only (her 12). */}
+              {talk && (
+                <button
+                  type="button"
+                  data-talk-it-through
+                  onClick={talk}
+                  className="inline-flex h-10 cursor-pointer items-center rounded-full border-[1.5px] border-nevo-navy/30 bg-nevo-cream px-[15px] text-[13.5px] font-semibold text-nevo-navy"
+                >
+                  {RETEACH_COPY.talk}
+                </button>
+              )}
             </div>
           </>
+        )}
+        {/* At the third miss while the box still asks: the offer is here too. */}
+        {asking && talk && (
+          <div className="mt-[13px] flex flex-wrap gap-2">
+            <button
+              type="button"
+              data-talk-it-through
+              onClick={talk}
+              className="inline-flex h-10 cursor-pointer items-center rounded-full border-[1.5px] border-nevo-navy/30 bg-nevo-cream px-[15px] text-[13.5px] font-semibold text-nevo-navy"
+            >
+              {RETEACH_COPY.talk}
+            </button>
+          </div>
         )}
       </div>
 

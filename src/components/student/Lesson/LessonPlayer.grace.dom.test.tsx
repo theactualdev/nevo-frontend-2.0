@@ -232,6 +232,19 @@ const nextBehind = () =>
   fireEvent.click(screen.getByRole("button", { name: "Next", hidden: true }));
 const reads = () => attempts.mock.calls.length;
 const panelFor = (questionId: string) => screen.queryByText(PROMPT[questionId]);
+/**
+ * The hand-off on offer at the deadline, taken (her 12): never opened for
+ * the child. Where the miss gave way before the deadline, the offer waits in
+ * the check, so Next opens it again first.
+ */
+const talkThrough = async () => {
+  if (!screen.queryByRole("button", { name: "Talk it through" })) {
+    next();
+    await flush();
+  }
+  fireEvent.click(screen.getByRole("button", { name: "Talk it through" }));
+  await flush();
+};
 
 /**
  * The first section's check: three misses, the panel at its deadline from
@@ -243,6 +256,9 @@ const handedOffAtDeadline = async () => {
   await missThrice();
   await wait(WINDOW_MS);
   expect(reads()).toBe(1);
+  // Offered, not opened: the child takes it.
+  expect(panelFor("cp-a")).toBeNull();
+  await talkThrough();
   expect(panelFor("cp-a")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
   expect(screen.getByText("Body of Denominators.")).toBeTruthy();
@@ -297,8 +313,11 @@ describe("the panel at the end of the grace window", () => {
     await wait(1);
     expect(reads()).toBe(1);
     expect(attempts).toHaveBeenCalledWith("lesson-1", SESSION);
-    // The server's hand-off, followed as a write's is: the check gives way.
-    expect(panelFor("cp-a")).toBeTruthy();
+    // The server's hand-off, followed as a write's is: OFFERED in the check
+    // (her 12), and the panel opens only when the child takes it.
+    expect(panelFor("cp-a")).toBeNull();
+      await talkThrough();
+      expect(panelFor("cp-a")).toBeTruthy();
     expect(screen.queryByText("Which is on top?")).toBeNull();
 
     // One read, and never a loop.
@@ -333,6 +352,7 @@ describe("the panel at the end of the grace window", () => {
 
     await wait(WINDOW_MS - 10_000);
     expect(reads()).toBe(1);
+    await talkThrough();
     expect(panelFor("cp-a")).toBeTruthy();
     await wait(10 * 60_000);
     expect(reads()).toBe(1);
@@ -356,6 +376,7 @@ describe("the panel at the end of the grace window", () => {
 
     await wait(1);
     expect(reads()).toBe(1);
+    await talkThrough();
     expect(panelFor("cp-a")).toBeTruthy();
   });
 });

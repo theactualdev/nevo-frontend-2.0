@@ -171,7 +171,15 @@ const miss = async () =>
   fireEvent.click(
     await screen.findByRole("button", { name: /The denominator/ }),
   );
-const checkOnScreen = () => screen.queryByText("Which number is on top?");
+const checkOnScreen = () => screen.queryByText("Which number is on top?");
+/**
+ * The hand-off is OFFERED, never opened for the child (Lydia, 7 Nov, her 12:
+ * "The box offers, the child takes it"): "Talk it through", taken.
+ */
+const talkThrough = async (prompt: string = PROMPT) => {
+  fireEvent.click(await screen.findByRole("button", { name: "Talk it through" }));
+  return screen.findByText(prompt);
+};
 /**
  * Out of a miss whose mark is still on its way. Since test 9 a miss waits for
  * its reply before it gives way, so a second answer in flight beside it is
@@ -222,7 +230,7 @@ describe("the server hands a child off from the quick check (B94)", () => {
 
     await miss();
 
-    expect(await screen.findByText(PROMPT)).toBeTruthy();
+    expect(await talkThrough()).toBeTruthy();
     await waitFor(() => expect(checkOnScreen()).toBeNull());
     // It arrives: nothing to accept or decline, no count of tries.
     expect(screen.getByText(/think it through/i)).toBeTruthy();
@@ -239,7 +247,7 @@ describe("the server hands a child off from the quick check (B94)", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     await miss();
-    await screen.findByText(PROMPT);
+    await talkThrough();
 
     await workThrough();
     expect(screen.getByText("Let's keep going.")).toBeTruthy();
@@ -261,7 +269,7 @@ describe("the server hands a child off from the quick check (B94)", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     await miss();
-    await screen.findByText(PROMPT);
+    await talkThrough();
     await workThrough();
     fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
 
@@ -279,7 +287,7 @@ describe("the server hands a child off from the quick check (B94)", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     await miss();
-    await screen.findByText(PROMPT);
+    await talkThrough();
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     next();
@@ -314,7 +322,7 @@ describe("the server hands a child off from the quick check (B94)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
     next();
     await miss();
-    await screen.findByText(PROMPT);
+    await talkThrough();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     next();
     next();
@@ -420,7 +428,7 @@ describe("what a hand-off records (38a)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
     next();
     await miss();
-    await screen.findByText(PROMPT);
+    await talkThrough();
     await workThrough();
     fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
     next();
@@ -444,7 +452,7 @@ describe("a hand-off panel is an adaptation applied (B74)", () => {
     expect(applied.ref?.current.count).toBe(0);
 
     await miss();
-    await screen.findByText(PROMPT);
+    await talkThrough();
 
     expect(applied.ref?.current.count).toBe(1);
     expect(applied.ref?.current.lastAt).toEqual(expect.any(Number));
@@ -465,15 +473,14 @@ describe("a hand-off panel is an adaptation applied (B74)", () => {
     await miss();
 
     lands[0](reply(HANDOFF));
-    expect(await screen.findByText(PROMPT)).toBeTruthy();
+    expect(await talkThrough()).toBeTruthy();
     lands[1](reply({ ...HANDOFF, attemptNumber: 4 }));
-    // On screen a second time: the panel arrived again.
-    await waitFor(() =>
-      expect(
-        trackEvent.mock.calls.filter((c) => c[0] === "guided_question_shown"),
-      ).toHaveLength(2),
-    );
-
+    await act(async () => {});
+    // A second hand-off is an offer (her 12), and the panel is already open:
+    // nothing reopens it, and the one panel is counted once.
+    expect(
+      trackEvent.mock.calls.filter((c) => c[0] === "guided_question_shown"),
+    ).toHaveLength(1);
     expect(applied.ref?.current.count).toBe(1);
   });
 
@@ -516,6 +523,8 @@ describe("a hand-off's steps, answered and marked by the server", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     await miss();
+    // Offered, and taken (her 12).
+    fireEvent.click(await screen.findByRole("button", { name: "Talk it through" }));
     fireEvent.click(await screen.findByRole("button", { name: CHOICE.prompt }));
     fireEvent.click(screen.getByRole("radio", { name: "The bottom number" }));
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
@@ -543,6 +552,8 @@ describe("a hand-off's steps, answered and marked by the server", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     await miss();
+    // Offered, and taken (her 12).
+    fireEvent.click(await screen.findByRole("button", { name: "Talk it through" }));
     fireEvent.click(await screen.findByRole("button", { name: CHOICE.prompt }));
     fireEvent.click(screen.getByRole("radio", { name: "The top number" }));
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
@@ -578,6 +589,8 @@ describe("a hand-off's steps, answered and marked by the server", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     await miss();
+    // Offered, and taken (her 12).
+    fireEvent.click(await screen.findByRole("button", { name: "Talk it through" }));
     fireEvent.click(await screen.findByRole("button", { name: CHOICE.prompt }));
     fireEvent.click(screen.getByRole("radio", { name: "The top number" }));
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
@@ -603,6 +616,8 @@ describe("a hand-off's steps, answered and marked by the server", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     await miss();
+    // Offered, and taken (her 12).
+    fireEvent.click(await screen.findByRole("button", { name: "Talk it through" }));
     fireEvent.click(await screen.findByRole("button", { name: CHOICE.prompt }));
     fireEvent.click(screen.getByRole("radio", { name: "The top number" }));
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
@@ -634,6 +649,8 @@ describe("a hand-off's steps, answered and marked by the server", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     await miss();
+    // Offered, and taken (her 12).
+    fireEvent.click(await screen.findByRole("button", { name: "Talk it through" }));
     fireEvent.click(await screen.findByRole("button", { name: SECOND.prompt }));
     fireEvent.change(screen.getByRole("textbox", { name: SECOND.prompt }), {
       target: { value: "4" },
@@ -659,9 +676,45 @@ describe("a hand-off's steps, answered and marked by the server", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     await miss();
-    await screen.findByText(CHOICE.prompt);
+    await talkThrough(CHOICE.prompt);
 
     expect(screen.queryByRole("button", { name: CHOICE.prompt })).toBeNull();
     expect(screen.queryByRole("radio")).toBeNull();
+  });
+});
+
+/**
+ * LYDIA, 7 NOV, HER 12: at the third miss the box shows the "Talk it through"
+ * button, and the panel must NOT open by itself - "The box offers, the child
+ * takes it."
+ */
+describe("Talk it through, offered at the third miss (her 12)", () => {
+  it("never opens the panel by itself: the check stays, offering it, past the give-way", async () => {
+    saveAttempt.mockResolvedValue(reply(HANDOFF));
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await miss();
+    await act(async () => {});
+
+    expect(screen.queryByText(PROMPT)).toBeNull();
+    expect(checkOnScreen()).toBeTruthy();
+    // Longer than a miss is held: the offer is not taken away.
+    await new Promise((r) => setTimeout(r, GIVES_WAY_AFTER_MS + 300));
+    expect(screen.getByRole("button", { name: "Talk it through" })).toBeInTheDocument();
+    expect(screen.queryByText(PROMPT)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Talk it through" }));
+
+    expect(await screen.findByText(PROMPT)).toBeTruthy();
+    await waitFor(() => expect(checkOnScreen()).toBeNull());
+  });
+
+  it("is not offered where the server handed nothing off", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await miss();
+    await act(async () => {});
+
+    expect(screen.queryByRole("button", { name: "Talk it through" })).toBeNull();
   });
 });

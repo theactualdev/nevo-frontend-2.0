@@ -861,6 +861,16 @@ export function LessonPlayer({
   const [handedOff, setHandedOff] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  /**
+   * A HAND-OFF ON OFFER, NOT OPENED (Lydia, 7 Nov, her 12: "The box offers,
+   * the child takes it"). The server's hand-off at the third miss is kept
+   * here, and the check shows "Talk it through"; only the child's tap opens
+   * the panel (`takeHandoff`). A right answer since withdraws it.
+   */
+  const [offeredHandoff, setOfferedHandoff] = useState<{
+    segmentId: string;
+    prompts: PanelPrompt[];
+  } | null>(null);
   const answeredRight = useRef<Set<string>>(new Set());
   // Segments whose hand-off panel has been counted as applied (B74).
   const handoffsApplied = useRef<Set<string>>(new Set());
@@ -2322,18 +2332,29 @@ export function LessonPlayer({
       p?.id && p.prompt?.trim() ? [handoffPrompt(p)] : [],
     );
     if (prompts.length === 0) return;
+    // Offered, never opened for them (her 12): the check shows "Talk it
+    // through", and the child's tap opens it (`takeHandoff`).
+    setOfferedHandoff({ segmentId, prompts });
+  };
+
+  /*
+   * "TALK IT THROUGH", TAKEN: the panel opens with the server's prompts, and
+   * the sheet goes. "FORWARD, NEVER BACK TO THE QUESTION" (38a §2) holds
+   * from here: a child who closes the panel and taps Next goes forward too,
+   * never into the check and its old wrong pick. Still not passed, and the
+   * misses still stand.
+   */
+  const takeHandoff = (segmentId: string) => {
+    const offer =
+      offeredHandoff?.segmentId === segmentId ? offeredHandoff : null;
+    if (!offer) return;
+    setOfferedHandoff(null);
     setCheckOpen(false);
-    /*
-     * "FORWARD, NEVER BACK TO THE QUESTION" (38a §2) holds from the moment the
-     * hand-off arrives, not only once Keep going is pressed: a child who
-     * closes the panel and taps Next goes forward too, never into the check
-     * and its old wrong pick. Still not passed, and the misses still stand.
-     */
     setHandedOff((prev) => new Set(prev).add(segmentId));
     setHandoff((prev) => ({
       segmentId,
       run: (prev?.run ?? 0) + 1,
-      prompts,
+      prompts: offer.prompts,
     }));
   };
 
@@ -4231,6 +4252,12 @@ export function LessonPlayer({
             setCheckOpen(false);
             takeWay(way);
           }}
+          // The third miss's hand-off, on offer for the child to take (her 12).
+          talkItThrough={
+            offeredHandoff?.segmentId === segment.id
+              ? () => takeHandoff(segment.id)
+              : undefined
+          }
           onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
           onAnswered={(answered) => {
             const { check, at } = checkShown;
@@ -4286,7 +4313,11 @@ export function LessonPlayer({
              * also waits for its `canAdvance` (`noteServerGate`, `shownHolds`).
              */
             onVerdict(reply, (mark: Verdict) => {
-              if (mark === true) answeredRight.current.add(checkpointId ?? here);
+              if (mark === true) {
+                answeredRight.current.add(checkpointId ?? here);
+                // A right answer since withdraws a "Talk it through" on offer.
+                setOfferedHandoff((o) => (o?.segmentId === here ? null : o));
+              }
               if (mark !== null) noteAnswer(mark);
               // Which pick first got it - a miss re-opens the check until it
               // is passed, so "passed" is true of everyone.
