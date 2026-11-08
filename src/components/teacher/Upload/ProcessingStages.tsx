@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
  * | Reading the document       | `stage: "lessons"`                    |
  * | Finding the sections       | `stage: "structure"`                  |
  * | Preparing the adaptations  | `stage: "adaptations"`                |
- * | Ready to assign            | `stage: "complete"`, `status: ready`  |
+ * | Ready to review            | `stage: "complete"`, `status: ready`  |
  *
  * **THE FIFTH RUNG TOOK THREE RULINGS TO GET HERE, and the record is worth
  * keeping because it is an argument about evidence rather than taste.**
@@ -70,7 +70,9 @@ export const PROCESSING_STAGES: { key: StageKey; label: string }[] = [
   { key: "sections", label: "Finding the sections" },
   // The frame's own words for it, kept rather than renamed.
   { key: "adapting", label: "Preparing the adaptations" },
-  { key: "ready", label: "Ready to assign" },
+  // C07j, 1397ec4: a freshly built lesson goes to review, never straight to
+  // Assign, so the last rung says so. Upload flow only.
+  { key: "ready", label: "Ready to review" },
 ];
 
 /**

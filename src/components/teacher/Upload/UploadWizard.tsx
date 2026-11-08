@@ -6,7 +6,12 @@ import { useEffect, useRef, useState } from "react";
 import { lessonsApi, type LessonDetailResponse } from "@/lib/api/lessons";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useStagedUpload } from "@/hooks/useStagedUpload";
-import { getToken } from "@/lib/auth/session";
+import { getSession, getToken } from "@/lib/auth/session";
+import {
+  followUpload,
+  followedUploads,
+  unfollowUpload,
+} from "@/lib/uploads/followedUploads";
 import { cn } from "@/lib/utils";
 import {
   FALLBACK_HEADINGS,
@@ -383,6 +388,56 @@ export function UploadWizard() {
   }[fallback ? "fallback" : phase];
 
   const blockName = fileName.replace(/\.[^.]+$/, "");
+
+  /*
+   * THE UPLOAD FOLLOWS THE TEACHER (C07j LU-02 and LU-03; backlog 17, 18, 20).
+   * Every upload staged here is remembered on this device, by its id, so the
+   * marker in the corner can ask the server about it after they leave, and
+   * "Tap to view" can bring them back to it. It is let go when they start
+   * over, and once the server says it is confirmed.
+   */
+  useEffect(() => {
+    if (!staged.uploadId || !scope) return;
+    followUpload(getSession()?.userId, {
+      uploadId: staged.uploadId,
+      name: fileName || "Your upload",
+      scope,
+      startedAt: new Date().toISOString(),
+    });
+    // Only when a new upload id arrives; the name and scope are set before it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staged.uploadId]);
+
+  /*
+   * BACK TO AN UPLOAD THE MARKER OFFERED (`?upload=`). Only one this device
+   * followed - the scope and file name are ours to remember, the server's
+   * status has neither - and its stage comes from the server's first poll, so
+   * it reopens at its review step when the reading is done (backlog 20).
+   */
+  const adopted = useRef(false);
+  useEffect(() => {
+    if (adopted.current || !getToken()) return;
+    adopted.current = true;
+    let id: string | null = null;
+    try {
+      id = new URLSearchParams(window.location.search).get("upload");
+    } catch {
+      id = null;
+    }
+    if (!id) return;
+    const entry = followedUploads(getSession()?.userId).find((u) => u.uploadId === id);
+    if (!entry) return;
+    // Scheduled, not set in the effect body (react-hooks/set-state-in-effect).
+    const t = setTimeout(() => {
+      setScope(entry.scope);
+      setFileName(entry.name);
+      setPhase("processing");
+      staged.adopt(entry.uploadId);
+    }, 0);
+    return () => clearTimeout(t);
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const heading = {
     scope: "What are you uploading?",
     // C07e's dedicated screen: "Breaking down '<block>'" supersedes the
@@ -407,6 +462,8 @@ export function UploadWizard() {
 
   const startFile = (file: File) => {
     stopTimer();
+    // A new file replaces the upload this wizard was holding.
+    if (staged.uploadId) unfollowUpload(getSession()?.userId, staged.uploadId);
     lastFile.current = file;
     setFileName(file.name);
     setSample(false);
@@ -532,6 +589,7 @@ export function UploadWizard() {
 
   const reset = () => {
     stopTimer();
+    if (staged.uploadId) unfollowUpload(getSession()?.userId, staged.uploadId);
     staged.reset();
     setRefused(false);
     setPhase("scope");
@@ -1112,19 +1170,12 @@ export function UploadWizard() {
               <ProcessingStages lessonName={blockName} current={singleStage} />
               <p className="mt-6 max-w-[440px] text-[14.5px] leading-[1.5] text-nevo-near-black/60">
                 {/* The leave-and-return promise, in the frame's own words.
-                    It is TRUE and has been since the single path moved to
-                    the staged pipeline: the job has its own id server-side
-                    and nothing stops when this tab does.
-
-                    LU-02's action and LU-03's persistent indicator are what
-                    make it usable rather than merely true - a teacher who
-                    leaves today has no way back to this screen. Both are
-                    raised on the ticket; this sentence is deliberately a
-                    statement about the work rather than an invitation to go,
-                    until there is somewhere to come back from. */}
-                {/* C07j's own line, with its hyphen: no em dashes in
-                    rendered copy (D1). */}
-                Carry on - we&rsquo;ll tell you when it&rsquo;s ready.
+                    TRUE now, and usable: the job has its own id server-side
+                    and nothing stops when this tab does, and the marker in
+                    the corner (LU-03) tells them, and takes them back. Its
+                    hyphen, not an em dash, in rendered copy (D1). */}
+                You&rsquo;re free to carry on elsewhere - we&rsquo;ll let you
+                know when it&rsquo;s ready.
                 {/*
                   WHAT THE WAIT IS, SAID ON THE RUNG THAT IS LONG.
 
@@ -1155,6 +1206,16 @@ export function UploadWizard() {
                 {staged.slow &&
                   " This one is taking a while. It hasn’t stalled."}
               </p>
+              {/* LU-02: "Takes them back to their lessons. The work keeps
+                  running; nothing here stops." */}
+              {staged.uploadId && (
+                <Link
+                  href="/teacher/lessons"
+                  className="mt-5 inline-flex h-[46px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-5 text-[14.5px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                >
+                  Carry on - we&rsquo;ll tell you when it&rsquo;s ready
+                </Link>
+              )}
             </div>
           )}
 

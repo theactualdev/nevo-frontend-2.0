@@ -156,6 +156,12 @@ export interface StagedUpload {
    * nothing.
    */
   resume: () => void;
+  /**
+   * Pick up an upload this console did not start in this visit - one the
+   * marker that follows the teacher is offering back (C07j LU-03). Its stage,
+   * structure and status come from the server's first poll.
+   */
+  adopt: (uploadId: string) => void;
   reset: () => void;
 }
 
@@ -289,6 +295,16 @@ export function useStagedUpload(): StagedUpload {
       });
   }, [uploadId, failedPages, retrying]);
 
+  const adopt = useCallback(
+    (id: string) => {
+      if (!getToken()) return;
+      reset();
+      startedAt.current = Date.now();
+      setUploadId(id);
+    },
+    [reset],
+  );
+
   const resume = useCallback(() => {
     if (!uploadId || failureKind !== "request") return;
     pollFailures.current = 0;
@@ -389,6 +405,7 @@ export function useStagedUpload(): StagedUpload {
     start,
     retryFailedPages,
     resume,
+    adopt,
     reset,
   };
 }

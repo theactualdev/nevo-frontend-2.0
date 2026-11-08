@@ -97,7 +97,7 @@ describe("what the ladder shows", () => {
     expect(screen.getByText("Receiving the file")).toBeInTheDocument();
     expect(screen.getByText("Reading the document")).toBeInTheDocument();
     expect(screen.getByText("Finding the sections")).toBeInTheDocument();
-    expect(screen.getByText("Ready to assign")).toBeInTheDocument();
+    expect(screen.getByText("Ready to review")).toBeInTheDocument();
   });
 
   it("draws no stage the backend cannot report", () => {
