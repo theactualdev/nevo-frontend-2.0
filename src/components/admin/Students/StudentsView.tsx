@@ -27,7 +27,6 @@ import { AddStudentSheet } from "./AddStudentSheet";
 import { statusLabel, studentStatus } from "./status";
 import { NoAccess, failureKind } from "../NoAccess";
 import {
-  Avatar,
   CARD,
   GHOST_BTN,
   Modal,
@@ -39,6 +38,8 @@ import {
 import { useSetupGate } from "@/hooks";
 import { SignInDetailsDownload } from "./SignInDetailsDownload";
 import { ERASURE_LINE } from "./EraseRecordModal";
+import { ChildAvatar } from "../Roster/ChildAvatar";
+import { lookOfChild } from "@/lib/profile/rosterLook";
 
 /**
  * D7 Students - the school roster.
@@ -611,7 +612,7 @@ export function StudentsView() {
                         )}
                       >
                         <span className="flex min-w-0 items-center gap-3">
-                          <Avatar name={s.name} size={34} />
+                          <ChildAvatar look={lookOfChild(s)} size={34} />
                           <span className="min-w-0">
                             <span className="block truncate text-[15px] font-semibold text-nevo-near-black">
                               {s.name}

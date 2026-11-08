@@ -37,6 +37,8 @@ import { NoAccess, failureKind } from "../NoAccess";
 import { BackLink } from "../BackLink";
 import { withBack, type Back } from "../back";
 import { WriteFailed } from "../WriteFailed";
+import { ChildAvatar } from "../Roster/ChildAvatar";
+import { lookOfChild } from "@/lib/profile/rosterLook";
 
 /**
  * D5b Class detail - one class, everything true about it.
@@ -509,7 +511,7 @@ export function ClassDetailView({
                 i < students.length - 1 && ROW_DIVIDER,
               )}
             >
-              <Avatar name={s.displayName} size={32} />
+              <ChildAvatar look={lookOfChild(s)} size={32} />
               <span className="flex-1 truncate text-[14.5px] font-semibold text-nevo-near-black">
                 {s.displayName}
               </span>

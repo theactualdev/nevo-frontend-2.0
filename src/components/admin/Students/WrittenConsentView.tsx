@@ -10,8 +10,9 @@ import { yearGroupLabel } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
 import { NoAccess, failureKind } from "../NoAccess";
 import type { Back } from "../back";
-import { Avatar, CARD, FailureLine, GHOST_BTN, PRIMARY_BTN } from "../Roster/primitives";
+import { CARD, FailureLine, GHOST_BTN, PRIMARY_BTN } from "../Roster/primitives";
 import { ConsentFormDownload } from "./ConsentFormDownload";
+import { ChildAvatar, useChildLook } from "../Roster/ChildAvatar";
 
 /**
  * D25 PC-02 "Record written consent": a signed paper form, entered against
@@ -78,6 +79,8 @@ export function WrittenConsentView({
 }) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [student, setStudent] = useState<AdminStudentDetail | null>(null);
+  /** The child's look, from their class roster (`useChildLook`). */
+  const look = useChildLook(studentId, student?.classIds);
   const [classLine, setClassLine] = useState<string | null>(null);
 
   const [parentName, setParentName] = useState("");
@@ -234,7 +237,7 @@ export function WrittenConsentView({
               </p>
 
               <div className="mt-[18px] flex items-center gap-3 rounded-xl bg-nevo-cream-elevated px-3.5 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
-                <Avatar name={name} size={38} />
+                <ChildAvatar look={look} size={38} />
                 <div className="min-w-0">
                   <div className="truncate text-[14.5px] font-semibold text-nevo-near-black">{name}</div>
                   {classLine ? (
