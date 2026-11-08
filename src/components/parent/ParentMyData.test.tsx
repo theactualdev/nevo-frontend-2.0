@@ -3,11 +3,12 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ChildConsents, ParentChild } from "@/lib/api/parent";
 import { ApiError } from "@/lib/api/client";
 
-const { myChildren, myConsents, myWithdraw, myObjection, myDataRequest, exerciseRight, search } =
+const { myChildren, myConsents, myWithdraw, myRestore, myObjection, myDataRequest, exerciseRight, search } =
   vi.hoisted(() => ({
     myChildren: vi.fn(),
     myConsents: vi.fn(),
     myWithdraw: vi.fn(),
+    myRestore: vi.fn(),
     myObjection: vi.fn(),
     myDataRequest: vi.fn(),
     exerciseRight: vi.fn(),
@@ -17,7 +18,7 @@ const { myChildren, myConsents, myWithdraw, myObjection, myDataRequest, exercise
 // Replaced wholesale - see ParentDataManagement.test.tsx for why importOriginal
 // deadlocks the jsdom worker here.
 vi.mock("@/lib/api/parent", () => ({
-  parentApi: { myChildren, myConsents, myWithdraw, myObjection, myDataRequest, exerciseRight },
+  parentApi: { myChildren, myConsents, myWithdraw, myRestore, myObjection, myDataRequest, exerciseRight },
 }));
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(search.value),
@@ -60,7 +61,7 @@ const outcome = (studentId: string) => ({
 });
 
 beforeEach(() => {
-  for (const f of [myChildren, myConsents, myWithdraw, myObjection, myDataRequest, exerciseRight]) f.mockReset();
+  for (const f of [myChildren, myConsents, myWithdraw, myRestore, myObjection, myDataRequest, exerciseRight]) f.mockReset();
   search.value = "";
   myChildren.mockResolvedValue([AMARA, TUNDE]);
   myConsents.mockResolvedValue([consents("s-1"), consents("s-2")]);
@@ -229,5 +230,97 @@ describe("withdrawal belongs to the guardian who gave it (SCRUM-306)", () => {
     expect(await screen.findByText("Only the guardian who gave this consent can withdraw it.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Withdraw consent/i })).toBeNull();
     expect(screen.queryByText(/couldn.t send that just now/i)).toBeNull();
+  });
+});
+
+/**
+ * THE WAY BACK (SCRUM-321, Lydia's D01c comment): the parent who withdrew
+ * restores it from their own account (`POST .../consents/restore`), and the
+ * page is read again so it shows what is now true. A guardian who didn't give
+ * it is told neither that they withdrew nor that they can restore.
+ */
+describe("restoring from the account (SCRUM-321)", () => {
+  const LINE =
+    "If you change your mind, you can restore this yourself from your account. Your school cannot do it for you.";
+  const withdrawn = (canWithdraw = true) =>
+    consents("s-1", { status: "withdrawn", decidedAt: "2026-10-01T09:00:00Z", canWithdraw });
+
+  it("subjectFor: theirs to restore only when every withdrawn consent is", () => {
+    expect(subjectFor(AMARA, withdrawn()).canRestore).toBe(true);
+    expect(subjectFor(AMARA, withdrawn(false)).canRestore).toBe(false);
+    expect(subjectFor(AMARA, consents("s-1")).canRestore).toBe(false);
+  });
+
+  it("the guardian who withdrew restores it, and the page reads as it now is", async () => {
+    myConsents.mockResolvedValueOnce([withdrawn()]).mockResolvedValue([consents("s-1")]);
+    myRestore.mockResolvedValue({
+      ...outcome("s-1"),
+      requestType: "restore_consent",
+      effect: "Your child can use Nevo again. Their school has been told.",
+    });
+    render(<ParentMyData />);
+    expect(await screen.findByText(LINE)).toBeInTheDocument();
+    // D01c (928cf30): restoring is consenting again, so the terms come first.
+    expect(screen.getByText("What you are agreeing to again")).toBeInTheDocument();
+    expect(screen.getAllByText("What Nevo collects").length).toBeGreaterThan(0);
+    expect(screen.getByText("Restoring puts Amara’s access back.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Restore consent" }));
+    expect(
+      await screen.findByText("Your child can use Nevo again. Their school has been told."),
+    ).toBeInTheDocument();
+    expect(myRestore).toHaveBeenCalledWith("s-1");
+    expect(myConsents).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(/account is suspended/i)).toBeNull();
+    expect(screen.getByRole("button", { name: /^Withdraw consent$/i })).toBeInTheDocument();
+  });
+
+  it("a guardian who didn't give it is told neither that they withdrew nor that they can restore", async () => {
+    myConsents.mockResolvedValue([withdrawn(false)]);
+    const { container } = render(<ParentMyData />);
+    expect(await screen.findByText(/account is suspended/i)).toBeInTheDocument();
+    // Lydia's 10 (copy pass, 7 Nov).
+    expect(container.textContent).toMatch(
+      /Amara’s consent has been withdrawn, so they can’t use Nevo at the moment\. The adult who gave that consent is the only one who can restore it\./,
+    );
+    expect(screen.queryByText("What you are agreeing to again")).toBeNull();
+    expect(container.textContent).not.toMatch(/You withdrew/);
+    expect(screen.queryByText(LINE)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Restore consent" })).toBeNull();
+  });
+
+  it("a refusal says whose it is, in the server's words, and takes the button away", async () => {
+    myConsents.mockResolvedValue([withdrawn()]);
+    myRestore.mockRejectedValue(
+      new ApiError(403, "Forbidden", {
+        detail: {
+          code: "consent_decision_belongs_to_another_guardian",
+          message: "Another of this child's grown-ups took this permission back, so only they can give it again.",
+        },
+      }),
+    );
+    render(<ParentMyData />);
+    fireEvent.click(await screen.findByRole("button", { name: "Restore consent" }));
+    expect(await screen.findByText(/only they can give it again/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Restore consent" })).toBeNull();
+  });
+
+  it("nothing left to restore reads the page again rather than failing", async () => {
+    myConsents.mockResolvedValueOnce([withdrawn()]).mockResolvedValue([consents("s-1")]);
+    myRestore.mockRejectedValue(
+      new ApiError(409, "Conflict", { detail: { code: "nothing_to_restore", message: "x" } }),
+    );
+    render(<ParentMyData />);
+    fireEvent.click(await screen.findByRole("button", { name: "Restore consent" }));
+    expect(await screen.findByRole("button", { name: /^Withdraw consent$/i })).toBeInTheDocument();
+    expect(myConsents).toHaveBeenCalledTimes(2);
+  });
+
+  it("any other failure says nothing has changed, and keeps the button", async () => {
+    myConsents.mockResolvedValue([withdrawn()]);
+    myRestore.mockRejectedValue(new Error("offline"));
+    render(<ParentMyData />);
+    fireEvent.click(await screen.findByRole("button", { name: "Restore consent" }));
+    expect(await screen.findByText(/Nothing has changed/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Restore consent" })).toBeEnabled();
   });
 });
