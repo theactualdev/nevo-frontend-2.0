@@ -5,6 +5,7 @@ import {
   type LessonDetailResponse,
   type LessonModule,
   type LessonSegment,
+  type SavedLessonDetail,
 } from "@/lib/api/lessons";
 import type { SegmentVariants } from "@/lib/api/variants";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
@@ -105,7 +106,7 @@ export async function downloadLesson(
 export async function lessonFromPackage(
   bytes: Uint8Array,
   lessonId: string,
-): Promise<LessonDetailResponse | null> {
+): Promise<SavedLessonDetail | null> {
   const file = await readZipFile(bytes, "lesson.json");
   if (!file) return null;
   let parsed: unknown;
@@ -264,9 +265,9 @@ function isSegment(s: unknown): boolean {
  */
 export function detailFromPackage(
   pkg: OfflinePackage & { segments: OfflinePackageSegment[] },
-): LessonDetailResponse {
+): SavedLessonDetail {
   type Packaged = Pick<
-    LessonDetailResponse,
+    SavedLessonDetail,
     "id" | "title" | "modules" | "recap" | "assessment" | "markingKeyVersions"
   > & {
     segments: Omit<
@@ -305,7 +306,7 @@ export function detailFromPackage(
       };
     }),
   };
-  return packaged as LessonDetailResponse;
+  return packaged as SavedLessonDetail;
 }
 
 /** A package's `markingKeyVersions`, kept only as the server writes them. */

@@ -720,15 +720,21 @@ export interface LessonDetailResponse extends LessonSummary {
    * ungrouped, which is what the separate call's failure already meant.
    */
   modules?: LessonModule[];
-  /**
-   * The offline package's `markingKeyVersions` (9b), kept with a saved copy:
-   * one version of each question's answer key, keyed as the server keys them
-   * (`markingKeyFor`). The detail read never sends it; only a lesson saved
-   * from its package has it, and only an answer marked on the device sends
-   * one back.
-   */
-  markingKeyVersions?: Record<string, string>;
 }
+
+/**
+ * A lesson as a SAVED COPY carries it: the detail's fields, plus the offline
+ * package's `markingKeyVersions` (9b) - one version of each question's answer
+ * key, keyed as the server keys them (`markingKeyFor`).
+ *
+ * NOT ON `LessonDetailResponse`, because `GET /api/content/lessons/{id}` never
+ * sends it: only a lesson saved from its package has it, and only an answer
+ * marked on the device sends one back. A detail read is one of these with
+ * the field absent.
+ */
+export type SavedLessonDetail = LessonDetailResponse & {
+  markingKeyVersions?: Record<string, string>;
+};
 
 /**
  * How the parser grouped the segments.
