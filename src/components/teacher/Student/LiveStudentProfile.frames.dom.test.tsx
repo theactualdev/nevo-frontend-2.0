@@ -186,6 +186,9 @@ describe("the learning support section", () => {
     const c16c = screen.getByRole("region", { name: "How Nevo has adapted for this student" });
     expect(c16c).toHaveTextContent("Offered the spoken version of the worked example.");
     expect(c16c).toHaveTextContent("You do not need to act on any of these.");
+    // Lydia's intro (7 Nov), without "and why" - no row says why (Hub, 8 Nov).
+    expect(c16c).toHaveTextContent("Here is what has changed for Amara.");
+    expect(c16c).not.toHaveTextContent(/and why|has happened for/);
     // Not the frame's learning-styles sentence (SCRUM-253; rule 1).
     expect(screen.queryByText(/how each student learns/)).not.toBeInTheDocument();
   });
