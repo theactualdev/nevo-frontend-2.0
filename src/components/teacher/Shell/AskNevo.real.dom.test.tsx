@@ -21,7 +21,7 @@ vi.mock("@/hooks/useCurrentUser", () => ({
 }));
 
 import { AskNevo } from "./AskNevo";
-import { setAskNevoClass } from "./askNevoScope";
+import { setAskNevoClass, setAskNevoRecord } from "./askNevoScope";
 import { ASK_NEVO_CONTEXTS, CANNOT_HELP_LINE } from "@/lib/mocks/teacherAskNevo";
 
 /**
@@ -421,5 +421,45 @@ describe("the daily cap", () => {
 
     await waitFor(() => expect(allowance).toHaveBeenCalled());
     expect(screen.getByPlaceholderText("Ask about a student, class, or lesson")).not.toBeDisabled();
+  });
+});
+
+/*
+ * Backlog item 32 (C15): "You're viewing: Amara Okafor", "What's going on with
+ * Amara?" - with the REAL child's name, published by the page beneath from its
+ * own read, and only for the record on the address.
+ */
+describe("the drawer naming the record the page has open", () => {
+  afterEach(() => setAskNevoRecord(null));
+
+  it("names the child the profile has published, as C15 does", () => {
+    setAskNevoRecord({ kind: "student", id: STUDENT, name: "Ngozi Eze", firstName: "Ngozi" });
+    openOn(`/teacher/students/${STUDENT}`);
+
+    expect(screen.getByText("You're viewing: Ngozi Eze")).toBeInTheDocument();
+    expect(screen.getByText("Ask me about Ngozi.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /What.s going on with Ngozi\?/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Which lesson comes next for Ngozi\?/ })).toBeInTheDocument();
+  });
+
+  it("names no one when the published record is not the one on the address", () => {
+    setAskNevoRecord({
+      kind: "student",
+      id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      name: "Someone Else",
+      firstName: "Someone",
+    });
+    openOn(`/teacher/students/${STUDENT}`);
+
+    expect(screen.queryByText(/Someone/)).not.toBeInTheDocument();
+    expect(screen.getByText("Ask me about this student.")).toBeInTheDocument();
+  });
+
+  it("names the lesson the lesson page has published", () => {
+    const LESSON = "12345678-1234-4abc-8def-1234567890ab";
+    setAskNevoRecord({ kind: "lesson", id: LESSON, name: "Photosynthesis" });
+    openOn(`/teacher/lessons/${LESSON}`);
+
+    expect(screen.getByText("You're viewing: Photosynthesis")).toBeInTheDocument();
   });
 });

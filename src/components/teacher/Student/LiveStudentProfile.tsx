@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PublishAskNevoRecord } from "@/components/teacher/Shell/PublishAskNevoRecord";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
@@ -282,6 +283,8 @@ export function LiveStudentProfile({
        only what B2 draws - who this is, what Nevo noticed, and Recommend. */
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] max-md:px-[18px] max-md:pt-0 max-md:pb-[22px] xl:px-[52px] xl:py-11">
       <div className="mx-auto xl:max-w-[900px]">
+        {/* Ask Nevo names this child, from this page's own read (item 32). */}
+        <PublishAskNevoRecord kind="student" id={student.id} name={name} firstName={student.firstName ?? null} />
         <PhoneRosterBar classId={classId} />
         <Link
           href={classHref ?? "/teacher/classes"}
