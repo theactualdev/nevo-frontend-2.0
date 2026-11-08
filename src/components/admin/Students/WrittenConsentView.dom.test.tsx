@@ -45,6 +45,7 @@ vi.mock("@/lib/api/classes", async (importOriginal) => {
     classesApi: {
       ...actual.classesApi,
       list: async () => [{ id: "c-2a", name: "JSS 2A", yearGroup: "jss2" }],
+      classStudents: async () => [],
     },
   };
 });

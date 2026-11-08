@@ -22,7 +22,6 @@ import { yearGroupLabel } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
 import { accommodationCopy } from "@/lib/constants/accommodations";
 import {
-  Avatar,
   CARD,
   GHOST_BTN,
   PRIMARY_BTN,
@@ -36,6 +35,9 @@ import { LEARNING_SUPPORT_REQUIRED } from "@/lib/api/learningSupport";
 import { useLearningSupport } from "../LearningSupport/useLearningSupport";
 import { NEEDS_LEARNING_SUPPORT, UnavailableAction } from "../LearningSupport/Unavailable";
 import { SafeguardingRecord } from "../Safeguarding/SafeguardingRecord";
+import { ChildAvatar } from "../Roster/ChildAvatar";
+import type { AvatarLook } from "@/lib/profile/avatarLook";
+import { lookOfChild } from "@/lib/profile/rosterLook";
 
 /**
  * D8b Learner Profile - the SENCo's plain-language view of one learner.
@@ -179,6 +181,8 @@ export function LearnerProfileView({
   const [observations, setObservations] = useState<LearnerObservation[] | null>(
     null,
   );
+  /** The child's look, from the same class roster read (see `ChildAvatar`). */
+  const [look, setLook] = useState<AvatarLook | null>(null);
   const [observationsPhase, setObservationsPhase] = useState<
     "idle" | "ready" | "failed"
   >("idle");
@@ -285,6 +289,7 @@ export function LearnerProfileView({
         if (!live) return;
         const mine = rows.find((r) => r.studentId === studentId);
         setObservations(mine?.observations ?? []);
+        setLook(mine ? lookOfChild(mine) : null);
         setObservationsPhase("ready");
       })
       .catch(() => {
@@ -363,7 +368,7 @@ export function LearnerProfileView({
       <BackLink back={back} fallback={{ href: "/admin/senco", label: "Learning Support" }} />
 
       <div className="mt-3 flex items-center gap-4">
-        <Avatar name={name} size={56} />
+        <ChildAvatar look={look} size={56} />
         <div className="min-w-0 flex-1">
           <h2 className="m-0 text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black">
             {name}

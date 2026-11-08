@@ -339,6 +339,13 @@ export interface AdminStudentRow {
    * `Invitation.consentStatus`. Do not generalise this change onto it.
    */
   consent: StudentConsent;
+  /**
+   * The child's avatar (SCRUM-324), each nullable. Read through
+   * `lookOfChild` - see `lib/profile/rosterLook`.
+   */
+  avatarTone?: string | null;
+  avatarShape?: string | null;
+  avatarColourway?: string | null;
 }
 
 export interface AdminStudentDetail {

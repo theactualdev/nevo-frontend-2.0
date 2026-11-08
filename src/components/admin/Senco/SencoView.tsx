@@ -26,13 +26,14 @@ import { GET_LEARNING_SUPPORT, UnavailableAction } from "../LearningSupport/Unav
 import { LEARNING_SUPPORT_REQUIRED, refusedWith } from "@/lib/api/learningSupport";
 import { WriteFailed } from "../WriteFailed";
 import {
-  Avatar,
   CARD,
   PRIMARY_BTN,
   PlusIcon,
   ROW_DIVIDER,
   SectionHeading,
 } from "../Roster/primitives";
+import { ChildAvatar } from "../Roster/ChildAvatar";
+import { lookOfChild } from "@/lib/profile/rosterLook";
 
 /**
  * D8 Learning Support and D8b Learner Profiles - the SENCo surface.
@@ -609,7 +610,7 @@ export function SencoView() {
                         i < openFlags.length - 1 && ROW_DIVIDER,
                       )}
                     >
-                      <Avatar name={name} size={38} />
+                      <ChildAvatar look={student ? lookOfChild(student) : null} size={38} />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-baseline gap-x-2">
                           <span className="text-[15px] font-semibold text-nevo-near-black">
@@ -764,7 +765,7 @@ export function SencoView() {
                       i < profiles.length - 1 && ROW_DIVIDER,
                     )}
                   >
-                    <Avatar name={s.name} size={38} />
+                    <ChildAvatar look={lookOfChild(s)} size={38} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="truncate text-[15px] font-semibold text-nevo-near-black">

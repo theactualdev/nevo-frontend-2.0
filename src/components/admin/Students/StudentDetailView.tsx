@@ -46,6 +46,7 @@ import { NoAccess, failureKind } from "../NoAccess";
 import { BackLink } from "../BackLink";
 import { withBack, type Back } from "../back";
 import { WriteFailed } from "../WriteFailed";
+import { ChildAvatar, useChildLook } from "../Roster/ChildAvatar";
 
 /**
  * D7b Student detail - the admin-scoped record for one student.
@@ -110,6 +111,8 @@ export function StudentDetailView({
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("loading");
   const [student, setStudent] = useState<AdminStudentDetail | null>(null);
+  /** The child's look, from their class roster (`useChildLook`). */
+  const look = useChildLook(studentId, student?.classIds);
   const [classes, setClasses] = useState<AdminClass[]>([]);
   const [guardians, setGuardians] = useState<ParentLink[]>([]);
   const [guardiansFailed, setGuardiansFailed] = useState(false);
@@ -330,7 +333,7 @@ export function StudentDetailView({
       <BackLink back={back} fallback={{ href: "/admin/students", label: "All students" }} />
 
       <div className="mt-3 flex items-center gap-4">
-        <Avatar name={name} size={56} />
+        <ChildAvatar look={look} size={56} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2.5">
             <h2 className="m-0 text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black max-lg:text-[22px]">

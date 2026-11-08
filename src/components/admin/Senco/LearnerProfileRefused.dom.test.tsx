@@ -42,7 +42,10 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
 });
 vi.mock("@/lib/api/classes", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/classes")>();
-  return { ...actual, classesApi: { ...actual.classesApi, list: async () => [] } };
+  return {
+    ...actual,
+    classesApi: { ...actual.classesApi, list: async () => [], classStudents: async () => [] },
+  };
 });
 
 describe("a refused section on the learner profile", () => {
