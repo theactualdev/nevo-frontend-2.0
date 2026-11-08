@@ -41,6 +41,12 @@ export interface LessonRegenerate {
   failureReason: string | null;
   /** The backend's reference for a failure, to quote in a report. */
   incident: string | null;
+  /**
+   * The last re-read's own review notes, null until one has finished. They
+   * describe the lesson as re-read, so a screen showing the upload's notes
+   * swaps to these, never keeping notes about a lesson that is gone.
+   */
+  reviewNotes: unknown[] | null;
   /** Re-read the lesson. Ignored while one is already running. */
   run: (lessonId: string) => void;
 }
@@ -51,6 +57,7 @@ export function useLessonRegenerate(
   const [state, setState] = useState<RegenerateState>("idle");
   const [failureReason, setFailureReason] = useState<string | null>(null);
   const [incident, setIncident] = useState<string | null>(null);
+  const [reviewNotes, setReviewNotes] = useState<unknown[] | null>(null);
   const abort = useRef<AbortController | null>(null);
   const running = useRef(false);
   const onLessonRef = useRef(onLesson);
@@ -95,12 +102,15 @@ export function useLessonRegenerate(
             parseRun.failureReason ?? "The parse failed.",
           );
         }
-        return lessonsApi.detail(accepted.lessonId);
+        const lesson = await lessonsApi.detail(accepted.lessonId);
+        // The notes travel with the lesson they describe, set together below.
+        return { lesson, notes: Array.isArray(parseRun.reviewNotes) ? parseRun.reviewNotes : [] };
       })
-      .then((lesson) => {
+      .then(({ lesson, notes }) => {
         running.current = false;
         if (controller.signal.aborted) return;
         setState("idle");
+        setReviewNotes(notes);
         onLessonRef.current(lesson);
       })
       .catch((err: unknown) => {
@@ -115,5 +125,5 @@ export function useLessonRegenerate(
       });
   }, []);
 
-  return { state, run, failureReason, incident };
+  return { state, run, failureReason, incident, reviewNotes };
 }

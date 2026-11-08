@@ -712,6 +712,9 @@ export function UploadWizard() {
                row in the library. That is the whole point of regenerate over
                re-upload. */
           onRegenerated={setParsed}
+          /* The questions the parse left out live on the upload's structure,
+             not on the lesson read. */
+          reviewNotes={staged.structure?.reviewNotes}
         />
       )}
 

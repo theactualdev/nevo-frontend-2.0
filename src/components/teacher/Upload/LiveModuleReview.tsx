@@ -10,6 +10,7 @@ import {
   type UploadSegment,
   type UploadStructure,
 } from "@/lib/api/uploads";
+import { QuestionsLeftOut } from "./QuestionsLeftOut";
 import { cn } from "@/lib/utils";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { useKeptDraft } from "@/hooks/useKeptDraft";
@@ -373,6 +374,8 @@ export function LiveModuleReview({
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[18px] xl:px-8 xl:py-[22px]">
         {/* The console's reading column: 820px, centred (design system, 8 Oct). */}
         <div className="mx-auto max-w-[820px]">
+          {/* The questions the parse left out, in the server's words. */}
+          <QuestionsLeftOut notes={structure.reviewNotes} className="mb-5" />
           {banner}
 
           {kept.kept && (

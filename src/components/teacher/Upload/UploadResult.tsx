@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useLessonRegenerate } from "@/hooks/useLessonRegenerate";
 import { useLessonReview } from "@/hooks/useLessonReview";
+import { QuestionsLeftOut } from "./QuestionsLeftOut";
 import { useSegmentReview } from "@/hooks/useSegmentReview";
 import type { LessonDetailResponse } from "@/lib/api/lessons";
 import { SplitSourceNotice } from "@/components/teacher/Library/SplitSourceNotice";
@@ -57,12 +58,18 @@ export function UploadResult({
   fileName,
   onUploadAnother,
   onRegenerated,
+  reviewNotes,
 }: {
   lesson: LessonDetailResponse;
   fileName: string;
   onUploadAnother: () => void;
   /** The re-read lesson, which replaces this one in place. */
   onRegenerated?: (lesson: LessonDetailResponse) => void;
+  /**
+   * The upload's own review notes (its structure document's), for the
+   * questions the parse left out. The lesson read does not carry them.
+   */
+  reviewNotes?: readonly unknown[];
 }) {
   const verdict = useLessonReview(lesson.id);
   // A re-read can change what is flagged, so the verdict is asked again.
@@ -119,6 +126,11 @@ export function UploadResult({
           can be said. "Saved to your library" below is true either way and
           says nothing about what was saved. */}
       <SplitSourceNotice segments={segments} />
+
+      {/* The questions the parse left out, in the server's words. After a
+          re-read, that run's notes: the upload's describe a lesson that has
+          since been read again. */}
+      <QuestionsLeftOut notes={regenerate.reviewNotes ?? reviewNotes} className="mt-5" />
 
       <div className="mt-5 flex max-w-[660px] items-start gap-3.5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-elevation-1">
         <span className="mt-px shrink-0 text-nevo-navy">
