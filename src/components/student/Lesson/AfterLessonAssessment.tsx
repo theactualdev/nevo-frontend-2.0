@@ -7,7 +7,12 @@ import type { ResultState } from "@/lib/api/lessons";
 import type { CheckOutcome } from "@/lib/lessons/checkOutcome";
 import type { Assessment } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { onVerdict, retryOf, type VerdictReply } from "@/lib/lessons/verdict";
+import {
+  keyMark,
+  onVerdict,
+  retryOf,
+  type VerdictReply,
+} from "@/lib/lessons/verdict";
 import { HoldRetry, useLongHold } from "./HoldRetry";
 import {
   AnswerDot,
@@ -217,7 +222,7 @@ export function AfterLessonAssessment({
     };
     const reply = onAnswer
       ? onAnswer(result)
-      : selected === question.correctId;
+      : keyMark(selected, question.correctId);
     if (reply instanceof Promise) {
       setMarking(true);
       setPending(reply);

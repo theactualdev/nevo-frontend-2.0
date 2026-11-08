@@ -25,3 +25,16 @@ export function isStoredAnswer(
 }
 
 const written = (s: string) => s.replace(/\s+/g, "");
+
+/**
+ * The package's mark on a calculation entry: `isStoredAnswer`, or NULL WHERE
+ * THE STEP CARRIES NO STORED ANSWER - one read online, where the server holds
+ * them back and marks the entry itself. With no reply, nothing here can call
+ * it wrong.
+ */
+export function storedMark(
+  entry: string,
+  accepted: readonly string[],
+): boolean | null {
+  return accepted.length === 0 ? null : isStoredAnswer(entry, accepted);
+}

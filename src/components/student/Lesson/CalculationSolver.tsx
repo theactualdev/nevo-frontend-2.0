@@ -20,7 +20,7 @@ import type {
   CalculationStep,
   ScaffoldQuantity,
 } from "@/lib/types";
-import { isStoredAnswer } from "@/lib/lessons/storedAnswer";
+import { storedMark } from "@/lib/lessons/storedAnswer";
 import {
   onVerdict,
   retryOf,
@@ -247,7 +247,7 @@ export function CalculationSolver({
    */
   onStepGiven?: (
     given: StepGiven,
-    packageMark: boolean,
+    packageMark: Verdict,
   ) => VerdictReply | undefined;
   /** A piece tapped into the manipulative (`manipulative_piece_placed`). */
   onPiecePlaced?: (stepId: string) => void;
@@ -641,7 +641,7 @@ export function CalculationSolver({
    */
   const send = (
     given: StepGiven | undefined,
-    packageMark: boolean,
+    packageMark: Verdict,
     settle: (mark: Verdict) => void,
   ) => {
     const sent =
@@ -671,7 +671,7 @@ export function CalculationSolver({
 
   // SCRUM-94.3: every step ends on a tap the child chooses to make.
   // `packageMark` is the lesson's own key, used only where no reply comes.
-  const answer = (packageMark: boolean) => {
+  const answer = (packageMark: Verdict) => {
     if (marking) return;
     /*
      * B130: "hint_used fires when the child submits a calculation step after
@@ -749,7 +749,7 @@ export function CalculationSolver({
         ...(responseTimeMs === undefined ? {} : { responseTimeMs }),
         hinted: usedOn.current === stepId,
       },
-      isStoredAnswer(value, mini.accepted),
+      storedMark(value, mini.accepted),
       (mark) => {
         setChosen(null);
         setTyped("");
@@ -1157,7 +1157,7 @@ export function CalculationSolver({
                       className="w-full"
                       onClick={() =>
                         answer(
-                          isStoredAnswer(
+                          storedMark(
                             step.options[chosen]?.value ?? "",
                             step.accepted,
                           ),
@@ -1180,7 +1180,7 @@ export function CalculationSolver({
                 nudge={nudge}
                 value={typed}
                 onChange={type}
-                onCommit={() => answer(isStoredAnswer(typed, step.accepted))}
+                onCommit={() => answer(storedMark(typed, step.accepted))}
               />
             )}
 

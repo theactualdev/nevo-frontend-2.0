@@ -102,6 +102,7 @@ import {
 import { schedulerApi, type ReviewOutcome } from "@/lib/api/scheduler";
 import { answerFor, calculationAttemptFor } from "@/lib/lessons/attempts";
 import {
+  keyMark,
   onVerdict,
   verdictOf,
   type PendingVerdict,
@@ -3096,7 +3097,7 @@ export function LessonPlayer({
    */
   const markAttempt = (
     answer: Omit<LessonQuestionAttemptWrite, "sessionId"> | null,
-    packageMark: () => boolean,
+    packageMark: () => Verdict,
     onStored?: (stored: LessonQuestionAttempt) => void,
   ): VerdictReply => {
     /*
@@ -3436,8 +3437,9 @@ export function LessonPlayer({
               choice: question?.options.find((o) => o.id === selectedId),
               responseTimeMs,
             }),
-            // Offline only: the package's key.
-            () => selectedId === question?.correctId,
+            // Offline only: the package's key - none online, where the
+            // server holds it (41c2f83), so no mark rather than a wrong one.
+            () => keyMark(selectedId, question?.correctId),
           );
           /*
            * THE CATALOGUE'S KEYS, `segmentId` and `questionId`, and nothing it
@@ -4260,8 +4262,8 @@ export function LessonPlayer({
                 responseTimeMs: answered.responseTimeMs,
                 hinted,
               }),
-              // Offline only: the package's key (test 9).
-              () => answered.selectedId === check.correctId,
+              // Offline only: the package's key (test 9) - none online.
+              () => keyMark(answered.selectedId, check.correctId),
               // B94: the server's answer may hand this child off; and a miss
               // brings the section's other ways in (SCRUM-282).
               (stored) => {
@@ -4576,7 +4578,7 @@ function SegmentBody({
    * What the child gave on a committed step, for the server to mark; gives
    * back that mark (test 9), the package's `packageMark` where none comes.
    */
-  onCalcGiven: (given: StepGiven, packageMark: boolean) => VerdictReply;
+  onCalcGiven: (given: StepGiven, packageMark: Verdict) => VerdictReply;
   onPiecePlaced: (stepId: string) => void;
   /** The child opened a calculation step's hint themselves. */
   onCalcHint: () => void;

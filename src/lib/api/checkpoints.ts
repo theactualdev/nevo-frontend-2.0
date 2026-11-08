@@ -175,15 +175,37 @@ export function isMarkable(checkpoint: ComprehensionCheckpoint): boolean {
  */
 export function toQuickCheck(
   checkpoint: ComprehensionCheckpoint,
+  { serverMarks = false }: { serverMarks?: boolean } = {},
 ): QuickCheck | null {
-  if (!isMarkable(checkpoint)) return null;
   if (checkpoint.answerType === "multiple_choice") return null;
   if (Array.isArray(checkpoint.answerKey)) return null;
   if (checkpoint.options.length < 2) return null;
 
-  const key = checkpoint.answerKey as CheckpointScalar;
-  const correct = checkpoint.options.find((o) => sameScalar(o.value, key));
-  if (!correct) return null;
+  /*
+   * ONLINE THE SERVER HOLDS THE KEY AND MARKS (41c2f83; test 9, #1039). Every
+   * online student lesson arrives with `answerKey`, `acceptedAnswers` and
+   * `explanation` stripped, so a check read online has no key by design - and
+   * refusing it here dropped every check and every end-of-lesson question:
+   * no child was asked anything (8 Nov). A one-tap check with two or more
+   * options is asked, with no `correctId`, and the attempt reply's `correct`
+   * is the only mark (`keyMark` gives null where none comes back).
+   *
+   * OFFLINE THE KEY GATE STANDS: a saved copy is marked on the device, so a
+   * check with no key there is still a question with no right answer.
+   */
+  const keyless = !isMarkable(checkpoint);
+  if (keyless) {
+    const oneTap =
+      checkpoint.answerType === "single_choice" ||
+      checkpoint.answerType === "boolean";
+    if (!serverMarks || !oneTap) return null;
+  }
+  let correct: (typeof checkpoint.options)[number] | undefined;
+  if (!keyless) {
+    const key = checkpoint.answerKey as CheckpointScalar;
+    correct = checkpoint.options.find((o) => sameScalar(o.value, key));
+    if (!correct) return null;
+  }
 
   const promptAudio =
     checkpoint.format === "spoken" ? checkpoint.promptAudioUrl?.trim() : null;
@@ -196,7 +218,7 @@ export function toQuickCheck(
       label: o.label,
       value: o.value,
     })),
-    correctId: String(correct.value),
+    ...(correct ? { correctId: String(correct.value) } : {}),
     correctNote:
       checkpoint.explanation?.trim() ||
       "That's it - you've got this one.",
