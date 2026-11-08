@@ -175,3 +175,25 @@ describe("afterRetry", () => {
     expect(afterRetry("/student/waiting")).toBe("/student/waiting");
   });
 });
+
+/**
+ * A SCREEN THAT HAS GONE NEVER NAVIGATES (the hub, 8 Nov): Back while Try
+ * again is asking.
+ */
+describe("Back while Try again is asking", () => {
+  it("moves nobody once the screen has gone", async () => {
+    let land: (to: string) => void = () => {};
+    studentDestination.mockReturnValue(
+      new Promise((resolve) => {
+        land = resolve;
+      }),
+    );
+    const { unmount } = render(<EntryCheckFailed next={LESSON} />);
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    unmount(); // Back.
+    await act(async () => land(LESSON));
+
+    expect(replace).not.toHaveBeenCalled();
+  });
+});

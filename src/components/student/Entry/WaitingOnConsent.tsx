@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/shared";
@@ -173,6 +174,8 @@ export function WaitingOnConsent({
  */
 export function WaitingOnConsentPage() {
   const router = useRouter();
+  // A screen that has gone never navigates (see `useStillHere`).
+  const hereRef = useStillHere();
   return (
     <WaitingOnConsent
       onCheckAgain={async () => {
@@ -181,7 +184,7 @@ export function WaitingOnConsentPage() {
         if (path === WAITING_ROUTE) return "still-waiting";
         // Nothing was checked: nothing new is said.
         if (path === UNCHECKED_ROUTE) return;
-        router.replace(to);
+        if (hereRef.current) router.replace(to);
       }}
     />
   );

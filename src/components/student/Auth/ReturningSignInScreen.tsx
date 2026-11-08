@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import { useDoor } from "@/hooks/useDoor";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -138,6 +139,8 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   // stored (19 Oct, `doorSession`).
   useDoor();
   const router = useRouter();
+  // A screen that has gone never navigates (see `useStillHere`).
+  const hereRef = useStillHere();
   const { signIn } = useAuth();
 
   // From 05, when it sent this child here; empty on any other arrival.
@@ -337,15 +340,20 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
    */
   const goOn = useCallback(
     (destination: string): boolean => {
+      // Gone while the sign-in was answered: nowhere to go from, nothing to
+      // schedule - and nothing to set back, so it counts as leaving.
+      if (!hereRef.current) return true;
       if (skipsWelcomeBeat(destination)) {
         router.push(destination);
         return true;
       }
       setDone(true);
-      doneTimer.current = setTimeout(() => router.push(destination), DONE_MS);
+      doneTimer.current = setTimeout(() => {
+        if (hereRef.current) router.push(destination);
+      }, DONE_MS);
       return false;
     },
-    [router],
+    [router, hereRef],
   );
 
   const submit = useCallback(async () => {

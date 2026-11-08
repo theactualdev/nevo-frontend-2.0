@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import { authApi } from "@/lib/api";
 import {
   DOOR_HREF,
@@ -123,6 +124,8 @@ function Spinner({ onNavy = false, size = 18 }: { onNavy?: boolean; size?: numbe
 
 export function TeacherSignIn() {
   const router = useRouter();
+  // A screen that has gone never navigates (see `useStillHere`).
+  const hereRef = useStillHere();
   const searchParams = useSearchParams();
   const { signIn } = useAuth();
   // The route guard appends ?next= when it turns someone away; send them
@@ -216,9 +219,14 @@ export function TeacherSignIn() {
           schoolId: "",
           method: "manual",
         });
+        // Gone while the sign-in was answered: a timer set now would outlive
+        // the cleanup that clears them, so none is set.
+        if (!hereRef.current) return;
         setPhase("success");
         timers.current.push(
-          setTimeout(() => router.push(destination), SUCCESS_HOLD_MS),
+          setTimeout(() => {
+            if (hereRef.current) router.push(destination);
+          }, SUCCESS_HOLD_MS),
         );
       })
       .catch((err: unknown) => {

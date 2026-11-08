@@ -841,3 +841,30 @@ describe("the thirty-day clock", () => {
     expect(roster.rememberChild).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * A DOOR THAT HAS GONE NEVER NAVIGATES (the hub, 8 Nov): Back while the PIN is
+ * answered, and the answer lands with the door already gone.
+ */
+describe("Back while the PIN is answered", () => {
+  it("moves nobody, then or after the beat, once the door has gone", async () => {
+    let land: (s: typeof SESSION) => void = () => {};
+    loginPin.mockReturnValue(
+      new Promise((resolve) => {
+        land = resolve;
+      }),
+    );
+    await chooseAda();
+    await tap("1234");
+
+    cleanup(); // Back: the door goes.
+    await act(async () => land(SESSION));
+    // Past the "Welcome back" beat (`DONE_MS`, 700).
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    });
+
+    expect(router.push).not.toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+});

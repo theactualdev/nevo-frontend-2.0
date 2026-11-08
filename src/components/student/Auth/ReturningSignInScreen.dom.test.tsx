@@ -1481,3 +1481,30 @@ describe("the keyboards on a touch screen", () => {
     expect(scrollBy).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * A SCREEN THAT HAS GONE NEVER NAVIGATES (the hub, 8 Nov): Back while the
+ * sign-in is answered, and the answer lands with 28c already gone.
+ */
+describe("Back while the sign-in is answered", () => {
+  it("moves nobody, then or after the beat, once the screen has gone", async () => {
+    let land: (s: typeof SESSION) => void = () => {};
+    loginPin.mockReturnValue(
+      new Promise((resolve) => {
+        land = resolve;
+      }),
+    );
+    const { unmount } = render(<ReturningSignInScreen />);
+    fill();
+    await signInNow();
+
+    unmount(); // Back.
+    await act(async () => {
+      land(SESSION);
+      // Past the "Welcome back" beat (`DONE_MS`, 1200).
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+
+    expect(push).not.toHaveBeenCalled();
+  });
+});

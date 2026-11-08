@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/shared";
 import { CombinedMark } from "@/components/shared/BrandMarks";
@@ -61,6 +62,8 @@ export function afterRetry(destination: string): string | null {
  */
 export function EntryCheckFailed({ next }: { next?: string }) {
   const router = useRouter();
+  // A screen that has gone never navigates (see `useStillHere`).
+  const hereRef = useStillHere();
   const { signOut } = useAuth();
   const online = useOnline();
   const [checking, setChecking] = useState(false);
@@ -69,6 +72,7 @@ export function EntryCheckFailed({ next }: { next?: string }) {
     if (checking) return;
     setChecking(true);
     void studentDestination(next).then((destination) => {
+      if (!hereRef.current) return;
       const to = afterRetry(destination);
       if (to) router.replace(to);
       else setChecking(false);
