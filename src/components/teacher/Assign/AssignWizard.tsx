@@ -235,6 +235,44 @@ function withNextStep(message: string): string {
   return `${stopped} Open them from your Library and check them.`;
 }
 
+/**
+ * WHY A SEND FAILED, AND WHETHER TRYING AGAIN CAN HELP (live, 8 Nov). Food
+ * Chains to SS 3 Sciences answered 422 and the wizard said "try again" -
+ * untrue for a refusal (Lydia, 4 Nov). The route's own 422 is
+ * `{detail: "At least one student is required"}` (a class with nobody
+ * enrolled); FastAPI's validation 422 is `{detail: {code: "validation_error",
+ * message: "Request validation failed."}}`. Neither changes on a retry.
+ *
+ * - Retryable: no answer at all (the network), a 5xx, 408 or 429.
+ * - A refusal: any other 4xx - with the server's own sentence where it sends
+ *   one for a person to read. "Request validation failed." is not one: that
+ *   is this side's request to fix, never the teacher's.
+ */
+export type SendFailure = { retryable: true } | { retryable: false; sentence: string | null };
+
+export function sendFailure(reason: unknown): SendFailure {
+  if (!(reason instanceof ApiError)) return { retryable: true };
+  const s = reason.status;
+  if (s >= 500 || s === 408 || s === 429 || s === 0) return { retryable: true };
+  const inner =
+    reason.detail && typeof reason.detail === "object"
+      ? (reason.detail as { detail?: unknown }).detail
+      : undefined;
+  const said =
+    typeof inner === "string"
+      ? inner.trim()
+      : apiErrorCode(reason.detail) === "validation_error"
+        ? ""
+        : (apiErrorMessage(reason.detail) ?? "").trim();
+  return {
+    retryable: false,
+    sentence: said ? (/[.!?]$/.test(said) ? said : `${said}.`) : null,
+  };
+}
+
+/** Ours, for a refusal that carries no sentence a teacher can act on. */
+export const CANNOT_ASSIGN_AS_IT_IS = "This couldn’t be assigned as it is.";
+
 export function AssignWizard({
   preselect,
   preselectClass,
@@ -677,6 +715,22 @@ export function AssignWizard({
       refusal && refusal.status === "rejected"
         ? apiErrorMessage((refusal.reason as ApiError).detail)
         : null;
+    /*
+     * REFUSED, NOT FAILED: every failed request was declined in a way a retry
+     * cannot change (`sendFailure`). Then "try again" is untrue, so the line
+     * is the server's own reason - each distinct one once - or ours where it
+     * sent none a teacher can read.
+     */
+    const failures = results
+      .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+      .map((r) => sendFailure(r.reason));
+    const refusedEveryTime = failures.length > 0 && failures.every((f) => !f.retryable);
+    const refusedLine =
+      [
+        ...new Set(
+          failures.map((f) => (!f.retryable && f.sentence) || CANNOT_ASSIGN_AS_IT_IS),
+        ),
+      ].join(" ");
 
     if (failed.length === targets.length) {
       /*
@@ -719,7 +773,9 @@ export function AssignWizard({
             : single
               ? "This lesson still has sections waiting for you, so it cannot go to students yet."
               : "One of these lessons still has sections waiting for you, so it cannot go to students yet. Open it from your Library and check them."
-          : "We couldn’t assign that just now. Nothing has been sent - try again.",
+          : refusedEveryTime
+            ? `${refusedLine} Nothing has been sent.`
+            : "We couldn’t assign that just now. Nothing has been sent - try again.",
       );
       return;
     }
@@ -737,7 +793,10 @@ export function AssignWizard({
         )
         .join(", ");
       setError(
-        `Assigned to the other classes, but ${names} didn’t go through. Don’t redo the whole thing - reopen this for ${names} only.`,
+        refusedEveryTime
+          ? // Reopening for a class the server refused would be refused again.
+            `Assigned to the other classes. ${names} didn’t go through: ${refusedLine}`
+          : `Assigned to the other classes, but ${names} didn’t go through. Don’t redo the whole thing - reopen this for ${names} only.`,
       );
       return;
     }
