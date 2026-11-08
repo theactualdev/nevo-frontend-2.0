@@ -32,7 +32,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: push, back: push, prefetch: vi.fn() }),
 }));
 
-import { AssignWizard } from "./AssignWizard";
+import { AssignWizard, sendFailure } from "./AssignWizard";
 import { SystemMessagesProvider } from "@/components/shared/SystemMessages";
 
 /**
@@ -754,7 +754,12 @@ describe("a 409 that names the lessons", () => {
 
     sendOne();
 
-    expect(await screen.findByText(/try again/i)).toBeInTheDocument();
+    // A refusal with no sentence (8 Nov): ours, and no "try again" either -
+    // a retry does not change a refusal.
+    expect(
+      await screen.findByText("This couldn’t be assigned as it is. Nothing has been sent."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/sections waiting for you/)).not.toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: /Open the lesson/i }),
     ).not.toBeInTheDocument();
@@ -1367,5 +1372,96 @@ describe("between the 201 and the library opening", () => {
 
     expect(await screen.findByRole("button", { name: "Confirm assignment" })).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Live, 8 Nov: Food Chains to SS 3 Sciences answered 422 and the wizard said
+ * "We couldn't assign that just now. Nothing has been sent - try again." A
+ * refusal does not change on a retry, so "try again" was untrue (Lydia, 4 Nov).
+ * The route's own 422 is a plain sentence; FastAPI's validation 422 is not one
+ * a teacher can act on.
+ */
+describe("a send the server refuses", () => {
+  const EMPTY_CLASS = new ApiError(422, "422", { detail: "At least one student is required" });
+  const INVALID = new ApiError(422, "422", {
+    detail: { code: "validation_error", message: "Request validation failed.", errors: [] },
+  });
+
+  const sendTo = (...names: RegExp[]) => {
+    render(
+      <SystemMessagesProvider>
+        <AssignWizard preselect="l-1" />
+      </SystemMessagesProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    onlyClasses(...(names.length ? names : [/JSS 2A/]));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
+  };
+
+  it("says the server's own reason, and never to try again", async () => {
+    create.mockRejectedValue(EMPTY_CLASS);
+    sendTo();
+
+    expect(
+      await screen.findByText("At least one student is required. Nothing has been sent."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/try again/)).not.toBeInTheDocument();
+  });
+
+  it("says ours, without try again, when the refusal has no sentence for a teacher", async () => {
+    create.mockRejectedValue(INVALID);
+    sendTo();
+
+    expect(
+      await screen.findByText("This couldn’t be assigned as it is. Nothing has been sent."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Request validation failed/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/try again/)).not.toBeInTheDocument();
+  });
+
+  it("keeps try again for a failure that really is passing - the server or the network", async () => {
+    create.mockRejectedValue(new ApiError(503, "503"));
+    sendTo();
+
+    expect(
+      await screen.findByText("We couldn’t assign that just now. Nothing has been sent - try again."),
+    ).toBeInTheDocument();
+  });
+
+  it("names the refused class and its reason, without sending the teacher back to it", async () => {
+    create.mockImplementation(async (body: { classId?: string }) => {
+      if (body.classId === "c-2") throw EMPTY_CLASS;
+      return { createdCount: 30 };
+    });
+    sendTo(/JSS 2A/, /JSS 2B/);
+
+    expect(
+      await screen.findByText(
+        "Assigned to the other classes. JSS 2B didn’t go through: At least one student is required.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/reopen this/)).not.toBeInTheDocument();
+  });
+});
+
+describe("sendFailure", () => {
+  it("reads which failures a retry can change", () => {
+    expect(sendFailure(new Error("network"))).toEqual({ retryable: true });
+    expect(sendFailure(new ApiError(500, "500"))).toEqual({ retryable: true });
+    expect(sendFailure(new ApiError(429, "429"))).toEqual({ retryable: true });
+    expect(sendFailure(new ApiError(422, "422", { detail: "At least one student is required" }))).toEqual({
+      retryable: false,
+      sentence: "At least one student is required.",
+    });
+    expect(sendFailure(new ApiError(404, "404", { detail: "Lesson not found" }))).toEqual({
+      retryable: false,
+      sentence: "Lesson not found.",
+    });
+    expect(
+      sendFailure(new ApiError(422, "422", { detail: { code: "validation_error", message: "Request validation failed." } })),
+    ).toEqual({ retryable: false, sentence: null });
   });
 });
