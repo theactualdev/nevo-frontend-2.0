@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { NevoLockup } from "@/components/shared/NevoLockup";
 import { ApiError } from "@/lib/api/client";
+import { getSession } from "@/lib/auth/session";
+import { schoolApi } from "@/lib/api/school";
 import {
   emailConfirmationApi,
   retryAfterSeconds,
@@ -78,12 +80,10 @@ const HEADING: Record<EmailConfirmationStatus, string> = {
   already_confirmed: "This email is already confirmed",
   expired: "This link has expired",
   /*
-   * NOT DRAWN. D01b draws expired and already-confirmed and stops, because a
-   * token that never existed is not a state a designer reaches by walking the
-   * happy path. It is still a state the contract returns, so it keeps our own
-   * wording rather than borrowing a neighbour's and saying the wrong thing.
+   * DRAWN NOW: D01b AC-03b (design 1397ec4, Lydia's item 25), "Link not
+   * valid - not expired, not used". See `invalidBody` for what it says.
    */
-  invalid: "This link doesn’t work",
+  invalid: "This link doesn’t look right",
   pending: "This address still needs confirming",
 };
 
@@ -116,6 +116,48 @@ function bodyFor(status: EmailConfirmationStatus, email: string | null): string 
 }
 
 /**
+ * AC-03b's body, reduced to what is true (5 Nov check, raised to design).
+ *
+ * The frame: "It may have been copied only part-way, or it's from an older
+ * email. Nothing's wrong with your account - we can send {school} a fresh link
+ * to {email}." Two parts don't hold:
+ *  - "or it's from an older email": an older link comes back `expired`, with
+ *    its address - that's AC-03, not this.
+ *  - the address and school: an invalid token identifies nobody (`email` is
+ *    null), so they can only be known when the person is SIGNED IN and their
+ *    own confirmation is still pending. Signed out - the usual way someone
+ *    opens an emailed link - there's nothing to name and nothing a button
+ *    could do without a session. Signed out, it says to sign in (Lydia, below).
+ */
+function invalidBody(own: OwnConfirmation | null, signedOut: boolean): string | null {
+  /*
+   * LYDIA, 7 Nov (her 8 in the copy pass, and 13d): this screen is "This link
+   * doesn't look right" - the expired screen keeps its own words - with Send a
+   * new link when signed in and Sign in when signed out.
+   *
+   * SIGNED IN AND WAITING: the heading and Send a new link, "nothing else on
+   * it". The admin is the school; there's no one else to send them to.
+   *
+   * SIGNED OUT: her SCRUM-321 line, "Sign in to your account to continue." -
+   * no address, no school, Sign in the only control, because the screen has
+   * none of them.
+   */
+  if (own) return null;
+  if (signedOut) return "Sign in to your account to continue.";
+  return "It may have been copied only part-way.";
+}
+
+/**
+ * The signed-in admin's own confirmation, read only after an invalid link and
+ * only while it is still waiting - the one case where AC-03b's address,
+ * school and two buttons are true.
+ */
+interface OwnConfirmation {
+  email: string;
+  school: string | null;
+}
+
+/**
  * Whether signing in is the next step.
  *
  * All five say yes today, and the map is here rather than inlined as `true`
@@ -140,6 +182,14 @@ export function ConfirmEmail({ token }: { token: string }) {
   /** undefined = not refused. null = refused, no wait given. */
   const [tooSoon, setTooSoon] = useState<number | null | undefined>(undefined);
   const [resendFailed, setResendFailed] = useState(false);
+  /** Signed in, still unconfirmed, after an invalid link - see `invalidBody`. */
+  const [own, setOwn] = useState<OwnConfirmation | null>(null);
+  /**
+   * Known to have no session, after an invalid link: no session at all, or
+   * the server refusing the one there is (401). A read that fails any other
+   * way proves nothing, so it keeps the frame's part-way line.
+   */
+  const [signedOut, setSignedOut] = useState(false);
 
   /*
    * The request alone. No synchronous setState, because this runs from an
@@ -154,6 +204,31 @@ export function ConfirmEmail({ token }: { token: string }) {
       .then((s) => {
         setState(s);
         setPhase("done");
+        /*
+         * AC-03c (design 928cf30, Job 14): an expired link opened SIGNED OUT
+         * names nobody and offers only Sign in - "an expired link is a URL
+         * anyone can hold". Once signed in, AC-03 is what they see.
+         */
+        if (s.status === "expired") {
+          if (!getSession()) setSignedOut(true);
+          return;
+        }
+        // AC-03b's signed-in case: the link names nobody, but a session does.
+        if (s.status !== "invalid") return;
+        if (!getSession()) {
+          setSignedOut(true);
+          return;
+        }
+        Promise.all([emailConfirmationApi.read(), schoolApi.get().catch(() => null)])
+          .then(([mine, school]) => {
+            if ((mine.status === "pending" || mine.status === "expired") && mine.email) {
+              setOwn({ email: mine.email, school: school?.name?.trim() || null });
+            }
+          })
+          .catch((err: unknown) => {
+            // The session has ended: signed out after all.
+            if (err instanceof ApiError && err.status === 401) setSignedOut(true);
+          });
       })
       .catch(() => {
         // Deliberately NOT `status: "invalid"`. We do not know that.
@@ -185,7 +260,9 @@ export function ConfirmEmail({ token }: { token: string }) {
     setTooSoon(undefined);
     setResendFailed(false);
     emailConfirmationApi
-      .resend(token)
+      // An invalid token identifies nobody, so the signed-in resend asks for
+      // the session's own address instead.
+      .resend(state?.status === "invalid" ? undefined : token)
       .then(() => setResent(true))
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.status === 429) {
@@ -234,20 +311,39 @@ export function ConfirmEmail({ token }: { token: string }) {
               * D01b names the 24-hour lifetime and the address; `message` knows
               * neither, so on the two states design drew, design wins.
               */}
-            <p className="mt-[13px] max-w-[420px] text-[17px] leading-[1.55] text-nevo-near-black/70">
-              {bodyFor(state.status, state.email) ?? state.message}
-            </p>
+            {(() => {
+              /*
+               * AC-03c's "Sign in and we will send a fresh one." is left out:
+               * signing in sends nothing (the console's banner offers Resend,
+               * a press away), so "we will send" would promise more than
+               * happens - raised. The 48 hours is Lydia's correction of the
+               * frame's 24 (copy pass, 7 Nov).
+               */
+              const body =
+                state.status === "invalid"
+                  ? invalidBody(own, signedOut)
+                  : state.status === "expired" && signedOut
+                    ? "Confirmation links last 48 hours."
+                    : (bodyFor(state.status, state.email) ?? state.message);
+              return body ? (
+                <p className="mt-[13px] max-w-[420px] text-[17px] leading-[1.55] text-nevo-near-black/70">
+                  {body}
+                </p>
+              ) : null;
+            })()}
             {/*
               * The address on its own line, only where the body has not
               * already named it. `email` is nullable - an invalid token
               * identifies nobody - so this is absent rather than blank.
               */}
-            {state.email && !bodyFor(state.status, state.email) ? (
+            {state.email && state.status !== "invalid" && !bodyFor(state.status, state.email) ? (
               <p className="mt-2.5 text-[14.5px] text-nevo-near-black/55">
                 {state.email}
               </p>
             ) : null}
-            {OFFERS_SIGN_IN[state.status] ? (
+            {/* Signed in and waiting after an invalid link, Send a new link is
+                the only control (Lydia, 13d) - they're signed in already. */}
+            {OFFERS_SIGN_IN[state.status] && !(state.status === "invalid" && own) ? (
               <Link
                 href="/auth/admin"
                 className="mt-7 flex h-[52px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-6 text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 active:brightness-93"
@@ -277,7 +373,9 @@ export function ConfirmEmail({ token }: { token: string }) {
               * password). `/verify` transfers nothing; changing transfers
               * everything. Two ways to serve it are with design.
               */}
-            {state.status === "expired" || state.status === "pending" ? (
+            {(state.status === "expired" && !signedOut) ||
+            state.status === "pending" ||
+            (state.status === "invalid" && own) ? (
               <div className="mt-6 flex w-full max-w-[360px] flex-col items-center gap-3">
                 <button
                   type="button"
@@ -345,9 +443,11 @@ export function ConfirmEmail({ token }: { token: string }) {
                   * caller of the address change was the setup wizard, which a
                   * signed-in admin never sees again.
                   */}
-                <p className="m-0 max-w-[340px] text-[13.5px] leading-[1.55] text-nevo-near-black/55">
-                  Wrong address? Sign in and you can change it there.
-                </p>
+                {state.status === "invalid" && own ? null : (
+                  <p className="m-0 max-w-[340px] text-[13.5px] leading-[1.55] text-nevo-near-black/55">
+                    Wrong address? Sign in and you can change it there.
+                  </p>
+                )}
               </div>
             ) : null}
           </>

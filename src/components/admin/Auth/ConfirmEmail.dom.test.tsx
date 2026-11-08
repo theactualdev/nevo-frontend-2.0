@@ -17,6 +17,9 @@ import { ConfirmEmail } from "./ConfirmEmail";
 
 const verify = vi.fn();
 const resend = vi.fn();
+const read = vi.fn();
+const getSession = vi.fn();
+const schoolGet = vi.fn();
 
 vi.mock("@/lib/api/emailConfirmation", async (importOriginal) => {
   const actual =
@@ -27,8 +30,17 @@ vi.mock("@/lib/api/emailConfirmation", async (importOriginal) => {
       ...actual.emailConfirmationApi,
       verify: (t: string) => verify(t),
       resend: (tok?: string) => resend(tok),
+      read: () => read(),
     },
   };
+});
+vi.mock("@/lib/auth/session", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth/session")>();
+  return { ...actual, getSession: () => getSession() };
+});
+vi.mock("@/lib/api/school", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/school")>();
+  return { ...actual, schoolApi: { ...actual.schoolApi, get: () => schoolGet() } };
 });
 
 const state = (over: Partial<EmailConfirmationState> = {}): EmailConfirmationState => ({
@@ -39,7 +51,15 @@ const state = (over: Partial<EmailConfirmationState> = {}): EmailConfirmationSta
   ...over,
 });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Signed out unless a test says otherwise - how an emailed link is usually opened.
+  getSession.mockReturnValue(null);
+});
+
+/** Signed in: AC-03 is what an expired link shows then (AC-03c is signed out). */
+const signedIn = () =>
+  getSession.mockReturnValue({ token: "s", userId: "u1", role: "senco_admin", expiresAt: "2026-12-01T00:00:00Z" });
 
 describe("ConfirmEmail", () => {
   it("sends the token from the path, not a query param", async () => {
@@ -70,7 +90,7 @@ describe("ConfirmEmail", () => {
     verify.mockResolvedValue(state({ status: "invalid", email: null, message: "No such link." }));
     const { container } = render(<ConfirmEmail token="t3" />);
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/doesn[’']t work/i),
+      expect(visibleText(container)).toMatch(/doesn[’']t look right/i),
     );
     expect(visibleText(container)).not.toMatch(/run out|already confirmed/i);
   });
@@ -113,6 +133,7 @@ describe("ConfirmEmail", () => {
      * written, and the constraint is gone: backend widened resend to accept
      * the token on 24 Sep. The old test would have kept the button out.
      */
+    signedIn();
     verify.mockResolvedValue(state({ status: "expired", email: null, message: "Ran out." }));
     const { container } = render(<ConfirmEmail token="t6" />);
 
@@ -127,7 +148,7 @@ describe("ConfirmEmail", () => {
     verify.mockResolvedValue(state({ status: "invalid", email: null, message: "No such link." }));
     const { container } = render(<ConfirmEmail token="t7" />);
 
-    await waitFor(() => expect(visibleText(container)).toMatch(/doesn[’']t work/i));
+    await waitFor(() => expect(visibleText(container)).toMatch(/doesn[’']t look right/i));
     expect(visibleText(container)).not.toMatch(/null|undefined|@/);
   });
 });
@@ -141,6 +162,10 @@ describe("ConfirmEmail", () => {
  * matched /expired/i would pass against either wording and catch nothing.
  */
 describe("D01b's own copy", () => {
+  beforeEach(() => {
+    signedIn();
+  });
+
   it("says what AC-03 says, with the backend's 48 hours and the address", async () => {
     verify.mockResolvedValue(
       state({ status: "expired", email: "f.adebayo@brightgate.edu.ng", message: "Ran out." }),
@@ -210,6 +235,10 @@ describe("D01b's own copy", () => {
  * wall.
  */
 describe("sending a new link from a dead one", () => {
+  beforeEach(() => {
+    signedIn();
+  });
+
   const expired = () =>
     verify.mockResolvedValue(state({ status: "expired", email: "f@b.edu.ng" }));
 
@@ -286,5 +315,123 @@ describe("sending a new link from a dead one", () => {
 
     await screen.findByRole("button", { name: /Send a new link/i });
     expect(screen.queryByRole("button", { name: /change the email/i })).toBeNull();
+  });
+});
+
+/**
+ * D01b AC-03b, "Link not valid" (design 1397ec4, Lydia's item 25), reduced to
+ * what is true: "or it's from an older email" is dropped (an older link comes
+ * back `expired`), and the address, school and two buttons appear only for a
+ * SIGNED-IN admin still waiting to confirm - an invalid token names nobody.
+ */
+describe("a link that doesn't look right (AC-03b)", () => {
+  const invalid = state({ status: "invalid", email: null, message: "No such link." });
+
+  /*
+   * SIGNED OUT, IN LYDIA'S WORDS (SCRUM-321, 7 Nov): "Sign in to your account
+   * to continue.", with no address, no school, and Sign in the only control.
+   * Not her "This link has expired.": the server says this link is invalid,
+   * not expired, and saying otherwise would be an untrue state (raised).
+   */
+  it("signed out, says to sign in, with Sign in the only control", async () => {
+    verify.mockResolvedValue(invalid);
+    const { container } = render(<ConfirmEmail token="t1" />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/This link doesn't look right/));
+    const text = visibleText(container);
+    expect(text).toMatch(/Sign in to your account to continue\./);
+    expect(text).not.toMatch(/part-way|older email|expired|@/);
+    expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual(["Sign in"]);
+    expect(screen.queryAllByRole("button")).toEqual([]);
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("a session the server refuses reads as signed out", async () => {
+    getSession.mockReturnValue({ token: "s", userId: "u1", role: "senco_admin", expiresAt: "2026-12-01T00:00:00Z" });
+    verify.mockResolvedValue(invalid);
+    read.mockRejectedValue(new ApiError(401, "Not authenticated"));
+    schoolGet.mockResolvedValue({ name: "Brightgate Academy" });
+    const { container } = render(<ConfirmEmail token="t1" />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Sign in to your account to continue\./));
+    expect(screen.queryByRole("button", { name: /Send a new link/ })).toBeNull();
+  });
+
+  it("a read that fails any other way keeps the part-way line - it proves nothing about the session", async () => {
+    getSession.mockReturnValue({ token: "s", userId: "u1", role: "senco_admin", expiresAt: "2026-12-01T00:00:00Z" });
+    verify.mockResolvedValue(invalid);
+    read.mockRejectedValue(new Error("offline"));
+    schoolGet.mockResolvedValue({ name: "Brightgate Academy" });
+    const { container } = render(<ConfirmEmail token="t1" />);
+    await waitFor(() => expect(read).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(visibleText(container)).toMatch(/It may have been copied only part-way\./);
+    expect(visibleText(container)).not.toMatch(/Sign in to your account to continue/);
+  });
+
+  /*
+   * LYDIA, 7 Nov (her 8 and 13d): signed in and waiting, the heading and Send
+   * a new link - "nothing else on it". The admin is the school.
+   */
+  it("signed in and waiting: the heading and Send a new link, nothing else", async () => {
+    getSession.mockReturnValue({ token: "s", userId: "u1", role: "senco_admin", expiresAt: "2026-12-01T00:00:00Z" });
+    verify.mockResolvedValue(invalid);
+    read.mockResolvedValue(state({ status: "pending", email: "f.adebayo@brightgate.edu.ng" }));
+    schoolGet.mockResolvedValue({ name: "Brightgate Academy" });
+    resend.mockResolvedValue(state({ status: "pending" }));
+    const { container } = render(<ConfirmEmail token="t1" />);
+    const send = await screen.findByRole("button", { name: /Send a new link/ });
+    expect(screen.getByRole("heading", { name: /This link doesn.t look right/ })).toBeInTheDocument();
+    expect(screen.queryAllByRole("link")).toEqual([]);
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    const text = visibleText(container);
+    expect(text).not.toMatch(/part-way|f\.adebayo|Brightgate|Wrong address|Change the email/);
+    fireEvent.click(send);
+    await waitFor(() => expect(resend).toHaveBeenCalledWith(undefined));
+    expect(await screen.findByText(/Sent\. Check your email/)).toBeInTheDocument();
+  });
+
+  it("signed in but already confirmed, offers nothing more to send", async () => {
+    getSession.mockReturnValue({ token: "s", userId: "u1", role: "senco_admin", expiresAt: "2026-12-01T00:00:00Z" });
+    verify.mockResolvedValue(invalid);
+    read.mockResolvedValue(state({ status: "confirmed", email: "f.adebayo@brightgate.edu.ng" }));
+    schoolGet.mockResolvedValue({ name: "Brightgate Academy" });
+    const { container } = render(<ConfirmEmail token="t1" />);
+    await waitFor(() => expect(read).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(visibleText(container)).not.toMatch(/f\.adebayo/);
+    expect(screen.queryByRole("button", { name: /Send a new link/ })).toBeNull();
+  });
+});
+
+/*
+ * AC-03c (design 928cf30, Job 14): an expired link opened SIGNED OUT. It
+ * names no address or school - an expired link is a URL anyone can hold -
+ * and Sign in is the only control. The 48 hours is Lydia's correction of the
+ * frame's 24. The frame's "Sign in and we will send a fresh one." is left
+ * out: signing in sends nothing on its own (raised).
+ */
+describe("an expired link opened signed out (AC-03c)", () => {
+  it("says it expired and how long links last, with Sign in the only control", async () => {
+    verify.mockResolvedValue(
+      state({ status: "expired", email: "f.adebayo@brightgate.edu.ng", message: "Ran out." }),
+    );
+    const { container } = render(<ConfirmEmail token="t1" />);
+    expect(await screen.findByRole("heading", { name: "This link has expired" })).toBeInTheDocument();
+    const text = visibleText(container);
+    expect(text).toMatch(/Confirmation links last 48 hours\./);
+    expect(text).not.toMatch(/f\.adebayo|Brightgate|we will send|We can send|Wrong address|24 hours/);
+    expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual(["Sign in"]);
+    expect(screen.queryAllByRole("button")).toEqual([]);
+  });
+
+  it("signed in, it's AC-03 - the address and Send a new link", async () => {
+    signedIn();
+    verify.mockResolvedValue(
+      state({ status: "expired", email: "f.adebayo@brightgate.edu.ng", message: "Ran out." }),
+    );
+    const { container } = render(<ConfirmEmail token="t1" />);
+    expect(await screen.findByRole("button", { name: /Send a new link/ })).toBeInTheDocument();
+    expect(visibleText(container)).toMatch(
+      /Confirmation links last 48 hours\. We can send a fresh one to f\.adebayo@brightgate\.edu\.ng\./,
+    );
   });
 });
