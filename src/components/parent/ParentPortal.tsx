@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ChildHeldLines, LINK_LIFETIME_LINE, isHeld } from "./childHeld";
 import { TryAgain } from "./TryAgain";
 import { ApiError } from "@/lib/api/client";
 import { parentApi, type ParentInvitation } from "@/lib/api/parent";
-import { ParentConsent } from "./ParentConsent";
+import { AccountSetup, ParentConsent } from "./ParentConsent";
 import { ParentDataManagement } from "./ParentDataManagement";
 
 /**
@@ -15,7 +17,12 @@ import { ParentDataManagement } from "./ParentDataManagement";
  * decide what to show; the record does:
  *
  *   not_sent / pending  -> D01b, the consent request
- *   confirmed           -> D01c, data management
+ *   confirmed           -> D01c, data management - with D01e's held card on
+ *                          top when the date-of-birth check holds the child
+ *                          (`ageCheck`, Teslim's item 16): sign in if they
+ *                          have an account (`parentAccountReady`), set one up
+ *                          if not. The rights stay below it - a held child's
+ *                          parent keeps the route to them (NDPA s.31).
  *   withdrawn           -> D01c, which opens in its suspended state
  *
  * Backend made this possible on purpose: an already-decided link still
@@ -79,16 +86,19 @@ export function ParentPortal({ token }: { token: string }) {
     return (
       <Shell>
         <div className="rounded-[14px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+          {/* A failed read, in Lydia's words (SCRUM-321): nothing about
+              whether consent is recorded - unread, the page doesn't know. */}
           <h1 className="text-[21px] font-semibold text-nevo-near-black">
             {phase === "failed"
-              ? "We couldn’t open this page"
+              ? "We couldn’t load this just now"
               : "This link is no longer active"}
           </h1>
-          <p className="mt-3 text-[15px] leading-[1.6] text-nevo-near-black/68">
-            {phase === "failed"
-              ? "Something went wrong at our end. Please try the link again in a moment."
-              : "It may have expired, been replaced by a newer one, or the school may have updated your details. Contact your child’s school and they can send you a fresh link."}
-          </p>
+          {phase === "failed" ? null : (
+            <p className="mt-3 text-[15px] leading-[1.6] text-nevo-near-black/68">
+              It may have expired, been replaced by a newer one, or the school may have updated
+              your details. Contact your child&rsquo;s school and they can send you a fresh link.
+            </p>
+          )}
           {phase === "failed" ? <TryAgain onClick={retry} /> : null}
         </div>
       </Shell>
@@ -102,9 +112,51 @@ export function ParentPortal({ token }: { token: string }) {
     invitation.status === "confirmed" || invitation.status === "withdrawn";
 
   return decided ? (
-    <ParentDataManagement token={token} invitation={invitation} />
+    <ParentDataManagement
+      token={token}
+      invitation={invitation}
+      lead={
+        invitation.status === "confirmed" && isHeld(invitation.ageCheck) ? (
+          <ReturningHeld token={token} invitation={invitation} />
+        ) : null
+      }
+    />
   ) : (
     <ParentConsent token={token} invitation={invitation} />
+  );
+}
+
+/**
+ * D01e's return state: back through the same link, consent recorded, the
+ * child held. Lydia's lines (SCRUM-321), then the one step that's theirs -
+ * sign in, or set up the account they'll confirm from.
+ */
+function ReturningHeld({ token, invitation }: { token: string; invitation: ParentInvitation }) {
+  const [skipped, setSkipped] = useState(false);
+  const name = invitation.studentFirstName;
+  const child = name ? name.charAt(0).toUpperCase() + name.slice(1) : "Your child";
+  return (
+    <div className="mb-3.5 rounded-[14px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+      <h2 className="text-[18px] font-semibold text-nevo-near-black">Welcome back.</h2>
+      <p className="mt-1.5 text-[14.5px] leading-[1.55] text-nevo-near-black/68">
+        {child}&rsquo;s consent is recorded.
+      </p>
+      <ChildHeldLines
+        child={child}
+        className="mt-1.5 mb-0 text-[14.5px] font-medium leading-[1.55] text-nevo-near-black/80"
+      />
+      {invitation.parentAccountReady ? (
+        <Link
+          href="/parent-sign-in"
+          className="mt-4 flex h-12 w-full cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy px-5 text-[15px] font-semibold text-nevo-cream"
+        >
+          Sign in
+        </Link>
+      ) : skipped ? null : (
+        <AccountSetup token={token} contact={invitation.parentContact} onSkip={() => setSkipped(true)} />
+      )}
+      <p className="mt-4 mb-0 text-[12.5px] leading-[1.5] text-nevo-near-black/55">{LINK_LIFETIME_LINE}</p>
+    </div>
   );
 }
 

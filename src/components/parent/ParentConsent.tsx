@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { CONFIRM_ONCE_MORE, ChildHeldLines, LINK_LIFETIME_LINE, isHeld } from "./childHeld";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { setSession } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
@@ -165,6 +166,8 @@ export function ParentConsent({
   const [accountCreated, setAccountCreated] = useState(false);
   /** Whether the server says nothing holds the child now (`ageCheck`). */
   const [startsNow, setStartsNow] = useState(false);
+  /** The server's date-of-birth check holds the child (D01e). */
+  const [held, setHeld] = useState(false);
   /*
    * THE CHILD'S DATE OF BIRTH, before consent (D01b R1-R4). Empty, the consent
    * waits on it (R1). Started, pressing Yes answers in place rather than
@@ -252,6 +255,7 @@ export function ParentConsent({
       // "Can start learning" only on the server's word that nothing holds
       // the child (Lydia, 4 Nov: an untrue state is worse than a missing one).
       setStartsNow(res.ageCheck === "matched" || res.ageCheck === "resolved");
+      setHeld(isHeld(res.ageCheck));
       setPhase("done");
     } catch (e) {
       // 404 covers unknown, revoked and expired - the same dead end, and the
@@ -330,8 +334,23 @@ export function ParentConsent({
             </svg>
           </span>
           <h1 className="mt-6 text-[23px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black">
-            Thank you. That&rsquo;s all we needed.
+            {/* Held, "that's all we needed" isn't true: there's one more
+                confirmation to come. Lydia's thank-you for a held child
+                (copy pass, 7 Nov), then what's left (SCRUM-321). */}
+            {held ? (
+              <>
+                Thank you. {childLead} can&rsquo;t start just yet, and we&rsquo;ll tell you as
+                soon as that changes.
+              </>
+            ) : (
+              <>Thank you. That&rsquo;s all we needed.</>
+            )}
           </h1>
+          {held ? (
+            <p className="mt-3 mb-0 max-w-[320px] text-[15px] font-medium leading-[1.6] text-nevo-near-black/80">
+              {CONFIRM_ONCE_MORE}
+            </p>
+          ) : null}
           <p className="mt-3 max-w-[320px] text-[15px] leading-[1.6] text-nevo-near-black/68">
             {/* D01b "Consent given · account created", without the frame's
                 "she": no gender is sent. */}
@@ -364,6 +383,11 @@ export function ParentConsent({
               A copy of your consent has been sent to you.
             </p>
           )}
+          {held ? (
+            <p className="mt-2 text-center text-[12px] leading-[1.5] text-nevo-near-black/50">
+              {LINK_LIFETIME_LINE}
+            </p>
+          ) : null}
         </div>
       </Shell>
     );
@@ -385,11 +409,24 @@ export function ParentConsent({
               {childLead} can start learning with their class.
             </p>
           ) : null}
+          {held ? (
+            <ChildHeldLines
+              child={childLead}
+              className="mt-3 mb-0 max-w-[320px] text-[15px] leading-[1.6] text-nevo-near-black/68"
+            />
+          ) : null}
           {receipt && (
             <p className="mt-6 text-[12px] leading-[1.5] text-nevo-near-black/50">
               A copy of your consent has been sent to you.
             </p>
           )}
+          {/* D01e: "Maybe later" is never a dead end - the link brings them
+              back to set up their account, for as long as it works. */}
+          {held ? (
+            <p className="mt-2 text-[12px] leading-[1.5] text-nevo-near-black/50">
+              {LINK_LIFETIME_LINE}
+            </p>
+          ) : null}
         </div>
       </Shell>
     );
@@ -682,7 +719,7 @@ export function ParentConsent({
  *     ever surfaces it is a data bug with a visible symptom, which is better
  *     than a client that quietly keeps a withdrawn channel alive.
  */
-function AccountSetup({
+export function AccountSetup({
   token,
   contact,
   onSkip,

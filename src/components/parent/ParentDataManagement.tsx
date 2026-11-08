@@ -138,6 +138,7 @@ export function ParentDataManagement({
   act,
   restore,
   notice = null,
+  lead = null,
 }: {
   /** The tokenised link's, when the page was opened from one. */
   token?: string;
@@ -152,6 +153,8 @@ export function ParentDataManagement({
   restore?: () => Promise<void>;
   /** The server's own words about the last thing done, shown once. */
   notice?: string | null;
+  /** Shown above the page - D01e's held card on a returning link. */
+  lead?: React.ReactNode;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -374,6 +377,7 @@ export function ParentDataManagement({
 
   return (
     <Shell>
+      {lead}
       {notice ? (
         <p role="status" className={`${NOTE} mt-0 mb-3.5`}>
           {notice}

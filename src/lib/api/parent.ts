@@ -95,6 +95,18 @@ export interface ParentInvitation {
   expiresAt: string;
   /** When the parent decided, null while they have not. */
   decidedAt: string | null;
+  /**
+   * This guardian already has an account (Teslim's item 16, live 7 Nov): a
+   * returning parent is sent to sign in, not through setting one up again.
+   */
+  parentAccountReady?: boolean;
+  /**
+   * Where the child's date-of-birth check stands, or null when none was
+   * raised (most children). `mismatch` is the one that holds the child.
+   */
+  ageCheck?: "matched" | "mismatch" | "resolved" | "awaiting_parent" | null;
+  /** Why it holds - `enrolled_age_band_unavailable` is a roster gap. */
+  ageCheckHoldReasons?: string[];
 }
 
 /**
