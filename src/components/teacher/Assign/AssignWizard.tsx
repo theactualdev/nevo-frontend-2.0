@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { assignmentsApi } from "@/lib/api/assignments";
 import { useLessonLibrary } from "@/hooks/useLessonLibrary";
@@ -307,6 +307,8 @@ export function AssignWizard({
   /** The earliest day the date picker offers - today, as of choosing "later". */
   const [minDay, setMinDay] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  /** A send is under way or has landed: set at once, before any re-render. */
+  const inFlight = useRef(false);
   const signedIn = useHasSession();
   const [error, setError] = useState("");
   // Past the first step there are choices a teacher would have to remake.
@@ -555,11 +557,16 @@ export function AssignWizard({
       availableFrom = at.toISOString();
     }
 
+    // A second tap before React has re-rendered "Assigning…" would start a
+    // second set of POSTs; there is no idempotency key on this endpoint.
+    if (inFlight.current) return;
+    inFlight.current = true;
     setSubmitting(true);
     setError("");
     setErrorHref("");
     const held = await awaitingSignOff(picked);
     if (held.size > 0) {
+      inFlight.current = false;
       setSubmitting(false);
       setUnreviewed([...held]);
       setStep(1);
@@ -591,13 +598,23 @@ export function AssignWizard({
         assignmentsApi.create({ lessonIds, ...t, availableFrom }),
       ),
     );
-    setSubmitting(false);
 
     const failed = targets.filter((_, i) => results[i].status === "rejected");
     const created = results.reduce(
       (n, r) => n + (r.status === "fulfilled" ? r.value.createdCount : 0),
       0,
     );
+    /*
+     * HELD FROM THE 201 UNTIL THE PAGE MOVES ON (live test, 8 Nov). The button
+     * was released the moment the requests settled, so between the 201 and
+     * the library opening it read "Confirm assignment" again, and a second tap
+     * assigned the lesson twice. Only a send that stays on this page - one
+     * that failed, partly or wholly, or created nothing - gives it back.
+     */
+    if (failed.length > 0 || created === 0) {
+      inFlight.current = false;
+      setSubmitting(false);
+    }
     /*
      * The other reason nothing was created. Absent is not zero: an older
      * deployment that does not send the field must not be read as "and none
