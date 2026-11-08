@@ -222,7 +222,8 @@ beforeEach(() => {
   trackEvent.mockReset();
   getAdaptation.mockReset();
   answerGuided.mockReset().mockResolvedValue({ recorded: true });
-  saveAttempt.mockReset().mockResolvedValue({
+  // The server marks what was sent (test 9): "a" is the check's answer.
+  saveAttempt.mockReset().mockImplementation(async (_lesson: string, body: { answer?: unknown }) => ({
     id: "att-1",
     lessonId: LESSON_ID,
     sessionId: SESSION,
@@ -231,14 +232,14 @@ beforeEach(() => {
     source: "checkpoint",
     attemptNumber: 1,
     question: {},
-    answer: "b",
-    correct: false,
+    answer: body.answer,
+    correct: body.answer === "a",
     submittedAt: "2026-10-22T12:00:00Z",
     resultState: "nothing_landed",
     handoffTo: null,
     guidedPrompts: [],
     advanceAfterHandoff: false,
-  });
+  }));
   setSession({
     token: "tok",
     expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
@@ -390,7 +391,10 @@ describe("the two-miss hint, end to end", () => {
     fireEvent.click(within(sheet()).getByRole("button", { name: /The numerator/ }));
     await landed(n);
 
-    expect(within(sheet()).getByRole("button", { name: "Continue" })).toBeTruthy();
+    // Its way on comes with the answer's mark (test 9).
+    expect(
+      await within(sheet()).findByRole("button", { name: "Continue" }),
+    ).toBeTruthy();
     expect(text()).not.toContain(HINT);
   });
 });

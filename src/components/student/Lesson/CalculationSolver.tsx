@@ -21,6 +21,13 @@ import type {
   ScaffoldQuantity,
 } from "@/lib/types";
 import { isStoredAnswer } from "@/lib/lessons/storedAnswer";
+import {
+  onVerdict,
+  retryOf,
+  type Verdict,
+  type VerdictReply,
+} from "@/lib/lessons/verdict";
+import { HoldRetry, useLongHold } from "./HoldRetry";
 import { cn } from "@/lib/utils";
 import { NO_SOUND, PressedLine } from "./PressedLine";
 import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
@@ -142,6 +149,7 @@ export function CalculationSolver({
   calculation,
   reading = false,
   onSolved,
+  onStepCommitted,
   onStepAnswered,
   onStepGiven,
   onPiecePlaced,
@@ -212,11 +220,18 @@ export function CalculationSolver({
    */
   onSolved: (solved: { responseTimeMs?: number }) => void;
   /**
-   * Each committed step (`calculation_step_response`). `correct` is this
-   * screen's match against the stored answers; it feeds the lesson's error
-   * streak and is never sent as a key of its own.
+   * Each committed step, the moment it is committed
+   * (`calculation_step_response`) - before its mark, so the signal carries
+   * when the child answered, not when the server did.
    */
-  onStepAnswered?: (stepId: string, correct: boolean) => void;
+  onStepCommitted?: (stepId: string) => void;
+  /**
+   * Each committed step's MARK, once it is known (test 9): the server's,
+   * from the answer's reply, online; the package's offline. It feeds the
+   * lesson's error streak and is never sent as a key of its own. `null` is a
+   * step the server could not mark, which is never wrong.
+   */
+  onStepAnswered?: (stepId: string, mark: Verdict) => void;
   /**
    * What the child gave on each committed step - every try, wrong ones too -
    * for the answer the server marks (`calculationAttemptFor`): the option
@@ -224,8 +239,16 @@ export function CalculationSolver({
    * answer as one. `responseTimeMs` runs from the step being put to the
    * child (again after a miss) to the commit; `hinted` is a hint having been
    * on screen for the step. Not fired for a build the server cannot mark.
+   *
+   * GIVES BACK THE MARK the step moves on (test 9): the server's, online.
+   * `packageMark` is this screen's match against the stored answers, for the
+   * host to fall back on only where no reply comes - offline. Nothing given
+   * back leaves it to `packageMark` too.
    */
-  onStepGiven?: (given: StepGiven) => void;
+  onStepGiven?: (
+    given: StepGiven,
+    packageMark: boolean,
+  ) => VerdictReply | undefined;
   /** A piece tapped into the manipulative (`manipulative_piece_placed`). */
   onPiecePlaced?: (stepId: string) => void;
   /** The child opened this step's hint themselves. */
@@ -282,6 +305,22 @@ export function CalculationSolver({
    * nothing: no hint, no emphasis and no copy reads it.
    */
   const [nudge, setNudge] = useState(0);
+  /**
+   * A COMMITTED ANSWER WHOSE MARK IS ON ITS WAY (test 9). The child's answer
+   * stays as it is - no new words, no spinner (rule 7) - and nothing more is
+   * taken until the mark lands: no second commit, no new pick, no new key.
+   */
+  const [marking, setMarking] = useState(false);
+  /** Which commit a mark answers, so one for a step since left lands nowhere. */
+  const markAsk = useRef(0);
+  /**
+   * The reply on its way, and the holds started: held long enough to look
+   * broken, the step offers "Try again" and nothing else (SCRUM-315).
+   */
+  const [pending, setPending] = useState<VerdictReply | null>(null);
+  const [hold, setHold] = useState(0);
+  const longHold = useLongHold(marking ? hold : null);
+  const retry = marking ? retryOf(pending) : null;
   /**
    * Once the child has started the narration, each new step is read as it
    * arrives (17b §5, "re-reads whenever the step advances"). Never before:
@@ -595,8 +634,45 @@ export function CalculationSolver({
     setNudge(0);
   };
 
+  /**
+   * The answer given, sent, and its mark waited for (test 9). A reply that
+   * is on its way holds the step; one there already - the package's mark,
+   * where no reply comes - moves it at once.
+   */
+  const send = (
+    given: StepGiven | undefined,
+    packageMark: boolean,
+    settle: (mark: Verdict) => void,
+  ) => {
+    const sent =
+      given === undefined
+        ? undefined
+        : (onStepGiven?.(given, packageMark) as VerdictReply | undefined);
+    const reply: VerdictReply = sent === undefined ? packageMark : sent;
+    const mine = ++markAsk.current;
+    if (reply instanceof Promise) {
+      setMarking(true);
+      setPending(reply);
+      setHold((h) => h + 1);
+    }
+    onVerdict(reply, (mark) => {
+      if (markAsk.current !== mine) return;
+      setMarking(false);
+      settle(mark);
+    });
+  };
+
+  /** A pick on a choice step or mini-step - never while a mark is on its way. */
+  const pick = (i: number) => {
+    if (marking) return;
+    setChosen(i);
+    onAct?.();
+  };
+
   // SCRUM-94.3: every step ends on a tap the child chooses to make.
-  const answer = (correct: boolean) => {
+  // `packageMark` is the lesson's own key, used only where no reply comes.
+  const answer = (packageMark: boolean) => {
+    if (marking) return;
     /*
      * B130: "hint_used fires when the child submits a calculation step after
      * using the hint" - read in full, still on screen as they submit. A hint
@@ -607,36 +683,45 @@ export function CalculationSolver({
       usedOn.current = step.stepId;
       onHintUsed?.(from, step.stepId);
     }
-    onStepAnswered?.(step.stepId, correct);
-    // The answer itself goes to the server, which marks it; `correct` stays
-    // this screen's, for the tick and the nudge.
+    const stepId = step.stepId;
+    onStepCommitted?.(stepId);
+    // The answer itself goes to the server, which marks it - and the step
+    // moves on that mark: the tick, the nudge, the next step (test 9).
     const answered = given();
-    if (answered !== undefined) {
-      const responseTimeMs = msSince(askedAt.current);
-      onStepGiven?.({
-        stepId: step.stepId,
-        answer: answered,
-        ...(responseTimeMs === undefined ? {} : { responseTimeMs }),
-        hinted: usedOn.current === step.stepId,
-      });
-    }
-    if (!correct) {
-      // Put back to the child: the next try is its own, timed from here.
-      askedAt.current = performance.now();
-      setNudge((n) => n + 1);
-      return;
-    }
-    // A confirmation waits for the child's "Next step" (17b step 1). On the
-    // last step there is no next step to wait for: the solution assembles.
-    if (step.input === "choice" && step.confirm && index !== lastIndex) {
-      setPhase("confirmed");
-      return;
-    }
-    advance();
+    const responseTimeMs = msSince(askedAt.current);
+    send(
+      answered === undefined
+        ? undefined
+        : {
+            stepId,
+            answer: answered,
+            ...(responseTimeMs === undefined ? {} : { responseTimeMs }),
+            hinted: usedOn.current === stepId,
+          },
+      packageMark,
+      (mark) => {
+        onStepAnswered?.(stepId, mark);
+        if (mark === false) {
+          // Put back to the child: the next try is its own, timed from here.
+          askedAt.current = performance.now();
+          setNudge((n) => n + 1);
+          return;
+        }
+        // A confirmation waits for the child's "Next step" (17b step 1). On
+        // the last step there is no next step to wait for: the solution
+        // assembles. A step the server could not mark is never wrong.
+        if (step.input === "choice" && step.confirm && index !== lastIndex) {
+          setPhase("confirmed");
+          return;
+        }
+        advance();
+      },
+    );
   };
 
   /** Fewer steps on or off, for this step. Either way the step starts afresh. */
   const toggleFewer = () => {
+    if (marking) return;
     setFewer(fewerHere ? null : { stepId: step.stepId, at: 0 });
     setChosen(null);
     setTyped("");
@@ -652,28 +737,35 @@ export function CalculationSolver({
    * not, the same nudge as a step, and the same mini-step again.
    */
   const answerMini = (value: string) => {
-    if (!mini || !fewer) return;
-    const correct = isStoredAnswer(value, mini.accepted);
+    if (!mini || !fewer || marking) return;
     const responseTimeMs = msSince(miniAskedAt.current);
-    onStepGiven?.({
-      stepId: mini.questionId,
-      answer: value,
-      ...(responseTimeMs === undefined ? {} : { responseTimeMs }),
-      hinted: usedOn.current === step.stepId,
-    });
-    setChosen(null);
-    setTyped("");
-    if (!correct) {
-      miniAskedAt.current = performance.now();
-      setNudge((n) => n + 1);
-      return;
-    }
-    if (fewer.at + 1 >= miniSteps.length) {
-      setFewer(null);
-      askedAt.current = performance.now();
-      return;
-    }
-    setFewer({ stepId: step.stepId, at: fewer.at + 1 });
+    const at = fewer.at;
+    const stepId = step.stepId;
+    // Moved on by its mark, as a step is (test 9).
+    send(
+      {
+        stepId: mini.questionId,
+        answer: value,
+        ...(responseTimeMs === undefined ? {} : { responseTimeMs }),
+        hinted: usedOn.current === stepId,
+      },
+      isStoredAnswer(value, mini.accepted),
+      (mark) => {
+        setChosen(null);
+        setTyped("");
+        if (mark === false) {
+          miniAskedAt.current = performance.now();
+          setNudge((n) => n + 1);
+          return;
+        }
+        if (at + 1 >= miniSteps.length) {
+          setFewer(null);
+          askedAt.current = performance.now();
+          return;
+        }
+        setFewer({ stepId, at: at + 1 });
+      },
+    );
   };
 
   const openHint = () => {
@@ -686,6 +778,7 @@ export function CalculationSolver({
 
   /** What is typed, from the pad, a laptop's keys or delete. */
   const type = (next: string | ((was: string) => string)) => {
+    if (marking) return;
     setTyped(next);
     onAct?.();
   };
@@ -1024,10 +1117,7 @@ export function CalculationSolver({
                 readable={readable}
                 nudge={nudge}
                 chosen={chosen}
-                onChoose={(i) => {
-                  setChosen(i);
-                  onAct?.();
-                }}
+                onChoose={pick}
                 typed={typed}
                 onType={type}
                 padDock={padDock}
@@ -1045,10 +1135,7 @@ export function CalculationSolver({
                     <button
                       key={i}
                       type="button"
-                      onClick={() => {
-                        setChosen(i);
-                        onAct?.();
-                      }}
+                      onClick={() => pick(i)}
                       aria-pressed={chosen === i}
                       className={cn(
                         "cursor-pointer rounded-[12px] border-2 bg-nevo-cream-elevated px-[18px] py-4 text-center text-base font-medium text-nevo-near-black shadow-elevation-1 transition-[transform,border-color] active:scale-[0.98] sm:text-[18px]",
@@ -1177,6 +1264,15 @@ export function CalculationSolver({
               />
             )}
             </div>
+            )}
+            {/* A mark long on its way: "Try again", and nothing else. */}
+            {longHold && retry && (
+              <HoldRetry
+                onRetry={() => {
+                  retry();
+                  setHold((h) => h + 1);
+                }}
+              />
             )}
           </>
         )}

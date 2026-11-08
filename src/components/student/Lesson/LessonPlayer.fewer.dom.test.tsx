@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import { calculationFromVariant } from "@/lib/lessons/fromContent";
 import { clearSession } from "@/lib/auth/session";
@@ -147,9 +147,11 @@ const PLAN: AdaptationPlan = {
 
 const tap = (name: string) =>
   fireEvent.click(screen.getByRole("button", { name }));
-const pick = (label: string) => {
+/** Pick and commit, and let the answer's mark come back (test 9). */
+const pick = async (label: string) => {
   tap(label);
   tap("Check my answer");
+  await act(async () => {});
 };
 const written = () =>
   saveAttempt.mock.calls.map(([, body]) => body as Record<string, unknown>);
@@ -171,8 +173,8 @@ describe("Fewer steps' answers", () => {
     render(<LessonPlayer lesson={LESSON} plan={PLAN} live />);
 
     tap("Fewer steps");
-    pick("1");
-    pick("4 and 4");
+    await pick("1");
+    await pick("4 and 4");
 
     await waitFor(() => expect(saveAttempt).toHaveBeenCalledTimes(3));
     expect(written()).toEqual([

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -170,13 +171,17 @@ const PLAN: AdaptationPlan = {
 
 const tap = (name: string) =>
   fireEvent.click(screen.getByRole("button", { name }));
-const pick = (label: string) => {
+/** Let a committed step's mark come back on its reply (test 9). */
+const settle = () => act(async () => {});
+const pick = async (label: string) => {
   tap(label);
   tap("Check my answer");
+  await settle();
 };
-const enter = (value: string) => {
+const enter = async (value: string) => {
   fireEvent.change(screen.getByRole("textbox"), { target: { value } });
   tap("Check my answer");
+  await settle();
 };
 const placePiece = () =>
   fireEvent.click(screen.getAllByRole("button", { name: "+ 1/4" })[0]);
@@ -214,13 +219,13 @@ afterEach(() => {
 });
 
 describe("each calculation step the child commits", () => {
-  it("is written, a wrong try and the right one each its own answer, timed as it was measured", () => {
+  it("is written, a wrong try and the right one each its own answer, timed as it was measured", async () => {
     render(<LessonPlayer lesson={lessonWith([NUMBER()])} plan={PLAN} live />);
 
     clock.now = 4_000;
-    enter("5");
+    await enter("5");
     clock.now = 6_500;
-    enter("3");
+    await enter("3");
 
     const [wrong, right] = written("s2");
     expect(written("s2")).toHaveLength(2);
@@ -251,16 +256,16 @@ describe("each calculation step the child commits", () => {
     expect(Object.keys(wrong)).not.toContain("correct");
   });
 
-  it("sends a choice step's option value, the one the child picked", () => {
+  it("sends a choice step's option value, the one the child picked", async () => {
     render(<LessonPlayer lesson={lessonWith([step()])} plan={PLAN} live />);
 
-    pick("1 and 2");
-    pick("4 and 4");
+    await pick("1 and 2");
+    await pick("4 and 4");
 
     expect(written("s1").map((b) => b.answer)).toEqual(["differ", "same"]);
   });
 
-  it("sends a finished build as the count the step stores, in the type it is stored in", () => {
+  it("sends a finished build as the count the step stores, in the type it is stored in", async () => {
     render(
       <LessonPlayer lesson={lessonWith([BUILD(), BUILD({ stepId: "b2", answer: "2" })])} plan={PLAN} live />,
     );
@@ -270,9 +275,11 @@ describe("each calculation step the child commits", () => {
     // Building it is not answering it (Lydia, 17 Oct, item 4).
     expect(written("b1")).toEqual([]);
     tap("That's the total");
+    await settle();
     placePiece();
     placePiece();
     tap("That's the total");
+    await settle();
 
     // A number as a number, text as text: a step with options is matched as
     // text, and 2 is not "2" there.
@@ -282,7 +289,7 @@ describe("each calculation step the child commits", () => {
     expect(written("b2")).toEqual([expect.objectContaining({ answer: "2" })]);
   });
 
-  it("writes nothing for a build the server cannot mark as a count", () => {
+  it("writes nothing for a build the server cannot mark as a count", async () => {
     // 17b's bar: two quarters built, stored as "2/4". The two pieces are not
     // that answer, and filing them would mark a right build wrong.
     render(
@@ -292,19 +299,20 @@ describe("each calculation step the child commits", () => {
     placePiece();
     placePiece();
     tap("That's the total");
+    await settle();
 
     expect(written("b1")).toEqual([]);
   });
 
-  it("says a hint was on screen for the step, and only for that step", () => {
+  it("says a hint was on screen for the step, and only for that step", async () => {
     render(
       <LessonPlayer lesson={lessonWith([step(), NUMBER()])} plan={PLAN} live />,
     );
 
     tap("Need a hint?");
-    pick("1 and 2");
-    pick("4 and 4");
-    enter("3");
+    await pick("1 and 2");
+    await pick("4 and 4");
+    await enter("3");
 
     // Both tries on the hinted step had it; the next step did not.
     expect(written("s1").map((b) => b.hintCount)).toEqual([1, 1]);
@@ -319,9 +327,9 @@ describe("the solved calculation", () => {
     );
 
     clock.now = 3_000;
-    pick("4 and 4");
+    await pick("4 and 4");
     clock.now = 9_000;
-    enter("3");
+    await enter("3");
 
     await waitFor(() => expect(written(SEG)).toHaveLength(1));
     expect(written(SEG)[0]).toEqual({
@@ -356,7 +364,7 @@ describe("the solved calculation", () => {
     );
     render(<LessonPlayer lesson={lessonWith([NUMBER()])} plan={PLAN} live />);
 
-    enter("3");
+    await enter("3");
     await Promise.resolve();
     await Promise.resolve();
 
@@ -371,9 +379,9 @@ describe("what is never written", () => {
   it("is anything at all from the signed-out walkthrough", async () => {
     render(<LessonPlayer lesson={lessonWith([step(), NUMBER()])} plan={PLAN} />);
 
-    pick("1 and 2");
-    pick("4 and 4");
-    enter("3");
+    await pick("1 and 2");
+    await pick("4 and 4");
+    await enter("3");
     await Promise.resolve();
 
     expect(saveAttempt).not.toHaveBeenCalled();
@@ -392,9 +400,9 @@ describe("with no session to write under", () => {
     render(<LessonPlayer lesson={lessonWith([NUMBER()])} plan={PLAN} live />);
 
     clock.now = 2_200;
-    enter("5");
+    await enter("5");
     clock.now = 3_000;
-    enter("3");
+    await enter("3");
 
     expect(saveAttempt).not.toHaveBeenCalled();
     await waitFor(() => expect(heldAnswers()).toHaveLength(3));

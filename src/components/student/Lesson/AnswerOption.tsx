@@ -27,6 +27,7 @@ export function AnswerOption({
   onSelect,
   selected,
   reading = false,
+  pressable = false,
   className,
 }: {
   label: string;
@@ -47,6 +48,13 @@ export function AnswerOption({
    * `readingSupport`. A muted answer keeps its quieter ink.
    */
   reading?: boolean;
+  /**
+   * PRESSABLE WHATEVER ITS TONE (SCRUM-315: the control "stays pressable
+   * rather than going disabled"): a pick held while its mark is on its way.
+   * A repeat tap does nothing - its handler says so - but nothing reads as
+   * disabled.
+   */
+  pressable?: boolean;
   className?: string;
 }) {
   return (
@@ -54,7 +62,7 @@ export function AnswerOption({
       type="button"
       aria-label={label}
       {...(selected === undefined ? {} : { "aria-pressed": selected })}
-      disabled={tone !== "idle"}
+      disabled={!pressable && tone !== "idle"}
       onClick={onSelect}
       className={cn(
         "flex w-full items-center justify-between gap-3 rounded-[12px] border-2 px-[18px] py-[15px] text-left text-base sm:text-[17px]",

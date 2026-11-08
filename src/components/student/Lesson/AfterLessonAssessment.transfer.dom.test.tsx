@@ -178,7 +178,7 @@ describe("a level is never named on a child's screen (test 4)", () => {
         check={l.segments[0].quickCheck!}
         open
         onTapOut={() => {}}
-        onAnswered={() => {}}
+        onAnswered={() => null}
         onContinue={() => {}}
         onTakeBreak={() => {}}
       />,

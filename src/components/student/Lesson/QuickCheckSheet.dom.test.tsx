@@ -8,6 +8,7 @@ import {
   RETEACH_COPY,
 } from "./QuickCheckSheet";
 import type { QuickCheck } from "@/lib/types";
+import type { VerdictReply } from "@/lib/lessons/verdict";
 
 /**
  * THE SHEET, MOCKED TO ITS SEAMS.
@@ -78,13 +79,20 @@ const CHECK: QuickCheck = {
   holds: true,
 };
 
+/**
+ * THE HOST'S MARK, given straight back (test 9): the package's key, as the
+ * player gives it where no reply comes. The sheet marks nothing itself.
+ */
+const byKey = ({ selectedId }: { selectedId: string }) =>
+  selectedId === CHECK.correctId;
+
 const mount = () =>
   render(
     <QuickCheckSheet
       check={CHECK}
       open
       onTapOut={() => {}}
-      onAnswered={() => {}}
+      onAnswered={byKey}
       onContinue={() => {}}
       onTakeBreak={() => {}}
     />,
@@ -126,7 +134,7 @@ describe("tapping out of the check", () => {
         check={CHECK}
         open
         onTapOut={onTapOut}
-        onAnswered={() => {}}
+        onAnswered={byKey}
         onContinue={() => {}}
         onTakeBreak={() => {}}
       />,
@@ -195,7 +203,7 @@ describe("pulling the phone sheet down", () => {
   });
 
   it("picks no answer with a pull that ends on one", () => {
-    const onAnswered = vi.fn();
+    const onAnswered = vi.fn(byKey);
     const onTapOut = vi.fn();
     mountWith({ onAnswered, onTapOut });
     const answer = screen.getByRole("button", { name: "Oxygen" });
@@ -247,7 +255,7 @@ describe("Take a break, inside the check", () => {
     ],
   ] as const)("is there and starts the child's break %s", (_, reach) => {
     const onTakeBreak = vi.fn();
-    const onAnswered = vi.fn();
+    const onAnswered = vi.fn(byKey);
     mountWith({ onTakeBreak, onAnswered });
     reach();
     const answered = onAnswered.mock.calls.length;
@@ -288,7 +296,7 @@ describe("a spoken check (B16)", () => {
         check={{ ...CHECK, promptAudio: "https://cdn.example/q.mp3" }}
         open
         onTapOut={() => {}}
-        onAnswered={() => {}}
+        onAnswered={byKey}
         onContinue={() => {}}
         onTakeBreak={() => {}}
       />,
@@ -330,7 +338,7 @@ describe("the reading accommodation on a quick check (D30)", () => {
         open
         reading={reading}
         onTapOut={() => {}}
-        onAnswered={() => {}}
+        onAnswered={byKey}
         onContinue={() => {}}
         onTakeBreak={() => {}}
       />,
@@ -418,7 +426,7 @@ const wayOn = () =>
 type Handlers = {
   open?: boolean;
   onTapOut?: () => void;
-  onAnswered?: () => void;
+  onAnswered?: (answered: { selectedId: string }) => VerdictReply;
   onContinue?: () => void;
   onTakeBreak?: () => void;
 };
@@ -427,7 +435,7 @@ const sheet = (handlers: Handlers) => (
     check={CHECK}
     open={handlers.open ?? true}
     onTapOut={handlers.onTapOut ?? (() => {})}
-    onAnswered={handlers.onAnswered ?? (() => {})}
+    onAnswered={handlers.onAnswered ?? byKey}
     onContinue={handlers.onContinue ?? (() => {})}
     onTakeBreak={handlers.onTakeBreak ?? (() => {})}
   />
@@ -521,7 +529,7 @@ describe("a miss, held and giving way (17d S1)", () => {
         check={CHECK}
         open
         onTapOut={() => {}}
-        onAnswered={() => {}}
+        onAnswered={byKey}
         onContinue={() => {}}
         onTakeBreak={() => {}}
         {...over}
@@ -573,7 +581,7 @@ describe("a miss, held and giving way (17d S1)", () => {
         check={CHECK}
         open={false}
         onTapOut={() => {}}
-        onAnswered={() => {}}
+        onAnswered={byKey}
         onContinue={() => {}}
         onTakeBreak={() => {}}
         onGiveWay={onGiveWay}
@@ -614,7 +622,7 @@ describe("tapping out of the re-teach box", () => {
     const props = {
       check: { ...CHECK, id: "cp-1" },
       onTapOut,
-      onAnswered: () => {},
+      onAnswered: byKey,
       onContinue: () => {},
       onTakeBreak: () => {},
       reteaching: {

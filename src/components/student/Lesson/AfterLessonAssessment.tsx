@@ -7,6 +7,8 @@ import type { ResultState } from "@/lib/api/lessons";
 import type { CheckOutcome } from "@/lib/lessons/checkOutcome";
 import type { Assessment } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { onVerdict, retryOf, type VerdictReply } from "@/lib/lessons/verdict";
+import { HoldRetry, useLongHold } from "./HoldRetry";
 import {
   AnswerDot,
   AnswerOption,
@@ -106,14 +108,19 @@ export function AfterLessonAssessment({
   reading?: boolean;
   /** `system_busy` bracket while a spoken question plays (B16). */
   onAudioBusy?: (phase: "start" | "end") => void;
-  /** Reports each confirmed answer (comprehension_response signal + review). */
+  /**
+   * Reports each confirmed answer (comprehension_response signal + review),
+   * and GIVES BACK ITS MARK, which the question moves on (test 9): the
+   * server's, from the answer's reply, online; the package's offline. While
+   * it is on its way the pick is held, quietly - see `Verdict`. Without a
+   * host there is no reply, and the package's key marks it.
+   */
   onAnswer?: (result: {
     questionIndex: number;
     selectedId: string;
-    correct: boolean;
     /** From the question appearing to the confirm, monotonic (rule 4). */
     responseTimeMs?: number;
-  }) => void;
+  }) => VerdictReply;
   /** "Review answers" on the result → the Review Answers screen (A5). */
   onReviewAnswers?: () => void;
 }) {
@@ -132,6 +139,17 @@ export function AfterLessonAssessment({
   const [selected, setSelected] = useState<string | null>(null);
   // A wrong confirm flips the question into its recovery state (violet, locked).
   const [revealed, setRevealed] = useState(false);
+  /** A confirmed answer whose mark is on its way: held, nothing said. */
+  const [marking, setMarking] = useState(false);
+  /**
+   * The reply on its way, and the holds started, which the long hold is
+   * timed from (SCRUM-315): held long enough to look broken, it offers "Try
+   * again" and nothing else.
+   */
+  const [pending, setPending] = useState<VerdictReply | null>(null);
+  const [hold, setHold] = useState(0);
+  const longHold = useLongHold(marking ? hold : null);
+  const retry = marking ? retryOf(pending) : null;
   // When the current question was put in front of the child.
   const shownAt = useRef<number | null>(null);
   useEffect(() => {
@@ -188,19 +206,30 @@ export function AfterLessonAssessment({
   };
 
   const confirm = () => {
-    if (!selected) return;
-    const correct = selected === question.correctId;
+    if (!selected || marking) return;
     const asked = shownAt.current;
-    onAnswer?.({
+    const result = {
       questionIndex: qIndex,
       selectedId: selected,
-      correct,
       ...(asked === null
         ? {}
         : { responseTimeMs: Math.max(0, Math.round(performance.now() - asked)) }),
+    };
+    const reply = onAnswer
+      ? onAnswer(result)
+      : selected === question.correctId;
+    if (reply instanceof Promise) {
+      setMarking(true);
+      setPending(reply);
+      setHold((h) => h + 1);
+    }
+    // Moved on by its mark: a miss to its recovery note, anything else on -
+    // an answer the server could not mark is never wrong.
+    onVerdict(reply, (mark) => {
+      setMarking(false);
+      if (mark === false) setRevealed(true);
+      else advance();
     });
-    if (correct) advance();
-    else setRevealed(true);
   };
 
   const tone = (id: string): AnswerTone => {
@@ -302,7 +331,9 @@ export function AfterLessonAssessment({
                 // revealed the tone and the dot say which was picked.
                 selected={revealed ? undefined : option.id === selected}
                 className="py-4"
-                trailing={
+                // Pressable while its mark is on its way (SCRUM-315).
+              pressable={marking}
+              trailing={
                   revealed ? (
                     option.id === selected ? (
                       <AnswerDot />
@@ -311,7 +342,9 @@ export function AfterLessonAssessment({
                     <AnswerRadio selected={option.id === selected} />
                   )
                 }
-                onSelect={() => setSelected(option.id)}
+                onSelect={() => {
+                  if (!marking) setSelected(option.id);
+                }}
               />
             ))}
           </div>
@@ -338,6 +371,14 @@ export function AfterLessonAssessment({
 
       <div className="shrink-0 px-6 pt-3 pb-6 sm:px-8 lg:px-10">
         <div className="mx-auto w-full max-w-[600px] lg:max-w-[640px]">
+          {longHold && retry && (
+            <HoldRetry
+              onRetry={() => {
+                retry();
+                setHold((h) => h + 1);
+              }}
+            />
+          )}
           <Button
             className="w-full"
             disabled={!selected}
