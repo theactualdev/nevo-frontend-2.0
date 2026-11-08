@@ -8,13 +8,17 @@ import type { RosterCounts } from "./summaryState";
  * (`SummaryChip.tsx`): Flagged a navy fill, Worth a glance the violet outline,
  * Can't sign in muted grey, nothing open the quiet navy. Then the counts,
  * each state on its own and never summed (design, 12 Oct).
+ *
+ * BOTH SCREENS COUNT WHO CAN'T SIGN IN (Lydia, copy pass, 7 Nov). Home left
+ * it out, as C03 draws only Worth a glance, so Home could say "All on track"
+ * over a class whose My Classes card said "1 can't sign in".
  */
 export type SummaryTone = "flagged" | "glance" | "cantSignIn" | "ok";
 
-export function summaryTone(c: RosterCounts, withSignIn: boolean): SummaryTone {
+export function summaryTone(c: RosterCounts): SummaryTone {
   if (c.flagged > 0) return "flagged";
   if (c.glance > 0) return "glance";
-  if (withSignIn && c.cantSignIn > 0) return "cantSignIn";
+  if (c.cantSignIn > 0) return "cantSignIn";
   return "ok";
 }
 
@@ -42,13 +46,15 @@ function join(parts: (string | false)[], calm: string): string {
 /**
  * C03's words: who is worth a look, or "All on track". The frame draws only
  * Worth a glance there; a sudden change is Flagged's variant (C05 counts it as
- * "1 flagged"), and leaving it out would call that class on track.
+ * "1 flagged"), and leaving it out would call that class on track. Who can't
+ * sign in is counted too, in C05's words (Lydia, 7 Nov).
  */
 export function homeSummary(c: RosterCounts, short = false): string {
   return join(
     [
       c.glance > 0 && (short ? `${c.glance} to glance` : `${c.glance} worth a glance`),
       c.flagged > 0 && `${c.flagged} flagged`,
+      c.cantSignIn > 0 && `${c.cantSignIn} can’t sign in`,
     ],
     short ? "On track" : "All on track",
   );

@@ -75,6 +75,24 @@ describe("HomeClasses - the status line", () => {
     expect(screen.queryByText("All on track")).toBeNull();
   });
 
+  // Lydia, copy pass, 7 Nov: Home counts who can't sign in, to match My Classes.
+  it("counts who can't sign in rather than calling the class on track", () => {
+    h.summaries.mockReturnValue({ counts: new Map([["c-1", counts(0, 0, 2)]]), loading: false });
+    render(<HomeClasses />);
+
+    // The same words at both widths.
+    expect(screen.getAllByText("2 can’t sign in")).toHaveLength(2);
+    expect(screen.queryByText(/on track/i)).toBeNull();
+  });
+
+  it("names each state on its own, can't sign in last, as My Classes does", () => {
+    h.summaries.mockReturnValue({ counts: new Map([["c-1", counts(3, 1, 1)]]), loading: false });
+    render(<HomeClasses />);
+
+    expect(screen.getByText("3 worth a glance · 1 flagged · 1 can’t sign in")).toBeInTheDocument();
+    expect(screen.getByText("3 to glance · 1 flagged · 1 can’t sign in")).toBeInTheDocument();
+  });
+
   it("says All on track when the class was counted and nothing is open", () => {
     h.summaries.mockReturnValue({ counts: new Map([["c-1", counts(0, 0, 0)]]), loading: false });
     render(<HomeClasses />);
