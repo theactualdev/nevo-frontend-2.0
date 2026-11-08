@@ -24,11 +24,11 @@ import { UploadResult } from "./UploadResult";
 import type { LessonDetailResponse } from "@/lib/api/lessons";
 
 /**
- * C07j LU-04 / 04b / 04c on the upload finish screen (1397ec4), as the Hub
- * decided them on 6 Nov: by the SERVER's review alone; LU-04's formats
- * sentence dropped; the review's real five steps; "Your students won't see
- * it..." only while readyToAssign is false; Lydia's key-points sentence only
- * when exactly true; and nothing new drawn over a read that failed.
+ * C07j LU-04 / 04b / 04c on the upload finish screen, against design ac1e61c
+ * (8d421d3's corrected C07j) and SCRUM-318: by the SERVER's review alone; one
+ * opening line, "Nothing reaches your class until you have been through it.";
+ * one step line where it is exactly so, else the fallback; no step ladder and
+ * no number; the list of sections gone; and nothing new over a failed read.
  */
 
 const LESSON = {
@@ -121,9 +121,10 @@ describe("LU-04, nothing reviewed yet", () => {
 
     expect(await screen.findByRole("heading", { name: "“Fractions 3” is ready for your review" })).toBeInTheDocument();
     expect(screen.getByText("Ready to review")).toBeInTheDocument();
-    expect(
-      screen.getByText(/Give them a quick review and the lesson’s ready to assign - nothing reaches your students until you have\./),
-    ).toBeInTheDocument();
+    // The corrected frame's opening line (ac1e61c); "Give them a quick review"
+    // went with the formats sentence it leaned on (SCRUM-318).
+    expect(screen.getByText("Nothing reaches your class until you have been through it.")).toBeInTheDocument();
+    expect(screen.queryByText(/Give them a quick review/)).toBeNull();
     expect(screen.getByRole("link", { name: "Review lesson" })).toHaveAttribute("href", "/teacher/lessons/l-1/review");
     expect(screen.getAllByRole("button", { name: "Upload another" })).toHaveLength(1);
   });
@@ -137,27 +138,27 @@ describe("LU-04, nothing reviewed yet", () => {
     expect(screen.queryByText(/read, listen and watch/i)).toBeNull();
   });
 
-  /* Hub decision 7: function below stays until Lydia rules. */
-  it("keeps the sections list below", async () => {
+  /* SCRUM-318: the list of sections comes out; the split notice stays. */
+  it("draws no list of sections", async () => {
     review.mockResolvedValue(reviewOf());
     show();
 
     await screen.findByRole("heading", { name: /is ready for your review/ });
-    expect(screen.getByText("What Nevo found")).toBeInTheDocument();
-    expect(screen.getByText("What a fraction is")).toBeInTheDocument();
+    expect(screen.queryByText("What Nevo found")).toBeNull();
+    expect(screen.queryByText("What a fraction is")).toBeNull();
   });
 });
 
 describe("LU-04b, part-way", () => {
-  it("draws the review's real five steps and continues at the first one still open", async () => {
+  it("names where it stands, with no step ladder and no number, and continues there", async () => {
     review.mockResolvedValue(reviewOf({ media: { items: [approvedPicture] } }));
     show();
 
-    expect(await screen.findByRole("heading", { name: "You’re part-way through reviewing this" })).toBeInTheDocument();
-    const steps = screen.getByRole("list", { name: "Review steps" });
-    for (const label of ["What I made", "Key points", "Checks", "Rewrites", "Live"]) {
-      expect(steps).toHaveTextContent(label);
-    }
+    expect(await screen.findByRole("heading", { name: "Your lesson is ready for review" })).toBeInTheDocument();
+    expect(screen.getByText("Nothing reaches your class until you have been through it.")).toBeInTheDocument();
+    expect(screen.getByText("You’ve been through the overview and are on the key points.")).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Review steps" })).toBeNull();
+    expect(screen.queryByText(/five steps|\d steps/)).toBeNull();
     expect(screen.getByRole("link", { name: "Continue review" })).toHaveAttribute(
       "href",
       "/teacher/lessons/l-1/review?step=2",
@@ -165,19 +166,40 @@ describe("LU-04b, part-way", () => {
     expect(screen.getByRole("link", { name: "Back to my library" })).toHaveAttribute("href", "/teacher/lessons");
   });
 
-  it("says Lydia's sentence when it's exactly so - on the key points, not yet assignable", async () => {
-    review.mockResolvedValue(reviewOf({ media: { items: [approvedPicture] } }));
+  it("is on the rewrites once the checks are approved", async () => {
+    review.mockResolvedValue(
+      reviewOf({
+        keyPointApproval: signoff("key_points"),
+        checksApproval: signoff("checks"),
+        rewriteCount: 2,
+      }),
+    );
     show();
 
     expect(
-      await screen.findByText(
-        "You’ve approved the structure and are on the key points. Your students won’t see it until the review is finished.",
-      ),
+      await screen.findByText("You’ve approved the checks and are on the rewrites."),
     ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Continue review" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1/review?step=4",
+    );
   });
 
-  /* Hub decisions 4 and 5. */
-  it("says neither sentence past the key points once it could be assigned", async () => {
+  // Naming the wrong step is worse than naming none: a lesson with no checks
+  // has approved nothing at step 3.
+  it("says only part-way when there were no checks to approve", async () => {
+    review.mockResolvedValue(reviewOf({ keyPointApproval: signoff("key_points"), rewriteCount: 2 }));
+    show();
+
+    expect(await screen.findByText("You’re part-way through reviewing this.")).toBeInTheDocument();
+    expect(screen.queryByText(/approved the checks/)).toBeNull();
+    expect(screen.getByRole("link", { name: "Continue review" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1/review?step=4",
+    );
+  });
+
+  it("is on the checks once the key points are approved", async () => {
     review.mockResolvedValue(
       reviewOf({
         readyToAssign: true,
@@ -199,8 +221,8 @@ describe("LU-04b, part-way", () => {
     );
     show();
 
-    await screen.findByRole("heading", { name: "You’re part-way through reviewing this" });
-    expect(screen.queryByText(/on the key points/)).toBeNull();
+    await screen.findByRole("heading", { name: "Your lesson is ready for review" });
+    expect(screen.getByText("You’ve approved the key points and are on the checks.")).toBeInTheDocument();
     expect(screen.queryByText(/won’t see it until/)).toBeNull();
     expect(screen.getByRole("link", { name: "Continue review" })).toHaveAttribute(
       "href",

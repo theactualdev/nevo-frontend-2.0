@@ -1,60 +1,53 @@
 "use client";
 
 import Link from "next/link";
-import { REVIEW_STEPS, type FinishView } from "@/components/teacher/LessonReview/reviewModel";
+import type { FinishView } from "@/components/teacher/LessonReview/reviewModel";
 import { reviewHrefFor } from "@/lib/lessons/signOff";
-import { cn } from "@/lib/utils";
 
 /**
- * C07j LU-04, LU-04b and LU-04c (1397ec4): the top of the upload's finish
- * screen, by where the lesson's review stands on the SERVER.
+ * C07j LU-04, LU-04b and LU-04c: the top of the upload's finish screen, by
+ * where the lesson's review stands on the SERVER. Built against design
+ * ac1e61c (8d421d3's corrected C07j) and SCRUM-318 (Lydia, 7 Nov).
  *
- * The Hub's decisions of 6 Nov, against the deployed contract:
- *  1. LU-04's "The read, listen and watch versions are built." is DROPPED:
- *     formats are per section, and pictures and narration are often still
- *     being made when the lesson opens (Lydia's 4 Nov principle).
- *  2. "Give them a quick review and the lesson's ready to assign - nothing
- *     reaches your students until you have." is KEPT: nothing reaches a child
- *     until it is assigned, and Assign waits on the review.
- *  3. LU-04b's step bar is the review's REAL five steps (the frame drew four,
- *     before the checks step).
- *  4. "Your students won't see it until the review is finished." only while
- *     the server's `readyToAssign` is false - after that it could be
- *     assigned, and the sentence would be untrue.
- *  5. "You've approved the structure and are on the key points." only when
- *     it is exactly so; otherwise the heading alone, "You're part-way
- *     through reviewing this". Lydia has been asked for a line per step.
- *  6. LU-04c's record from the sign-offs on record.
- * The sections list, the split-source notice and "Try that again" stay below
- * until she rules (7).
+ * - LU-04, nothing reviewed yet: "“{title}” is ready for your review", and
+ *   the opening line every review state now shares, "Nothing reaches your
+ *   class until you have been through it." SCRUM-318 drops "The read, listen
+ *   and watch versions are built." (untrue: formats are per section, and
+ *   pictures are often still being made) and with it the "Give them a quick
+ *   review" that leaned on it.
+ * - LU-04b, part-way: "Your lesson is ready for review", the same opening
+ *   line, and ONE step line - the overview, the key points or the checks -
+ *   only where it is exactly so, else "You're part-way through reviewing
+ *   this." NO step ladder and NO number: "Counting the steps here adds
+ *   nothing and invites the error this page used to make". Pictures are not a
+ *   step here; they are approved inside the review's first step.
+ * - LU-04c, reviewed: unchanged - "Reviewed by {names} · {day}", Assign, and
+ *   View in library.
+ *
+ * The split notice and Try that again stay on the page beneath; the list of
+ * sections is gone (SCRUM-318).
  */
+
+const OPENING = "Nothing reaches your class until you have been through it.";
 
 const PRIMARY =
   "inline-flex h-[50px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[22px] text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93";
 const SECONDARY =
   "inline-flex h-[50px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6";
-
-function Tick() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M20 6L9 17l-5-5" />
-    </svg>
-  );
-}
+const H2 = "mt-4 text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[25px]";
+const LINE = "max-w-[540px] text-[14.5px] leading-[1.6] text-nevo-near-black/66";
 
 export function FinishBlock({
   view,
   lessonId,
   title,
   fileName,
-  readyToAssign,
   onUploadAnother,
 }: {
   view: FinishView;
   lessonId: string;
   title: string;
   fileName: string;
-  readyToAssign: boolean;
   onUploadAnother: () => void;
 }) {
   const eyebrow =
@@ -68,13 +61,8 @@ export function FinishBlock({
 
       {view.stage === "unstarted" && (
         <>
-          <h2 className="mt-4 text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[25px]">
-            {`“${title}” is ready for your review`}
-          </h2>
-          <p className="mt-2.5 max-w-[540px] text-[14.5px] leading-[1.6] text-nevo-near-black/66">
-            Give them a quick review and the lesson&rsquo;s ready to assign - nothing reaches your
-            students until you have.
-          </p>
+          <h2 className={H2}>{`“${title}” is ready for your review`}</h2>
+          <p className={`${LINE} mt-2.5`}>{OPENING}</p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Link href={reviewHrefFor(lessonId)} className={PRIMARY}>
               Review lesson
@@ -88,49 +76,9 @@ export function FinishBlock({
 
       {view.stage === "partway" && (
         <>
-          <ol aria-label="Review steps" className="mt-5 flex list-none flex-wrap items-center justify-center gap-[7px] p-0 xl:gap-2.5">
-            {REVIEW_STEPS.map((label, i) => {
-              const n = i + 1;
-              const done = view.done[i] && n !== view.next;
-              const current = n === view.next;
-              return (
-                <li key={label} className="flex items-center gap-[7px]">
-                  <span
-                    className={cn(
-                      "inline-flex size-[24px] items-center justify-center rounded-full text-[11.5px] font-semibold",
-                      done || current
-                        ? "bg-nevo-navy text-nevo-cream"
-                        : "border-[1.5px] border-nevo-navy/30 text-nevo-near-black/50",
-                    )}
-                  >
-                    {done ? <Tick /> : n}
-                  </span>
-                  <span
-                    className={cn(
-                      "text-[12.5px] whitespace-nowrap",
-                      current ? "font-semibold text-nevo-near-black" : "text-nevo-near-black/55",
-                    )}
-                  >
-                    {label}
-                    {done && <span className="sr-only"> (done)</span>}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-          <h2 className="mt-5 text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[25px]">
-            You&rsquo;re part-way through reviewing this
-          </h2>
-          {(view.onKeyPoints || !readyToAssign) && (
-            <p className="mt-2.5 max-w-[540px] text-[14.5px] leading-[1.6] text-nevo-near-black/66">
-              {[
-                view.onKeyPoints ? "You’ve approved the structure and are on the key points." : null,
-                !readyToAssign ? "Your students won’t see it until the review is finished." : null,
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            </p>
-          )}
+          <h2 className={H2}>Your lesson is ready for review</h2>
+          <p className={`${LINE} mt-2.5`}>{OPENING}</p>
+          <p className={`${LINE} mt-1.5`}>{view.stepLine}</p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Link href={`${reviewHrefFor(lessonId)}?step=${view.next}`} className={PRIMARY}>
               Continue review
@@ -144,10 +92,8 @@ export function FinishBlock({
 
       {view.stage === "reviewed" && (
         <>
-          <h2 className="mt-4 text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[25px]">
-            {`“${title}” is reviewed and ready`}
-          </h2>
-          <p className="mt-2.5 max-w-[540px] text-[14.5px] leading-[1.6] text-nevo-near-black/66">
+          <h2 className={H2}>{`“${title}” is reviewed and ready`}</h2>
+          <p className={`${LINE} mt-2.5`}>
             You&rsquo;ve reviewed every section. It&rsquo;s in your library and ready to assign to a
             class.
           </p>

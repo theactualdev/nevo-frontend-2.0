@@ -6,15 +6,9 @@ import { useLessonRegenerate } from "@/hooks/useLessonRegenerate";
 import { useLessonReview } from "@/hooks/useLessonReview";
 import { useSegmentReview } from "@/hooks/useSegmentReview";
 import type { LessonDetailResponse } from "@/lib/api/lessons";
-import type {
-  ContentModality,
-  LessonContentType,
-  ParsedLessonSegment,
-} from "@/lib/api/content";
 import { SplitSourceNotice } from "@/components/teacher/Library/SplitSourceNotice";
 import { stillToCheck } from "@/components/teacher/Library/LessonDetailActions";
 import { assignRefusal, reviewHrefFor } from "@/lib/lessons/signOff";
-import { cn } from "@/lib/utils";
 import { IncidentLine } from "./ParseFallback";
 import { FinishBlock } from "./FinishBlock";
 import { finishView } from "@/components/teacher/LessonReview/reviewModel";
@@ -57,90 +51,6 @@ import { finishView } from "@/components/teacher/LessonReview/reviewModel";
  * after an upload that is the usual case, which is why "Open the lesson" -
  * where the checking happens - stays beside it.
  */
-
-const TYPE_LABEL: Record<LessonContentType, string> = {
-  explanatory_text: "Explanatory",
-  worked_example: "Worked example",
-  practice_question: "Practice",
-  visual_diagram: "Diagram",
-  definition: "Definition",
-  summary: "Summary",
-  calculation: "Calculation",
-};
-
-const MODALITY_LABEL: Record<ContentModality, string> = {
-  text: "text",
-  audio: "audio",
-  visual: "visual",
-  interactive: "interactive",
-};
-
-function Segment({
-  segment,
-  index,
-}: {
-  segment: ParsedLessonSegment;
-  index: number;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex flex-col gap-2 px-[22px] py-4 xl:flex-row xl:items-start xl:gap-4",
-        segment.needsReview && "border-l-[3px] border-nevo-violet",
-      )}
-    >
-      <span className="w-6 shrink-0 text-[13px] text-nevo-near-black/40 tabular-nums">
-        {index + 1}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="text-[15px] font-semibold text-nevo-near-black">
-            {segment.title ?? `Section ${index + 1}`}
-          </span>
-          <span className="shrink-0 rounded-full bg-nevo-navy/9 px-[9px] py-0.5 text-[11px] font-semibold whitespace-nowrap text-nevo-near-black/55">
-            {TYPE_LABEL[segment.contentType] ??
-              segment.contentType.replace(/_/g, " ")}
-          </span>
-        </div>
-        {segment.body && (
-          <p className="mt-1.5 line-clamp-2 max-w-[62ch] text-[13.5px] leading-[1.5] text-nevo-near-black/62">
-            {segment.body}
-          </p>
-        )}
-        {segment.needsReview && (
-          /*
-           * "Worth a look", and NOT the reasons.
-           *
-           * Both this row and the upload result used to append
-           * `reviewReasons.map(r => r.replace(/_/g, " ").toLowerCase())` - which
-           * is, word for word, the thing `SegmentReviewReason`'s own contract
-           * description exists to prevent: "Enumerated so the console can render
-           * its own copy per reason instead of printing the raw token with
-           * underscores swapped for spaces." A teacher was reading
-           * "audio generation failed".
-           *
-           * The console DOES have that copy, in `LiveVariantReview`, written per
-           * reason and in sentences. It is too long for an inline chip, and
-           * inventing a second short register for the same six reasons is how
-           * two wordings drift. So the row says the one true thing and the
-           * variant review link beside it - added the same day - goes to the
-           * screen that explains which. Flagged to design.
-           */
-          <p className="mt-2 text-[13px] leading-[1.5] text-nevo-navy">
-            Worth a look
-          </p>
-        )}
-      </div>
-      {segment.availableModalities.length > 0 && (
-        <span className="shrink-0 text-[12.5px] text-nevo-near-black/45">
-          {segment.availableModalities
-            .map((m) => MODALITY_LABEL[m] ?? m)
-            .join(" · ")}
-        </span>
-      )}
-    </div>
-  );
-}
 
 export function UploadResult({
   lesson,
@@ -192,7 +102,6 @@ export function UploadResult({
           lessonId={lesson.id}
           title={lesson.title}
           fileName={fileName}
-          readyToAssign={verdict.ready}
           onUploadAnother={onUploadAnother}
         />
       ) : (
@@ -250,14 +159,11 @@ export function UploadResult({
         </p>
       )}
 
-      <h3 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:text-sm">
-        What Nevo found
-      </h3>
-      <div className="mt-3.5 divide-y divide-nevo-near-black/7 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1 xl:mt-4">
-        {segments.map((s, i) => (
-          <Segment key={s.id} segment={s} index={i} />
-        ))}
-      </div>
+      {/* SCRUM-318 (Lydia, 7 Nov): the list of sections comes OUT - "the
+          structure step has already shown the teacher every section and had
+          them accept it, so showing the same list again asks them to read it
+          twice and changes nothing." The split notice above and Try that
+          again below stay exactly as they are. */}
 
       <div className="mt-7 flex flex-wrap items-center gap-3">
         {/* THE WAY INTO THE REVIEW (backlog item 19). Assign was held with

@@ -514,8 +514,15 @@ export interface FinishView {
   stage: "unstarted" | "partway" | "reviewed";
   done: boolean[];
   next: number;
-  /** Lydia's LU-04b sentence is exactly true: the next step is the key points. */
-  onKeyPoints: boolean;
+  /**
+   * C07j LU-04b's step line (design ac1e61c), only where it is exactly so:
+   * "You've been through the overview and are on the key points.", then "...
+   * approved the key points and are on the checks.", then "... approved the
+   * checks and are on the rewrites." Anything it cannot name falls back to
+   * "You're part-way through reviewing this." - "naming the wrong step is
+   * worse than naming none".
+   */
+  stepLine: string;
   /** "Reviewed by Ms. Adeyemi · 4 November", from the sign-offs on record. */
   reviewedBy: string | null;
 }
@@ -550,7 +557,16 @@ export function finishView(review: LessonReview, segments: LessonSegment[]): Fin
     stage,
     done,
     next,
-    onKeyPoints: stage === "partway" && next === 2,
+    stepLine:
+      next === 2 && done[0]
+        ? "You’ve been through the overview and are on the key points."
+        : next === 3 && done[1]
+          ? "You’ve approved the key points and are on the checks."
+          : // A lesson with no checks approved nothing at step 3, so this line
+            // needs the checks sign-off itself, not only nothing pending.
+            next === 4 && done[2] && review.checksApproval?.current === true
+            ? "You’ve approved the checks and are on the rewrites."
+            : "You’re part-way through reviewing this.",
     reviewedBy:
       names.length > 0 ? [`Reviewed by ${listed(names)}`, day].filter(Boolean).join(" · ") : null,
   };
