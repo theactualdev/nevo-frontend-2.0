@@ -23,7 +23,8 @@ import { KeptDraftNotice } from "@/components/shared/KeptDraftNotice";
  * WHAT CAN BE STEERED, and why not more. `PUT /uploads/{id}/structure` takes
  * the whole document back, so anything expressible in it is editable here:
  * renaming a lesson or a section, reordering either, moving a section to the
- * lesson beside it, and folding a lesson into the one before it.
+ * lesson beside it, and folding a lesson or a section into the one before it
+ * (C07d's Merge, at both levels - sections since 8 Nov, backlog item 37).
  *
  * SPLIT IS HERE as of 3 Sep, and the way it works is worth knowing. It used
  * to be absent because starting a new lesson meant minting a `format: uuid`
@@ -300,6 +301,23 @@ export function LiveStructureTree({
   /** Replace one lesson's sections, through `edit` so it marks dirty. */
   const withModules = (li: number, mods: StructureLesson["modules"]) =>
     edit(draft.map((l, i) => (i === li ? { ...l, modules: mods } : l)));
+
+  /**
+   * C07d's section Merge, "fold a node into the one before it": this
+   * section's segments go to the end of the section above, in order, and the
+   * section above keeps its own title, recap and preview. Only within the
+   * lesson - across lessons is "Move to the lesson above".
+   */
+  const mergeModuleUp = (li: number, mi: number) => {
+    if (mi === 0) return;
+    const mods = draft[li].modules;
+    const next = mods
+      .map((m, j) =>
+        j === mi - 1 ? { ...m, segmentIds: [...m.segmentIds, ...mods[mi].segmentIds] } : m,
+      )
+      .filter((_, j) => j !== mi);
+    withModules(li, next);
+  };
 
   /** Reorder a segment within its section. */
   const moveSegment = (li: number, mi: number, pi: number, by: -1 | 1) => {
@@ -619,6 +637,14 @@ export function LiveStructureTree({
                   </button>
                   <button type="button" onClick={() => moveModule(li, mi, 1)} disabled={mi === lesson.modules.length - 1} aria-label="Move section down" title="Move down" className={iconBtn}>
                     <Arrow up={false} />
+                  </button>
+                  {/* C07d's section Merge, with the lesson Merge's own mark.
+                      Held on the first section, which has nothing above it
+                      in this lesson. */}
+                  <button type="button" onClick={() => mergeModuleUp(li, mi)} disabled={mi === 0} aria-label="Merge into the section above" title="Merge into the section above" className={iconBtn}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M5 9h14M5 15h14M9 5l3-3 3 3" />
+                    </svg>
                   </button>
                   <button type="button" onClick={() => moveModuleAcross(li, mi, -1)} disabled={li === 0} aria-label="Move to the lesson above" title="Move to the lesson above" className={iconBtn}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

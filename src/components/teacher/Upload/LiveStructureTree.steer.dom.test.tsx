@@ -311,3 +311,46 @@ describe("steering a segment", () => {
     expect((await sentKeys(1)).map((m) => m.segmentIds)).toEqual([["k-3"]]);
   });
 });
+
+/**
+ * Backlog item 37. C07d's Merge "folds a node into the one before it" at the
+ * lesson AND the section level; the live tree offered it for lessons only.
+ */
+describe("merging a section", () => {
+  const sent = async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(updateStructure).toHaveBeenCalled());
+    return updateStructure.mock.calls.at(-1)?.[1] as {
+      lessons: { modules: { segmentIds: string[]; title: string; sequenceOrder: number }[] }[];
+    };
+  };
+  /** One per section, in tree order: lesson 1's two, then lesson 2's one. */
+  const mergeButtons = () => screen.getAllByRole("button", { name: "Merge into the section above" });
+
+  it("folds a section into the one above, its segments last, the title above kept", async () => {
+    show();
+    fireEvent.click(mergeButtons()[1]);
+
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    const doc = await sent();
+    expect(doc.lessons[0].modules).toHaveLength(1);
+    expect(doc.lessons[0].modules[0]).toMatchObject({
+      title: "Where rivers start",
+      segmentIds: ["k-1", "k-2", "k-9"],
+      sequenceOrder: 1,
+    });
+    // The other lesson is untouched.
+    expect(doc.lessons[1].modules.map((m) => m.segmentIds)).toEqual([["k-3"]]);
+  });
+
+  it("holds it on each lesson's first section, which has nothing above it in that lesson", () => {
+    show();
+
+    const buttons = mergeButtons();
+    expect(buttons).toHaveLength(3);
+    expect(buttons[0]).toBeDisabled();
+    expect(buttons[1]).not.toBeDisabled();
+    // Lesson 2's only section never folds into lesson 1.
+    expect(buttons[2]).toBeDisabled();
+  });
+});
