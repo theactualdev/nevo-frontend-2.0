@@ -122,11 +122,12 @@ export const SLOWER_LINE = "No rush. Let's take this one a step at a time.";
  * engine must not offer it as a route there"). Each only where there is
  * something behind it.
  *  - SLOWER is the lesson's pace, the same switch the text's Slower chip is,
- *    held for the sitting on the server. Here it puts the frame's line above
- *    the question and lets the step arrive in pieces: the question, then the
- *    step's approved `parts` one at a time where it has them (8c4ccef), then
- *    the answer. Each next piece when the child taps "Tap to continue", never
- *    on a timer (Lydia, 2 Nov; `SLOWER_NEXT`).
+ *    held for the sitting on the server. Here it lets the step arrive in
+ *    pieces: the question, then the step's approved `parts` one at a time
+ *    where it has them (8c4ccef), then the answer. Each next piece when the
+ *    child taps "Tap to continue", never on a timer (Lydia, 2 Nov;
+ *    `SLOWER_NEXT`). The frame's line goes above the question ONLY on a step
+ *    with pieces behind it - see `SLOWER_LINE`.
  *  - MORE SUPPORT is the idea behind the step, in a teacher's words: the
  *    step's `explanation` (`conceptExplanation`, 8c67353), in the frame's
  *    "Let's look at this part together" card above the question - concept
@@ -985,8 +986,17 @@ export function CalculationSolver({
                 </p>
               </div>
             )}
-            {/* The frame's Slower line, above the question (`presentSlower`). */}
-            {slower && !mini && (
+            {/*
+              The frame's Slower line, above the question (`presentSlower`),
+              ONLY ON A STEP WITH PIECES BEHIND IT (Lydia, 7 Nov, copy pass,
+              urgent): "That line is a claim about something that is not going
+              to happen... in front of children." A step whose pieces are
+              waiting for a teacher reaches a child with none - the server
+              keeps them back - and so does a step that has none, so on either
+              Slower still paces it (the question, then the answer on a tap)
+              but says nothing it cannot keep.
+            */}
+            {slower && !mini && parts.length > 0 && (
               <p
                 className={cn(
                   "mb-4 text-center text-sm text-nevo-violet-text sm:text-[15px]",

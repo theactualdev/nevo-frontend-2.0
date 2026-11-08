@@ -360,7 +360,11 @@ describe("a calculation's signals", () => {
    * header still draws no density pills over the solver.
    */
   it("offers the child's Slower in the solver's own row, never the header's pacing chips", () => {
-    const lesson = lessonWith([step()]);
+    // A step with pieces behind it: the only kind Slower's line is shown on
+    // (Lydia, 7 Nov, copy pass).
+    const lesson = lessonWith([
+      step({ parts: ["Look at each fraction.", "Find the bottom numbers."] }),
+    ]);
     lesson.segments[0].text = {
       heading: "Adding",
       body: { default: "One idea here. A second idea here. A third idea here." },
