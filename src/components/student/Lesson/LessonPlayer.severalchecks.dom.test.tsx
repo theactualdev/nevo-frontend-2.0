@@ -189,7 +189,7 @@ describe("several checks, one after another in the same sheet", () => {
     press("Next check");
 
     expect(within(sheet()).getByText("Last quick check for this section.")).toBeTruthy();
-    pick("Right 3");
+    await pick("Right 3");
     expect(within(sheet()).queryByRole("button", { name: "Next check" })).toBeNull();
     press("Finish");
 
