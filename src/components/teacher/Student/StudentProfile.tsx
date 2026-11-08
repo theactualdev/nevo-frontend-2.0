@@ -21,6 +21,11 @@ import { MasteryDualTrack } from "./MasteryDualTrack";
 import { RecommendSheet } from "./RecommendSheet";
 import { SessionPanel } from "./SessionPanel";
 import { ShareSheet } from "./ShareSheet";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
+import { avatarLookOf } from "@/lib/profile/avatarLook";
+
+/** C08's own sample look for the walkthrough's child: the cream rounded square. */
+const SAMPLE_LOOK = avatarLookOf("square", "cream_elevated");
 
 /**
  * C08 Student Profile (teacher view) - how this student learns, in plain
@@ -121,9 +126,9 @@ export function StudentProfile({
           )}
         >
           <div className="flex items-center gap-3.5 xl:gap-4">
-            <span className="flex size-[50px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-[17px] font-semibold text-nevo-cream xl:size-14 xl:text-[19px]">
-              {student.initials}
-            </span>
+            {/* C08 (928cf30): a child's avatar, never initials (SCRUM-317) -
+                the frame's own sample look on this signed-out walkthrough. */}
+            <StudentAvatar look={SAMPLE_LOOK} className="size-[50px] xl:size-14" glyphClassName="size-[46%]" />
             <div>
               <div className="flex items-center gap-[9px] xl:gap-2.5">
                 <h1 className="text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">

@@ -6,6 +6,8 @@ import { getToken } from "@/lib/auth/session";
 import { classesOnce } from "@/lib/classes/classesOnce";
 import { useHasSession } from "./useHasSession";
 import { studentName } from "./useClassRoster";
+import type { AvatarLook } from "@/lib/profile/avatarLook";
+import { lookOfChild } from "@/lib/profile/rosterLook";
 
 /**
  * Every student the teacher can actually write to, across their classes.
@@ -25,7 +27,11 @@ import { studentName } from "./useClassRoster";
 export interface DirectoryStudent {
   studentId: string;
   name: string;
-  initials: string;
+  /**
+   * The avatar the child chose, read off their class roster row (SCRUM-317).
+   * Teacher screens draw this beside the child's name - never their initials.
+   */
+  look: AvatarLook;
   /** The class this child was read from, so a link can carry it (C08's back link). */
   classId: string;
   className: string;
@@ -42,25 +48,14 @@ export interface StudentDirectory {
   failed: boolean;
 }
 
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  }
-  return name.slice(0, 2).toUpperCase();
-}
-
 function toDirectory(classId: string, className: string, roster: ClassStudent[]) {
-  return roster.map((s) => {
-    const name = studentName(s);
-    return {
-      studentId: s.studentId,
-      name,
-      initials: initialsOf(name),
-      classId,
-      className,
-    };
-  });
+  return roster.map((s) => ({
+    studentId: s.studentId,
+    name: studentName(s),
+    look: lookOfChild(s),
+    classId,
+    className,
+  }));
 }
 
 export function useStudentDirectory(): StudentDirectory {

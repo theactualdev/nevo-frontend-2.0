@@ -6,6 +6,7 @@ import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { useKeptDraft } from "@/hooks/useKeptDraft";
 import { KeptDraftNotice } from "@/components/shared/KeptDraftNotice";
 import { useStudentDirectory } from "@/hooks/useStudentDirectory";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
 import { useHasSession } from "@/hooks/useHasSession";
 import { studentSlug } from "@/lib/mocks/teacherStudents";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
@@ -126,7 +127,7 @@ export function ComposeModal({
         ? directory.map((s) => ({
             name: s.name,
             className: s.className,
-            initials: s.initials,
+            look: s.look,
             studentId: s.studentId,
           }))
         : // Gated on the SESSION, not on `live`. `live` is false while the
@@ -384,9 +385,8 @@ export function ComposeModal({
                       onClick={() => setChosen(s)}
                       className="flex w-full cursor-pointer items-center gap-3 rounded-[10px] px-2 py-2.5 text-left transition-colors hover:bg-nevo-navy/6 xl:gap-[13px] xl:py-[11px]"
                     >
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-nevo-navy/10 text-xs font-semibold text-nevo-navy xl:size-[38px] xl:text-[12.5px]">
-                        {s.initials}
-                      </span>
+                      {/* The child's own avatar, never initials (SCRUM-317). */}
+                      <StudentAvatar look={s.look} className="size-9 xl:size-[38px]" glyphClassName="size-[58%]" />
                       <span className="min-w-0 flex-1">
                         <span className="block text-[14.5px] font-medium text-nevo-near-black xl:text-[15px]">
                           {s.name}
@@ -439,9 +439,7 @@ export function ComposeModal({
                   To
                 </span>
                 <div className="mt-2 flex items-center gap-[11px] rounded-[10px] bg-nevo-cream-elevated px-3.5 py-2.5">
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-xs font-semibold text-nevo-cream xl:size-[34px]">
-                    {picked.initials}
-                  </span>
+                  <StudentAvatar look={picked.look} className="size-8 xl:size-[34px]" glyphClassName="size-[58%]" />
                   <span className="min-w-0 flex-1">
                     <span className="text-sm font-semibold text-nevo-near-black xl:text-[14.5px]">
                       {picked.name}

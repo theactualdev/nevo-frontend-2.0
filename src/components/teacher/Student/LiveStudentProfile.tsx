@@ -11,6 +11,8 @@ import { profileChip } from "@/components/teacher/shared/summaryState";
 import { useStudentSessions } from "@/hooks/useStudentSessions";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { useRosterObservations } from "@/hooks/useRosterObservations";
+import { useStudentDirectory } from "@/hooks/useStudentDirectory";
+import { StudentAvatar } from "@/components/shared/StudentAvatar";
 import {
   OBSERVATION_COPY,
   observationCount,
@@ -90,12 +92,6 @@ const SESSION_NOTE: Record<string, string> = {
   exited: "Left partway through",
 };
 
-function initialsOf(first: string | null, last: string | null): string {
-  const a = first?.trim()?.[0] ?? "";
-  const b = last?.trim()?.[0] ?? "";
-  return (a + b).toUpperCase() || "?";
-}
-
 /**
  * C08's "A flag Learning Support has acknowledged": plain text under the flag,
  * "Adaora from learning support saw this on 12 October." Where no name is
@@ -158,6 +154,10 @@ export function LiveStudentProfile({
   // open - the server's own filter (backlog item 7).
   const escalated = useEscalated({ studentId });
   const chip = profileChip(noticed, escalated.students.has(studentId));
+  /* The child's avatar (SCRUM-317), from their row on this teacher's own
+     class rosters: the single-student read carries none. */
+  const { students: directory, loading: directoryLoading } = useStudentDirectory();
+  const look = directory.find((s) => s.studentId === studentId)?.look ?? null;
   /* C08's "What Nevo has noticed", from the class this profile was opened
      from. Also before the guard below. */
   const observations = useRosterObservations(classId, studentId);
@@ -303,9 +303,15 @@ export function LiveStudentProfile({
         */}
         <div className="mt-3.5 flex flex-col items-start gap-4 xl:mt-4 xl:flex-row xl:flex-wrap xl:justify-between xl:gap-6">
           <div className="flex items-center gap-3.5 xl:gap-4">
-            <span className="flex size-[50px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-[17px] font-semibold text-nevo-cream xl:size-14 xl:text-[19px]">
-              {initialsOf(student.firstName, student.lastName)}
-            </span>
+            {/* The avatar the child chose, never their initials (SCRUM-317),
+                with their name beside it: a pulse while the rosters are read,
+                and nothing for a child who is not on this teacher's rosters
+                rather than a look they did not choose. */}
+            {look ? (
+              <StudentAvatar look={look} className="size-[50px] xl:size-14" glyphClassName="size-[46%]" />
+            ) : directoryLoading ? (
+              <span aria-hidden className="size-[50px] shrink-0 animate-pulse rounded-full bg-nevo-cream-elevated xl:size-14" />
+            ) : null}
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-x-[9px] gap-y-1 xl:gap-x-2.5">
                 <h1 className="text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">

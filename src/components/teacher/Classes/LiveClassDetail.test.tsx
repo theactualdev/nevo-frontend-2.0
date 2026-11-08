@@ -816,3 +816,32 @@ describe("what a row says about a child, in order", () => {
     expect(screen.queryByText("Worth a glance")).not.toBeInTheDocument();
   });
 });
+
+/**
+ * SCRUM-317 on the roster (C05, 928cf30): each child by the avatar they chose,
+ * beside their name - never their initials. The look is on the roster row.
+ */
+describe("the roster's avatars", () => {
+  const looks = (el: HTMLElement) =>
+    [...el.querySelectorAll("[data-avatar-look]")].map((n) => n.getAttribute("data-avatar-look"));
+
+  it("draws each child's own look, from their roster row", () => {
+    useClassRoster.mockReturnValue({
+      students: [
+        seg({ studentId: "s-1", avatarTone: "star-near_black" }),
+        seg({ studentId: "s-2", firstName: "Bayo", avatarShape: "triangle", avatarColourway: "cream_elevated" }),
+      ],
+      loading: false,
+      failed: false,
+    });
+    const { container } = render(<LiveClassDetail klass={klass} />);
+
+    expect(looks(container)).toEqual(["star-near_black", "triangle-cream_elevated"]);
+  });
+
+  it("draws the nothing-chosen look for a child who hasn't chosen one", () => {
+    const { container } = render(<LiveClassDetail klass={klass} />);
+
+    expect(looks(container)).toEqual(["circle-navy"]);
+  });
+});

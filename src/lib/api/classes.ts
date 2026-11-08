@@ -165,6 +165,13 @@ export interface ClassStudent {
    * students lane, so it never showed up.
    */
   consent?: StudentConsent | null;
+  /**
+   * The child's avatar (SCRUM-324), each nullable. Read through
+   * `lookOfChild` - see `lib/profile/rosterLook`.
+   */
+  avatarTone?: string | null;
+  avatarShape?: string | null;
+  avatarColourway?: string | null;
 }
 
 /**

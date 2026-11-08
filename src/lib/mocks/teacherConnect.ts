@@ -1,4 +1,5 @@
 import { studentSlug } from "./teacherStudents";
+import { avatarLookOf, type AvatarLook } from "@/lib/profile/avatarLook";
 
 /**
  * Connect mock data (C10 + C10b). Individual threads with students. Parents
@@ -26,7 +27,8 @@ export interface Message {
 export interface Thread {
   id: string;
   studentName: string;
-  initials: string;
+  /** The child's avatar, drawn beside their name (SCRUM-317). A sample here. */
+  look: AvatarLook;
   className: string;
   /** List-row preview; "You: " marks a message the teacher sent. */
   preview: string;
@@ -38,7 +40,7 @@ export const THREADS: Thread[] = [
   {
     id: studentSlug("Amara Okafor"),
     studentName: "Amara Okafor",
-    initials: "AO",
+    look: avatarLookOf("star", "navy"),
     className: "JSS 2A",
     preview: "Well done for finishing, Amara.",
     time: "2m",
@@ -61,7 +63,7 @@ export const THREADS: Thread[] = [
   {
     id: studentSlug("Tunde Adeyemi"),
     studentName: "Tunde Adeyemi",
-    initials: "TA",
+    look: avatarLookOf("square", "near_black"),
     className: "JSS 2A",
     preview: "Sorry ma, I wasn't feeling well that day.",
     time: "1h",
@@ -84,7 +86,7 @@ export const THREADS: Thread[] = [
   {
     id: studentSlug("Chisom Eze"),
     studentName: "Chisom Eze",
-    initials: "CE",
+    look: avatarLookOf("triangle", "near_black"),
     className: "JSS 2A",
     preview: "You: Lovely work on the comprehension!",
     time: "3h",
@@ -95,7 +97,7 @@ export const THREADS: Thread[] = [
   {
     id: studentSlug("Damilola Akinwande"),
     studentName: "Damilola Akinwande",
-    initials: "DA",
+    look: avatarLookOf("hexagon", "navy"),
     className: "JSS 2A",
     preview: "Thank you ma, I understand now.",
     time: "Yest",
@@ -111,7 +113,7 @@ export const THREADS: Thread[] = [
   {
     id: studentSlug("Fatima Musa"),
     studentName: "Fatima Musa",
-    initials: "FM",
+    look: avatarLookOf("circle", "near_black"),
     className: "JSS 2A",
     preview: "See you in class tomorrow.",
     time: "Yest",
@@ -130,20 +132,22 @@ export const THREADS: Thread[] = [
 export interface ComposeStudent {
   name: string;
   className: string;
-  initials: string;
+  /** The avatar the child chose, drawn beside their name (SCRUM-317). */
+  look: AvatarLook;
   /** Present for real students; absent on the fixtures, which cannot be sent to. */
   studentId?: string;
 }
 
+/** The signed-out walkthrough's sample children, each with a sample look. */
 export const COMPOSE_STUDENTS: ComposeStudent[] = [
-  { name: "Amara Okafor", className: "JSS 2A", initials: "AO" },
-  { name: "Bello Ibrahim", className: "JSS 2B", initials: "BI" },
-  { name: "Chisom Eze", className: "JSS 2A", initials: "CE" },
-  { name: "Damilola Akinwande", className: "JSS 2A", initials: "DA" },
-  { name: "Emeka Nwachukwu", className: "JSS 2B", initials: "EN" },
-  { name: "Fatima Musa", className: "JSS 2A", initials: "FM" },
-  { name: "Kolade Fashola", className: "SSS 1 Sciences", initials: "KF" },
-  { name: "Ngozi Obi", className: "JSS 2B", initials: "NO" },
+  { name: "Amara Okafor", className: "JSS 2A", look: avatarLookOf("star", "navy") },
+  { name: "Bello Ibrahim", className: "JSS 2B", look: avatarLookOf("square", "cream_elevated") },
+  { name: "Chisom Eze", className: "JSS 2A", look: avatarLookOf("triangle", "near_black") },
+  { name: "Damilola Akinwande", className: "JSS 2A", look: avatarLookOf("hexagon", "navy") },
+  { name: "Emeka Nwachukwu", className: "JSS 2B", look: avatarLookOf("diamond", "cream_elevated") },
+  { name: "Fatima Musa", className: "JSS 2A", look: avatarLookOf("circle", "near_black") },
+  { name: "Kolade Fashola", className: "SSS 1 Sciences", look: avatarLookOf("triangle", "cream_elevated") },
+  { name: "Ngozi Obi", className: "JSS 2B", look: avatarLookOf("star", "near_black") },
 ];
 
 export const COMPOSE_CLASS_FILTERS = [
