@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import {
   AGE_CHECK_EXPIRED,
   AGE_CHECK_NOT_PENDING,
+  PARENT_ACCOUNT_UNAVAILABLE,
+  PARENT_NOTICE_RECENTLY_SENT,
   ageCheckRefusal,
   ageChecksApi,
   holdStage,
@@ -160,6 +162,11 @@ export function DobHoldView({ back = null }: { back?: Back | null }) {
     setHeld((rows) => (next.blocksAccess ? rows.map((r) => (r.id === next.id ? next : r)) : rows.filter((r) => r.id !== next.id)));
   };
 
+  /** A resend answers with the check as it now stands - its new sent date. */
+  const onResent = (next: AgeCheck) => {
+    setHeld((rows) => rows.map((r) => (r.id === next.id ? next : r)));
+  };
+
   /*
    * HELD FOR A MISSING YEAR GROUP (item 17; Lydia, SCRUM-321): the dates
    * agree, but no single year group is recorded (`enrolled_age_band_unavailable`,
@@ -274,7 +281,14 @@ export function DobHoldView({ back = null }: { back?: Back | null }) {
                         onGone={read}
                       />
                     ) : holdStage(c) === "parent" ? (
-                      <WaitingCard key={c.id} check={c} person={personFor(c)} done={done[c.id] ?? null} />
+                      <WaitingCard
+                        key={c.id}
+                        check={c}
+                        person={personFor(c)}
+                        done={done[c.id] ?? null}
+                        onResent={onResent}
+                        onGone={read}
+                      />
                     ) : (
                       <BothCheckedCard key={c.id} check={c} person={personFor(c)} />
                     ),
@@ -293,7 +307,14 @@ export function DobHoldView({ back = null }: { back?: Back | null }) {
                 />
               ))}
               {waiting.map((c) => (
-                <WaitingCard key={c.id} check={c} person={personFor(c)} done={done[c.id] ?? null} />
+                <WaitingCard
+                  key={c.id}
+                  check={c}
+                  person={personFor(c)}
+                  done={done[c.id] ?? null}
+                  onResent={onResent}
+                  onGone={read}
+                />
               ))}
               {settled.map((c) => (
                 <BothCheckedCard key={c.id} check={c} person={personFor(c)} />
@@ -481,9 +502,73 @@ function RecheckCard({
  * school IS told when they still differ. With no parent account to ask,
  * nobody has been, so it keeps saying what has to happen instead.
  */
-function WaitingCard({ check, person, done }: { check: AgeCheck; person: Person; done: Done | null }) {
+/*
+ * D30b, WAITING ON THE PARENT (design 1397ec4), built reduced to what the
+ * server makes true (5 Nov check):
+ *
+ * - "sent {date}" is the server's `parentNotifiedAt`, and "Resend the request"
+ *   asks again (`resend-parent-notice`). "Request resent" is the tablet
+ *   frame's words; the desktop's "…to Mr. Adeyemi" is dropped, because the
+ *   notice goes to every linked parent with an active account and
+ *   `parentName` is only the earliest-linked guardian.
+ * - The removal date stays a date. The frame's "(30 days from today)" is
+ *   left out: the date is 30 days from the SCHOOL's notice, a resend doesn't
+ *   move it, and counting days would be the page's arithmetic.
+ * - Left out, raised to Lydia: the answered state ("{name}'s account has
+ *   started" / "entered a date that matches your record") - a hold can lift
+ *   with the dates still differing, and consent and payment are separate
+ *   gates; and the header's "enrolled {date}", which no read carries.
+ */
+function WaitingCard({
+  check,
+  person,
+  done,
+  onResent,
+  onGone,
+}: {
+  check: AgeCheck;
+  person: Person;
+  done: Done | null;
+  /** Optional, so a card drawn elsewhere on this page needn't wire it. */
+  onResent?: (next: AgeCheck) => void;
+  /** The server says it is no longer held: read the list again. */
+  onGone?: () => void;
+}) {
   const removal = longDay(check.deletionDueAt);
   const asked = Boolean(check.parentNotifiedAt);
+  const sentOn = longDay(check.parentNotifiedAt ?? null);
+  const [busy, setBusy] = useState(false);
+  const [resent, setResent] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
+
+  const resend = () => {
+    if (busy) return;
+    setBusy(true);
+    setRefusal(null);
+    ageChecksApi
+      .resendParentNotice(check.id)
+      .then((next) => {
+        setResent(true);
+        onResent?.(next);
+      })
+      .catch((err: unknown) => {
+        const code = ageCheckRefusal(err);
+        if (code === AGE_CHECK_NOT_PENDING) {
+          onGone?.();
+          return;
+        }
+        setRefusal(
+          code === PARENT_NOTICE_RECENTLY_SENT
+            ? "It went in the last few minutes, so it hasn't been sent again."
+            : code === PARENT_ACCOUNT_UNAVAILABLE
+              ? `No parent linked to ${person.first} has an active Nevo account, so there's no one to send it to.`
+              : code === AGE_CHECK_EXPIRED
+                ? "This check has closed, so the request can’t be sent again."
+                : "That didn’t go through, and nothing has changed. Try again in a moment.",
+        );
+      })
+      .finally(() => setBusy(false));
+  };
   return (
     <li className="rounded-xl bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-lg:px-5 max-lg:py-[18px]">
       <span className="block text-[13.5px] font-semibold text-nevo-near-black/58">{person.name}</span>
@@ -496,23 +581,54 @@ function WaitingCard({ check, person, done }: { check: AgeCheck; person: Person;
         {done?.kind === "corrected" && longDate(done.to)
           ? `Your record now reads ${longDate(done.to)}. `
           : ""}
+        {/*
+          * LYDIA'S WORDS, SCRUM-321 (7 Nov). "This notice went to everyone
+          * linked to {name}" - the server notifies every linked parent with an
+          * active account, not one named adult. The "activates on its own as
+          * soon as the two dates agree" sentence is gone: not the whole rule.
+          * In its place, her line for the ADMIN card (13b, 7 Nov): "The hold
+          * can clear once your record and the parent's line up closely
+          * enough." The parent's own date-check page keeps her original.
+          */}
         {asked ? (
           <>
-            We&rsquo;ve asked {person.first}&rsquo;s parent to enter it again. If the two dates now
-            agree, {person.first}&rsquo;s account activates on its own. If they still differ,
-            we&rsquo;ll let you know - there&rsquo;s nothing more for you to do here for now.
+            This notice went to everyone linked to {person.first}.
+            {sentOn ? ` Sent ${sentOn}.` : ""}
           </>
         ) : (
-          <>
-            {person.first}&rsquo;s parent now needs to enter the date again. If the two dates agree,{" "}
-            {person.first}&rsquo;s account activates on its own.
-          </>
-        )}
+          <>{person.first}&rsquo;s parent now needs to enter the date again.</>
+        )}{" "}
+        The hold can clear once your record and the parent&rsquo;s line up closely enough.
       </p>
       <p className="m-0 mt-3 text-[13px] leading-[1.5] text-nevo-near-black/58">
         Not active yet - waiting on the parent.
-        {removal ? ` Record removed on ${removal} if unresolved.` : ""}
+        {/* SCRUM-321: the date only, with nothing implying a resend moves it.
+            "their", as this page says it for every child. */}
+        {removal ? ` ${person.first} will be removed from their class on ${removal}.` : ""}
       </p>
+      {asked ? (
+        <div className="mt-3.5">
+          {resent ? (
+            <p className="m-0 text-[13.5px] font-semibold text-nevo-navy" role="status">
+              Request resent
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={resend}
+              disabled={busy}
+              className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline disabled:cursor-default disabled:opacity-60"
+            >
+              {busy ? "Sending…" : "Resend the request"}
+            </button>
+          )}
+          {refusal ? (
+            <p className="m-0 mt-2 text-[13px] leading-[1.5] text-nevo-near-black/70" role="alert">
+              {refusal}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </li>
   );
 }

@@ -79,6 +79,8 @@ export function holdStage(check: AgeCheck): HoldStage {
 export const AGE_CHECK_EXPIRED = "age_check_expired";
 export const AGE_CHECK_NOT_PENDING = "age_check_not_pending";
 export const SCHOOL_RECHECK_REQUIRED = "school_recheck_required";
+export const PARENT_NOTICE_RECENTLY_SENT = "parent_notice_recently_sent";
+export const PARENT_ACCOUNT_UNAVAILABLE = "parent_account_unavailable";
 
 /** The refusal's code, when the server gave one. */
 export function ageCheckRefusal(err: unknown): string | null {
@@ -129,6 +131,21 @@ export const ageChecksApi = {
     api.post<AgeCheck>(`/api/v1/age-checks/${encodeURIComponent(ageCheckId)}/school-recheck`, {
       dateOfBirth,
     }),
+
+  /**
+   * POST /api/v1/age-checks/{id}/resend-parent-notice - ask the parent again
+   * (D30b). Reaches every linked parent with an active account and returns
+   * the check with its new `parentNotifiedAt`; the removal date doesn't move.
+   * Refusals: 409 `school_recheck_required`, 429 `parent_notice_recently_sent`
+   * (within 5 minutes), 409 `parent_account_unavailable` (no linked parent
+   * has an active account), 409 `age_check_not_pending`, 410
+   * `age_check_expired`.
+   */
+  resendParentNotice: (ageCheckId: string) =>
+    api.post<AgeCheck>(
+      `/api/v1/age-checks/${encodeURIComponent(ageCheckId)}/resend-parent-notice`,
+      {},
+    ),
 
   /**
    * GET /api/v1/age-checks/{id}/history - the school's re-checks and, since

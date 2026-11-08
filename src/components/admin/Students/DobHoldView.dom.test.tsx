@@ -3,16 +3,17 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { ApiError } from "@/lib/api/client";
 import type { AgeCheck } from "@/lib/api/ageChecks";
 
-const { held, schoolRecheck, getStudent, listClasses } = vi.hoisted(() => ({
+const { held, schoolRecheck, resendParentNotice, getStudent, listClasses } = vi.hoisted(() => ({
   held: vi.fn(),
   schoolRecheck: vi.fn(),
+  resendParentNotice: vi.fn(),
   getStudent: vi.fn(),
   listClasses: vi.fn(),
 }));
 
 vi.mock("@/lib/api/ageChecks", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/ageChecks")>();
-  return { ...actual, ageChecksApi: { held, schoolRecheck } };
+  return { ...actual, ageChecksApi: { held, schoolRecheck, resendParentNotice } };
 });
 vi.mock("@/lib/api/students", () => ({ studentsApi: { get: getStudent } }));
 vi.mock("@/lib/api/classes", () => ({ classesApi: { list: listClasses } }));
@@ -87,10 +88,13 @@ describe("a hold waiting on the school", () => {
     fireEvent.click(within(await card()).getByRole("button", { name: "This date is correct" }));
     await waitFor(() => expect(schoolRecheck).toHaveBeenCalledWith("ac-tunde", "2013-03-14"));
     expect(await screen.findByRole("heading", { name: "You’ve confirmed Tunde’s date of birth" })).toBeInTheDocument();
-    expect(screen.getByText(/Not active yet - waiting on the parent\. Record removed on 19 November 2026 if unresolved\./)).toBeInTheDocument();
+    // SCRUM-321: the date only - "removed from their class", nothing about a resend.
+    expect(
+      screen.getByText(/Not active yet - waiting on the parent\. Tunde will be removed from their class on 19 November 2026\./),
+    ).toBeInTheDocument();
   });
 
-  it("says the parent has been asked, in D30's words, when the server says so", async () => {
+  it("says the notice went to everyone linked to the child, in Lydia's words, when the server says so (SCRUM-321)", async () => {
     // The re-check asks every linked parent and stamps parentNotifiedAt (66be3b8).
     schoolRecheck.mockResolvedValue(
       check({ schoolRecheckedAt: "2026-10-21T09:00:00Z", parentNotifiedAt: "2026-10-21T09:00:01Z" }),
@@ -98,10 +102,15 @@ describe("a hold waiting on the school", () => {
     render(<DobHoldView />);
     fireEvent.click(within(await card()).getByRole("button", { name: "This date is correct" }));
     expect(
-      await screen.findByText(
-        /We’ve asked Tunde’s parent to enter it again\. If the two dates now agree, Tunde’s account activates on its own\. If they still differ, we’ll let you know - there’s nothing more for you to do here for now\./,
-      ),
+      await screen.findByText(/This notice went to everyone linked to Tunde\. Sent 21 October 2026\./),
     ).toBeInTheDocument();
+    // "as soon as the two dates agree" is not the whole rule (SCRUM-321);
+    // her line for the ADMIN card stands in its place (13b, 7 Nov).
+    expect(document.body.textContent).not.toMatch(/activates on its own|We’ve asked/);
+    expect(document.body.textContent).toMatch(
+      /The hold can clear once your record and the parent’s line up closely enough\./,
+    );
+    expect(document.body.textContent).not.toMatch(/her school.s record and yours/);
   });
 
   it("doesn't say anyone was asked when no parent account was there to ask", async () => {
@@ -172,6 +181,80 @@ describe("waiting on the parent", () => {
     render(<DobHoldView />);
     expect(await screen.findByText(/You’ve done your part on these\./)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "This date is correct" })).toBeNull();
+  });
+
+  /*
+   * D30b (design 1397ec4), reduced to what the server makes true: when it was
+   * sent, and a resend. No parent named - the notice goes to every linked
+   * parent with an active account - and no count of days to removal.
+   */
+  const asked = (over: Partial<AgeCheck> = {}) =>
+    check({
+      schoolRecheckedAt: "2026-10-21T09:00:00Z",
+      parentNotifiedAt: "2026-10-21T09:00:01Z",
+      ...over,
+    });
+
+  it("says when the request went, and resends it, with the new date (D30b)", async () => {
+    held.mockResolvedValue([asked()]);
+    resendParentNotice.mockResolvedValue(asked({ parentNotifiedAt: "2026-11-04T12:00:00Z" }));
+    render(<DobHoldView />);
+    const c = await card();
+    expect(c).toHaveTextContent("Sent 21 October 2026");
+    fireEvent.click(within(c).getByRole("button", { name: "Resend the request" }));
+    expect(await within(c).findByText("Request resent")).toBeInTheDocument();
+    expect(resendParentNotice).toHaveBeenCalledWith("ac-tunde");
+    expect(c).toHaveTextContent("Sent 4 November 2026");
+    // The removal date stays the date the server sends - a resend doesn't move it.
+    expect(c).toHaveTextContent("Tunde will be removed from their class on 19 November 2026.");
+    expect(c.textContent).not.toMatch(/days from today|Mr\./);
+  });
+
+  it("says plainly when it went in the last few minutes, and keeps the button", async () => {
+    held.mockResolvedValue([asked()]);
+    resendParentNotice.mockRejectedValue(
+      new ApiError(429, "Too Many Requests", { detail: { code: "parent_notice_recently_sent" } }),
+    );
+    render(<DobHoldView />);
+    const c = await card();
+    fireEvent.click(within(c).getByRole("button", { name: "Resend the request" }));
+    expect(
+      await within(c).findByText("It went in the last few minutes, so it hasn't been sent again."),
+    ).toBeInTheDocument();
+    expect(within(c).getByRole("button", { name: "Resend the request" })).toBeInTheDocument();
+  });
+
+  it("says when no linked parent has an account to send it to", async () => {
+    held.mockResolvedValue([asked()]);
+    resendParentNotice.mockRejectedValue(
+      new ApiError(409, "Conflict", { detail: { code: "parent_account_unavailable" } }),
+    );
+    render(<DobHoldView />);
+    const c = await card();
+    fireEvent.click(within(c).getByRole("button", { name: "Resend the request" }));
+    expect(
+      await within(c).findByText(
+        "No parent linked to Tunde has an active Nevo account, so there's no one to send it to.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("reads the list again when the hold has already gone", async () => {
+    held.mockResolvedValue([asked()]);
+    resendParentNotice.mockRejectedValue(
+      new ApiError(409, "Conflict", { detail: { code: "age_check_not_pending" } }),
+    );
+    render(<DobHoldView />);
+    fireEvent.click(within(await card()).getByRole("button", { name: "Resend the request" }));
+    await waitFor(() => expect(held).toHaveBeenCalledTimes(2));
+  });
+
+  it("offers no resend when nobody was asked in the first place", async () => {
+    held.mockResolvedValue([asked({ parentNotifiedAt: null })]);
+    render(<DobHoldView />);
+    const c = await card();
+    expect(within(c).queryByRole("button", { name: "Resend the request" })).toBeNull();
+    expect(c.textContent).not.toMatch(/sent \d/);
   });
 
 });
@@ -320,5 +403,19 @@ describe("a roster gap on Date of birth checks (item 17)", () => {
     expect(text.indexOf("date of birth a parent gave differs")).toBeLessThan(text.indexOf("Tunde Adeyemi"));
     expect(text.indexOf("Tunde Adeyemi")).toBeLessThan(text.indexOf("Held for a missing year group"));
     expect(text.indexOf("Held for a missing year group")).toBeLessThan(text.indexOf("Kemi Ade"));
+  });
+
+  it("a year-group child waiting on the parent can still be resent, from inside the group", async () => {
+    const waiting = gap({ schoolRecheckedAt: "2026-10-21T09:00:00Z", parentNotifiedAt: "2026-10-21T09:00:01Z" });
+    held.mockResolvedValue([waiting]);
+    resendParentNotice.mockResolvedValue({ ...waiting, parentNotifiedAt: "2026-11-04T12:00:00Z" });
+    getStudent.mockResolvedValue({ id: "s-gap", firstName: "Kemi", lastName: "Ade", classIds: [] });
+    render(<DobHoldView />);
+    await screen.findByText("Kemi Ade");
+    const group = screen.getByRole("list", { name: "Held for a missing year group" });
+    expect(group).toHaveTextContent("This notice went to everyone linked to Kemi.");
+    fireEvent.click(within(group).getByRole("button", { name: "Resend the request" }));
+    expect(await within(group).findByText("Request resent")).toBeInTheDocument();
+    expect(resendParentNotice).toHaveBeenCalledWith("ac-gap");
   });
 });
