@@ -159,6 +159,18 @@ const Mark = ({ state }: { state: "done" | "running" | "waiting" }) => {
  * The wizard had routed there since 18 Sep and never passed the prop, so the
  * frozen ladder was code nothing reached. It is gone, so nothing can.
  */
+
+/**
+ * LU-01's headline: the running stage in the present tense, "Finding the
+ * sections…" (backlog item 35). The stage's own rung label, so it can never
+ * name a stage the ladder doesn't; at the last rung there is nothing still
+ * running, so no ellipsis.
+ */
+export function headlineFor(current: StageKey): string {
+  const label = PROCESSING_STAGES.find((s) => s.key === current)?.label ?? "";
+  return current === "ready" ? label : `${label}…`;
+}
+
 export function ProcessingStages({
   lessonName,
   current,
@@ -174,6 +186,16 @@ export function ProcessingStages({
           uploaded three things needs to know which one this is. */}
       <p className="text-[13px] font-medium text-nevo-near-black/55">
         {lessonName}
+      </p>
+      {/* The headline under it, as LU-01 draws it. A polite live region, so
+          a screen reader hears the stage move on; the ladder below only
+          shows it. */}
+      <p
+        role="status"
+        aria-live="polite"
+        className="mt-1.5 text-[21px] font-semibold tracking-[-0.012em] text-nevo-near-black xl:text-[23px]"
+      >
+        {headlineFor(current)}
       </p>
 
       <ul className="mt-4 flex list-none flex-col gap-[18px] p-0">
