@@ -159,7 +159,7 @@ function SegmentRow({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2.5 xl:gap-2">
           <span className="text-sm font-semibold text-nevo-near-black xl:text-[15px]">
-            {segment.title ?? `Section ${index + 1}`}
+            {segment.title ?? `Segment ${index + 1}`}
           </span>
           {/* The tablet row draws no type tag. */}
           <TypeTag className="hidden xl:inline">{typeLabel(segment.contentType)}</TypeTag>
@@ -802,8 +802,8 @@ export function LiveLessonDetail({
           <div className="mt-3.5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-6 shadow-elevation-1">
             <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/68">
               {lesson.status === "failed"
-                ? "Nevo couldn’t read this file, so there are no sections to show."
-                : "Nevo is still reading this lesson. Sections will appear here once it’s done."}
+                ? "Nevo couldn’t read this file, so there are no segments to show."
+                : "Nevo is still reading this lesson. Segments will appear here once it’s done."}
             </p>
           </div>
         )}

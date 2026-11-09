@@ -223,6 +223,17 @@ describe("four screens, not one page", () => {
     expect(screen.getByText("Part 2")).toBeInTheDocument();
   });
 
+  // 8 Nov: with no sections, the rows ARE segments, and are called segments.
+  it("calls a lesson with no sections' rows segments, not sections", async () => {
+    api.detail.mockResolvedValue(lesson([seg(1), seg(2, { title: null })]));
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "See how it’s broken up" }));
+
+    expect(screen.getByText("Segment 1")).toBeInTheDocument();
+    expect(screen.getAllByText("Segment 2").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/^Section \d/)).not.toBeInTheDocument();
+  });
+
   it("draws no minutes anywhere", async () => {
     api.detail.mockResolvedValue({ ...lesson(SEGMENTS.map((s) => ({ ...s, estimatedMinutes: 4 }))), estimatedMinutes: 16 });
     await open();
