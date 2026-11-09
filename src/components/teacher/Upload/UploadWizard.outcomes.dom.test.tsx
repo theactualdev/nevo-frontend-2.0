@@ -880,7 +880,7 @@ describe("where a unit's reading is drawn", () => {
     startUnitUpload();
 
     expect(screen.queryByText("Nevo is reading your unit")).not.toBeInTheDocument();
-    expect(screen.queryByText("Reading your upload")).not.toBeInTheDocument();
+    expect(screen.queryByText("Finding the lessons")).not.toBeInTheDocument();
   });
 
   it("keeps the faint-pages card, above the tree and inside its scroll", () => {
@@ -918,7 +918,7 @@ describe("where a unit's reading is drawn", () => {
     stagedState({ uploadId: "u-1", status: "parsing", stage: "lessons" });
     startUnitUpload();
 
-    const ladder = screen.getAllByText("Reading your upload")[0].closest("div.min-h-full")!;
+    const ladder = screen.getAllByText("Finding the lessons")[0].closest("div.min-h-full")!;
 
     expect(ladder).toHaveClass("flex-1", "justify-center");
     expect(ladder.parentElement).toHaveClass("flex", "flex-col", "min-h-full");
