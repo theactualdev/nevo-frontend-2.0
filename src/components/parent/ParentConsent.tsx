@@ -719,7 +719,7 @@ export function ParentConsent({
  *     ever surfaces it is a data bug with a visible symptom, which is better
  *     than a client that quietly keeps a withdrawn channel alive.
  */
-export function AccountSetup({
+function AccountSetup({
   token,
   contact,
   onSkip,
