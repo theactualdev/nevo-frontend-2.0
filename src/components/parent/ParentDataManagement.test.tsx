@@ -389,3 +389,20 @@ describe("restoring access is the parent's, never the school's", () => {
     expect(container.textContent).not.toMatch(/through your school|To restore access later, contact|until consent is restored/);
   });
 });
+
+/**
+ * THE RETENTION LINE, LYDIA'S WORDS (9 Nov, item 8; register row 1). Neither
+ * "the school decides what happens next" nor "in line with your school's data
+ * agreement" ships - both point at a retention control that doesn't exist.
+ */
+describe("how long data is kept", () => {
+  const LINE =
+    "If you withdraw consent, Amara’s access stops straight away. Their records are not deleted at once. They are kept for a limited period and then permanently deleted.";
+
+  it("says Lydia's line, and nothing about the school deciding or a data agreement", () => {
+    const { container } = render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
+    fireEvent.click(screen.getByRole("button", { name: /How long data is kept/ }));
+    expect(screen.getByText(LINE)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/school decides|data agreement|For as long as/);
+  });
+});

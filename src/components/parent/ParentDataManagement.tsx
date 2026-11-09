@@ -78,8 +78,17 @@ const SECTIONS: { heading: string; body: (child: string) => string }[] = [
   },
   {
     heading: "How long data is kept",
+    /*
+     * LYDIA'S LINE, WORD FOR WORD (9 Nov, item 8; register row 1). Neither
+     * "the school decides what happens next" nor the frame's "in line with
+     * your school's data agreement" ships: both point at a retention control
+     * that doesn't exist. It says both halves - access stops at once, nothing
+     * is deleted at once - and "a limited period", not 180 days: that is a
+     * scheduled purge date, not an expiry the restore route enforces. Nothing
+     * in it implies anything can be brought back.
+     */
     body: (c) =>
-      `For as long as ${c}’s school uses Nevo. If consent is withdrawn, their account is suspended straight away and the school decides what happens next.`,
+      `If you withdraw consent, ${c}’s access stops straight away. Their records are not deleted at once. They are kept for a limited period and then permanently deleted.`,
   },
 ];
 
