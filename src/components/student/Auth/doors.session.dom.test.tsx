@@ -22,8 +22,13 @@ import { clearSession, setSession } from "@/lib/auth/session";
 
 vi.setConfig({ testTimeout: 30_000 });
 
+// ONE router for the whole file, as Next's own is: `useRouter()` reads a
+// context value, the same object every render. A new object per render
+// re-ran every effect that lists `router` - a second SSO handshake whose
+// redirect timer outlived the test and fired into the next one.
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => router,
   useSearchParams: () =>
     new URLSearchParams({ provider: "google", code: "c-1", state: "state-1" }),
   usePathname: () => "/auth/login",

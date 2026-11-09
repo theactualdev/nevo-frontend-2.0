@@ -10,8 +10,13 @@ const { params, loginPassword, requestPasswordReset, acceptInvitation, completeP
     completePasswordReset: vi.fn(),
   }));
 
+// ONE router for the whole file, as Next's own is: `useRouter()` reads a
+// context value, the same object every render. A new object per render
+// re-ran every effect that lists `router` - a second SSO handshake whose
+// redirect timer outlived the test and fired into the next one.
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  useRouter: () => router,
   useSearchParams: () => params.value,
 }));
 vi.mock("@/lib/api", () => ({
