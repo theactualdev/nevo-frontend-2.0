@@ -30,9 +30,11 @@ vi.mock("next/navigation", () => ({
 import { AssignWizard } from "./AssignWizard";
 
 /**
- * THE CLASS SELECTOR'S DEFAULT (T107), ruled 14 Sep: the class the teacher
- * came from, else the first alphabetically. C07i draws step 2 that way - its
- * first class ticked. The wizard used to open the list with nothing ticked.
+ * NO CLASS IS CHOSEN FOR THE TEACHER, except the one they came from (Hub,
+ * 9 Nov, from a live assign test). The 14 Sep default ticked the first class
+ * alphabetically (T107; C07i draws step 2 with its first class ticked), and
+ * picking another ADDED to it - so a teacher who picked SS 1B was about to
+ * send the lesson to JSS 2B as well, a class nobody chose.
  */
 
 // Deliberately not in alphabetical order, and with a two-digit year group.
@@ -77,15 +79,14 @@ const ticked = () =>
   screen.queryAllByRole("button", { pressed: true }).map((b) => b.textContent ?? "");
 
 describe("arriving directly", () => {
-  it("ticks the first class alphabetically, reading year groups as numbers", () => {
+  it("ticks no class, and waits for the teacher to choose one", () => {
     toStep2();
 
-    expect(ticked()).toHaveLength(1);
-    expect(ticked()[0]).toMatch(/JSS 2A/);
-    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+    expect(ticked()).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
   });
 
-  it("ticks it once the class list arrives, too", () => {
+  it("still ticks none once the class list arrives", () => {
     classesRead([], { loading: true, live: false });
     const { rerender } = toStep2();
     expect(ticked()).toHaveLength(0);
@@ -93,7 +94,7 @@ describe("arriving directly", () => {
     classesRead();
     rerender(<AssignWizard preselect="l-1" />);
 
-    expect(ticked()[0]).toMatch(/JSS 2A/);
+    expect(ticked()).toHaveLength(0);
   });
 
   it("ticks nothing when the teacher has no classes", () => {
@@ -106,52 +107,70 @@ describe("arriving directly", () => {
 });
 
 describe("arriving from a class", () => {
-  it("ticks that class instead", () => {
+  it("ticks that class, and only that one", () => {
     toStep2("c-sss");
 
     expect(ticked()).toHaveLength(1);
     expect(ticked()[0]).toMatch(/SSS 1 Sciences/);
   });
 
-  it("falls back to the first alphabetically when that class is not theirs", () => {
+  it("ticks it once the class list arrives, too", () => {
+    classesRead([], { loading: true, live: false });
+    const { rerender } = toStep2("c-sss");
+    expect(ticked()).toHaveLength(0);
+
+    classesRead();
+    rerender(<AssignWizard preselect="l-1" preselectClass="c-sss" />);
+
+    expect(ticked()).toEqual([expect.stringMatching(/SSS 1 Sciences/)]);
+  });
+
+  it("ticks nothing when that class is not theirs - never a stand-in", () => {
     toStep2("c-elsewhere");
 
-    expect(ticked()[0]).toMatch(/JSS 2A/);
+    expect(ticked()).toHaveLength(0);
   });
 });
 
 describe("once the teacher touches the list", () => {
-  it("is theirs - un-ticking the default leaves nothing chosen", () => {
+  it("is exactly the class they picked - nothing ticked beside it (the live defect)", () => {
     toStep2();
-    fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
+    fireEvent.click(screen.getByRole("button", { name: /SSS 1 Sciences/ }));
+
+    expect(ticked()).toEqual([expect.stringMatching(/SSS 1 Sciences/)]);
+  });
+
+  it("is theirs - un-ticking the class they came from leaves nothing chosen", () => {
+    toStep2("c-sss");
+    fireEvent.click(screen.getByRole("button", { name: /SSS 1 Sciences/ }));
 
     expect(ticked()).toHaveLength(0);
     expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
   });
 
-  it("adds to the default rather than replacing it", () => {
-    toStep2();
+  it("adds to the class they came from when they pick another", () => {
+    toStep2("c-sss");
     fireEvent.click(screen.getByRole("button", { name: /JSS 2B/ }));
 
-    // In the list's own order, which is the server's.
-    expect(ticked().sort()).toEqual(["JSS 2A", "JSS 2B"]);
+    expect(ticked().sort()).toEqual(["JSS 2B", "SSS 1 Sciences"]);
   });
 
-  it("does not bring the default back after a detour through specific students", () => {
-    toStep2();
+  it("does not bring the class they came from back after a detour through specific students", () => {
+    toStep2("c-sss");
     fireEvent.click(screen.getByRole("button", { name: "Specific students" }));
     fireEvent.click(screen.getByRole("button", { name: "Whole class" }));
 
     expect(ticked()).toHaveLength(0);
   });
 
-  it("sends the default class when the teacher simply goes on", async () => {
+  it("sends only the class they picked", async () => {
     toStep2();
+    fireEvent.click(screen.getByRole("button", { name: /JSS 2B/ }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
 
     await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
-    expect(create).toHaveBeenCalledWith(expect.objectContaining({ classId: "c-2a" }));
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ classId: "c-2b" }));
   });
 });

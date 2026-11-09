@@ -110,9 +110,9 @@ beforeEach(() => {
 });
 
 /**
- * Leave EXACTLY these classes ticked on step 2. It opens with the first class
- * alphabetically already ticked (the 14 Sep default), so a bare click on that
- * one would un-tick it.
+ * Leave EXACTLY these classes ticked on step 2. It opens with nothing ticked
+ * unless the flow came from a class (Hub, 9 Nov), so this un-ticks anything
+ * else and ticks what is named.
  */
 const onlyClasses = (...names: RegExp[]) => {
   for (const b of screen.queryAllByRole("button", { pressed: true })) {
@@ -1240,9 +1240,10 @@ describe("a lesson nobody has signed off", () => {
     review.mockImplementation(async (id: string) => ({ reviewComplete: id === "l-1" }));
   });
 
-  /** Step 1 to Confirm with the default class and "Available now". */
+  /** Step 1 to Confirm with JSS 2A and "Available now". */
   const toConfirm = () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    onlyClasses(/JSS 2A/);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
