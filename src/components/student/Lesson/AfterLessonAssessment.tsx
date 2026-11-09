@@ -566,9 +566,8 @@ function GrowthResult({
    */
   verdict: ResultState | null | undefined;
   /**
-   * The verdict is still on its way. The mark and heading keep their place
-   * unseen until it lands, rather than one being swapped for the other in
-   * front of the child.
+   * The verdict is still on its way, with the completion write. THE WHOLE
+   * RESULT keeps its place unseen until it lands - see the column below.
    */
   held: boolean;
   /** The server's outcome (B26); absent, the lesson's own lists. */
@@ -610,11 +609,26 @@ function GrowthResult({
 
   return (
     <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col justify-center bg-nevo-cream px-6 text-nevo-near-black">
-      <div className="mx-auto w-full max-w-[300px] sm:max-w-[430px]">
-        <div
-          aria-hidden={held || undefined}
-          className={cn(held && "invisible")}
-        >
+      {/*
+        RULE 8: THE RESULT LANDS ONCE (the hub, 9 Nov). Only the mark and the
+        heading were held for the completion write, so the screen landed in
+        two steps: "Continue" and "Review answers" first, and the heading
+        about two seconds later, when the write answered (9 Nov live check,
+        Density: 2.3 s, then 4.5 s) - with the server's two lists after it.
+        So all of it - mark, heading, note, lists and both buttons - is held
+        unseen, and lands together on the write's reply. The wait is the cream
+        page and nothing else (SCRUM-315: no spinner), as the review session's
+        completion already holds while its write is in flight
+        (`reviewCompletionCopy`). A write that fails is `ResultUnread`.
+      */}
+      <div
+        aria-hidden={held || undefined}
+        className={cn(
+          "mx-auto w-full max-w-[300px] sm:max-w-[430px]",
+          held && "invisible",
+        )}
+      >
+        <div>
           {/* Success mark: navy circle + cream check, one-shot pop (DS state pattern) */}
           {nothingLanded ? (
             // The frame's own revisit mark, not the success check.

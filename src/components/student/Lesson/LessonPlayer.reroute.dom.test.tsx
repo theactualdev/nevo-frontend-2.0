@@ -201,15 +201,22 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     expect(endings.at(-1)).toEqual({ completionStatus: "completed" });
   });
 
-  it("replaces the completion screen too, if the child moved on first", async () => {
+  /*
+   * THE CHILD CANNOT MOVE ON FIRST ANY MORE (rule 8, the hub, 9 Nov): the
+   * whole result - its buttons with it - is held unseen until the completion
+   * write answers, so there is no "Continue" to press past a result the
+   * reroute is about to replace. It used to be pressable while only the mark
+   * and heading were held, and this case pinned the summary being replaced.
+   */
+  it("offers no way past the result before the verdict, so the reroute is the first thing shown", async () => {
     const { rerender } = render(
       <LessonPlayer lesson={LESSON} plan={null} live onStartAgain={vi.fn()} />,
     );
     await finishCheck();
-    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
     expect(
-      screen.getByRole("heading", { name: "That's the lesson done." }),
-    ).toBeTruthy();
+      screen.queryByRole("heading", { name: "That's the lesson done." }),
+    ).toBeNull();
 
     land(
       rerender,
