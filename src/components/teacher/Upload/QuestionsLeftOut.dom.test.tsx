@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
-import { QuestionsLeftOut, picturesRefused, questionsLeftOut, readerNotes } from "./QuestionsLeftOut";
+import {
+  QuestionsLeftOut,
+  picturesRefused,
+  questionsLeftOut,
+  readerNotes,
+  textHeldBack,
+} from "./QuestionsLeftOut";
 
 /**
  * The questions the parse left out (`question_unusable` review notes), in the
@@ -127,9 +133,15 @@ describe("the notice", () => {
  * teacher (Lydia, item 6: never which rule fired or what triggered it).
  */
 describe("how the file was read", () => {
+  // As backend 06396db words it: only when a page gave up no text.
   const READER =
-    "The console could not read this file, so Nevo read it with a plainer reader that ignores layout and cannot read a scanned page. Columns, tables and anything handwritten may have come through jumbled or not at all. Check the sections against the original, and if the lesson looks thin, try uploading the text itself.";
-  const reader = (over: Record<string, unknown> = {}) => ({ code: "source_read_by_backup_reader", message: READER, ...over });
+    "Nevo read this file with a reader that ignores layout and cannot read a scanned page, and some pages gave up no text at all. Columns, tables and anything handwritten may have come through jumbled or be missing. Check the sections against the original, and if the lesson looks thin, try uploading the text itself.";
+  const reader = (over: Record<string, unknown> = {}) => ({
+    code: "source_read_by_backup_reader",
+    pageNumbers: [4, 5],
+    message: READER,
+    ...over,
+  });
   // The note as backend 86f8e10 sends it: no `categories`, no `phase`.
   const blocked = {
     code: "visual_blocked_by_safety",
@@ -187,5 +199,58 @@ describe("how the file was read", () => {
     expect(picturesRefused([blocked, blocked, { ...blocked, message: "" }, { ...blocked, segment: null }])).toEqual([
       { segment: "k-2", message: blocked.message },
     ]);
+  });
+});
+
+/**
+ * A PART OF THE LESSON NEVO WROTE, HELD BACK BY A SAFETY CHECK (backend
+ * 06396db). That part came through as plain text with no questions - Food
+ * Chains, 9 Nov - and nothing said why. The server's sentence, as sent.
+ */
+describe("a part of the lesson held back", () => {
+  const HELD =
+    "A safety check held back the lesson Nevo wrote from this part of your file, so this part came through as plain text with no questions. Your file was not the problem - it passed its own check. Tell us the lesson name and we will look at the check.";
+  const held = (over: Record<string, unknown> = {}) => ({
+    code: "lesson_text_blocked_by_safety",
+    textRetained: true,
+    chunkNumber: 2,
+    pageNumbers: [3, 4],
+    message: HELD,
+    ...over,
+  });
+
+  it("says the server's sentence, word for word", () => {
+    expect(textHeldBack([held()])).toEqual([HELD]);
+    render(<QuestionsLeftOut notes={[held()]} />);
+
+    expect(screen.getByText(HELD)).toBeInTheDocument();
+  });
+
+  it("says it once, however many parts were held back", () => {
+    render(<QuestionsLeftOut notes={[held({ chunkNumber: 1 }), held({ chunkNumber: 3 })]} />);
+
+    expect(screen.getAllByText(HELD)).toHaveLength(1);
+  });
+
+  it("says it before how the file was read and before the questions left out", () => {
+    render(
+      <QuestionsLeftOut
+        notes={[
+          unusable(),
+          { code: "source_read_by_backup_reader", message: "Read with the other reader." },
+          held(),
+        ]}
+      />,
+    );
+
+    const first = screen.getByText(HELD);
+    expect(first.compareDocumentPosition(screen.getByText("Read with the other reader.")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(first.compareDocumentPosition(screen.getByText(SERVER_SENTENCE)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("says nothing for a note with no sentence", () => {
+    const { container } = render(<QuestionsLeftOut notes={[held({ message: " " })]} />);
+
+    expect(container).toBeEmptyDOMElement();
   });
 });

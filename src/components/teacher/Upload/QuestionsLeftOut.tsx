@@ -15,9 +15,11 @@ import { cn } from "@/lib/utils";
  * reworded or summarised here.
  *
  * ONLY THE TEACHER'S NOTES: `question_unusable`, and since 9 Nov
- * `source_read_by_backup_reader` (backend bdc6bed: the file was read with the
- * plain backup reader, so check the sections against the original), said
- * first, in its `message` alone, and `visual_blocked_by_safety` (one per
+ * `lesson_text_blocked_by_safety` (backend 06396db: a safety check held back
+ * the lesson Nevo wrote from one part of the file, so that part is plain text
+ * with no questions), said first, in its `message` alone;
+ * `source_read_by_backup_reader` (bdc6bed, and since 06396db only when a page
+ * gave up no text), next, in its `message` alone; and `visual_blocked_by_safety` (one per
  * segment: the safety check refused that segment's picture; its text is
  * unchanged), its `message` alone under the segment's name as the screen
  * names it. Never its `secondsSpent`, nor the `categories` and `phase` it
@@ -56,6 +58,25 @@ export function readerNotes(notes: readonly unknown[] | null | undefined): strin
     if (!note || typeof note !== "object") continue;
     const n = note as Record<string, unknown>;
     if (n.code !== "source_read_by_backup_reader") continue;
+    if (typeof n.message === "string" && n.message.trim()) out.push(n.message.trim());
+  }
+  return [...new Set(out)];
+}
+
+/**
+ * The held-back-lesson-text notes' own sentences, word for word (backend
+ * 06396db). One note comes per part of the file that was held back, each with
+ * the same sentence, so the same sentence is said once. Only the `message`:
+ * its `chunkNumber`, `pageNumbers` and `textRetained` are not for a teacher
+ * as they stand, and never which rule fired or what matched (Lydia, item 6).
+ */
+export function textHeldBack(notes: readonly unknown[] | null | undefined): string[] {
+  if (!Array.isArray(notes)) return [];
+  const out: string[] = [];
+  for (const note of notes) {
+    if (!note || typeof note !== "object") continue;
+    const n = note as Record<string, unknown>;
+    if (n.code !== "lesson_text_blocked_by_safety") continue;
     if (typeof n.message === "string" && n.message.trim()) out.push(n.message.trim());
   }
   return [...new Set(out)];
@@ -125,12 +146,25 @@ export function QuestionsLeftOut({
   segmentName?: (segmentKey: string) => string | null;
 }) {
   const left = questionsLeftOut(notes);
+  const held = textHeldBack(notes);
   const reader = readerNotes(notes);
   const pictures = picturesRefused(notes);
-  if (left.length === 0 && reader.length === 0 && pictures.length === 0) return null;
+  if (left.length === 0 && held.length === 0 && reader.length === 0 && pictures.length === 0) {
+    return null;
+  }
   return (
     <div className={cn("flex w-full flex-col gap-3", className)}>
-      {/* How the file was read comes first: it bears on everything below. */}
+      {/* A part of the lesson that came through as plain text comes first:
+          it is the biggest thing missing from what is below. */}
+      {held.map((message) => (
+        <p
+          key={message}
+          className="w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 text-[14.5px] leading-[1.55] text-nevo-near-black/82"
+        >
+          {message}
+        </p>
+      ))}
+      {/* Then how the file was read: it bears on everything below. */}
       {reader.map((message) => (
         <p
           key={message}
