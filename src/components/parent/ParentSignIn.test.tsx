@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ApiError } from "@/lib/api/client";
 
 const { requestCode, verifyCode, setSession } = vi.hoisted(() => ({
@@ -154,6 +154,50 @@ describe("the code", () => {
         role: "parent_guardian",
       }),
     );
+  });
+
+  /*
+   * A SCREEN THAT HAS GONE NEVER NAVIGATES (the hub, 8 Nov; the admin lane's
+   * review of #1081). The portal is a hard navigation once the code is good;
+   * a parent who has left the page during "Checking…" - Back, or the route
+   * unmounting it - is not taken there anyway. Their session stays: the
+   * server did sign them in.
+   */
+  describe("the hard navigation to the portal", () => {
+    let assign: ReturnType<typeof vi.fn>;
+    beforeEach(() => {
+      assign = vi.fn();
+      vi.stubGlobal("location", { ...window.location, assign });
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("goes to the portal for a parent still on the page", async () => {
+      verifyCode.mockResolvedValueOnce(SESSION);
+      await reachCode();
+      typeCode("1234");
+      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+      await vi.waitFor(() => expect(assign).toHaveBeenCalledWith("/parent-portal"));
+    });
+
+    it("is not made for a parent who has left during Checking", async () => {
+      let land: (s: typeof SESSION) => void = () => {};
+      verifyCode.mockReturnValueOnce(
+        new Promise((resolve) => {
+          land = resolve;
+        }),
+      );
+      await reachCode();
+      typeCode("1234");
+      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+      cleanup(); // The parent leaves.
+      await act(async () => land(SESSION));
+
+      expect(assign).not.toHaveBeenCalled();
+      // Signed in all the same: only the navigation is skipped.
+      expect(setSession).toHaveBeenCalled();
+    });
   });
 
   it("gives one message for a wrong code and an expired one", async () => {

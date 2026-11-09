@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import { cn } from "@/lib/utils";
 import { authApi, teamApi } from "@/lib/api";
 import { invitesApi } from "@/lib/api/invites";
@@ -178,6 +179,8 @@ export function SetPasswordForm({
   resetHref?: string;
 }) {
   const router = useRouter();
+  // A screen that has gone never navigates (see `useStillHere`).
+  const hereRef = useStillHere();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [consent, setConsent] = useState(false);
@@ -239,6 +242,8 @@ export function SetPasswordForm({
 
   /** Where the success screen is heading - the console needs a live session. */
   const finish = (next: "console" | "signin", as: StaffDoor = door) => {
+    // Gone while the server answered: nothing to move on from.
+    if (!hereRef.current) return;
     /*
      * A TEACHER WHO HAS JUST JOINED goes on to C01's join confirmation and
      * profile, not straight into the console - the frame's next beat, which
@@ -252,10 +257,11 @@ export function SetPasswordForm({
     setArrivedAs(as);
     setPhase("done");
     timers.current.push(
-      setTimeout(
-        () => router.push(next === "console" ? CONSOLE_HOME[as] : signInAt),
-        SUCCESS_HOLD_MS,
-      ),
+      setTimeout(() => {
+        if (hereRef.current) {
+          router.push(next === "console" ? CONSOLE_HOME[as] : signInAt);
+        }
+      }, SUCCESS_HOLD_MS),
     );
   };
 
@@ -285,7 +291,7 @@ export function SetPasswordForm({
          */
         const status = err instanceof ApiError ? err.status : 0;
         if (status >= 400 && status < 500) {
-          router.push(`${resetAt}?expired=1`);
+          if (hereRef.current) router.push(`${resetAt}?expired=1`);
           return;
         }
         setPhase("form");

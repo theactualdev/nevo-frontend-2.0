@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import { useRouter } from "next/navigation";
 import { studentDestination } from "@/lib/auth/entryGate";
 import {
@@ -38,6 +39,8 @@ export function NewPinAfterClear({
   onRefused: (refusal: EntryPinElsewhere) => void;
 }) {
   const router = useRouter();
+  // A screen that has gone never navigates (see `useStillHere`).
+  const hereRef = useStillHere();
   /** The identifier storing the PIN hands back, read once it has landed. */
   const identifierRef = useRef<string | null>(null);
 
@@ -53,7 +56,9 @@ export function NewPinAfterClear({
       onComplete={() => {
         rememberOnboardedStudent(identifierRef.current);
         // Home, or a hold for a child the server holds.
-        void studentDestination().then((to) => router.push(to));
+        void studentDestination().then((to) => {
+          if (hereRef.current) router.push(to);
+        });
       }}
     />
   );

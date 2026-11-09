@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import { useDoor } from "@/hooks/useDoor";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Info } from "lucide-react";
@@ -81,6 +82,8 @@ export function SsoCallback() {
   // stored (19 Oct, `doorSession`).
   useDoor();
   const router = useRouter();
+  // A screen that has gone never navigates (see `useStillHere`).
+  const hereRef = useStillHere();
   const searchParams = useSearchParams();
   const { signIn } = useAuth();
   const [phase, setPhase] = useState<Phase>("signing-in");
@@ -144,6 +147,9 @@ export function SsoCallback() {
         // `studentDestination` leaves a teacher's or an admin's home alone,
         // since `consent-gate` is `students/me`.
         void studentDestination(landing).then((destination) => {
+          // Gone - Back pressed during "Signing you in": nothing is
+          // scheduled, and nobody is moved from wherever they went.
+          if (!hereRef.current) return;
           // D2, as at the PIN doors: a child about to be held is not told
           // they are in. They go straight to the waiting screen.
           if (skipsWelcomeBeat(destination)) {
@@ -152,7 +158,7 @@ export function SsoCallback() {
           }
           setPhase("success");
           redirectTimer.current = setTimeout(() => {
-            router.replace(destination);
+            if (hereRef.current) router.replace(destination);
           }, SUCCESS_HOLD_MS);
         });
       })
@@ -160,7 +166,7 @@ export function SsoCallback() {
         setUnreached(cause instanceof ApiError && cause.status === 0);
         setPhase("error");
       });
-  }, [router, signIn, provider, code, state, incomplete]);
+  }, [router, signIn, provider, code, state, incomplete, hereRef]);
 
   useEffect(() => {
     resolve();

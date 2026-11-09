@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import { CONFIRM_ONCE_MORE, ChildHeldLines, LINK_LIFETIME_LINE, isHeld } from "./childHeld";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { setSession } from "@/lib/auth/session";
@@ -733,6 +734,10 @@ function AccountSetup({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
+  // A screen that has gone never navigates (see `useStillHere`): leaving the
+  // page while the code is checked - Back, or the route unmounting it - must
+  // not end on the portal anyway.
+  const hereRef = useStillHere();
 
   const code = digits.join("");
 
@@ -767,8 +772,10 @@ function AccountSetup({
         role: session.role,
       });
       // A hard navigation, not a router push: the session and its mirror cookie
-      // must have settled before the portal is asked for.
-      window.location.assign("/parent-portal");
+      // must have settled before the portal is asked for. Not from a screen
+      // the parent has already left; the session stays, since the server did
+      // sign them in.
+      if (hereRef.current) window.location.assign("/parent-portal");
     } catch (e) {
       setBusy(false);
       setDigits(["", "", "", ""]);

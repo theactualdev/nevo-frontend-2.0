@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ApiError } from "@/lib/api/client";
 
 const { push, loginPassword, signIn, logout, search } = vi.hoisted(() => ({
@@ -300,4 +300,32 @@ describe("where the door sends an admin once they're in", () => {
       unmount();
     }
   }, 20000);
+});
+
+/**
+ * A DOOR THAT HAS GONE NEVER NAVIGATES (the hub, 8 Nov): Back while the
+ * sign-in is answered. A "You're in" timer set after the door's cleanup had
+ * run was never cleared, and pushed them from wherever they had gone.
+ */
+describe("Back while the sign-in is answered", () => {
+  it("moves nobody, then or after the beat, once the door has gone", async () => {
+    let land: (s: unknown) => void = () => {};
+    loginPassword.mockReturnValue(
+      new Promise((resolve) => {
+        land = resolve;
+      }),
+    );
+    submit();
+
+    cleanup(); // Back: the door goes.
+    await act(async () => {
+      land({ accessToken: "tok", userId: "a-1", role: "senco_admin", expiresAt: "2099-01-01T00:00:00Z" });
+    });
+    // Past the success beat (`SUCCESS_HOLD_MS`, 1400).
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1_600));
+    });
+
+    expect(push).not.toHaveBeenCalled();
+  });
 });

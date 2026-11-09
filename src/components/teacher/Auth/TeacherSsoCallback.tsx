@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import { useAuth } from "@/hooks";
 import { authApi } from "@/lib/api";
 import { setSession } from "@/lib/auth/session";
@@ -53,6 +54,8 @@ function LogoMark() {
 
 export function TeacherSsoCallback() {
   const router = useRouter();
+  // A screen that has gone never navigates (see `useStillHere`).
+  const hereRef = useStillHere();
   const searchParams = useSearchParams();
   const { signIn } = useAuth();
   const [phase, setPhase] = useState<Phase>("signing-in");
@@ -116,16 +119,21 @@ export function TeacherSsoCallback() {
         // once the session exists. Seeding a placeholder here would put an
         // invented school into the signed-in user.
         signIn({ id: res.userId, role, schoolId: "", method: "sso" });
+        // Gone - Back pressed during the handshake: a timer set now would
+        // outlive the cleanup that clears them, so none is set.
+        if (!hereRef.current) return;
         setPhase("success");
         timers.current.push(
           setTimeout(
-            () => router.replace(landing),
+            () => {
+              if (hereRef.current) router.replace(landing);
+            },
             SUCCESS_HOLD_MS,
           ),
         );
       })
       .catch(() => setPhase("error"));
-  }, [router, signIn, provider, code, state, incomplete]);
+  }, [router, signIn, provider, code, state, incomplete, hereRef]);
 
   useEffect(() => {
     const pending = timers.current;

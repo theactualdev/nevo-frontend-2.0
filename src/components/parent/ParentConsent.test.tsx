@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { ApiError } from "@/lib/api/client";
 import type { ParentInvitation } from "@/lib/api/parent";
@@ -436,6 +436,56 @@ describe("setting up a parent account", () => {
         role: "parent_guardian",
       }),
     );
+  });
+
+  /*
+   * A SCREEN THAT HAS GONE NEVER NAVIGATES (the hub, 8 Nov). The portal is a
+   * hard navigation once the code is good; a parent who has left the page
+   * while it was checked - Back, or the route unmounting it - is not taken
+   * there anyway. (The code step has no "Maybe later", and the confirm
+   * step's is disabled while busy.)
+   */
+  describe("the hard navigation to the portal", () => {
+    const PARENT = {
+      accessToken: "parent-tok",
+      tokenType: "bearer",
+      expiresAt: "2026-12-01T00:00:00Z",
+      userId: "p-1",
+      role: "parent_guardian",
+      replacedSession: false,
+    };
+    let assign: ReturnType<typeof vi.fn>;
+    beforeEach(() => {
+      assign = vi.fn();
+      vi.stubGlobal("location", { ...window.location, assign });
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("goes to the portal for a parent still on the screen", async () => {
+      verifyCode.mockResolvedValueOnce(PARENT);
+      await reachCodeStep();
+      typeCode("1234");
+      fireEvent.click(screen.getByRole("button", { name: /Verify and sign in/i }));
+
+      await vi.waitFor(() => expect(assign).toHaveBeenCalledWith("/parent-portal"));
+    });
+
+    it("is not made for a parent who has left while the code was checked", async () => {
+      let land: (s: typeof PARENT) => void = () => {};
+      verifyCode.mockReturnValueOnce(
+        new Promise((resolve) => {
+          land = resolve;
+        }),
+      );
+      await reachCodeStep();
+      typeCode("1234");
+      fireEvent.click(screen.getByRole("button", { name: /Verify and sign in/i }));
+
+      cleanup(); // The parent leaves.
+      await act(async () => land(PARENT));
+
+      expect(assign).not.toHaveBeenCalled();
+    });
   });
 
   it("gives one message for a wrong code and an expired one", async () => {
