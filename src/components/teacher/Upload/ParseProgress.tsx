@@ -15,65 +15,61 @@ import { cn } from "@/lib/utils";
  */
 
 /**
- * THREE RUNGS, AND NEVER ONE THE BACKEND DOES NOT REPORT.
+ * FOUR RUNGS, EACH STANDING BEHIND SOMETHING THE SERVER DOES (Lydia, 9 Nov,
+ * item 5): "Their four steps are accepted, because each one stands behind
+ * something the server actually does, which the two existing lines did not."
  *
- * Design, 14 Sep: "never draw a rung the backend doesn't report." The ladder
- * had four rungs invented to match C07e's drawing, driven by a mock clock, and
- * `UploadStage` reported three - `lessons | structure | complete`. So a teacher
- * watched a four-step story about a three-step process, and on the LIVE path
- * did not see the ladder at all: a real upload id routed to a plain spinner,
- * because there was no honest way to map three values onto four rungs.
+ * | rung                                  | what says so                          |
+ * |---------------------------------------|---------------------------------------|
+ * | Finding the lessons                   | `reading_document` (was `lessons`)   |
+ * | Finding the sections in each lesson   | `finding_sections` (was `structure`) |
+ * | Preparing the adaptations             | `preparing_adaptations` (`adaptations`) |
+ * | Ready for your review                 | `ready_to_assign` (was `complete`)   |
  *
- * `UploadStage` REPORTS FOUR AS OF 23 SEP - `adaptations` joined it - and this
- * is still three rungs, which is that same rule rather than a lapse from it.
- * A fourth rung is design's to rule on, and the ask sits in
- * `ProcessingStages.tsx` where the same question is already recorded. What
- * this file owes in the meantime is in `rungFor`.
- *
- * Labels are design's own words. `complete` is a rung like the others rather
- * than the ladder resolving, which was the reading design confirmed after I
- * flagged that "three rungs" and "completion is the whole ladder resolved"
- * pulled in different directions - `complete` is reported, so it ticks.
+ * C07e drew "Splitting sections into segments" and "Writing the recaps and
+ * previews", and neither has a signal behind it; design's own rule since 14
+ * Sep is "never draw a rung the backend doesn't report". The third rung is
+ * LU-01's word for the work the server does name - pictures, narration and
+ * the depth rewrites. The last reads "Ready for your review", NOT "Ready to
+ * review": "so it names whose job it is".
  *
  * Keyed by the enum rather than positional, so a new stage value cannot
  * silently shift a teacher onto the wrong rung.
  */
 export const PARSE_STAGES: { stage: UploadStage; label: string }[] = [
-  { stage: "lessons", label: "Reading your upload" },
-  { stage: "structure", label: "Breaking it into segments" },
-  { stage: "complete", label: "Ready to review" },
+  { stage: "lessons", label: "Finding the lessons" },
+  { stage: "structure", label: "Finding the sections in each lesson" },
+  { stage: "adaptations", label: "Preparing the adaptations" },
+  { stage: "complete", label: "Ready for your review" },
 ];
 
 /**
+ * The running step's present-tense line, under the spinner as C07e draws it:
+ * the rung's own words, so it can never name a step the ladder doesn't, with
+ * the ellipsis of work under way - and none once nothing is still running.
+ */
+export function parseLine(stage: number): string {
+  const rung = PARSE_STAGES[stage] ?? PARSE_STAGES[0];
+  return stage >= PARSE_STAGES.length - 1 ? rung.label : `${rung.label}…`;
+}
+
+/**
  * Where a stage sits on the ladder. `-1` for a value we do not know, and for
- * `null` - which the hook uses before the first poll answers.
+ * `null` - which the hook uses before the first poll answers. A stage nobody
+ * has met cannot be placed, and the spinner is at least not a claim about
+ * where the parse has got to.
  *
- * `adaptations` HOLDS ON THE SEGMENTS RUNG rather than answering `-1`, and
- * that is not cosmetic: the wizard renders this ladder only while
- * `rungFor(...) >= 0`. While the enum had a value this file did not know, a
- * real upload drew the ladder, reached the second rung, and then had the
- * whole ladder replaced by a bare spinner for the longest part of the wait.
- * Watched happening on a live upload on 23 Sep, not reasoned about.
- *
- * A genuinely unknown value still answers `-1`, and that is a different case:
- * a stage nobody has met cannot be placed, and the spinner is at least not a
- * claim about where the parse has got to. `adaptations` can be placed,
- * because backend said where it sits.
+ * Both sets of the server's names land on the same rungs (deploy order): the
+ * older `lessons | structure | adaptations | complete` and today's
+ * `receiving_file | reading_document | finding_sections |
+ * preparing_adaptations | ready_to_assign`.
  */
 export function rungFor(stage: UploadStage | null | undefined): number {
-  if (stage === "adaptations") {
-    return PARSE_STAGES.findIndex((s) => s.stage === "structure");
-  }
-  /*
-   * THE SERVER'S CURRENT NAMES, onto the same three rungs. They are what a
-   * live upload reports, and each answered -1 - the whole ladder replaced by
-   * a spinner for the entire wait, the 23 Sep defect again.
-   */
   const now: Partial<Record<UploadStage, UploadStage>> = {
     receiving_file: "lessons",
     reading_document: "lessons",
     finding_sections: "structure",
-    preparing_adaptations: "structure",
+    preparing_adaptations: "adaptations",
     ready_to_assign: "complete",
   };
   const known = stage ? (now[stage] ?? stage) : stage;
@@ -107,8 +103,14 @@ export function ParseProgress({
       <div className="flex w-full max-w-[460px] flex-col items-center">
         <div className="flex flex-col items-center gap-[18px]">
           <span className="size-[52px] shrink-0 rounded-full border-4 border-nevo-navy/16 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:950ms]" />
-          <div className="text-center text-[19px] font-semibold tracking-[-0.01em] text-nevo-near-black xl:text-[21px]">
-            {PARSE_STAGES[stage]?.label ?? PARSE_STAGES[0].label}
+          {/* A polite live region: a screen reader hears the step move on,
+              which the ladder below only shows. */}
+          <div
+            role="status"
+            aria-live="polite"
+            className="text-center text-[19px] font-semibold tracking-[-0.01em] text-nevo-near-black xl:text-[21px]"
+          >
+            {parseLine(stage)}
           </div>
         </div>
 

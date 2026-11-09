@@ -1,35 +1,33 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { PARSE_STAGES, ParseProgress, rungFor } from "./ParseProgress";
+import { PARSE_STAGES, ParseProgress, parseLine, rungFor } from "./ParseProgress";
 
 /**
- * The parse ladder, and the rule design gave it: "never draw a rung the backend
- * doesn't report."
+ * The unit's progress ladder (C07e), and the rule design gave it: "never draw
+ * a rung the backend doesn't report."
  *
- * It had FOUR rungs, invented to match C07e's drawing, driven by a mock clock.
- * `UploadStage` reports THREE - `lessons | structure | complete`. So a teacher
- * watched a four-step story about a three-step process, and on the live path
- * never saw the ladder at all: a real upload id routed to a plain spinner,
- * because there was no honest way to map three values onto four rungs.
- *
- * `rungFor` is where that rule lives, so it is what these pin. The labels are
- * design's own words, asserted verbatim: getting them approximately right is
- * the failure mode nobody notices.
+ * Lydia, 9 Nov (item 5): four steps, each standing behind something the server
+ * does - "Finding the lessons / Finding the sections in each lesson /
+ * Preparing the adaptations / Ready for your review, with the running step's
+ * present-tense line beneath it". The labels are asserted verbatim: getting
+ * them approximately right is the failure mode nobody notices.
  */
 
 describe("rungFor", () => {
   it("places each reported stage, in the order the backend reports them", () => {
     expect(rungFor("lessons")).toBe(0);
     expect(rungFor("structure")).toBe(1);
-    expect(rungFor("complete")).toBe(2);
+    expect(rungFor("adaptations")).toBe(2);
+    expect(rungFor("complete")).toBe(3);
   });
 
-  it("treats `complete` as a rung, not as the ladder resolving", () => {
-    // This was the ambiguity in the ruling, and design settled it: `complete`
-    // is reported, so it ticks like the others. If it ever stops being a rung
-    // this test should be the thing that objects.
-    expect(PARSE_STAGES).toHaveLength(3);
-    expect(PARSE_STAGES[2].stage).toBe("complete");
+  it("gives the adaptations their own rung, as Lydia accepted", () => {
+    // It used to hold on the sections rung, while a fourth rung waited on a
+    // ruling. The work is real - pictures, narration and the depth rewrites -
+    // and the server names it.
+    expect(rungFor("adaptations")).not.toBe(rungFor("structure"));
+    expect(PARSE_STAGES).toHaveLength(4);
+    expect(PARSE_STAGES[3].stage).toBe("complete");
   });
 
   it("refuses to place a stage it does not recognise", () => {
@@ -40,26 +38,12 @@ describe("rungFor", () => {
     expect(rungFor("some_future_stage" as never)).toBe(-1);
   });
 
-  it("holds the adaptations stage on the segments rung, not off the ladder", () => {
-    /*
-     * The wizard renders this ladder only while `rungFor(...) >= 0`. For as
-     * long as `adaptations` answered -1, a real upload drew the ladder,
-     * reached the second rung, and then had the whole ladder replaced by a
-     * bare spinner - through the longest part of the wait, which is the exact
-     * reading of "the product has hung" the ladder exists to prevent.
-     *
-     * It holds rather than gaining a rung: a fourth rung is design's to rule
-     * on, and "never draw a rung the backend doesn't report" was their words.
-     */
-    expect(rungFor("adaptations")).toBe(rungFor("structure"));
-    expect(rungFor("adaptations")).toBeGreaterThanOrEqual(0);
-  });
-
-  it("carries design's labels verbatim", () => {
+  it("carries Lydia's labels verbatim - Ready FOR YOUR review", () => {
     expect(PARSE_STAGES.map((s) => s.label)).toEqual([
-      "Reading your upload",
-      "Breaking it into segments",
-      "Ready to review",
+      "Finding the lessons",
+      "Finding the sections in each lesson",
+      "Preparing the adaptations",
+      "Ready for your review",
     ]);
   });
 });
@@ -71,16 +55,33 @@ describe("the ladder", () => {
     for (const s of PARSE_STAGES) {
       expect(screen.getAllByText(s.label).length).toBeGreaterThan(0);
     }
-    // The four invented rungs are gone. Naming one that used to exist is the
-    // cheapest guard against the old list creeping back.
-    expect(screen.queryByText("Writing the recaps and previews")).not.toBeInTheDocument();
-    expect(screen.queryByText("Finding the lessons")).not.toBeInTheDocument();
+    // C07e's two steps with nothing behind them stay off the ladder.
+    expect(screen.queryByText(/Splitting sections into segments/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Writing the recaps and previews/)).not.toBeInTheDocument();
   });
 
-  it("leads with the stage the upload is actually on", () => {
+  it("says the running step in the present tense, under the spinner", () => {
     render(<ParseProgress stage={1} />);
 
-    expect(screen.getAllByText("Breaking it into segments").length).toBeGreaterThan(0);
+    expect(screen.getByRole("status")).toHaveTextContent("Finding the sections in each lesson…");
+  });
+
+  it("moves the line on with the ladder, and is announced when it does", () => {
+    const { rerender } = render(<ParseProgress stage={1} />);
+    rerender(<ParseProgress stage={2} />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Preparing the adaptations…");
+    expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("drops the ellipsis once nothing is still running", () => {
+    render(<ParseProgress stage={3} />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(/^Ready for your review$/);
+  });
+
+  it("only ever names a step the ladder draws", () => {
+    PARSE_STAGES.forEach((s, i) => expect(parseLine(i).replace(/…$/, "")).toBe(s.label));
   });
 
   it("does not crash on a rung index past the end", () => {
@@ -104,8 +105,6 @@ describe("the ladder", () => {
  */
 describe("open and steer", () => {
   it("offers nothing when the caller has nowhere to send them", () => {
-    // The old Link rendered unconditionally, which is how a control came to
-    // point at a fixture.
     render(<ParseProgress stage={2} />);
 
     expect(
@@ -120,10 +119,7 @@ describe("open and steer", () => {
     const onSteer = vi.fn();
     render(<ParseProgress stage={2} onSteer={onSteer} />);
 
-    // EVERY done rung carries one - the component's own docblock: "as soon as
-    // a level is identified the teacher can open it and start steering while
-    // later levels run". At stage 2 more than one rung is done, which is why
-    // this reads all of them rather than one.
+    // EVERY done rung carries one: at stage 2 more than one rung is done.
     const controls = screen.getAllByRole("button", { name: /open and steer/i });
     expect(controls.length).toBeGreaterThan(1);
 
@@ -139,7 +135,6 @@ describe("open and steer", () => {
     const onSteer = vi.fn();
     render(<ParseProgress stage={0} onSteer={onSteer} />);
 
-    // Rung 0 is active, not done - there is no identified level to steer yet.
     expect(
       screen.queryAllByRole("button", { name: /open and steer/i }),
     ).toHaveLength(0);
@@ -147,15 +142,15 @@ describe("open and steer", () => {
 });
 
 /**
- * THE SERVER'S CURRENT NAMES (live spec; the upload worker at 3901b87). Each
- * answered -1, so a live unit's ladder was a spinner for the whole wait.
+ * THE SERVER'S CURRENT NAMES (live spec). Each must land on the rung its older
+ * name has, or a live unit's ladder is a spinner for the whole wait.
  */
 describe("rungFor, on the stage names the server sends now", () => {
-  it("places each on the rung its older name had", () => {
+  it("places each on the rung its older name has", () => {
     expect(rungFor("receiving_file")).toBe(0);
     expect(rungFor("reading_document")).toBe(0);
     expect(rungFor("finding_sections")).toBe(1);
-    expect(rungFor("preparing_adaptations")).toBe(1);
-    expect(rungFor("ready_to_assign")).toBe(2);
+    expect(rungFor("preparing_adaptations")).toBe(2);
+    expect(rungFor("ready_to_assign")).toBe(3);
   });
 });
