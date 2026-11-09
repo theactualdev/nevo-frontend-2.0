@@ -301,8 +301,6 @@ export function LiveLessonDetail({
    * just did.
    */
   const sections = useSegmentReview(lesson.id, segments);
-  /* The rows below mark only what is STILL waiting, from the hook's own list. */
-  const waitingIds = new Set(sections.outstanding.map((s) => s.id));
   const say = useSystemMessages();
   /*
    * LR-05: "quiet state change plus the SCRUM-152 system message". The state
@@ -318,7 +316,27 @@ export function LiveLessonDetail({
   const review = useLessonReview(lesson.id, () =>
     say.show({ kind: "confirm", message: `${lesson.title} is ready to assign.` }),
   );
-  const outstandingSections = sections.remaining;
+  /*
+   * A LESSON THE SERVER HAS SIGNED OFF HAS NOTHING WAITING (Hub's live assign
+   * test, 9 Nov). Heat Transfer read "Needs review - a few sections need a
+   * quick check before you assign" over a review the server called complete:
+   * `reviewComplete`, `readyToAssign`, no `outstandingReviewSteps`.
+   *
+   * The count was the parser's per-segment flags (`needsReview` and not
+   * `approved`), and since 19 Oct nothing on this page approves a segment:
+   * the review happens once, in C07k, and signs off the whole lesson. So the
+   * flags never cleared, and the page contradicted the server.
+   *
+   * Once the server has answered that the lesson is signed off AND ready, no
+   * segment is counted or marked as waiting. Before it answers, when it could
+   * not be read, or on a deployment that does not say, the flags count as
+   * they always did.
+   */
+  const signedOffAndReady =
+    !review.loading && !review.failed && review.signedOff === true && review.ready;
+  const outstandingSections = signedOffAndReady ? 0 : sections.remaining;
+  /* The rows below mark only what is STILL waiting, from the hook's own list. */
+  const waitingIds = new Set(signedOffAndReady ? [] : sections.outstanding.map((s) => s.id));
   const outstandingPoints = review.outstanding;
   /** Anything at all still waiting, from either half. */
   const waiting = outstandingPoints + outstandingSections;
@@ -332,7 +350,7 @@ export function LiveLessonDetail({
    * nothing to route that lesson into.
    */
   const toReview = review.signedOff === false;
-  /** C06b's "Two things need a quick look": what the flow will stop on. */
+  /** C06b's "Two things need a quick look", said without "quick": what the flow will stop on. */
   const needLook = outstandingPoints + review.missingKeyPoints;
   /*
    * WHETHER THERE IS A LESSON HERE TO SEND AT ALL.
@@ -390,9 +408,9 @@ export function LiveLessonDetail({
    */
   const reviewLine =
     outstandingPoints > 0
-      ? "A few key points need a quick check before you assign."
+      ? "A few key points need a check before you assign."
       : outstandingSections > 0
-        ? "A few segments need a quick check before you assign."
+        ? "A few segments need a check before you assign."
         : "";
 
   // Group by module where the parser made any. A segment the modules do not
@@ -579,7 +597,9 @@ export function LiveLessonDetail({
             <h3 className="text-[18px] font-semibold text-nevo-near-black">
               {needLook > 0 ? (
                 <>
-                  {`${needLook} ${needLook === 1 ? "thing needs" : "things need"} a quick look`}
+                  {/* No "quick" (Lydia, 9 Nov, item 15): it undercuts the
+                      rule that nothing reaches a class unreviewed. */}
+                  {`${needLook} ${needLook === 1 ? "thing needs" : "things need"} a look`}
                   <span className="hidden xl:inline"> before this is ready</span>
                 </>
               ) : (

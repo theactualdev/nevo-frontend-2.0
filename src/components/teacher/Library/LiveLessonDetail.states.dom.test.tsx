@@ -215,7 +215,7 @@ describe("a lesson with key points waiting", () => {
     show();
 
     expect(
-      screen.getByText("A few key points need a quick check before you assign."),
+      screen.getByText("A few key points need a check before you assign."),
     ).toBeInTheDocument();
   });
 
@@ -356,7 +356,7 @@ describe("the way into the four-step review", () => {
 
     show();
 
-    expect(screen.getByRole("heading", { name: /2 things need a quick look/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /2 things need a look/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Review in five steps/ })).toHaveAttribute(
       "href",
       "/teacher/lessons/l-9/review",
@@ -368,7 +368,7 @@ describe("the way into the four-step review", () => {
 
     show();
 
-    expect(screen.getByRole("heading", { name: /1 thing needs a quick look/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /1 thing needs a look/ })).toBeInTheDocument();
   });
 
   it("still asks for the approval when nothing is flagged", () => {
