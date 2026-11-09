@@ -164,20 +164,50 @@ describe("a safety check that could not run", () => {
 
     expect(await screen.findByText(SERVER_UNAVAILABLE)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Try another file/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Try this file again" }));
     // The same file, staged again.
     expect(start).toHaveBeenCalledTimes(2);
   });
 });
 
-describe("any other stopped parse", () => {
-  it("is unchanged on a unit: the server's sentence and Try another file", async () => {
+/*
+ * THE UNIT CARD FOLLOWS THE SINGLE LESSON'S RULE (Hub, 9 Nov): "Try another
+ * file" only where the file is the cause. A stop that is ours sends the same
+ * file again - Lydia's item 6 reasoning, that it must not teach a teacher to
+ * distrust their material.
+ */
+describe("any other stopped parse on a unit", () => {
+  it("sends the same file again when the stop was not the file's fault", async () => {
     stopped("preparation_timeout", "Preparing this lesson took longer than we allow.");
 
     startUpload(UNIT);
 
     expect(await screen.findByText("Preparing this lesson took longer than we allow.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Try another file/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Try another file/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try this file again" }));
+    expect(start).toHaveBeenCalledTimes(2);
     expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+  });
+
+  it("does the same for a stop the server gave no code for", async () => {
+    stopped(null as unknown as string, "Nevo could not finish preparing this lesson.");
+
+    startUpload(UNIT);
+
+    expect(await screen.findByText("Nevo could not finish preparing this lesson.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try this file again" })).toBeInTheDocument();
+  });
+
+  it("offers another file only when the file held nothing to read", async () => {
+    stopped("no_readable_text", "We could not find any lesson text in that file.");
+    const reset = vi.fn();
+    staged.value = { ...staged.value, reset };
+
+    startUpload(UNIT);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Try another file" }));
+    expect(reset).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: /Try this file again/ })).not.toBeInTheDocument();
   });
 });

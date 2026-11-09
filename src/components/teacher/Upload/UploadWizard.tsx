@@ -398,14 +398,22 @@ export function UploadWizard() {
   const heldBySafety =
     staged.failed && staged.failureKind === "parse" && staged.reasonCode === "safety_held";
   /**
-   * THE CHECK COULD NOT RUN (`safety_check_unavailable`): the same file, sent
-   * again shortly, gets through - the server's own sentence says "Nothing is
-   * wrong with your file - please try again shortly." So the unit's card offers
-   * that, not "Try another file", which points at the file. No line of ours:
-   * Lydia has given none for this case (asked).
+   * "TRY ANOTHER FILE" ONLY WHERE THE FILE IS THE CAUSE - the single lesson's
+   * rule (`ParseFallback`: it "belongs to the UNREADABLE screen"), now the
+   * unit card's too (Hub, 9 Nov). That is a file the server refused, or one it
+   * found nothing in to read (`UNREADABLE_REASONS`).
+   *
+   * Every other stopped parse - a safety check that could not run, a timeout, a
+   * fault of ours, a stop with no code - sends the same file again, as "Try
+   * this file again". Lydia, 9 Nov, item 6: a stop that is not the file's fault
+   * must not teach a teacher to distrust their own material. The card offered
+   * "Try another file" for every stopped parse until now.
    */
-  const sendSameAgain =
-    staged.failureKind === "request" || staged.reasonCode === "safety_check_unavailable";
+  const anotherFile =
+    staged.failureKind === "file" ||
+    (staged.failureKind === "parse" &&
+      staged.reasonCode != null &&
+      UNREADABLE_REASONS.has(staged.reasonCode));
 
   /**
    * The fallback screen, and which failure it is about, from either source.
@@ -1173,7 +1181,7 @@ export function UploadWizard() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (sendSameAgain) {
+                      if (!anotherFile) {
                         tryAgain();
                         return;
                       }
@@ -1183,9 +1191,15 @@ export function UploadWizard() {
                     className="mt-5 h-[46px] cursor-pointer rounded-[10px] bg-nevo-navy px-5 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
                   >
                     {/* Sending the same file again is the right move when
-                        the call failed; a different one is only worth
-                        suggesting when this file could not be read. */}
-                    {sendSameAgain ? "Try again" : "Try another file"}
+                        the call failed or the parse stopped for a reason of
+                        ours; a different one is only worth suggesting when
+                        this file could not be read. The labels are the single
+                        lesson's. */}
+                    {staged.failureKind === "request"
+                      ? "Try again"
+                      : anotherFile
+                        ? "Try another file"
+                        : "Try this file again"}
                   </button>
                 </div>
               ) : rungFor(staged.stage) >= 0 ? (
