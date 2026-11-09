@@ -20,8 +20,9 @@ import { cn } from "@/lib/utils";
  * first, in its `message` alone, and `visual_blocked_by_safety` (one per
  * segment: the safety check refused that segment's picture; its text is
  * unchanged), its `message` alone under the segment's name as the screen
- * names it. NEVER its `categories`, `phase` or `secondsSpent` - never which
- * rule fired or what triggered it (Lydia, item 6). Shown here until the
+ * names it. Never its `secondsSpent`, nor the `categories` and `phase` it
+ * carried until backend 86f8e10 moved them to the log - never which rule fired
+ * or what triggered it (Lydia, item 6). Shown here until the
  * lesson review can read it (asked of Teslim, 9 Nov). The other codes (`ai_parse_fallback`,
  * `page_text_missing`, `depth_variants_*`, `audio_generation_failed`, ...) are
  * technical notes for us, not for a teacher, and stay off the page. Faint

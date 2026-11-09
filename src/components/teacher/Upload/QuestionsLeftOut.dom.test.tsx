@@ -130,14 +130,16 @@ describe("how the file was read", () => {
   const READER =
     "The console could not read this file, so Nevo read it with a plainer reader that ignores layout and cannot read a scanned page. Columns, tables and anything handwritten may have come through jumbled or not at all. Check the sections against the original, and if the lesson looks thin, try uploading the text itself.";
   const reader = (over: Record<string, unknown> = {}) => ({ code: "source_read_by_backup_reader", message: READER, ...over });
+  // The note as backend 86f8e10 sends it: no `categories`, no `phase`.
   const blocked = {
     code: "visual_blocked_by_safety",
     segment: "k-2",
-    categories: ["violence"],
-    phase: "image_prompt",
-    message: "The safety check refused the picture for this section, so the section has no picture.",
+    message:
+      "A safety check held back the picture for this section, so the section has no picture. Its teaching text is unchanged. If that looks wrong, tell us the lesson and this section and we will look at the check rather than your material.",
     secondsSpent: 4.2,
   };
+  // As bdc6bed sent it, before 86f8e10 - which a stored upload can still carry.
+  const older = { ...blocked, categories: ["violence"], phase: "image_prompt" };
 
   it("says the backup reader's own sentence, word for word", () => {
     expect(readerNotes([reader()])).toEqual([READER]);
@@ -164,7 +166,7 @@ describe("how the file was read", () => {
   it("says a refused picture's own sentence under its segment's name - and never which rule fired or when", () => {
     const { container } = render(
       <QuestionsLeftOut
-        notes={[blocked, reader()]}
+        notes={[older, reader()]}
         segmentName={(key) => (key === "k-2" ? "Segment 2" : null)}
       />,
     );

@@ -176,9 +176,10 @@ describe("the finish screen", () => {
  */
 describe("a refused picture", () => {
   const PICTURE =
-    "The safety check refused the picture for this section, so the section has no picture. Its teaching text is unchanged. If the refusal looks wrong, say so with the lesson name and this section - a classifier is a model, not a rule.";
+    "A safety check held back the picture for this section, so the section has no picture. Its teaching text is unchanged. If that looks wrong, tell us the lesson and this section and we will look at the check rather than your material.";
   const REFUSED = [
-    { code: "visual_blocked_by_safety", segment: "k-2", categories: ["violence"], phase: "image", message: PICTURE, secondsSpent: 3.1 },
+    // As backend 86f8e10 sends it: no `categories`, no `phase`.
+    { code: "visual_blocked_by_safety", segment: "k-2", message: PICTURE, secondsSpent: 3.1 },
   ];
   const TWO: UploadStructure = {
     ...STRUCTURE,
