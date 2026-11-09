@@ -109,6 +109,35 @@ const sent = () =>
   ]);
 const settle = () => act(async () => {});
 
+let visibility: DocumentVisibilityState = "visible";
+const setVisibility = (state: DocumentVisibilityState) => {
+  visibility = state;
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    get: () => visibility,
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+};
+
+/** "Leave for now", through its dialog. */
+const leaveForNow = async () => {
+  fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
+  fireEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: "Leave for now",
+    }),
+  );
+  await settle();
+};
+
+/** Home takes over: the player goes, and its tick passes. */
+const goesHome = async (unmount: () => void) => {
+  unmount();
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  });
+};
+
 beforeEach(() => {
   setSession({
     token: "tok",
@@ -125,6 +154,11 @@ afterEach(() => {
   resetAttentionReports();
   cleanup();
   clearSession();
+  visibility = "visible";
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    get: () => visibility,
+  });
 });
 
 describe("the section on screen, to its sitting", () => {
@@ -177,22 +211,59 @@ describe("the section on screen, to its sitting", () => {
     // sitting the leave had just ended, answered 404.
     const { unmount } = render(<LessonPlayer lesson={LESSON} plan={null} live />);
     await settle();
-    fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
-    fireEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
-        name: "Leave for now",
-      }),
-    );
-    await settle();
+    await leaveForNow();
     expect(progress.report).toHaveBeenCalledWith("exited", { segment: 0 });
 
-    // Home takes over: the player goes.
-    unmount();
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    });
+    await goesHome(unmount);
 
     expect(sent()).toEqual([["return", SEG_1]]);
+  });
+
+  it("sends no return for an away still open when 'Leave for now' ends the sitting", async () => {
+    // The live trace of case 11: the 404 was a `return`. The page was away
+    // as the sitting ended and came back after it.
+    const { unmount } = render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    await settle();
+    setVisibility("hidden");
+    await settle();
+    expect(sent()).toEqual([
+      ["return", SEG_1],
+      ["away", SEG_1],
+    ]);
+
+    await leaveForNow();
+    setVisibility("visible");
+    await settle();
+    await goesHome(unmount);
+
+    expect(sent()).toEqual([
+      ["return", SEG_1],
+      ["away", SEG_1],
+    ]);
+  });
+
+  it("sends no return still waiting behind an away when 'Leave for now' ends the sitting", async () => {
+    // Back on screen, but the away is still on its way (1.7 to 17.8 s on
+    // 9 Nov), so the return waits behind it - and the child leaves.
+    const { unmount } = render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    await settle();
+    let land: () => void = () => {};
+    report.mockImplementationOnce(
+      () => new Promise((resolve) => (land = () => resolve({}))),
+    );
+    setVisibility("hidden");
+    setVisibility("visible");
+    await settle();
+
+    await leaveForNow();
+    land();
+    await settle();
+    await goesHome(unmount);
+
+    expect(sent()).toEqual([
+      ["return", SEG_1],
+      ["away", SEG_1],
+    ]);
   });
 
   it("sends nothing before the sitting has opened", async () => {
