@@ -14,7 +14,10 @@ import { cn } from "@/lib/utils";
  * as sent, with its questions listed under it as sent. Nothing is counted,
  * reworded or summarised here.
  *
- * ONLY `question_unusable`. The other codes (`ai_parse_fallback`,
+ * ONLY THE TEACHER'S NOTES: `question_unusable`, and since 9 Nov
+ * `source_read_by_backup_reader` (backend bdc6bed: the file was read with the
+ * plain backup reader, so check the sections against the original), said
+ * first, in its `message` alone. The other codes (`ai_parse_fallback`,
  * `page_text_missing`, `depth_variants_*`, `audio_generation_failed`, ...) are
  * technical notes for us, not for a teacher, and stay off the page. Faint
  * pages already have their own notice from `failedPages`.
@@ -33,6 +36,23 @@ export interface QuestionsLeftOutNote {
   message: string | null;
   /** The dropped questions' prompts (or the server's label for one), as sent. */
   questions: string[];
+}
+
+/**
+ * The backup-reader notes' own sentences, word for word (Hub, 9 Nov). Only
+ * the `message`: nothing else on the note is for a teacher. One with no
+ * sentence says nothing - there is no line of ours for it.
+ */
+export function readerNotes(notes: readonly unknown[] | null | undefined): string[] {
+  if (!Array.isArray(notes)) return [];
+  const out: string[] = [];
+  for (const note of notes) {
+    if (!note || typeof note !== "object") continue;
+    const n = note as Record<string, unknown>;
+    if (n.code !== "source_read_by_backup_reader") continue;
+    if (typeof n.message === "string" && n.message.trim()) out.push(n.message.trim());
+  }
+  return [...new Set(out)];
 }
 
 /** The `question_unusable` notes in a parse's `reviewNotes`, and nothing else. */
@@ -63,9 +83,19 @@ export function QuestionsLeftOut({
   className?: string;
 }) {
   const left = questionsLeftOut(notes);
-  if (left.length === 0) return null;
+  const reader = readerNotes(notes);
+  if (left.length === 0 && reader.length === 0) return null;
   return (
     <div className={cn("flex w-full flex-col gap-3", className)}>
+      {/* How the file was read comes first: it bears on everything below. */}
+      {reader.map((message) => (
+        <p
+          key={message}
+          className="w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 text-[14.5px] leading-[1.55] text-nevo-near-black/82"
+        >
+          {message}
+        </p>
+      ))}
       {left.map((note, i) => (
         <div
           key={i}

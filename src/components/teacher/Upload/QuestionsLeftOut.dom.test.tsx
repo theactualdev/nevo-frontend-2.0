@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
-import { QuestionsLeftOut, questionsLeftOut } from "./QuestionsLeftOut";
+import { QuestionsLeftOut, questionsLeftOut, readerNotes } from "./QuestionsLeftOut";
 
 /**
  * The questions the parse left out (`question_unusable` review notes), in the
@@ -116,5 +116,54 @@ describe("the notice", () => {
 
     expect(screen.queryByText(/deterministic parsing/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Audio could not be generated/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Backend bdc6bed (9 Nov): two new teacher-facing notes. This component says
+ * the upload-level one, `source_read_by_backup_reader`, in its `message` alone.
+ * The per-segment `visual_blocked_by_safety` belongs on that segment's picture
+ * in the review, never here, and nothing of it but its message is ever for a
+ * teacher (Lydia, item 6: never which rule fired or what triggered it).
+ */
+describe("how the file was read", () => {
+  const READER =
+    "The console could not read this file, so Nevo read it with a plainer reader that ignores layout and cannot read a scanned page. Columns, tables and anything handwritten may have come through jumbled or not at all. Check the sections against the original, and if the lesson looks thin, try uploading the text itself.";
+  const reader = (over: Record<string, unknown> = {}) => ({ code: "source_read_by_backup_reader", message: READER, ...over });
+  const blocked = {
+    code: "visual_blocked_by_safety",
+    segment: "k-2",
+    categories: ["violence"],
+    phase: "image_prompt",
+    message: "The safety check refused the picture for this section, so the section has no picture.",
+    secondsSpent: 4.2,
+  };
+
+  it("says the backup reader's own sentence, word for word", () => {
+    expect(readerNotes([reader()])).toEqual([READER]);
+    render(<QuestionsLeftOut notes={[reader()]} />);
+
+    expect(screen.getByText(READER)).toBeInTheDocument();
+  });
+
+  it("says it before the questions left out", () => {
+    render(<QuestionsLeftOut notes={[unusable(), reader()]} />);
+
+    const said = screen.getByText(READER);
+    const left = screen.getByText(SERVER_SENTENCE);
+    expect(said.compareDocumentPosition(left) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("says nothing for a reader note that came with no sentence", () => {
+    const { container } = render(<QuestionsLeftOut notes={[reader({ message: "" })]} />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("never shows a blocked picture's note here, nor which rule fired or when", () => {
+    const { container } = render(<QuestionsLeftOut notes={[blocked, reader()]} />);
+
+    expect(screen.queryByText(/refused the picture/)).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/violence|image_prompt|4\.2/);
   });
 });
