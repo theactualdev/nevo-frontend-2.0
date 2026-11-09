@@ -510,7 +510,7 @@ describe("a signed-in teacher's own lesson", () => {
 
     render(<VariantReviewRoute fixture={null} lessonId="l-1" sectionIndex={9} />);
 
-    expect(screen.getByText(/no section 9/i)).toBeInTheDocument();
+    expect(screen.getByText(/no segment 9/i)).toBeInTheDocument();
   });
 });
 

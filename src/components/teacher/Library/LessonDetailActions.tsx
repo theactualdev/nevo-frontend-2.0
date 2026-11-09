@@ -13,16 +13,22 @@ import { assignRefusal, REVIEW_TO_ASSIGN } from "@/lib/lessons/signOff";
  * left, that is the one thing holding the lesson, and "Still being checked."
  * would be a sentence about Nevo when it is the teacher's review that waits.
  */
+/**
+ * What is still to check, in the units the counts are: key points, and
+ * SEGMENTS - `useSegmentReview`'s outstanding list is flagged segments, and
+ * it said "1 section still to check" over one (Hub, 8 Nov). "Segment" is the
+ * teacher-facing word for that unit ("3 sections · 7 segments").
+ */
 export function stillToCheck(
   keyPoints: number,
-  sections: number,
+  segments: number,
   awaitingReview = false,
 ): string {
   const plural = (n: number, one: string, many: string) =>
     `${n} ${n === 1 ? one : many}`;
   const left = [
     ...(keyPoints > 0 ? [plural(keyPoints, "key point", "key points")] : []),
-    ...(sections > 0 ? [plural(sections, "section", "sections")] : []),
+    ...(segments > 0 ? [plural(segments, "segment", "segments")] : []),
   ].join(" and ");
   if (left) return `${left} still to check`;
   return awaitingReview ? REVIEW_TO_ASSIGN : "Still being checked.";

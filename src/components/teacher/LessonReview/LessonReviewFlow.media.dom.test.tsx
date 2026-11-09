@@ -179,7 +179,7 @@ describe("pictures and narration in step 1", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("Pictures · 2 made")).toBeInTheDocument();
-    expect(screen.getByText("1 section has none")).toBeInTheDocument();
+    expect(screen.getByText("1 segment has none")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "A picture for s-1" })).toBeInTheDocument();
     expect(screen.getByText("Narration · 1 recording")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Play the narration for Part 1" })).toBeInTheDocument();

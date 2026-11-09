@@ -50,7 +50,7 @@ export function VariantReview({
         </Link>
 
         <h1 className="mt-0.5 text-[22px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[26px]">
-          {`${lesson.title} · Section ${sectionIndex}`}
+          {`${lesson.title} · Segment ${sectionIndex}`}
         </h1>
 
         <p className="mt-4 text-[13px] leading-[1.6] text-nevo-near-black/60 italic xl:mt-[18px]">

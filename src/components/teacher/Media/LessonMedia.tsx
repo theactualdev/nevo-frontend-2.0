@@ -137,7 +137,7 @@ export function LessonMedia({
   const classNames = (lesson.classes ?? []).map((c) => c.name);
   const meta = [
     classNames.length > 0 ? `Live with ${humanList(classNames)}` : null,
-    `${segments.length} ${segments.length === 1 ? "section" : "sections"}`,
+    `${segments.length} ${segments.length === 1 ? "segment" : "segments"}`,
     hasPictures && hasNarration
       ? "pictures and narration"
       : hasPictures

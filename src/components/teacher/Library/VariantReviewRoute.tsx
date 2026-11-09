@@ -116,7 +116,7 @@ export function VariantReviewRoute({
           {missing
             ? "We couldn’t find this lesson"
             : outOfRange
-              ? "This lesson has no section " + sectionIndex
+              ? "This lesson has no segment " + sectionIndex
               : "We couldn’t load this lesson"}
         </h1>
         <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/62">
