@@ -14,9 +14,11 @@ import {
 } from "@/lib/uploads/followedUploads";
 import { cn } from "@/lib/utils";
 import {
+  BackToLibrary,
   FALLBACK_HEADINGS,
   IncidentLine,
   ParseFallback,
+  SAFETY_HELD_LINE,
   type FallbackKind,
 } from "./ParseFallback";
 import { LiveModuleReview } from "./LiveModuleReview";
@@ -388,6 +390,24 @@ export function UploadWizard() {
       : null;
 
   /**
+   * A SAFETY CHECK STOPPED THE PARSE (`safety_held`, backend 86f8e10). Lydia's
+   * line replaces the server's sentence on both paths (9 Nov, item 6). Before
+   * that code existed a held file came back as a plain failure, and a teacher
+   * concluded their file was the problem.
+   */
+  const heldBySafety =
+    staged.failed && staged.failureKind === "parse" && staged.reasonCode === "safety_held";
+  /**
+   * THE CHECK COULD NOT RUN (`safety_check_unavailable`): the same file, sent
+   * again shortly, gets through - the server's own sentence says "Nothing is
+   * wrong with your file - please try again shortly." So the unit's card offers
+   * that, not "Try another file", which points at the file. No line of ours:
+   * Lydia has given none for this case (asked).
+   */
+  const sendSameAgain =
+    staged.failureKind === "request" || staged.reasonCode === "safety_check_unavailable";
+
+  /**
    * The fallback screen, and which failure it is about, from either source.
    *
    * The demo beats set a phase; a staged parse reports its failure through a
@@ -417,9 +437,11 @@ export function UploadWizard() {
             kind:
               staged.failureKind === "request"
                 ? "unreachable"
-                : staged.reasonCode && UNREADABLE_REASONS.has(staged.reasonCode)
-                  ? "unreadable"
-                  : "parseFailed",
+                : heldBySafety
+                  ? "safetyHeld"
+                  : staged.reasonCode && UNREADABLE_REASONS.has(staged.reasonCode)
+                    ? "unreadable"
+                    : "parseFailed",
           }
         : null;
   const stepTotal = scope === null ? "N" : scope === "single" ? 3 : 5;
@@ -1097,7 +1119,17 @@ export function UploadWizard() {
                to the ladder's own height, and only the signed-out demo (one
                level up, no wrapper) was ever centred. */
             <div className="flex min-h-full w-full flex-col">
-              {staged.failed ? (
+              {heldBySafety ? (
+                /* The unit's card for a safety stop: Lydia's line and the way
+                   back to the library, as on the single lesson's screen. No
+                   reference, no "Try another file". */
+                <div className="w-full rounded-[16px] bg-nevo-cream-elevated p-8 shadow-elevation-1">
+                  <p className="text-[15px] leading-[1.6] text-nevo-near-black">{SAFETY_HELD_LINE}</p>
+                  <div className="mt-5">
+                    <BackToLibrary />
+                  </div>
+                </div>
+              ) : staged.failed ? (
                 /*
                   TWO FAILURES, TWO SENTENCES.
 
@@ -1141,7 +1173,7 @@ export function UploadWizard() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (staged.failureKind === "request") {
+                      if (sendSameAgain) {
                         tryAgain();
                         return;
                       }
@@ -1153,9 +1185,7 @@ export function UploadWizard() {
                     {/* Sending the same file again is the right move when
                         the call failed; a different one is only worth
                         suggesting when this file could not be read. */}
-                    {staged.failureKind === "request"
-                      ? "Try again"
-                      : "Try another file"}
+                    {sendSameAgain ? "Try again" : "Try another file"}
                   </button>
                 </div>
               ) : rungFor(staged.stage) >= 0 ? (

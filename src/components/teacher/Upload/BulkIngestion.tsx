@@ -3,10 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { SampleRegion } from "@/components/shared/SampleRegion";
-import { uploadsApi, type BatchResult } from "@/lib/api/uploads";
+import { uploadsApi, type BatchResult, type UploadReasonCode } from "@/lib/api/uploads";
 import { getToken } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
+import { SAFETY_HELD_LINE } from "./ParseFallback";
 
 /**
  * C07h Bulk Curriculum Ingestion: a whole term's scheme of work at once.
@@ -90,6 +91,8 @@ type Outcome = {
   status?: string;
   /** Prose, promised - never `error`, which is a driver exception. */
   failureReason?: string | null;
+  /** The server's code for why it stopped. Read for `safety_held` alone. */
+  reasonCode?: UploadReasonCode | null;
   /** For a teacher to quote. A parse dies behind the response, so there is no
    *  500 for a reference to ride on; it is a field on the job instead. */
   incidentId?: string | null;
@@ -369,6 +372,7 @@ export function BulkIngestion() {
               ...(title ? { title } : {}),
               status: row.status,
               failureReason: row.failureReason ?? null,
+              reasonCode: row.reasonCode ?? null,
               incidentId: row.incidentId ?? null,
             };
             if (!FINISHED.has(row.status)) again.push(id);
@@ -954,12 +958,16 @@ export function BulkIngestion() {
                                           `failureReason`, the field that
                                           promises prose - never `error`, a
                                           driver exception shown nowhere. */}
+                                      {/* A safety stop is Lydia's line (9
+                                          Nov, item 6), never the server's. */}
                                       {died
-                                        ? (died.failureReason ??
-                                          "We took this one, and the reading stopped partway. That is ours to sort out.")
+                                        ? died.reasonCode === "safety_held"
+                                          ? SAFETY_HELD_LINE
+                                          : (died.failureReason ??
+                                            "We took this one, and the reading stopped partway. That is ours to sort out.")
                                         : (u.error ?? "Nevo couldn\u2019t read this one.")}
                                     </p>
-                                    {died?.incidentId && (
+                                    {died?.incidentId && died.reasonCode !== "safety_held" && (
                                       <div className="mt-[3px] text-[12px] text-nevo-near-black/50">
                                         {"If you tell us about this, quote "}
                                         <span className="font-mono text-nevo-near-black/70">
@@ -973,7 +981,10 @@ export function BulkIngestion() {
                                       door: a different file is the remedy
                                       (C07h). Taken and then stopped: the file
                                       was fine, so the same one again. */}
+                                  {/* None for a safety stop: sent again,
+                                      it is refused again. */}
                                   {canAct &&
+                                    died?.reasonCode !== "safety_held" &&
                                     (died ? (
                                       <button
                                         type="button"
