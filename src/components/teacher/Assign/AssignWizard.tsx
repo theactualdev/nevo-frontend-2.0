@@ -349,7 +349,9 @@ export function AssignWizard({
   /** A send is under way or has landed: set at once, before any re-render. */
   const inFlight = useRef(false);
   const signedIn = useHasSession();
-  const [error, setError] = useState("");
+  const [error, setErrorText] = useState("");
+  /** The choices `error` was said about - see `selectionKey`. */
+  const [errorFor, setErrorFor] = useState("");
   // Past the first step there are choices a teacher would have to remake.
   useUnsavedGuard(step > 1);
   /**
@@ -453,6 +455,32 @@ export function AssignWizard({
         )[0]?.id;
   const classes = classChoice ?? new Set(firstClass ? [firstClass] : []);
   const picked = [...chosen].filter((id) => offered.has(id));
+  /*
+   * A LINE IS ABOUT THE CHOICES IT WAS SAID ABOUT (Hub, 9 Nov, from a live
+   * assign test). "Those 3 students already have this lesson, so nothing was
+   * sent again." was said about Heat Transfer and SS 1B - and it was still
+   * there after the teacher went back and picked Osmosis, on Osmosis's confirm
+   * step, where it was untrue. The line lived until the next Confirm cleared
+   * it.
+   *
+   * So each line remembers what was chosen when it was said, and shows only
+   * while that is still what is chosen: change the lessons, the classes, the
+   * students or the time, and it goes. A refusal that still applies is said
+   * again, about the new choices, on the next Confirm.
+   */
+  const selectionKey = JSON.stringify([
+    [...chosen].sort(),
+    who,
+    [...classes].sort(),
+    [...students].sort(),
+    when,
+    date,
+    time,
+  ]);
+  const setError = (line: string) => {
+    setErrorText(line);
+    setErrorFor(selectionKey);
+  };
   /*
    * ASSIGN WAITS FOR THE LESSON-WIDE SIGN-OFF (Lydia, 25 Oct), at this door
    * too. The lesson page holds Assign until the server's `reviewComplete`,
@@ -1314,7 +1342,7 @@ export function AssignWizard({
 
       {/* A failed assignment owns the footer: the teacher must not leave this
           screen believing work was sent when it was not. */}
-      {error && (
+      {error && errorFor === selectionKey && (
         <div className="shrink-0 px-7 pb-3 xl:px-8">
           <p className="mx-auto max-w-[560px] rounded-[10px] bg-nevo-violet/14 px-[14px] py-3 text-[13.5px] leading-[1.5] text-nevo-near-black/78">
             {error}
