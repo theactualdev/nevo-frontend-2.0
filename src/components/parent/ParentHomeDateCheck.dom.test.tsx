@@ -19,6 +19,16 @@ vi.mock("@/lib/api/ageChecks", async (importOriginal) => {
 
 import { ParentHome } from "./ParentHome";
 
+/*
+ * WAIT CHEAPLY, THEN ASSERT THE ROLE ONCE. The home's lines land after TWO
+ * reads (the children, then this child's), and `findByRole` recomputes the
+ * whole tree's accessibility on every poll - slow in jsdom, so on a loaded
+ * machine it ran out the default 1s and failed at random (check 4, 9 Nov).
+ * `findByText` polls cheaply, with room to wait; the link is then checked by
+ * role, once.
+ */
+const SLOW_READS = { timeout: 5000 };
+
 /**
  * SCRUM-243: the parent's route to D01d. One quiet line on the home, only
  * when the school has re-checked and the parent hasn't given the date yet -
@@ -58,7 +68,8 @@ describe("the route to the date check", () => {
   it("is one line, for the child it's about, when the parent has something to confirm", async () => {
     parentChecks.mockResolvedValue([check()]);
     render(<ParentHome />);
-    const link = await screen.findByRole("link", { name: /Can you confirm Amara’s date of birth\?/ });
+    await screen.findByText(/Can you confirm Amara’s date of birth\?/, undefined, SLOW_READS);
+    const link = screen.getByRole("link", { name: /Can you confirm Amara’s date of birth\?/ });
     expect(link).toHaveAttribute("href", "/parent-portal/date-check?child=s-1");
   });
 
@@ -66,7 +77,7 @@ describe("the route to the date check", () => {
     parentChecks.mockResolvedValue([check({ schoolRecheckedAt: null })]);
     render(<ParentHome />);
     await waitFor(() => expect(parentChecks).toHaveBeenCalled());
-    await screen.findByRole("link", { name: "Your child’s data" });
+    await screen.findByText("Your child’s data", undefined, SLOW_READS);
     // The checks read answers after the children read; let it land.
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.queryByRole("link", { name: /date of birth/ })).toBeNull();
@@ -78,7 +89,7 @@ describe("the route to the date check", () => {
       check({ id: "ac2", blocksAccess: false }),
     ]);
     render(<ParentHome />);
-    await screen.findByRole("link", { name: "Your child’s data" });
+    await screen.findByText("Your child’s data", undefined, SLOW_READS);
     // The checks read answers after the children read; let it land.
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.queryByRole("link", { name: /date of birth/ })).toBeNull();

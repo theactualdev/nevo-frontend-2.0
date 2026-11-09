@@ -18,6 +18,16 @@ vi.mock("@/lib/auth/session", () => ({ getSession }));
 
 import { ParentHome } from "./ParentHome";
 
+/*
+ * WAIT CHEAPLY, THEN ASSERT THE ROLE ONCE. The home's lines land after TWO
+ * reads (the children, then this child's), and `findByRole` recomputes the
+ * whole tree's accessibility on every poll - slow in jsdom, so on a loaded
+ * machine it ran out the default 1s and failed at random (check 4, 9 Nov).
+ * `findByText` polls cheaply, with room to wait; the link is then checked by
+ * role, once.
+ */
+const SLOW_READS = { timeout: 5000 };
+
 /**
  * D02b's way in. No frame draws one, so it is the screen's own heading as a
  * line on the home - and only when the server has strengthened something for
@@ -56,7 +66,8 @@ describe("the way to what a child has strengthened", () => {
       ],
     });
     render(<ParentHome />);
-    expect(await screen.findByRole("link", { name: /What Amara.s strengthened/ })).toHaveAttribute(
+    await screen.findByText(/What Amara.s strengthened/, undefined, SLOW_READS);
+    expect(screen.getByRole("link", { name: /What Amara.s strengthened/ })).toHaveAttribute(
       "href",
       "/parent-portal/changes?child=s-1",
     );
