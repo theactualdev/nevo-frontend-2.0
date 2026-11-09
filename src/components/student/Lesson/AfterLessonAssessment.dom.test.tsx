@@ -372,20 +372,44 @@ describe("whether anything landed is the server's word (B98)", () => {
     expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
   });
 
-  it("holds the mark and heading while the verdict is on its way", () => {
+  it("holds the whole result - mark, heading and both buttons - while the verdict is on its way", () => {
     render(
       <AfterLessonAssessment
         assessment={ASSESSMENT}
         onFinish={() => {}}
+        onReviewAnswers={() => {}}
         resumeAt={4}
         result={null}
         resultPending
       />,
     );
 
-    // Kept in place, unseen, so one heading is not swapped for another.
+    // Kept in place, unseen: nothing lands before the verdict (rule 8).
     expect(screen.queryByRole("heading")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review answers" })).toBeNull();
     expect(document.querySelector("h2")?.closest(".invisible")).toBeTruthy();
+    const buttons = [...document.querySelectorAll("button")];
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const b of buttons) expect(b.closest(".invisible")).toBeTruthy();
+  });
+
+  it("lands once, all of it together, when the verdict arrives", () => {
+    const props = {
+      assessment: ASSESSMENT,
+      onFinish: () => {},
+      onReviewAnswers: () => {},
+      resumeAt: 4,
+    };
+    const { rerender } = render(
+      <AfterLessonAssessment {...props} result={null} resultPending />,
+    );
+    rerender(<AfterLessonAssessment {...props} result="landed" />);
+
+    expect(screen.getByRole("heading", { name: HEADING })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Review answers" })).toBeTruthy();
+    expect(document.querySelector(".invisible")).toBeNull();
   });
 
   it("shows the walkthrough, which no server marks, as the frame draws it", () => {

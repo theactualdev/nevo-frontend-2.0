@@ -1010,7 +1010,11 @@ describe("opening a lesson straight into a check left part way (B82)", () => {
   it("opens on the result, and completes, when every question was answered", async () => {
     open({ progressRow: left({ checkPosition: 2 }) });
 
-    expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
+    // On the result - held, whole, until the completion write answers (rule
+    // 8), so its Continue is there but not yet shown.
+    expect(
+      screen.getByRole("button", { name: "Continue", hidden: true }),
+    ).toBeTruthy();
     await waitFor(() =>
       expect(statuses()).toContain(LESSON_STATUS.COMPLETED),
     );
@@ -1060,8 +1064,11 @@ describe("the check ending completes the lesson", () => {
     await waitFor(() =>
       expect(statuses()).toContain(LESSON_STATUS.COMPLETED),
     );
-    // The child is still on the result.
-    expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
+    // The child is still on the result - held, whole, until the write
+    // answers (rule 8), which this test's progress never reports.
+    expect(
+      screen.getByRole("button", { name: "Continue", hidden: true }),
+    ).toBeTruthy();
   });
 
   it("waits for the last answer to be stored first", async () => {
