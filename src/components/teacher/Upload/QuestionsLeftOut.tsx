@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
  *
  * A LIST NEVER STANDS WITH NOTHING ABOVE IT (Lydia, 9 Nov, item 21). A note
  * that arrives with no sentence still lists its questions - leaving them out
- * would be the silence this exists to end - under her line, "These questions
+ * would be the silence this exists to end - under Lydia's line, "These questions
  * were left out of the lesson.", which claims nothing about why.
  */
 
