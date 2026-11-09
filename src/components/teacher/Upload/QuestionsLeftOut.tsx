@@ -19,11 +19,14 @@ import { cn } from "@/lib/utils";
  * technical notes for us, not for a teacher, and stay off the page. Faint
  * pages already have their own notice from `failedPages`.
  *
- * A note that arrives with no sentence still lists its questions - leaving
- * them out would be the silence this exists to end - but no line is written
- * for it here: that wording is Lydia's (asked, 8 Nov). Today's server always
- * sends one.
+ * A LIST NEVER STANDS WITH NOTHING ABOVE IT (Lydia, 9 Nov, item 21). A note
+ * that arrives with no sentence still lists its questions - leaving them out
+ * would be the silence this exists to end - under Lydia's line, "These questions
+ * were left out of the lesson.", which claims nothing about why.
  */
+
+/** Lydia's line (9 Nov) above a list whose note came with no sentence. */
+export const QUESTIONS_LEFT_OUT = "These questions were left out of the lesson.";
 
 export interface QuestionsLeftOutNote {
   /** The server's sentence, as sent. Null only if it sent none. */
@@ -68,16 +71,11 @@ export function QuestionsLeftOut({
           key={i}
           className="w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4"
         >
-          {note.message && (
-            <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">{note.message}</p>
-          )}
+          <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
+            {note.message ?? QUESTIONS_LEFT_OUT}
+          </p>
           {note.questions.length > 0 && (
-            <ul
-              className={cn(
-                "flex list-disc flex-col gap-1 pl-5 text-[14px] leading-[1.5] text-nevo-near-black/72",
-                note.message && "mt-2",
-              )}
-            >
+            <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 text-[14px] leading-[1.5] text-nevo-near-black/72">
               {note.questions.map((q, j) => (
                 <li key={j}>{q}</li>
               ))}

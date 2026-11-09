@@ -54,10 +54,27 @@ describe("which notes are a teacher's", () => {
     ]);
   });
 
-  it("still lists the questions when the server sent no sentence, and writes none of its own", () => {
+  it("still keeps the questions when the server sent no sentence", () => {
     expect(questionsLeftOut([unusable({ message: undefined })])).toEqual([
       { message: null, questions: ["Why do you think metals feel cold?", "a question that was not structured"] },
     ]);
+  });
+});
+
+// Lydia, 9 Nov (item 21): a list never appears with nothing above it.
+describe("a note that came with no sentence", () => {
+  it("is listed under Lydia's line, which claims nothing about why", () => {
+    render(<QuestionsLeftOut notes={[unusable({ message: undefined })]} />);
+
+    expect(screen.getByText("These questions were left out of the lesson.")).toBeInTheDocument();
+    expect(within(screen.getByRole("list")).getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("never stands in for the server's own sentence", () => {
+    render(<QuestionsLeftOut notes={[unusable()]} />);
+
+    expect(screen.getByText(SERVER_SENTENCE)).toBeInTheDocument();
+    expect(screen.queryByText("These questions were left out of the lesson.")).not.toBeInTheDocument();
   });
 });
 
