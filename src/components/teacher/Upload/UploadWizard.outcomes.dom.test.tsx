@@ -883,6 +883,23 @@ describe("where a unit's reading is drawn", () => {
     expect(screen.queryByText("Finding the lessons")).not.toBeInTheDocument();
   });
 
+  // Lydia, 9 Nov (item 16): a teacher can tell a re-upload was not ignored.
+  it("says a re-upload brought back what Nevo made of the file", () => {
+    stagedState({ ...READY, reused: true });
+    startUnitUpload();
+
+    expect(
+      screen.getByText("You have uploaded this file before, so Nevo has brought back what it made of it."),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing of the sort for a file read fresh", () => {
+    stagedState({ ...READY, reused: false });
+    startUnitUpload();
+
+    expect(screen.queryByText(/uploaded this file before/)).not.toBeInTheDocument();
+  });
+
   it("keeps the faint-pages card, above the tree and inside its scroll", () => {
     stagedState({ ...READY, failedPages: [3] });
     startUnitUpload();

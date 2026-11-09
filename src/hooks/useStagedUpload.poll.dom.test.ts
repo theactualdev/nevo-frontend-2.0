@@ -287,3 +287,31 @@ describe("a reused upload that comes back already ready", () => {
     expect(result.current.structure).toEqual(READY.structure);
   });
 });
+
+/**
+ * Lydia, 9 Nov (item 16): a re-upload is said. The hook keeps the create
+ * response's `reused` so the wizard can say it, and forgets it on a new file.
+ */
+describe("whether the server brought an upload back", () => {
+  it("is kept from the create response", async () => {
+    create.mockResolvedValue({ uploadId: "u-1", status: "ready", stage: "ready_to_assign", reused: true, reviewReady: true });
+    status.mockResolvedValue(READY);
+    const result = await staged();
+
+    expect(result.current.reused).toBe(true);
+  });
+
+  it("is false for an upload made fresh, and after a reset", async () => {
+    status.mockResolvedValue(READY);
+    const result = await staged();
+    expect(result.current.reused).toBe(false);
+
+    create.mockResolvedValue({ uploadId: "u-2", status: "ready", stage: "ready_to_assign", reused: true });
+    await act(async () => {
+      await result.current.start(new File(["x"], "x.pdf"), "single");
+    });
+    expect(result.current.reused).toBe(true);
+    act(() => result.current.reset());
+    expect(result.current.reused).toBe(false);
+  });
+});

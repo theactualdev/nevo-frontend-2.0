@@ -134,6 +134,14 @@ export interface StagedUpload {
   /** Still going, and long enough that a teacher deserves telling. */
   slow: boolean;
   /**
+   * The server handed back an upload this teacher already made of the same
+   * file (`reused` on the create response: `find_reusable_upload`, or the
+   * same file still processing). The wizard says so (Lydia, 9 Nov, item 16):
+   * without it a teacher "cannot tell whether her new upload was read or
+   * ignored".
+   */
+  reused: boolean;
+  /**
    * Resolves with what happened to the file: `refused` is the server's 4xx
    * answer about the file itself, `failed` is ours. The caller decides where
    * a refusal belongs on screen - C07 draws it on the file step.
@@ -212,6 +220,7 @@ export function useStagedUpload(): StagedUpload {
    * teacher). A settled status from the create is read once, at once.
    */
   const [read, setRead] = useState(false);
+  const [reused, setReused] = useState(false);
 
   const reset = useCallback(() => {
     setUploadId(null);
@@ -231,6 +240,7 @@ export function useStagedUpload(): StagedUpload {
     setSlow(false);
     setTick(0);
     setRead(false);
+    setReused(false);
     startedAt.current = null;
     pollFailures.current = 0;
   }, []);
@@ -246,6 +256,7 @@ export function useStagedUpload(): StagedUpload {
           setUploadId(res.uploadId);
           setStatus(res.status);
           setStage(res.stage);
+          setReused(res.reused === true);
           return "staged";
         })
         .catch((err: unknown) => {
@@ -402,6 +413,7 @@ export function useStagedUpload(): StagedUpload {
     reasonCode,
     incident,
     slow,
+    reused,
     start,
     retryFailedPages,
     resume,

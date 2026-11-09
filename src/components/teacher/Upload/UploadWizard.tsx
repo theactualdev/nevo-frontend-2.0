@@ -131,6 +131,24 @@ function pageList(pages: number[]): string {
 }
 
 /**
+ * A RE-UPLOAD, SAID (Lydia, 9 Nov, item 16). The server hands back the upload
+ * this teacher already made of the same file (`reused` on the create
+ * response), so what follows is what Nevo made of it before - and without a
+ * word the teacher "cannot tell whether her new upload was read or ignored".
+ * Lydia's words, shown above the review the upload opens on.
+ */
+export const REUPLOAD_LINE =
+  "You have uploaded this file before, so Nevo has brought back what it made of it.";
+
+function ReuploadNotice() {
+  return (
+    <p className="mb-4 w-full rounded-[12px] border-l-[3px] border-nevo-navy/40 bg-nevo-cream-elevated px-[18px] py-3.5 text-[14.5px] leading-[1.55] text-nevo-near-black/80">
+      {REUPLOAD_LINE}
+    </p>
+  );
+}
+
+/**
  * C07f's partly-read file, as far as the contract can say it (backlog item
  * 38). The upload's status names the pages that didn't come through
  * (`failedPages`) and nothing else about the file, so:
@@ -766,13 +784,16 @@ export function UploadWizard() {
           structure={staged.structure}
           segments={staged.segments}
           banner={
-            staged.failedPages.length > 0 ? (
-              <PartialReadNotice
-                pages={staged.failedPages}
-                retrying={staged.retrying}
-                onRetry={staged.retryFailedPages}
-              />
-            ) : null
+            <>
+              {staged.reused && <ReuploadNotice />}
+              {staged.failedPages.length > 0 ? (
+                <PartialReadNotice
+                  pages={staged.failedPages}
+                  retrying={staged.retrying}
+                  onRetry={staged.retryFailedPages}
+                />
+              ) : null}
+            </>
           }
           onBack={() => {
             staged.reset();
@@ -829,13 +850,16 @@ export function UploadWizard() {
               takes the words of it the contract can make true - see
               `PartialReadNotice` (backlog item 38).
             */
-            staged.failedPages.length > 0 ? (
-              <PartialReadNotice
-                pages={staged.failedPages}
-                retrying={staged.retrying}
-                onRetry={staged.retryFailedPages}
-              />
-            ) : null
+            <>
+              {staged.reused && <ReuploadNotice />}
+              {staged.failedPages.length > 0 ? (
+                <PartialReadNotice
+                  pages={staged.failedPages}
+                  retrying={staged.retrying}
+                  onRetry={staged.retryFailedPages}
+                />
+              ) : null}
+            </>
           }
         />
       )}
