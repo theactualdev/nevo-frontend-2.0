@@ -313,17 +313,19 @@ export function ConfirmEmail({ token }: { token: string }) {
               */}
             {(() => {
               /*
-               * AC-03c's "Sign in and we will send a fresh one." is left out:
-               * signing in sends nothing (the console's banner offers Resend,
-               * a press away), so "we will send" would promise more than
-               * happens - raised. The 48 hours is Lydia's correction of the
-               * frame's 24 (copy pass, 7 Nov).
+               * AC-03c in LYDIA'S WORDS (9 Nov, item 22): "This link has
+               * expired. Sign in and you can send a fresh one from the banner
+               * at the top of your console." The frame's "we will send" stays
+               * out - signing in sends nothing; the console's paused banner
+               * has "Resend link". "Confirmation links last 48 hours." sits
+               * between, where the frame puts its lifetime sentence, with
+               * Lydia's 48 for the frame's 24 (copy pass, 7 Nov).
                */
               const body =
                 state.status === "invalid"
                   ? invalidBody(own, signedOut)
                   : state.status === "expired" && signedOut
-                    ? "Confirmation links last 48 hours."
+                    ? "Confirmation links last 48 hours. Sign in and you can send a fresh one from the banner at the top of your console."
                     : (bodyFor(state.status, state.email) ?? state.message);
               return body ? (
                 <p className="mt-[13px] max-w-[420px] text-[17px] leading-[1.55] text-nevo-near-black/70">

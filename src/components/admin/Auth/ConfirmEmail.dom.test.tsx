@@ -417,7 +417,10 @@ describe("an expired link opened signed out (AC-03c)", () => {
     const { container } = render(<ConfirmEmail token="t1" />);
     expect(await screen.findByRole("heading", { name: "This link has expired" })).toBeInTheDocument();
     const text = visibleText(container);
-    expect(text).toMatch(/Confirmation links last 48 hours\./);
+    // Lydia's words (9 Nov, item 22), with the frame's lifetime sentence between.
+    expect(text).toMatch(
+      /Confirmation links last 48 hours\. Sign in and you can send a fresh one from the banner at the top of your console\./,
+    );
     expect(text).not.toMatch(/f\.adebayo|Brightgate|we will send|We can send|Wrong address|24 hours/);
     expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual(["Sign in"]);
     expect(screen.queryAllByRole("button")).toEqual([]);
