@@ -263,6 +263,13 @@ describe("restoring from the account (SCRUM-321)", () => {
     // D01c (928cf30): restoring is consenting again, so the terms come first.
     expect(screen.getByText("What you are agreeing to again")).toBeInTheDocument();
     expect(screen.getAllByText("What Nevo collects").length).toBeGreaterThan(0);
+    // The retention term in Lydia's words (9 Nov, item 8), here too.
+    expect(
+      screen.getByText(
+        "If you withdraw consent, Amara’s access stops straight away. Their records are not deleted at once. They are kept for a limited period and then permanently deleted.",
+      ),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/school decides what happens next/);
     expect(screen.getByText("Restoring puts Amara’s access back.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Restore consent" }));
     expect(
