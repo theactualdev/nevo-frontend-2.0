@@ -168,3 +168,63 @@ describe("the finish screen", () => {
     expect(said()).toBeInTheDocument();
   });
 });
+
+/**
+ * A refused picture (backend bdc6bed), shown against its segment on the
+ * upload's screens until the lesson review can read it (Hub, 9 Nov, (b)):
+ * the server's sentence, under the segment's name as each screen names it.
+ */
+describe("a refused picture", () => {
+  const PICTURE =
+    "The safety check refused the picture for this section, so the section has no picture. Its teaching text is unchanged. If the refusal looks wrong, say so with the lesson name and this section - a classifier is a model, not a rule.";
+  const REFUSED = [
+    { code: "visual_blocked_by_safety", segment: "k-2", categories: ["violence"], phase: "image", message: PICTURE, secondsSpent: 3.1 },
+  ];
+  const TWO: UploadStructure = {
+    ...STRUCTURE,
+    reviewNotes: REFUSED,
+    lessons: [
+      {
+        lessonId: "l-1",
+        title: "Heat transfer",
+        sequenceOrder: 1,
+        modules: [{ title: "Conductors", sequenceOrder: 1, segmentIds: ["k-1", "k-2"], recap: null, preview: null }],
+      },
+    ],
+  };
+  const ROWS = [
+    { segmentKey: "k-1", title: "Metals", contentType: "explanatory_text", sequenceOrder: 1, estimatedMinutes: 3, needsReview: false },
+    { segmentKey: "k-2", title: null, contentType: "explanatory_text", sequenceOrder: 2, estimatedMinutes: 3, needsReview: false },
+  ];
+
+  it("is said under its segment on a single lesson's sections, named as the rows are", () => {
+    const { container } = render(
+      <LiveModuleReview uploadId="u-1" structure={TWO} segments={ROWS as never} onBack={vi.fn()} onConfirmed={vi.fn()} />,
+    );
+
+    expect(screen.getByText(PICTURE)).toBeInTheDocument();
+    expect(screen.getAllByText("Segment 2").length).toBeGreaterThan(0);
+    expect(container.textContent).not.toMatch(/violence|3\.1/);
+  });
+
+  it("is said on a unit's tree", () => {
+    render(<LiveStructureTree uploadId="u-1" structure={TWO} segments={ROWS as never} blockName="Physics" />);
+
+    expect(screen.getByText(PICTURE)).toBeInTheDocument();
+  });
+
+  it("is said on the finish screen, under the lesson's own name for the segment", () => {
+    const lesson = {
+      ...LESSON,
+      segmentCount: 2,
+      segments: [
+        { id: "s-1", segmentKey: "k-1", sequenceOrder: 1, title: "Metals", contentType: "explanatory_text", body: "…", needsReview: false, availableModalities: ["text"] },
+        { id: "s-2", segmentKey: "k-2", sequenceOrder: 2, title: "Wood and plastic", contentType: "explanatory_text", body: "…", needsReview: true, availableModalities: ["text"] },
+      ],
+    } as unknown as LessonDetailResponse;
+    render(<UploadResult lesson={lesson} fileName="heat.pdf" onUploadAnother={vi.fn()} reviewNotes={REFUSED} />);
+
+    expect(screen.getByText(PICTURE)).toBeInTheDocument();
+    expect(screen.getAllByText("Wood and plastic").length).toBeGreaterThan(0);
+  });
+});

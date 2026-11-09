@@ -375,7 +375,13 @@ export function LiveModuleReview({
         {/* The console's reading column: 820px, centred (design system, 8 Oct). */}
         <div className="mx-auto max-w-[820px]">
           {/* The questions the parse left out, in the server's words. */}
-          <QuestionsLeftOut notes={structure.reviewNotes} className="mb-5" />
+          <QuestionsLeftOut
+            notes={structure.reviewNotes}
+            className="mb-5"
+            segmentName={(key) =>
+              new Map(rows.map((r, i) => [r.key, r.title ?? `Segment ${i + 1}`])).get(key) ?? null
+            }
+          />
           {banner}
 
           {kept.kept && (

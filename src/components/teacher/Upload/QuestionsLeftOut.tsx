@@ -17,7 +17,12 @@ import { cn } from "@/lib/utils";
  * ONLY THE TEACHER'S NOTES: `question_unusable`, and since 9 Nov
  * `source_read_by_backup_reader` (backend bdc6bed: the file was read with the
  * plain backup reader, so check the sections against the original), said
- * first, in its `message` alone. The other codes (`ai_parse_fallback`,
+ * first, in its `message` alone, and `visual_blocked_by_safety` (one per
+ * segment: the safety check refused that segment's picture; its text is
+ * unchanged), its `message` alone under the segment's name as the screen
+ * names it. NEVER its `categories`, `phase` or `secondsSpent` - never which
+ * rule fired or what triggered it (Lydia, item 6). Shown here until the
+ * lesson review can read it (asked of Teslim, 9 Nov). The other codes (`ai_parse_fallback`,
  * `page_text_missing`, `depth_variants_*`, `audio_generation_failed`, ...) are
  * technical notes for us, not for a teacher, and stay off the page. Faint
  * pages already have their own notice from `failedPages`.
@@ -55,6 +60,35 @@ export function readerNotes(notes: readonly unknown[] | null | undefined): strin
   return [...new Set(out)];
 }
 
+export interface PictureRefused {
+  /** The segment's key, as the note names it (`segment`). */
+  segment: string;
+  /** The server's sentence, word for word. */
+  message: string;
+}
+
+/**
+ * The refused-picture notes: which segment, and the server's sentence. Only
+ * those two fields are read, so nothing else on the note can reach a screen.
+ */
+export function picturesRefused(notes: readonly unknown[] | null | undefined): PictureRefused[] {
+  if (!Array.isArray(notes)) return [];
+  const out: PictureRefused[] = [];
+  const seen = new Set<string>();
+  for (const note of notes) {
+    if (!note || typeof note !== "object") continue;
+    const n = note as Record<string, unknown>;
+    if (n.code !== "visual_blocked_by_safety") continue;
+    if (typeof n.segment !== "string" || !n.segment.trim()) continue;
+    if (typeof n.message !== "string" || !n.message.trim()) continue;
+    const key = `${n.segment}\u0000${n.message.trim()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ segment: n.segment, message: n.message.trim() });
+  }
+  return out;
+}
+
 /** The `question_unusable` notes in a parse's `reviewNotes`, and nothing else. */
 export function questionsLeftOut(
   notes: readonly unknown[] | null | undefined,
@@ -78,13 +112,21 @@ export function questionsLeftOut(
 export function QuestionsLeftOut({
   notes,
   className,
+  segmentName,
 }: {
   notes: readonly unknown[] | null | undefined;
   className?: string;
+  /**
+   * A segment's name as this screen names it - its title, else "Segment N"
+   * by its place - from the key a note gives. Null where the screen has no
+   * such segment: the note is still said, under no name.
+   */
+  segmentName?: (segmentKey: string) => string | null;
 }) {
   const left = questionsLeftOut(notes);
   const reader = readerNotes(notes);
-  if (left.length === 0 && reader.length === 0) return null;
+  const pictures = picturesRefused(notes);
+  if (left.length === 0 && reader.length === 0 && pictures.length === 0) return null;
   return (
     <div className={cn("flex w-full flex-col gap-3", className)}>
       {/* How the file was read comes first: it bears on everything below. */}
@@ -96,6 +138,22 @@ export function QuestionsLeftOut({
           {message}
         </p>
       ))}
+      {pictures.map((p) => {
+        const name = segmentName?.(p.segment) ?? null;
+        return (
+          <div
+            key={`${p.segment}:${p.message}`}
+            className="w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4"
+          >
+            {name && (
+              <span className="block text-[12.5px] font-semibold text-nevo-near-black/60">{name}</span>
+            )}
+            <p className={cn("text-[14.5px] leading-[1.55] text-nevo-near-black/82", name && "mt-1")}>
+              {p.message}
+            </p>
+          </div>
+        );
+      })}
       {left.map((note, i) => (
         <div
           key={i}

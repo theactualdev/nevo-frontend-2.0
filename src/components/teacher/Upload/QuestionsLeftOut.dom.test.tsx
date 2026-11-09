@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
-import { QuestionsLeftOut, questionsLeftOut, readerNotes } from "./QuestionsLeftOut";
+import { QuestionsLeftOut, picturesRefused, questionsLeftOut, readerNotes } from "./QuestionsLeftOut";
 
 /**
  * The questions the parse left out (`question_unusable` review notes), in the
@@ -160,10 +160,30 @@ describe("how the file was read", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("never shows a blocked picture's note here, nor which rule fired or when", () => {
-    const { container } = render(<QuestionsLeftOut notes={[blocked, reader()]} />);
+  // Hub, 9 Nov, option (b): here until the lesson review can read it.
+  it("says a refused picture's own sentence under its segment's name - and never which rule fired or when", () => {
+    const { container } = render(
+      <QuestionsLeftOut
+        notes={[blocked, reader()]}
+        segmentName={(key) => (key === "k-2" ? "Segment 2" : null)}
+      />,
+    );
 
-    expect(screen.queryByText(/refused the picture/)).not.toBeInTheDocument();
+    expect(screen.getByText(blocked.message)).toBeInTheDocument();
+    expect(screen.getByText("Segment 2")).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/violence|image_prompt|4\.2/);
+  });
+
+  it("still says it, under no name, where the screen has no such segment", () => {
+    const { container } = render(<QuestionsLeftOut notes={[blocked]} segmentName={() => null} />);
+
+    expect(screen.getByText(blocked.message)).toBeInTheDocument();
+    expect(container.querySelectorAll("span")).toHaveLength(0);
+  });
+
+  it("reads only the segment and the sentence, once each", () => {
+    expect(picturesRefused([blocked, blocked, { ...blocked, message: "" }, { ...blocked, segment: null }])).toEqual([
+      { segment: "k-2", message: blocked.message },
+    ]);
   });
 });
