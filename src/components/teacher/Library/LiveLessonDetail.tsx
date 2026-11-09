@@ -392,7 +392,7 @@ export function LiveLessonDetail({
     outstandingPoints > 0
       ? "A few key points need a quick check before you assign."
       : outstandingSections > 0
-        ? "A few sections need a quick check before you assign."
+        ? "A few segments need a quick check before you assign."
         : "";
 
   // Group by module where the parser made any. A segment the modules do not
@@ -503,14 +503,15 @@ export function LiveLessonDetail({
               </p>
             )}
             <span className="mt-[5px] block text-[14px] text-nevo-near-black/60 xl:mt-1.5 xl:text-[14.5px]">
-              {/* C06b counts KEY POINTS while a review is open and sections
+              {/* C06b counts KEY POINTS while a review is open and segments
                   otherwise - the meta line describes the thing the screen is
-                  currently about. */}
+                  currently about. C06b draws "sections", but the number is
+                  `segmentCount` (Hub, 9 Nov: say segments). */}
               {/* C06b's header leads with the subject, as the card does. */}
               {lesson.subject && `${lesson.subject} · `}
               {waiting > 0 && review.keyPoints.length > 0
                 ? plural(review.keyPoints.length, "key point", "key points")
-                : plural(lesson.segmentCount, "section", "sections")}
+                : plural(lesson.segmentCount, "segment", "segments")}
               {students > 0 &&
                 ` · Assigned to ${students} ${students === 1 ? "student" : "students"}`}
               {nextDue &&
@@ -638,7 +639,7 @@ export function LiveLessonDetail({
                   Ready when you are
                 </p>
                 <p className="mt-[5px] text-sm leading-[1.55] text-nevo-near-black/68 xl:mt-1.5 xl:text-[14.5px]">
-                  {`Nevo has prepared this lesson into ${plural(lesson.segmentCount, "section", "sections")}. Assign it to a class and it'll open for students at the time you choose.`}
+                  {`Nevo has prepared this lesson into ${plural(lesson.segmentCount, "segment", "segments")}. Assign it to a class and it'll open for students at the time you choose.`}
                 </p>
               </div>
             </div>

@@ -80,11 +80,14 @@ describe("what the teacher is told", () => {
     render(<SplitSourceNotice segments={[FALLBACK(), FALLBACK()]} />);
 
     expect(
-      screen.getByText(/your document, split into sections/i),
+      screen.getByText(/your document, split into segments/i),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/text from the file you uploaded/i),
+      screen.getByText(/every segment below is text from the file you uploaded/i),
     ).toBeInTheDocument();
+    // It counts segments; "sections" was untrue on a lesson with none (Hub's
+    // live test, 9 Nov).
+    expect(screen.queryByText(/section/i)).not.toBeInTheDocument();
   });
 
   it("stays quiet when one section in a built lesson fell back", () => {
@@ -98,14 +101,14 @@ describe("what the teacher is told", () => {
     render(<SplitSourceNotice segments={[FALLBACK(), BUILT(), BUILT()]} />);
 
     expect(
-      screen.queryByText(/your document, split into sections/i),
+      screen.queryByText(/your document, split into segments/i),
     ).not.toBeInTheDocument();
   });
 
   it("stays quiet on an ordinary lesson", () => {
     render(<SplitSourceNotice segments={[BUILT(), BUILT()]} />);
 
-    expect(screen.queryByText(/split into sections/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/split into segments/i)).not.toBeInTheDocument();
   });
 
   it("does not claim the lesson is broken", () => {

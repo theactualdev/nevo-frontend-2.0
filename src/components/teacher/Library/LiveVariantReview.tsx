@@ -134,7 +134,7 @@ function VariantBody({
     const v = segment.textVariant;
     if (!v)
       return (
-        <Empty>Nevo has not generated a written version of this section.</Empty>
+        <Empty>Nevo has not generated a written version of this segment.</Empty>
       );
     /*
      * SCRUM-224: WHAT THE CHILD SEES, THE TEACHER REVIEWS. The text segment
@@ -211,14 +211,14 @@ function VariantBody({
     const v = segment.visualVariant;
     if (!v)
       return (
-        <Empty>Nevo has not generated a visual version of this section.</Empty>
+        <Empty>Nevo has not generated a visual version of this segment.</Empty>
       );
     return (
       <div className="flex flex-col gap-3">
         {v.imageUrl && (
           <IllustrationWrapper
             src={v.imageUrl}
-            alt={v.caption || "Visual version of this section"}
+            alt={v.caption || "Visual version of this segment"}
             width={720}
             height={420}
             className="rounded-[10px]"
@@ -424,7 +424,7 @@ function VariantBody({
    */
   const v = segment.calculationVariant;
   if (!v)
-    return <Empty>Nevo has not generated worked steps for this section.</Empty>;
+    return <Empty>Nevo has not generated worked steps for this segment.</Empty>;
   return (
     <div className="flex flex-col gap-3">
       {v.fullEquation && (
@@ -460,7 +460,7 @@ function VariantBody({
           ))}
         </ol>
       ) : (
-        <Empty>The worked steps did not come through for this section.</Empty>
+        <Empty>The worked steps did not come through for this segment.</Empty>
       )}
       {v.completionStatement && (
         <p className="text-[13.5px] leading-[1.55] text-nevo-near-black/72">
@@ -514,7 +514,7 @@ export function LiveVariantReview({
         </Link>
 
         <h1 className="mt-0.5 text-[22px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[26px]">
-          {`${lessonTitle} · Section ${sectionIndex}`}
+          {`${lessonTitle} · Segment ${sectionIndex}`}
         </h1>
         {segment.title && (
           <p className="mt-1 text-[14px] text-nevo-near-black/60">
@@ -593,8 +593,8 @@ export function LiveVariantReview({
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <p className="text-[13px] text-nevo-near-black/60">
             {segmentCount
-              ? `Reviewing section ${sectionIndex} of ${segmentCount}`
-              : `Reviewing section ${sectionIndex}`}
+              ? `Reviewing segment ${sectionIndex} of ${segmentCount}`
+              : `Reviewing segment ${sectionIndex}`}
           </p>
         </div>
 
@@ -604,11 +604,12 @@ export function LiveVariantReview({
           sections, six round trips. The frame draws a pill per section under
           the review: this one filled, the ones before it tinted, the rest
           plain. Links rather than buttons, because each is still its own
-          address and the back button should walk them. "Section", as this
-          screen says everywhere else, where the frame says "Segment".
+          address and the back button should walk them. "Segment", as the
+          frame says (C16d: "Photosynthesis · Segment 2"): this screen said
+          "Section", which since C07d names the groups segments sit in (8 Nov).
         */}
         {segmentCount !== undefined && segmentCount > 1 && (
-          <nav aria-label="Sections" className="mt-4 flex flex-wrap gap-1.5 xl:gap-2">
+          <nav aria-label="Segments" className="mt-4 flex flex-wrap gap-1.5 xl:gap-2">
             {Array.from({ length: segmentCount }, (_, i) => i + 1).map((n) => (
               <Link
                 key={n}
@@ -623,7 +624,7 @@ export function LiveVariantReview({
                       : "bg-nevo-cream-elevated font-normal text-nevo-near-black/70 hover:brightness-95",
                 )}
               >
-                {`Section ${n}`}
+                {`Segment ${n}`}
               </Link>
             ))}
           </nav>

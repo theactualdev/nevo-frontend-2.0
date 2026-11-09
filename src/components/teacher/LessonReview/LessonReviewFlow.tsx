@@ -320,7 +320,7 @@ export function LessonReviewFlow({
         (pointsSigned
           ? signoffLine(review.keyPointApproval!)
           : missingLeft > 0
-            ? `Decide the ${plural(missingLeft, "section", "sections")} with no key point first: add one or leave it out.`
+            ? `Decide the ${plural(missingLeft, "segment", "segments")} with no key point first: add one or leave it out.`
             : flagsLeft > 0
               ? `${flagsLeft} flagged above - handle or accept, your call.`
               : "One press keeps every key point."),
@@ -1129,7 +1129,7 @@ function StepRewrites({
               onClick={() => setAll(true)}
               className="cursor-pointer border-none bg-transparent px-0.5 py-1 text-left text-[12.5px] text-nevo-near-black/55 hover:text-nevo-navy"
             >
-              {`+ ${rows.length - SHOWN} more ${rows.length - SHOWN === 1 ? "section" : "sections"}, each rewritten the same way`}
+              {`+ ${rows.length - SHOWN} more ${rows.length - SHOWN === 1 ? "segment" : "segments"}, each rewritten the same way`}
             </button>
           )}
         </div>

@@ -35,7 +35,7 @@ import type { LessonSegment } from "@/lib/api/lessons";
 /** Segments Nevo split by rule rather than read. */
 export function splitBySource(segments: LessonSegment[]): {
   count: number;
-  /** Every section in the lesson, so there is no generated version at all. */
+  /** Every segment in the lesson, so there is no generated version at all. */
   whole: boolean;
 } {
   const count = segments.filter((s) =>
@@ -68,15 +68,17 @@ export function SplitSourceNotice({ segments }: { segments: LessonSegment[] }) {
       </span>
       <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
         <strong className="font-semibold text-nevo-near-black">
-          This lesson is your document, split into sections.
+          This lesson is your document, split into segments.
         </strong>{" "}
         {/* Says what it IS, not what went wrong. A teacher cannot act on
             "generation was rejected", and the thing they need to know is what
             they are looking at - because the review means something different
             when the words are their own. */}
-        Nevo couldn&rsquo;t build its own version of this one, so every section
+        {/* SEGMENTS, not sections: it counts `segments`, and a lesson with
+            no sections said "every section below" (Hub's live test, 9 Nov). */}
+        Nevo couldn&rsquo;t build its own version of this one, so every segment
         below is text from the file you uploaded rather than Nevo&rsquo;s
-        reading of it. It will still work for a class; the sections just
+        reading of it. It will still work for a class; the segments just
         won&rsquo;t adapt the way a built lesson does.
       </p>
     </div>

@@ -237,9 +237,10 @@ function toCard(lesson: LessonSummary): LibraryCard {
     // real lesson is never 0 minutes and "0 min" would be a claim.
     meta: [
       // C06's meta leads with the subject. A lesson uploaded without one
-      // simply starts with its sections.
+      // simply starts with its count - of SEGMENTS, which `n` is, so it says
+      // segments (Hub, 9 Nov), where C06 draws "sections".
       lesson.subject || null,
-      `${n} ${n === 1 ? "section" : "sections"}`,
+      `${n} ${n === 1 ? "segment" : "segments"}`,
       SOURCE_LABEL[lesson.sourceType] ?? lesson.sourceType,
       lesson.estimatedMinutes ? `${lesson.estimatedMinutes} min` : null,
     ]

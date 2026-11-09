@@ -85,7 +85,7 @@ describe("a live lesson's pictures and narration", () => {
   it("says where the lesson is live and what is in it", async () => {
     await open();
 
-    expect(screen.getByText("Live with JSS 2A · 3 sections · pictures and narration")).toBeInTheDocument();
+    expect(screen.getByText("Live with JSS 2A · 3 segments · pictures and narration")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Lesson Detail/ })).toHaveAttribute("href", "/teacher/lessons/l-1");
   });
 

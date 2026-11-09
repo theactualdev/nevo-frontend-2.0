@@ -98,7 +98,7 @@ describe("the progress line", () => {
   it("counts sections when the total is known", () => {
     show({}, 5);
 
-    expect(screen.getByText(/reviewing section 2 of 5/i)).toBeInTheDocument();
+    expect(screen.getByText(/reviewing segment 2 of 5/i)).toBeInTheDocument();
   });
 
   it("states no total it was not given", () => {
@@ -113,7 +113,7 @@ describe("the progress line", () => {
       />,
     );
 
-    expect(screen.getByText(/reviewing section 2$/i)).toBeInTheDocument();
+    expect(screen.getByText(/reviewing segment 2$/i)).toBeInTheDocument();
     expect(screen.queryByText(/of 5/i)).not.toBeInTheDocument();
   });
 });
@@ -153,25 +153,25 @@ describe("the picture's sign-off line", () => {
  * C07b draws a pill per section.
  */
 describe("the section pills", () => {
-  const pills = () => screen.getByRole("navigation", { name: "Sections" });
+  const pills = () => screen.getByRole("navigation", { name: "Segments" });
 
   it("draws one per section, each its own address", () => {
     show({}, 5);
     const links = Array.from(pills().querySelectorAll("a"));
 
     expect(links.map((a) => a.textContent)).toEqual([
-      "Section 1",
-      "Section 2",
-      "Section 3",
-      "Section 4",
-      "Section 5",
+      "Segment 1",
+      "Segment 2",
+      "Segment 3",
+      "Segment 4",
+      "Segment 5",
     ]);
     expect(links[3]).toHaveAttribute("href", "/teacher/lessons/l-1/variants?section=4");
   });
 
   it("marks this section as the current one, in the frame's filled pill", () => {
     show({}, 5);
-    const here = screen.getByRole("link", { name: "Section 2" });
+    const here = screen.getByRole("link", { name: "Segment 2" });
 
     expect(here).toHaveAttribute("aria-current", "page");
     expect(here.className).toMatch(/bg-nevo-navy/);
@@ -180,15 +180,15 @@ describe("the section pills", () => {
   it("tints the sections before this one and leaves the rest plain", () => {
     show({}, 5);
 
-    expect(screen.getByRole("link", { name: "Section 1" }).className).toMatch(/bg-nevo-violet\/12/);
-    expect(screen.getByRole("link", { name: "Section 3" }).className).toMatch(/bg-nevo-cream-elevated/);
-    expect(screen.getByRole("link", { name: "Section 3" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Segment 1" }).className).toMatch(/bg-nevo-violet\/12/);
+    expect(screen.getByRole("link", { name: "Segment 3" }).className).toMatch(/bg-nevo-cream-elevated/);
+    expect(screen.getByRole("link", { name: "Segment 3" })).not.toHaveAttribute("aria-current");
   });
 
   it("draws none for a lesson of one section", () => {
     show({}, 1);
 
-    expect(screen.queryByRole("navigation", { name: "Sections" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Segments" })).not.toBeInTheDocument();
   });
 });
 

@@ -255,7 +255,7 @@ describe("the key points", () => {
     await open(2);
 
     expect(screen.getByRole("button", { name: "Accept all 3 key points" })).toBeDisabled();
-    expect(screen.getByText(/Decide the 1 section with no key point first/)).toBeInTheDocument();
+    expect(screen.getByText(/Decide the 1 segment with no key point first/)).toBeInTheDocument();
   });
 
   it("writes 'Leave it out' straight back", async () => {
@@ -509,7 +509,7 @@ describe("the same at 73 sections as at 7", () => {
     const steps = within(screen.getByRole("navigation", { name: "Lesson review steps" }));
     fireEvent.click(steps.getByRole("button", { name: /Rewrites/ }));
     expect(
-      screen.getByRole("button", { name: "+ 68 more sections, each rewritten the same way" }),
+      screen.getByRole("button", { name: "+ 68 more segments, each rewritten the same way" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Accept all rewrites" })).toBeInTheDocument();
   });

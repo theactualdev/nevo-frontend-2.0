@@ -194,7 +194,7 @@ describe("assigning from the finish screen", () => {
 
     // SCRUM-319: pressable, never disabled; the reason comes with the tap.
     fireEvent.click(await screen.findByRole("button", { name: "Assign to a class" }));
-    expect(await screen.findByText("1 section still to check")).toBeInTheDocument();
+    expect(await screen.findByText("1 segment still to check")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Assign to a class" })).not.toBeInTheDocument();
   });
 

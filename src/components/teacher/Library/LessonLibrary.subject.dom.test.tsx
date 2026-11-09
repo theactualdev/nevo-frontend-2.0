@@ -345,7 +345,8 @@ describe("the card's meta line", () => {
     expect(__toCardForTest(lesson()).meta.startsWith("Mathematics · ")).toBe(true);
   });
 
-  it("starts with the sections when the lesson has no subject", () => {
-    expect(__toCardForTest(lesson({ subject: null })).meta).toMatch(/^\d+ sections?/);
+  it("starts with the segments when the lesson has no subject", () => {
+    // `segmentCount` counts segments, so the card says segments (Hub, 9 Nov).
+    expect(__toCardForTest(lesson({ subject: null })).meta).toMatch(/^\d+ segments?/);
   });
 });

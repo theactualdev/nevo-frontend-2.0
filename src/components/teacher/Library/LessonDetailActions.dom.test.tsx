@@ -96,7 +96,7 @@ describe("what is left to check", () => {
     );
     press();
 
-    expect(screen.getByText("1 section still to check")).toBeInTheDocument();
+    expect(screen.getByText("1 segment still to check")).toBeInTheDocument();
   });
 
   it("names both when both are outstanding", () => {
@@ -116,7 +116,7 @@ describe("what is left to check", () => {
     press();
 
     expect(
-      screen.getByText("2 key points and 1 section still to check"),
+      screen.getByText("2 key points and 1 segment still to check"),
     ).toBeInTheDocument();
   });
 });

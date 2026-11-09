@@ -42,11 +42,16 @@ function FlagIcon() {
   );
 }
 
-/** "1 section has none" / "3 flagged for a change" / "every section". */
+/**
+ * "1 segment has none" / "3 flagged for a change" / "every segment". The count
+ * is SEGMENTS without a picture or a recording (`reviewModel`), so it says
+ * segments: "8 sections have none" on a lesson with no sections was untrue
+ * (Hub's live test, 9 Nov).
+ */
 function coverNote(flagged: number, without: number, flaggedWord: string): string {
   if (flagged > 0) return `${flagged} ${flaggedWord}`;
-  if (without > 0) return `${without} ${without === 1 ? "section has" : "sections have"} none`;
-  return "every section";
+  if (without > 0) return `${without} ${without === 1 ? "segment has" : "segments have"} none`;
+  return "every segment";
 }
 
 export function StepMedia({

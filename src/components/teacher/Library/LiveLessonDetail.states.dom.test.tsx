@@ -126,7 +126,7 @@ describe("a lesson with nothing outstanding", () => {
 
     expect(screen.getByText("Ready when you are")).toBeInTheDocument();
     expect(
-      screen.getByText(/Nevo has prepared this lesson into 5 sections/),
+      screen.getByText(/Nevo has prepared this lesson into 5 segments/),
     ).toBeInTheDocument();
   });
 
@@ -200,7 +200,8 @@ describe("a lesson with key points waiting", () => {
   it("counts key points in the meta line, not sections", () => {
     /*
      * C06b reads "Biology · This term · 6 key points" in this state and
-     * "5 sections" in the others - the meta line describes the thing the
+     * "5 sections" in the others (said as "5 segments", since it counts
+     * segments - Hub, 9 Nov) - the meta line describes the thing the
      * screen is currently about. This counted sections in every state.
      */
     show();
@@ -522,7 +523,7 @@ describe("a lesson with nothing to send", () => {
     showAs({ status: "failed", segments: [], segmentCount: 0 });
 
     expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
-    expect(screen.queryByText(/prepared this lesson into 0 sections/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/prepared this lesson into 0 segments/)).not.toBeInTheDocument();
   });
 
   it("offers no Assign when its parse failed", () => {
