@@ -169,6 +169,10 @@ export type UploadReasonCode =
   | "save_failed"
   | "output_limit"
   | "partial_reading"
+  /** A safety check refused the lesson's own text (86f8e10). It refuses again. */
+  | "safety_held"
+  /** The safety check could not run. Trying again shortly works. */
+  | "safety_check_unavailable"
   | "unclassifiable_question"
   | "unknown";
 

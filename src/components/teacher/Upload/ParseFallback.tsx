@@ -29,13 +29,25 @@ export type FallbackKind =
   | "unreadable"
   /** The parse started and could not finish. */
   | "parseFailed"
+  /** A safety check stopped the parse (`reasonCode: "safety_held"`). */
+  | "safetyHeld"
   | "unreachable";
+
+/**
+ * WHEN A SAFETY CHECK STOPS NEVO READING A LESSON (Lydia, 9 Nov, item 6), in
+ * Lydia's words and nothing beyond them: "Not which rule fired, not what triggered
+ * it, and never anything that quotes or points at the content that caused it."
+ * Shown for `reasonCode: "safety_held"` wherever a stopped upload is shown.
+ */
+export const SAFETY_HELD_LINE =
+  "Nevo stopped partway through this lesson because of a safety check, so the sections it would normally propose are not here. Nothing has reached your class.";
 
 export const FALLBACK_HEADINGS: Record<FallbackKind, string> = {
   noBoundary: "One continuous lesson",
   partial: "Read most of your block",
   unreadable: "We hit a snag",
   parseFailed: "We hit a snag",
+  safetyHeld: "We hit a snag",
   unreachable: "We hit a snag",
 };
 
@@ -44,6 +56,9 @@ const FOOT_NOTES: Record<FallbackKind, string> = {
   partial: "Your progress is saved.",
   unreadable: "Your progress is saved - nothing was lost.",
   parseFailed: "Nothing you did is lost - the file is fine to send again.",
+  // Nothing: sending it again would be refused again, and Lydia's line already
+  // says the one thing a teacher needs - that nothing reached the class.
+  safetyHeld: "",
   // C07f's own footnote for this state, from the 31 Aug frame.
   unreachable: "Nothing is wrong with your file - try again in a moment.",
 };
@@ -68,7 +83,7 @@ const ghostBtn =
  * this leaves the wizard for the library, which is where a teacher who has
  * given up on this file wants to be.
  */
-function BackToLibrary() {
+export function BackToLibrary() {
   return (
     <Link
       href="/teacher/lessons"
@@ -363,6 +378,34 @@ export function ParseFallback({
                   tells a teacher their file was the problem when we have just
                   said it was not - and sends them to find one they do not
                   need. One next action, chosen by the failure. */}
+            </div>
+          </div>
+        )}
+
+        {kind === "safetyHeld" && (
+          /*
+            HER LINE, AND NOTHING BEYOND IT. Not the server's own sentence
+            (`failureReason`), which Lydia's words replace; not the
+            reference, which is a way to report the check and Lydia's to add
+            if wanted. No "Try this file again": a refusal refuses again (backend
+            86f8e10). And no "Try another file", which would teach a teacher to
+            distrust a lesson that may be fine - the outcome Lydia called the
+            worst possible one.
+          */
+          <div className="mx-auto flex max-w-[560px] flex-col items-center pt-6 text-center xl:pt-10">
+            <span className="flex size-14 shrink-0 items-center justify-center rounded-[16px] bg-nevo-violet/18 text-nevo-navy">
+              {/* The paused read, as for a parse that stopped: it says the
+                  reading stopped, never that the page was at fault. */}
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M4 5a2 2 0 0 1 2-2h5v16H6a2 2 0 0 0-2 2z" />
+                <path d="M15 8v8M19 8v8" />
+              </svg>
+            </span>
+            <p className="mt-[18px] max-w-[460px] text-[16px] leading-[1.6] text-nevo-near-black">
+              {SAFETY_HELD_LINE}
+            </p>
+            <div className="mt-[22px] flex flex-wrap items-center justify-center gap-3">
+              <BackToLibrary />
             </div>
           </div>
         )}
