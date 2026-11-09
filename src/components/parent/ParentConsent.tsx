@@ -734,8 +734,9 @@ function AccountSetup({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
-  // A screen that has gone never navigates (see `useStillHere`): "Maybe
-  // later" while the code is checked must not end on the portal anyway.
+  // A screen that has gone never navigates (see `useStillHere`): leaving the
+  // page while the code is checked - Back, or the route unmounting it - must
+  // not end on the portal anyway.
   const hereRef = useStillHere();
 
   const code = digits.join("");
@@ -772,7 +773,8 @@ function AccountSetup({
       });
       // A hard navigation, not a router push: the session and its mirror cookie
       // must have settled before the portal is asked for. Not from a screen
-      // the parent has already left.
+      // the parent has already left; the session stays, since the server did
+      // sign them in.
       if (hereRef.current) window.location.assign("/parent-portal");
     } catch (e) {
       setBusy(false);

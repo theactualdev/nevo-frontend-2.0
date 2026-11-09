@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import { ApiError } from "@/lib/api/client";
 import { parentApi } from "@/lib/api/parent";
 import { setSession } from "@/lib/auth/session";
@@ -68,6 +69,9 @@ export function ParentSignIn() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
+  // A screen that has gone never navigates (see `useStillHere`): Back during
+  // "Checking…" must not end on the portal anyway.
+  const hereRef = useStillHere();
 
   const code = digits.join("");
 
@@ -109,8 +113,9 @@ export function ParentSignIn() {
         role: session.role,
       });
       // A hard navigation: the session and its mirror cookie must have settled
-      // before the portal is asked for.
-      window.location.assign("/parent-portal");
+      // before the portal is asked for. Not from a screen the parent has left;
+      // the session stays, since the server did sign them in.
+      if (hereRef.current) window.location.assign("/parent-portal");
     } catch (e) {
       setBusy(false);
       setDigits(["", "", "", ""]);

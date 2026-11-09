@@ -440,8 +440,10 @@ describe("setting up a parent account", () => {
 
   /*
    * A SCREEN THAT HAS GONE NEVER NAVIGATES (the hub, 8 Nov). The portal is a
-   * hard navigation once the code is good; a parent who has left the screen
-   * while it was checked - "Maybe later", Back - is not taken there anyway.
+   * hard navigation once the code is good; a parent who has left the page
+   * while it was checked - Back, or the route unmounting it - is not taken
+   * there anyway. (The code step has no "Maybe later", and the confirm
+   * step's is disabled while busy.)
    */
   describe("the hard navigation to the portal", () => {
     const PARENT = {
