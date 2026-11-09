@@ -1775,8 +1775,12 @@ export function LessonPlayer({
    * sitting only: not a review, not a finished lesson looked at again, whose
    * sitting has ended. And only while a section is on screen: the
    * after-lesson questions name no section. See `useAttentionReports`.
+   *
+   * Where the player ends the sitting itself ("Leave for now"), it says so,
+   * and nothing more goes for it: the away as the lesson went drew a 404
+   * `active_session_not_found` on 9 Nov (Teslim: no event after the end).
    */
-  useAttentionReports({
+  const endFocusEvents = useAttentionReports({
     on: live && !review && !finished,
     sessionId: progress.sessionId,
     segmentId: phase === "segments" ? segment.id : null,
@@ -4389,6 +4393,8 @@ export function LessonPlayer({
           // says nothing about the lesson, which was finished before the review
           // began. Writing `exited` here would demote it on the way out.
           if (!review && !finished) {
+            // The sitting ends here: no focus event after it.
+            endFocusEvents();
             reportProgress(LESSON_STATUS.EXITED, { segment: index });
           }
           setEnding({ completionStatus: "exited", exitPosition: segment.id });

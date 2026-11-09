@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import { resetAttentionReports } from "@/hooks/useAttentionReports";
 import { clearSession, setSession } from "@/lib/auth/session";
@@ -163,6 +170,29 @@ describe("the section on screen, to its sitting", () => {
       ["return", SEG_1],
       ["return", SEG_2],
     ]);
+  });
+
+  it("sends nothing more once 'Leave for now' has ended the sitting", async () => {
+    // Case 11 of the 9 Nov run: the lesson went with one more event for the
+    // sitting the leave had just ended, answered 404.
+    const { unmount } = render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Leave for now",
+      }),
+    );
+    await settle();
+    expect(progress.report).toHaveBeenCalledWith("exited", { segment: 0 });
+
+    // Home takes over: the player goes.
+    unmount();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+
+    expect(sent()).toEqual([["return", SEG_1]]);
   });
 
   it("sends nothing before the sitting has opened", async () => {
