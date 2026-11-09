@@ -1,12 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ChildHeldLines, LINK_LIFETIME_LINE, isHeld } from "./childHeld";
 import { TryAgain } from "./TryAgain";
 import { ApiError } from "@/lib/api/client";
 import { parentApi, type ParentInvitation } from "@/lib/api/parent";
-import { AccountSetup, ParentConsent } from "./ParentConsent";
+import { ParentConsent } from "./ParentConsent";
 import { ParentDataManagement } from "./ParentDataManagement";
 
 /**
@@ -17,12 +15,7 @@ import { ParentDataManagement } from "./ParentDataManagement";
  * decide what to show; the record does:
  *
  *   not_sent / pending  -> D01b, the consent request
- *   confirmed           -> D01c, data management - with D01e's held card on
- *                          top when the date-of-birth check holds the child
- *                          (`ageCheck`, Teslim's item 16): sign in if they
- *                          have an account (`parentAccountReady`), set one up
- *                          if not. The rights stay below it - a held child's
- *                          parent keeps the route to them (NDPA s.31).
+ *   confirmed           -> D01c, data management
  *   withdrawn           -> D01c, which opens in its suspended state
  *
  * Backend made this possible on purpose: an already-decided link still
@@ -111,52 +104,17 @@ export function ParentPortal({ token }: { token: string }) {
   const decided =
     invitation.status === "confirmed" || invitation.status === "withdrawn";
 
+  /*
+   * NO "WELCOME BACK" CARD FOR A HELD CHILD (Lydia, 9 Nov, item 9). D01e's
+   * return state - sign in, or set up an account from this link - is the way
+   * back after Maybe later, which her part-three hold keeps from shipping
+   * ahead of the rest of that flow. It comes back as part of that flow when
+   * she clears the hold, never as a card on its own.
+   */
   return decided ? (
-    <ParentDataManagement
-      token={token}
-      invitation={invitation}
-      lead={
-        invitation.status === "confirmed" && isHeld(invitation.ageCheck) ? (
-          <ReturningHeld token={token} invitation={invitation} />
-        ) : null
-      }
-    />
+    <ParentDataManagement token={token} invitation={invitation} />
   ) : (
     <ParentConsent token={token} invitation={invitation} />
-  );
-}
-
-/**
- * D01e's return state: back through the same link, consent recorded, the
- * child held. Lydia's lines (SCRUM-321), then the one step that's theirs -
- * sign in, or set up the account they'll confirm from.
- */
-function ReturningHeld({ token, invitation }: { token: string; invitation: ParentInvitation }) {
-  const [skipped, setSkipped] = useState(false);
-  const name = invitation.studentFirstName;
-  const child = name ? name.charAt(0).toUpperCase() + name.slice(1) : "Your child";
-  return (
-    <div className="mb-3.5 rounded-[14px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
-      <h2 className="text-[18px] font-semibold text-nevo-near-black">Welcome back.</h2>
-      <p className="mt-1.5 text-[14.5px] leading-[1.55] text-nevo-near-black/68">
-        {child}&rsquo;s consent is recorded.
-      </p>
-      <ChildHeldLines
-        child={child}
-        className="mt-1.5 mb-0 text-[14.5px] font-medium leading-[1.55] text-nevo-near-black/80"
-      />
-      {invitation.parentAccountReady ? (
-        <Link
-          href="/parent-sign-in"
-          className="mt-4 flex h-12 w-full cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy px-5 text-[15px] font-semibold text-nevo-cream"
-        >
-          Sign in
-        </Link>
-      ) : skipped ? null : (
-        <AccountSetup token={token} contact={invitation.parentContact} onSkip={() => setSkipped(true)} />
-      )}
-      <p className="mt-4 mb-0 text-[12.5px] leading-[1.5] text-nevo-near-black/55">{LINK_LIFETIME_LINE}</p>
-    </div>
   );
 }
 
