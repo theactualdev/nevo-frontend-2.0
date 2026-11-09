@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, incidentId } from "@/lib/api/client";
+import type { UploadReasonCode } from "@/lib/api/uploads";
 import { awaitParseRun, contentApi } from "@/lib/api/content";
 import { lessonsApi, type LessonDetailResponse } from "@/lib/api/lessons";
 
@@ -42,6 +43,11 @@ export interface LessonRegenerate {
   /** The backend's reference for a failure, to quote in a report. */
   incident: string | null;
   /**
+   * The failed run's `reasonCode` (backend 06396db). Read for `safety_held`,
+   * which the screen says in Lydia's words (9 Nov, item 6). Null otherwise.
+   */
+  reasonCode: UploadReasonCode | null;
+  /**
    * The last re-read's own review notes, null until one has finished. They
    * describe the lesson as re-read, so a screen showing the upload's notes
    * swaps to these, never keeping notes about a lesson that is gone.
@@ -57,6 +63,7 @@ export function useLessonRegenerate(
   const [state, setState] = useState<RegenerateState>("idle");
   const [failureReason, setFailureReason] = useState<string | null>(null);
   const [incident, setIncident] = useState<string | null>(null);
+  const [reasonCode, setReasonCode] = useState<UploadReasonCode | null>(null);
   const [reviewNotes, setReviewNotes] = useState<unknown[] | null>(null);
   const abort = useRef<AbortController | null>(null);
   const running = useRef(false);
@@ -86,6 +93,7 @@ export function useLessonRegenerate(
     setState("running");
     setFailureReason(null);
     setIncident(null);
+    setReasonCode(null);
 
     void contentApi
       .regenerate(lessonId)
@@ -97,6 +105,7 @@ export function useLessonRegenerate(
           // Kept for the screen, not only thrown: these are the run's answer.
           setFailureReason(parseRun.failureReason ?? null);
           setIncident(parseRun.incidentId ?? null);
+          setReasonCode(parseRun.reasonCode ?? null);
           throw new ApiError(
             500,
             parseRun.failureReason ?? "The parse failed.",
@@ -125,5 +134,5 @@ export function useLessonRegenerate(
       });
   }, []);
 
-  return { state, run, failureReason, incident, reviewNotes };
+  return { state, run, failureReason, incident, reasonCode, reviewNotes };
 }

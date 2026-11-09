@@ -298,3 +298,55 @@ describe("assigning from the finish screen", () => {
     await waitFor(() => expect(review).toHaveBeenCalledTimes(2));
   });
 });
+
+/**
+ * A RE-READ A SAFETY CHECK STOPPED (`reasonCode: "safety_held"`, backend
+ * 06396db). Lydia's line (9 Nov, item 6), as the upload screens say it: not
+ * the server's sentence, no reference, and no way to send it again.
+ */
+describe("a re-read a safety check stopped", () => {
+  const LINE =
+    "Nevo stopped partway through this lesson because of a safety check, so the sections it would normally propose are not here. Nothing has reached your class.";
+  const SERVER =
+    "Our safety check held this file back, so the lesson has not been prepared. If the material is ordinary classroom content, tell us the reference below and we will look at the check rather than your file.";
+  const show = () =>
+    render(
+      <UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} onRegenerated={vi.fn()} />,
+    );
+
+  it("says Lydia's line, and nothing beyond it", async () => {
+    awaitParseRun.mockResolvedValue({
+      status: "failed",
+      finished: true,
+      failureReason: SERVER,
+      incidentId: "ca8435c98d08",
+      reasonCode: "safety_held",
+    });
+    show();
+
+    tryAgain();
+
+    expect(await screen.findByText(LINE)).toBeInTheDocument();
+    expect(screen.queryByText(SERVER)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ca8435c98d08/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try that again" })).not.toBeInTheDocument();
+  });
+
+  it("leaves any other failed re-read as it was", async () => {
+    awaitParseRun.mockResolvedValue({
+      status: "failed",
+      finished: true,
+      failureReason: "Our safety check could not run, so the lesson has not been prepared.",
+      reasonCode: "safety_check_unavailable",
+    });
+    show();
+
+    tryAgain();
+
+    expect(
+      await screen.findByText("Our safety check could not run, so the lesson has not been prepared."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try that again" })).toBeInTheDocument();
+  });
+});

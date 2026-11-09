@@ -1,5 +1,6 @@
 import { api } from "./client";
 import type { ComprehensionCheckpoint } from "./checkpoints";
+import type { UploadReasonCode } from "./uploads";
 import type {
   AudioVariant,
   CalculationVariant,
@@ -141,6 +142,13 @@ export interface ParseRunStatus {
   error?: string | null;
   /** Twelve hex characters, in the log beside the exception. */
   incidentId?: string | null;
+  /**
+   * WHY, AS A CODE, for a failed run only (backend 06396db): the same
+   * `UploadReasonCode` an upload carries, so a re-read a safety check stopped
+   * (`safety_held`) can say so in Lydia's words rather than echo a generic
+   * failure. Null unless the run failed; never which rule fired.
+   */
+  reasonCode?: UploadReasonCode | null;
   reviewNotes: Record<string, unknown>[];
   segmentCount: number;
   /** Segments that are split source text rather than generated content. */

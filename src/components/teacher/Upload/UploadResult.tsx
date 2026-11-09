@@ -11,7 +11,7 @@ import type { LessonDetailResponse } from "@/lib/api/lessons";
 import { SplitSourceNotice } from "@/components/teacher/Library/SplitSourceNotice";
 import { stillToCheck } from "@/components/teacher/Library/LessonDetailActions";
 import { assignRefusal, reviewHrefFor } from "@/lib/lessons/signOff";
-import { IncidentLine } from "./ParseFallback";
+import { IncidentLine, SAFETY_HELD_LINE } from "./ParseFallback";
 import { FinishBlock } from "./FinishBlock";
 import { finishView } from "@/components/teacher/LessonReview/reviewModel";
 
@@ -89,6 +89,13 @@ export function UploadResult({
   const blocked = !verdict.ready || awaitingReview || checking;
   const review = lesson.reviewSegmentCount;
   const rereading = regenerate.state === "running";
+  /*
+   * A RE-READ A SAFETY CHECK STOPPED (`reasonCode: "safety_held"`, backend
+   * 06396db). Said in Lydia's words, as the upload screens say it (9 Nov, item
+   * 6), and with no way to send it again: a refusal refuses again. The lesson
+   * above is untouched - the re-read replaces it only when it finishes.
+   */
+  const rereadHeld = regenerate.state === "failed" && regenerate.reasonCode === "safety_held";
   /* SCRUM-319: Assign stays pressable; a tap while held explains it. */
   const [explained, setExplained] = useState(false);
   const refusal = assignRefusal(lesson.id, verdict.outstandingSteps);
@@ -222,7 +229,7 @@ export function UploadResult({
         {/* Only where a caller can take the new lesson. No handler means no
             control, rather than a button that reads the lesson again and
             throws the result away. */}
-        {onRegenerated && (
+        {onRegenerated && !rereadHeld && (
           <button
             type="button"
             onClick={() => regenerate.run(lesson.id)}
@@ -265,7 +272,15 @@ export function UploadResult({
         </p>
       )}
 
-      {regenerate.state === "failed" && (
+      {rereadHeld && (
+        <p className="mt-3 max-w-[62ch] text-[14px] leading-[1.55] text-nevo-near-black/68">
+          {/* Lydia's line and nothing beyond it: not the server's sentence, not
+              the reference (as on the upload screens). */}
+          {SAFETY_HELD_LINE}
+        </p>
+      )}
+
+      {regenerate.state === "failed" && !rereadHeld && (
         <>
           <p className="mt-3 max-w-[62ch] text-[14px] leading-[1.55] text-nevo-near-black/68">
             {/* The server's reason leads where the parse gave one - as it
