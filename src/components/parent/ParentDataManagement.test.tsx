@@ -380,6 +380,24 @@ describe("restoring access is the parent's, never the school's", () => {
     expect(screen.queryByRole("button", { name: /Restore consent/i })).toBeNull();
   });
 
+  it("on the emailed link, offers a way to sign in - and no Restore (Lydia, 9 Nov, item 7)", () => {
+    render(<ParentDataManagement token={TOKEN} invitation={inv({ status: "withdrawn" })} />);
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/parent-sign-in");
+    expect(screen.queryByRole("button", { name: /Restore consent/i })).toBeNull();
+  });
+
+  it("signed in, there's no sign-in link - Restore is right there", () => {
+    render(
+      <ParentDataManagement
+        invitation={inv({ status: "withdrawn" })}
+        act={vi.fn()}
+        restore={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Restore consent" })).toBeInTheDocument();
+  });
+
   it("before a withdrawal, says the parent can restore it themselves later - Lydia's copy-pass line", () => {
     const { container } = render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
     fireEvent.click(screen.getByRole("button", { name: /^Withdraw consent$/i }));

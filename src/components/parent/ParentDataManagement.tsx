@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import {
@@ -302,6 +303,17 @@ export function ParentDataManagement({
                 {withdrawalSentence(invitation.decidedAt)}
               </p>
               <p className={BODY}>{RESTORE_LINE}</p>
+              {/*
+                * THE EMAILED LINK (Lydia, 9 Nov, item 7): restore stays
+                * signed-in only - links can be old, and forwarded to someone
+                * the consent was never given by. So the link page keeps the
+                * "from your account" line, no Restore, and a route to sign in.
+                */}
+              {token && !restore ? (
+                <Link href="/parent-sign-in" className={`${QUIET} block text-center`}>
+                  Sign in
+                </Link>
+              ) : null}
               {restore && !notTheirs ? (
                 <>
                   {/*
