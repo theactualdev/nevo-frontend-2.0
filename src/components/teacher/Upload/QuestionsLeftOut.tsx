@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { pageList } from "./pageList";
 
 /**
  * THE QUESTIONS NEVO LEFT OUT, said where a teacher is looking (Hub, 8 Nov).
@@ -17,9 +18,10 @@ import { cn } from "@/lib/utils";
  * ONLY THE TEACHER'S NOTES: `question_unusable`, and since 9 Nov
  * `lesson_text_blocked_by_safety` (backend 06396db: a safety check held back
  * the lesson Nevo wrote from one part of the file, so that part is plain text
- * with no questions), said first, in its `message` alone;
+ * with no questions), said first, in Lydia's words with its pages beside it;
  * `source_read_by_backup_reader` (bdc6bed, and since 06396db only when a page
- * gave up no text), next, in its `message` alone; and `visual_blocked_by_safety` (one per
+ * gave up no text), next, in Lydia's words (10 Nov: `TEXT_HELD_BACK_LINE`,
+ * `BACKUP_READER_LINE`); and `visual_blocked_by_safety` (one per
  * segment: the safety check refused that segment's picture; its text is
  * unchanged), its `message` alone under the segment's name as the screen
  * names it. Never its `secondsSpent`, nor the `categories` and `phase` it
@@ -36,6 +38,27 @@ import { cn } from "@/lib/utils";
  * were left out of the lesson.", which claims nothing about why.
  */
 
+/**
+ * LYDIA'S WORDS FOR TWO OF THE SERVER'S NOTES (10 Nov, items 1 and 3), said
+ * in place of the note's `message`. Neither invites a teacher to report
+ * anything: "No copy ships inviting a teacher to report anything until there
+ * is somewhere to do it." The server's sentences both did.
+ */
+export const TEXT_HELD_BACK_LINE =
+  "A safety check held back the lesson Nevo wrote from this part of your file, so it came through as plain text with no questions. Your file passed its own check, so your material is not the problem.";
+export const BACKUP_READER_LINE =
+  "Nevo had to read this file with a plainer reader, and some pages gave up no text at all. Columns, tables and handwriting may have come through jumbled or be missing entirely. Check the sections against your original, and if the lesson looks thin, upload the text itself.";
+
+/**
+ * THE REFUSED-PICTURE NOTE IS NOT SAID YET - the one switch (Hub, 11 Nov).
+ * The server's sentence ends by inviting the teacher to "tell us the lesson
+ * and this section", which Lydia's 10 Nov rule forbids until there is
+ * somewhere to tell us, and her own words for the note are in an addendum not
+ * yet received. It was never shown on main, so saying nothing keeps today's
+ * state. Turn it back on here, with her words in place of the `message`.
+ */
+export const SAY_REFUSED_PICTURES = false;
+
 /** Lydia's line (9 Nov) above a list whose note came with no sentence. */
 export const QUESTIONS_LEFT_OUT = "These questions were left out of the lesson.";
 
@@ -47,39 +70,51 @@ export interface QuestionsLeftOutNote {
 }
 
 /**
- * The backup-reader notes' own sentences, word for word (Hub, 9 Nov). Only
- * the `message`: nothing else on the note is for a teacher. One with no
- * sentence says nothing - there is no line of ours for it.
+ * Whether the backup reader struggled with this file: one line, Lydia's
+ * (`BACKUP_READER_LINE`), however many notes say so. The note's own
+ * `message` and `pageNumbers` are not read.
  */
 export function readerNotes(notes: readonly unknown[] | null | undefined): string[] {
   if (!Array.isArray(notes)) return [];
-  const out: string[] = [];
-  for (const note of notes) {
-    if (!note || typeof note !== "object") continue;
-    const n = note as Record<string, unknown>;
-    if (n.code !== "source_read_by_backup_reader") continue;
-    if (typeof n.message === "string" && n.message.trim()) out.push(n.message.trim());
-  }
-  return [...new Set(out)];
+  const said = notes.some(
+    (note) =>
+      !!note && typeof note === "object" && (note as Record<string, unknown>).code === "source_read_by_backup_reader",
+  );
+  return said ? [BACKUP_READER_LINE] : [];
+}
+
+export interface TextHeldBack {
+  /** "Pages 3 and 4", "Page 7" - the server's pages - or null where it sent none. */
+  pages: string | null;
 }
 
 /**
- * The held-back-lesson-text notes' own sentences, word for word (backend
- * 06396db). One note comes per part of the file that was held back, each with
- * the same sentence, so the same sentence is said once. Only the `message`:
- * its `chunkNumber`, `pageNumbers` and `textRetained` are not for a teacher
- * as they stand, and never which rule fired or what matched (Lydia, item 6).
+ * The parts of the file whose lesson a safety check held back (backend
+ * 06396db), each said in Lydia's line (`TEXT_HELD_BACK_LINE`) with its pages
+ * beside it where the note has them (10 Nov, item 2: "this part of your file"
+ * asks a teacher to search for what we already know). One note comes per
+ * part; the same pages are said once, and parts with no pages share one line.
+ * Only `pageNumbers` is read: never the `message`, `chunkNumber` or
+ * `textRetained`, and never which rule fired or what matched (Lydia, item 6).
  */
-export function textHeldBack(notes: readonly unknown[] | null | undefined): string[] {
+export function textHeldBack(notes: readonly unknown[] | null | undefined): TextHeldBack[] {
   if (!Array.isArray(notes)) return [];
-  const out: string[] = [];
+  const out: TextHeldBack[] = [];
+  const seen = new Set<string>();
   for (const note of notes) {
     if (!note || typeof note !== "object") continue;
     const n = note as Record<string, unknown>;
     if (n.code !== "lesson_text_blocked_by_safety") continue;
-    if (typeof n.message === "string" && n.message.trim()) out.push(n.message.trim());
+    const pages = Array.isArray(n.pageNumbers)
+      ? n.pageNumbers.filter((p): p is number => Number.isInteger(p))
+      : [];
+    const label = pages.length > 0 ? `${pages.length > 1 ? "Pages" : "Page"} ${pageList(pages)}` : null;
+    const key = label ?? "";
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ pages: label });
   }
-  return [...new Set(out)];
+  return out;
 }
 
 export interface PictureRefused {
@@ -135,6 +170,7 @@ export function QuestionsLeftOut({
   notes,
   className,
   segmentName,
+  refusedPictures = SAY_REFUSED_PICTURES,
 }: {
   notes: readonly unknown[] | null | undefined;
   className?: string;
@@ -144,11 +180,13 @@ export function QuestionsLeftOut({
    * such segment: the note is still said, under no name.
    */
   segmentName?: (segmentKey: string) => string | null;
+  /** Whether a refused picture is said; `SAY_REFUSED_PICTURES` unless a test asks. */
+  refusedPictures?: boolean;
 }) {
   const left = questionsLeftOut(notes);
   const held = textHeldBack(notes);
   const reader = readerNotes(notes);
-  const pictures = picturesRefused(notes);
+  const pictures = refusedPictures ? picturesRefused(notes) : [];
   if (left.length === 0 && held.length === 0 && reader.length === 0 && pictures.length === 0) {
     return null;
   }
@@ -156,13 +194,18 @@ export function QuestionsLeftOut({
     <div className={cn("flex w-full flex-col gap-3", className)}>
       {/* A part of the lesson that came through as plain text comes first:
           it is the biggest thing missing from what is below. */}
-      {held.map((message) => (
-        <p
-          key={message}
-          className="w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 text-[14.5px] leading-[1.55] text-nevo-near-black/82"
+      {held.map((part) => (
+        <div
+          key={part.pages ?? "no pages"}
+          className="w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4"
         >
-          {message}
-        </p>
+          {part.pages && (
+            <span className="block text-[12.5px] font-semibold text-nevo-near-black/60">{part.pages}</span>
+          )}
+          <p className={cn("text-[14.5px] leading-[1.55] text-nevo-near-black/82", part.pages && "mt-1")}>
+            {TEXT_HELD_BACK_LINE}
+          </p>
+        </div>
       ))}
       {/* Then how the file was read: it bears on everything below. */}
       {reader.map((message) => (

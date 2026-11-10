@@ -198,23 +198,27 @@ describe("a refused picture", () => {
     { segmentKey: "k-2", title: null, contentType: "explanatory_text", sequenceOrder: 2, estimatedMinutes: 3, needsReview: false },
   ];
 
-  it("is said under its segment on a single lesson's sections, named as the rows are", () => {
+  /*
+   * NOT SAID YET, on any screen (Hub, 11 Nov): the server's sentence invites a
+   * report there is nowhere to make, and Lydia's words for the note have not
+   * arrived. `QuestionsLeftOut.dom` pins how it is said once they do.
+   */
+  it("is not said on a single lesson's sections", () => {
     const { container } = render(
       <LiveModuleReview uploadId="u-1" structure={TWO} segments={ROWS as never} onBack={vi.fn()} onConfirmed={vi.fn()} />,
     );
 
-    expect(screen.getByText(PICTURE)).toBeInTheDocument();
-    expect(screen.getAllByText("Segment 2").length).toBeGreaterThan(0);
-    expect(container.textContent).not.toMatch(/violence|3\.1/);
+    expect(screen.queryByText(PICTURE)).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/tell us|violence|3\.1/);
   });
 
-  it("is said on a unit's tree", () => {
+  it("is not said on a unit's tree", () => {
     render(<LiveStructureTree uploadId="u-1" structure={TWO} segments={ROWS as never} blockName="Physics" />);
 
-    expect(screen.getByText(PICTURE)).toBeInTheDocument();
+    expect(screen.queryByText(PICTURE)).not.toBeInTheDocument();
   });
 
-  it("is said on the finish screen, under the lesson's own name for the segment", () => {
+  it("is not said on the finish screen", () => {
     const lesson = {
       ...LESSON,
       segmentCount: 2,
@@ -225,7 +229,6 @@ describe("a refused picture", () => {
     } as unknown as LessonDetailResponse;
     render(<UploadResult lesson={lesson} fileName="heat.pdf" onUploadAnother={vi.fn()} reviewNotes={REFUSED} />);
 
-    expect(screen.getByText(PICTURE)).toBeInTheDocument();
-    expect(screen.getAllByText("Wood and plastic").length).toBeGreaterThan(0);
+    expect(screen.queryByText(PICTURE)).not.toBeInTheDocument();
   });
 });
