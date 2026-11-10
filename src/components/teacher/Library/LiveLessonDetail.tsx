@@ -677,11 +677,11 @@ export function LiveLessonDetail({
           </p>
         )}
 
-        {lesson.confirmationSummary && (
-          <p className="mt-4 max-w-[68ch] text-[14.5px] leading-[1.6] text-nevo-near-black/72">
-            {lesson.confirmationSummary}
-          </p>
-        )}
+        {/* NO "Parsed {n} lesson segments for teacher review." (Lydia, 10 Nov:
+          "the parsed-segments line is dropped"). It was `confirmationSummary`, one
+          fixed server template printed as sent since 30 Aug, under our own count
+          line: the same number again, in the parser's words. The field stays on
+          the type, unread. */}
 
         {progress?.slowdownNote && (
           <p className="mt-5 max-w-[68ch] rounded-[12px] bg-nevo-violet/14 px-[18px] py-4 text-[14.5px] leading-[1.6] text-nevo-near-black/82 xl:leading-[1.55]">
