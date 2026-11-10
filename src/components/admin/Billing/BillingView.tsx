@@ -17,6 +17,7 @@ import {
 import { formatMoney } from "@/lib/money";
 import { NextCharge } from "./NextCharge";
 import { overdueHeadline, overdueLine, overduePanel } from "./overdue";
+import { SupportEmailLink } from "../SupportEmail";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
 import { BillingContacts } from "./BillingContacts";
@@ -328,6 +329,17 @@ export function BillingView() {
                     our billing team has them.
                   </p>
                 )}
+                {/*
+                  * D11b's "Contact billing support" (design 928cf30), where the
+                  * frame puts it: the foot of the overdue panel, a navy text
+                  * action. It writes to Nevo's published support address -
+                  * the one every other support link uses (`SupportEmail`),
+                  * read live with the published fallback. It promises nothing
+                  * about when or what happens next; the frame states nothing.
+                  */}
+                <SupportEmailLink className="mt-2.5 inline-block cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline">
+                  Contact billing support
+                </SupportEmailLink>
               </div>
             );
           })()}

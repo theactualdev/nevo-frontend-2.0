@@ -8,6 +8,7 @@ import type {
   UpcomingCharge,
 } from "@/lib/api/billing";
 import { BillingView } from "./BillingView";
+import { PUBLISHED_SUPPORT_EMAIL } from "../SupportEmail";
 
 /**
  * "How to pay" rendered whatever the upcoming charge said - a paid invoice, or
@@ -24,6 +25,13 @@ const detailsRead = vi.fn<(id: string) => Promise<InvoiceTransferDetails | null>
 const reportTransfer = vi.fn<(id: string, ref: string) => Promise<TransferReport>>();
 let rows: Invoice[] = [];
 let rateType = "standard";
+/** Nevo's live support contact read (`GET /support-contact`). */
+const supportContact = vi.fn();
+
+vi.mock("@/lib/api/support", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/support")>();
+  return { ...actual, supportApi: { contact: () => supportContact() } };
+});
 
 vi.mock("@/lib/api/billing", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/billing")>();
@@ -88,6 +96,7 @@ beforeEach(() => {
   reportTransfer.mockReset();
   rows = [];
   rateType = "standard";
+  supportContact.mockReset().mockRejectedValue(new Error("offline"));
 });
 
 describe("Billing's How to pay", () => {
@@ -374,5 +383,74 @@ describe("a reported transfer (9 Oct)", () => {
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/Payment sent, pending verification/),
     );
+  });
+});
+
+/**
+ * D11b's "Contact billing support" (design 928cf30; launch item 6 of the 2 Nov
+ * backlog). The frame draws it as a navy text action at the foot of the
+ * overdue panel. It writes to Nevo's published support address - the one
+ * every other support link uses - and promises nothing about when or what
+ * happens next, because the frame states nothing.
+ */
+describe("the overdue panel's Contact billing support", () => {
+  const overdue = (): Invoice => ({
+    id: "inv3",
+    invoiceNumber: "NEV-003",
+    issuedAt: "2026-01-01T00:00:00Z",
+    amount: "54825000.00",
+    status: "overdue",
+    dueAt: "2026-02-01",
+    paidAt: null,
+    pdfUrl: "/api/v1/billing/invoices/sch1/NEV-003.pdf",
+    currency: "NGN",
+    periodLabel: null,
+    studentCount: null,
+    perStudentRate: null,
+    totalBeforeVat: null,
+    vatAmount: null,
+    daysOverdue: 64,
+    outstandingCount: 1,
+    outstandingTotal: "54825000.00",
+    overduePanelApplies: true,
+  });
+
+  it("sits at the foot of the panel, under the bank details, and writes to the published support address", async () => {
+    upcoming.mockResolvedValue(charge({ invoiceId: null, invoiceNumber: null, status: null }));
+    rows = [overdue()];
+    render(<BillingView />);
+    const action = await screen.findByRole("link", { name: "Contact billing support" });
+    expect(action).toHaveAttribute("href", `mailto:${PUBLISHED_SUPPORT_EMAIL}`);
+    const accountNumber = screen.getByText("1234567890");
+    expect(accountNumber.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("writes to the live support address once the server publishes it", async () => {
+    supportContact.mockResolvedValue({
+      email: "billing-help@nevolearning.com",
+      whatsapp: null,
+      responseTime: null,
+    });
+    upcoming.mockResolvedValue(charge({ invoiceId: null, invoiceNumber: null, status: null }));
+    rows = [overdue()];
+    render(<BillingView />);
+    const action = await screen.findByRole("link", { name: "Contact billing support" });
+    await waitFor(() => expect(action).toHaveAttribute("href", "mailto:billing-help@nevolearning.com"));
+  });
+
+  it("promises no reply time or outcome", async () => {
+    upcoming.mockResolvedValue(charge({ invoiceId: null, invoiceNumber: null, status: null }));
+    rows = [overdue()];
+    const { container } = render(<BillingView />);
+    await screen.findByRole("link", { name: "Contact billing support" });
+    expect(visibleText(container)).not.toMatch(/within \d|hours?\b.*reply|we.ll (get back|reply|respond)|resolve/i);
+  });
+
+  it("isn't there when nothing is overdue - there's no panel to put it in", async () => {
+    upcoming.mockResolvedValue(charge({}));
+    rows = [{ ...overdue(), status: "pending", daysOverdue: undefined, overduePanelApplies: false }];
+    render(<BillingView />);
+    await screen.findByRole("link", { name: "NEV-003" });
+    expect(screen.queryByRole("link", { name: "Contact billing support" })).toBeNull();
   });
 });
