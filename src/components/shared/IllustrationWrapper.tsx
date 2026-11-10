@@ -30,7 +30,9 @@ export type IllustrationMotion = "none" | "breathe" | "sway";
  * authentication, which a signed URL effectively does.
  *
  * Local art (`/illustrations/*.png`) keeps the optimizer, because resizing and
- * format conversion genuinely matter for a child on a slow connection.
+ * format conversion genuinely matter for a child on a slow connection - unless
+ * it already ships at the size it is drawn, in a compact format, which says
+ * so with `unoptimized` (the break pictures: `BREAK_PICTURES`).
  *
  * WHEN BACKEND NAMES THE HOST, adding it to `remotePatterns` and dropping this
  * branch is a reasonable change - but only if the URLs stop being signed.
@@ -48,6 +50,7 @@ export function IllustrationWrapper({
   className,
   motion = "none",
   priority,
+  unoptimized = false,
   onError,
   onLoad,
 }: {
@@ -58,6 +61,11 @@ export function IllustrationWrapper({
   className?: string;
   motion?: IllustrationMotion;
   priority?: boolean;
+  /**
+   * Served as it is: art we ship already at the size it is drawn, which the
+   * optimizer would only make wait. A remote source is always served as is.
+   */
+  unoptimized?: boolean;
   /** The image did not load - a signed link that expired, or no connection. */
   onError?: () => void;
   /** The image finished loading. */
@@ -72,7 +80,7 @@ export function IllustrationWrapper({
       priority={priority}
       onError={onError}
       onLoad={onLoad}
-      unoptimized={isRemote(src)}
+      unoptimized={unoptimized || isRemote(src)}
       className={cn(
         "h-auto max-w-full",
         motion === "breathe" && "motion-safe:animate-nevo-breathe",

@@ -1,3 +1,4 @@
+import { BREAK_PICTURES } from "./breakPictures";
 import { IllustrationWrapper } from "./IllustrationWrapper";
 
 /**
@@ -13,10 +14,8 @@ export function BreathingCharacter({
 }) {
   return (
     <IllustrationWrapper
-      src="/illustrations/break-micro.png"
+      {...BREAK_PICTURES.micro}
       alt="A calm figure breathing slowly"
-      width={1254}
-      height={1254}
       motion="breathe"
       className={className}
       priority={priority}

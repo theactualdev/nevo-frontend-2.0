@@ -1,3 +1,4 @@
+import { BREAK_PICTURES } from "./breakPictures";
 import { IllustrationWrapper } from "./IllustrationWrapper";
 
 /**
@@ -13,10 +14,8 @@ export function StretchingCharacter({
 }) {
   return (
     <IllustrationWrapper
-      src="/illustrations/break-movement.png"
+      {...BREAK_PICTURES.movement}
       alt="A figure gently stretching"
-      width={1024}
-      height={1536}
       motion="sway"
       className={className}
       priority={priority}
