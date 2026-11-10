@@ -43,11 +43,13 @@ import { randomId } from "@/lib/utils";
  * sent. Over the server's bound, nothing either.
  *
  * HOW LONG THE SECTION HAS BEEN ON SCREEN as each return goes (Teslim, 9 Nov:
- * "I'll date the return as arrival minus that"). After a reload or a reopen
- * the return waited 8 to 12 s for the sitting to be known, and the server
- * stamped it then. Measured from when the section came on screen - or the
- * page came back, whichever is later - to each try at sending it, and handed
- * to `attentionApi`, which holds it back until the field is in the contract.
+ * "I'll date the return as arrival minus that"; live 10 Nov). After a reload
+ * or a reopen the return waited 8 to 12 s for the sitting to be known, and
+ * the server stamped it then. Measured from when the section came on screen
+ * - or the page came back, whichever is later - to each try at sending it,
+ * and sent on the return as `clientVisibleForMs`. Never on an away (the
+ * server refuses it there), never for a return the last page queued, and
+ * nothing over the bound.
  *
  * THE SITTING ENDS WHEN THE PLAYER SAYS SO. "Leave for now" ends the sitting,
  * and the lesson then sent one more event for it as it went (9 Nov, 404
@@ -74,7 +76,7 @@ const MAX_QUEUED = 100;
 const RETRY_MS = [1_000, 3_000, 10_000, 30_000];
 /**
  * The longest absence the server takes a length for (e5a0544): ten hours.
- * The time on screen keeps the same bound until the contract sets its own.
+ * The time on screen has the same bound (10 Nov).
  */
 const MAX_DEVICE_MS = 36_000_000;
 
@@ -208,15 +210,19 @@ function reporterFor(owner: string, sessionId: string): Reporter {
     if (retry) clearTimeout(retry);
     retry = null;
     sending = true;
-    // Taken at each try, so a return that waited still dates itself.
-    const since = onScreenSince.get(next.clientEventId);
+    // Taken at each try, so a return that waited still dates itself - and
+    // never kept with the queued event, nor put on an away (refused there).
+    const since =
+      next.action === "return"
+        ? onScreenSince.get(next.clientEventId)
+        : undefined;
     const visibleForMs =
       since === undefined ? undefined : bounded(performance.now() - since);
-    const options = {
-      keepalive,
-      ...(visibleForMs === undefined ? {} : { visibleForMs }),
-    };
-    attentionApi.report(sessionId, next, options).then(
+    const body =
+      visibleForMs === undefined
+        ? next
+        : { ...next, clientVisibleForMs: visibleForMs };
+    attentionApi.report(sessionId, body, { keepalive }).then(
       () => {
         sending = false;
         // Ended while it travelled: nothing of this sitting is kept now.

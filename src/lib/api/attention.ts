@@ -35,26 +35,15 @@ export interface AttentionReport {
    * 9 Nov). 0 to 36,000,000.
    */
   clientAwayDurationMs?: number;
-}
-
-/** How a report travels, and what was measured that is not sent yet. */
-export interface AttentionSendOptions {
   /**
-   * Lets an away sent as the page is hidden or closed outlive it (Bearer
-   * rules out `sendBeacon`).
+   * On a `return` only (Teslim, 9 Nov, live 10 Nov; refused on an away like
+   * the length above): how long the section had been on screen as this
+   * return was sent, measured with `performance.now()`. The server dates the
+   * return as arrival minus this, clamped to the sitting's start - for a
+   * return that waited 8 to 12 s for its sitting after a reload. Measured at
+   * each try, so it is never kept with the queued event. 0 to 36,000,000.
    */
-  keepalive?: boolean;
-  /**
-   * HELD BACK: how long the section had been on screen as this return was
-   * sent, measured with `performance.now()`. Teslim's chosen fix (9 Nov) for
-   * a return that waits 8 to 12 s for its sitting after a reload - "I'll
-   * date the return as arrival minus that" - as `clientVisibleForMs`. It is
-   * not in the live contract yet (`AttentionTransition`: action, segmentId,
-   * clientEventId, clientAwayDurationMs), so it does not go on the request.
-   * The day it is: add it to `AttentionReport` and to the body below, where
-   * `npm run contract` checks it.
-   */
-  visibleForMs?: number;
+  clientVisibleForMs?: number;
 }
 
 /** `AttentionState`, the server's view after the transition. */
@@ -73,12 +62,13 @@ export const attentionApi = {
   /**
    * `POST /api/v1/students/me/sessions/{sessionId}/attention`. Refused 404
    * `active_session_not_found` or `lesson_section_not_found`, and 403
-   * `student_required`. See `AttentionSendOptions` for what travels with it.
+   * `student_required`. `keepalive` lets an away sent as the page is hidden
+   * or closed outlive it (Bearer rules out `sendBeacon`).
    */
   report: (
     sessionId: string,
     report: AttentionReport,
-    options: AttentionSendOptions = {},
+    options: { keepalive?: boolean } = {},
   ) =>
     api.post<AttentionState>(
       `/api/v1/students/me/sessions/${encodeURIComponent(sessionId)}/attention`,

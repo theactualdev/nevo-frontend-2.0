@@ -43,12 +43,10 @@ describe("attentionApi.report", () => {
     expect(post.mock.calls[0][2]).toEqual({ keepalive: true });
   });
 
-  it("holds back the time on screen: it is not in the live contract yet", async () => {
-    await attentionApi.report(SESSION, RETURN, { visibleForMs: 9_000 });
+  it("carries a return's time on screen as it is given", async () => {
+    const back = { ...RETURN, clientVisibleForMs: 9_000 };
+    await attentionApi.report(SESSION, back);
 
-    const [, body, init] = post.mock.calls[0];
-    expect(body).toEqual(RETURN);
-    expect(body).not.toHaveProperty("clientVisibleForMs");
-    expect(init).toBeUndefined();
+    expect(post.mock.calls[0][1]).toEqual(back);
   });
 });

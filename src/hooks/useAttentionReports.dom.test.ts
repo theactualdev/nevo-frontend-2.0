@@ -46,6 +46,15 @@ const sent = () =>
     (r as { segmentId: string }).segmentId,
   ]);
 const settle = () => act(async () => {});
+/**
+ * A call's event: what is queued and kept, without the time on screen that
+ * each try measures afresh.
+ */
+const eventOf = (call: unknown[]) => {
+  const event = { ...(call[1] as Record<string, unknown>) };
+  delete event.clientVisibleForMs;
+  return event;
+};
 
 beforeEach(() => {
   Object.defineProperty(document, "visibilityState", {
@@ -69,7 +78,7 @@ afterEach(() => {
 });
 
 describe("what is sent", () => {
-  it("reports the first section once the sitting is known, with no time on the request", async () => {
+  it("reports the first section once the sitting is known, with how long it has been on screen", async () => {
     const { rerender } = mount({ sessionId: null });
     await settle();
     expect(report).not.toHaveBeenCalled();
@@ -80,16 +89,16 @@ describe("what is sent", () => {
     expect(report).toHaveBeenCalledOnce();
     const [session, body, options] = report.mock.calls[0];
     expect(session).toBe(SESSION);
-    // No absence before it, so no length; and how long the section has been
-    // on screen is handed to `attentionApi`, which holds it back for now.
+    // No absence before it, so no length - only its time on screen.
     expect(Object.keys(body as object).sort()).toEqual([
       "action",
       "clientEventId",
+      "clientVisibleForMs",
       "segmentId",
     ]);
     expect(body).toMatchObject({ action: "return", segmentId: SEG_A });
     expect((body as { clientEventId: string }).clientEventId).toMatch(UUID);
-    expect(options).toMatchObject({ keepalive: false });
+    expect(options).toEqual({ keepalive: false });
   });
 
   it("reports each section as it comes on screen, once", async () => {
@@ -201,7 +210,7 @@ describe("one coherent sitting", () => {
     });
 
     expect(report).toHaveBeenCalledTimes(2);
-    expect(report.mock.calls[1][1]).toEqual(report.mock.calls[0][1]);
+    expect(eventOf(report.mock.calls[1])).toEqual(eventOf(report.mock.calls[0]));
   });
 
   it("sends at once when the device is back online", async () => {
@@ -213,7 +222,7 @@ describe("one coherent sitting", () => {
     await settle();
 
     expect(report).toHaveBeenCalledTimes(2);
-    expect(report.mock.calls[1][1]).toEqual(report.mock.calls[0][1]);
+    expect(eventOf(report.mock.calls[1])).toEqual(eventOf(report.mock.calls[0]));
   });
 
   it("sends nothing more for a sitting the server no longer holds", async () => {
@@ -534,10 +543,10 @@ describe("the length of every absence this page saw", () => {
 /*
  * HOW LONG THE SECTION HAS BEEN ON SCREEN WHEN ITS RETURN GOES (Teslim,
  * 9 Nov: `clientVisibleForMs`, "I'll date the return as arrival minus
- * that"). After a reload or a reopen the return waited 8 to 12 s for the
- * sitting, and the server stamped it then. Measured here and handed to
- * `attentionApi` with every return this page queued - which holds it back
- * until the field is in the live contract.
+ * that"; live 10 Nov). After a reload or a reopen the return waited 8 to
+ * 12 s for the sitting, and the server stamped it then. Measured here and
+ * sent with every return this page queued - never on an away, which the
+ * server refuses.
  */
 describe("how long the section has been on screen when its return goes", () => {
   let clock = 0;
@@ -547,12 +556,41 @@ describe("how long the section has been on screen when its return goes", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  /** Each call's options, as `[action, visibleForMs]`. */
+  /** Each call, as `[action, clientVisibleForMs]`. */
   const visibleFor = () =>
-    report.mock.calls.map(([, r, o]) => [
+    report.mock.calls.map(([, r]) => [
       (r as { action: string }).action,
-      (o as { visibleForMs?: number }).visibleForMs,
+      (r as { clientVisibleForMs?: number }).clientVisibleForMs,
     ]);
+
+  it("never puts it on an away, sent live or tried again: the server refuses it there", async () => {
+    mount();
+    await settle();
+    setVisibility("hidden");
+    await settle();
+    clock += 5_000;
+    setVisibility("visible");
+    await settle();
+    report.mockRejectedValueOnce(new ApiError(0, "offline"));
+    setVisibility("hidden");
+    await settle();
+    clock += 30_000;
+    window.dispatchEvent(new Event("online"));
+    await settle();
+
+    expect(visibleFor()).toEqual([
+      ["return", 0],
+      ["away", undefined],
+      ["return", 0],
+      ["away", undefined],
+      ["away", undefined],
+    ]);
+    for (const [, r] of report.mock.calls) {
+      if ((r as { action: string }).action === "away") {
+        expect(r).not.toHaveProperty("clientVisibleForMs");
+      }
+    }
+  });
 
   it("counts from when the section came on screen, not from when the sitting was known", async () => {
     const { rerender } = mount({ sessionId: null });
