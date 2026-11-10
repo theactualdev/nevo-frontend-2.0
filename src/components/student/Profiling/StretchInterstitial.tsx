@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { IllustrationWrapper } from "@/components/shared";
+import { BREAK_PICTURES } from "@/components/shared/breakPictures";
 import { cn } from "@/lib/utils";
 import { ProfilingShell } from "./ProfilingShell";
 
@@ -44,10 +45,8 @@ export function StretchInterstitial({
     <ProfilingShell filled={filled} active={active}>
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
         <IllustrationWrapper
-          src="/illustrations/break-movement.png"
+          {...BREAK_PICTURES.movement}
           alt="A Nevo figure stretching gently"
-          width={1024}
-          height={1536}
           priority
           motion="breathe"
           className="h-[140px] w-auto sm:h-[180px]"

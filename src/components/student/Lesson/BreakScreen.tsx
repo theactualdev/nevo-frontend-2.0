@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { Leaf } from "lucide-react";
 import { IllustrationWrapper } from "@/components/shared";
+import { BREAK_PICTURES } from "@/components/shared/breakPictures";
 import { BREAK_TYPES, type BreakType } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -156,10 +157,8 @@ export function BreakScreen({
       {type === BREAK_TYPES.MICRO && (
         <>
           <BreakArt
-            src="/illustrations/break-micro.png"
+            {...BREAK_PICTURES.micro}
             alt="A figure sitting calmly with eyes closed"
-            width={1254}
-            height={1254}
             priority
             motion="breathe"
             className="w-[200px] sm:w-[250px]"
@@ -173,10 +172,8 @@ export function BreakScreen({
       {type === BREAK_TYPES.MOVEMENT && (
         <>
           <BreakArt
-            src="/illustrations/break-movement.png"
+            {...BREAK_PICTURES.movement}
             alt="A figure stretching arms overhead"
-            width={1024}
-            height={1536}
             priority
             className="h-[250px] w-auto sm:h-[300px]"
           />
@@ -201,10 +198,8 @@ export function BreakScreen({
       {type === BREAK_TYPES.CONSOLIDATION && (
         <>
           <BreakArt
-            src="/illustrations/break-consolidation.png"
+            {...BREAK_PICTURES.consolidation}
             alt="A figure thinking, hand resting on chin"
-            width={1024}
-            height={1536}
             priority
             className="mb-6 h-[150px] w-auto sm:mb-7 sm:h-[190px]"
           />
@@ -251,10 +246,8 @@ export function BreakScreen({
       {type === BREAK_TYPES.FULL && (
         <>
           <BreakArt
-            src="/illustrations/break-full.png"
+            {...BREAK_PICTURES.full}
             alt="A figure lying down resting"
-            width={1536}
-            height={1024}
             priority
             className="w-[280px] sm:w-[340px]"
           />
