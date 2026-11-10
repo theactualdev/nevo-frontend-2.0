@@ -31,9 +31,19 @@ export interface AttentionReport {
    * On a `return` only (e5a0544; 422 `away_duration_requires_return` on an
    * away): how long the absence lasted, measured on the device with
    * `performance.now()` (rule 4). The server then dates the away from it
-   * rather than from when the away arrived. 0 to 36,000,000.
+   * rather than from when the away arrived, whenever it is there (Teslim,
+   * 9 Nov). 0 to 36,000,000.
    */
   clientAwayDurationMs?: number;
+  /**
+   * On a `return` only (Teslim, 9 Nov, live 10 Nov; refused on an away like
+   * the length above): how long the section had been on screen as this
+   * return was sent, measured with `performance.now()`. The server dates the
+   * return as arrival minus this, clamped to the sitting's start - for a
+   * return that waited 8 to 12 s for its sitting after a reload. Measured at
+   * each try, so it is never kept with the queued event. 0 to 36,000,000.
+   */
+  clientVisibleForMs?: number;
 }
 
 /** `AttentionState`, the server's view after the transition. */
