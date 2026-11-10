@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import type { BillingContact } from "@/lib/api/billing";
+import { ApiError } from "@/lib/api/client";
 
 const { contacts, removeContact } = vi.hoisted(() => ({
   contacts: vi.fn(),
@@ -105,5 +106,37 @@ describe("who gets the invoices", () => {
     expect(visibleText(container)).not.toMatch(/No one is set to receive your invoices/);
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("bursar@brightgate.edu.ng")).toBeInTheDocument();
+  });
+});
+
+/**
+ * SCRUM-311 (Teslim 236f99b, live 10 Nov): the school's LAST billing contact
+ * can't be removed. The server refuses with 409 `last_billing_contact` and says
+ * why; the row shows the server's words, never "try again", which couldn't
+ * work.
+ */
+describe("removing the last billing contact", () => {
+  const REFUSAL =
+    "This is the school's only billing contact. Add another one before removing this one, or the school cannot be invoiced.";
+
+  it("shows the server's reason, not a retry, and keeps the contact", async () => {
+    contacts.mockResolvedValue([c("bc-1", "bursar@brightgate.edu.ng")]);
+    removeContact.mockRejectedValue(
+      new ApiError(409, "Conflict", { detail: { code: "last_billing_contact", message: REFUSAL } }),
+    );
+    const { container } = render(<BillingContacts primaryId="bc-1" onChanged={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(REFUSAL);
+    expect(visibleText(container)).not.toMatch(/Try again|didn.t remove/);
+    expect(visibleText(container)).toMatch(/bursar@brightgate\.edu\.ng/);
+  });
+
+  it("still words a lost request as one - that can be tried again", async () => {
+    contacts.mockResolvedValue([c("bc-1", "bursar@brightgate.edu.ng")]);
+    removeContact.mockRejectedValue(new ApiError(500, "Server error", { detail: "boom" }));
+    const { container } = render(<BillingContacts primaryId="bc-1" onChanged={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(visibleText(container)).toMatch(/didn.t remove them/));
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });
