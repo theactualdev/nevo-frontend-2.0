@@ -305,6 +305,9 @@ describe("assigning from the finish screen", () => {
  * the server's sentence, no reference, and no way to send it again.
  */
 describe("a re-read a safety check stopped", () => {
+  // Lydia, 10 Nov (item 4): the re-read's own line, above the earlier reading.
+  const REREAD =
+    "Nevo stopped partway through this re-reading because of a safety check, so what you see below is still the earlier reading.";
   const LINE =
     "Nevo stopped partway through this lesson because of a safety check, so the sections it would normally propose are not here. Nothing has reached your class.";
   const SERVER =
@@ -314,7 +317,7 @@ describe("a re-read a safety check stopped", () => {
       <UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} onRegenerated={vi.fn()} />,
     );
 
-  it("says Lydia's line, and nothing beyond it", async () => {
+  it("says the re-read's line above the earlier reading, and nothing beyond it", async () => {
     awaitParseRun.mockResolvedValue({
       status: "failed",
       finished: true,
@@ -326,10 +329,31 @@ describe("a re-read a safety check stopped", () => {
 
     tryAgain();
 
-    expect(await screen.findByText(LINE)).toBeInTheDocument();
+    const said = await screen.findByText(REREAD);
+    // "What you see below": the earlier reading's title is below it.
+    expect(said.compareDocumentPosition(screen.getAllByText(/Fractions 3/)[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+    expect(screen.queryByText(/reached your class/)).not.toBeInTheDocument();
     expect(screen.queryByText(SERVER)).not.toBeInTheDocument();
     expect(screen.queryByText(/ca8435c98d08/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try that again" })).not.toBeInTheDocument();
+  });
+
+  it("says item 6's line only where the lesson has nothing to show", async () => {
+    awaitParseRun.mockResolvedValue({ status: "failed", finished: true, failureReason: SERVER, reasonCode: "safety_held" });
+    render(
+      <UploadResult
+        lesson={{ ...LESSON, segments: [], segmentCount: 0 } as LessonDetailResponse}
+        fileName="fractions.pdf"
+        onUploadAnother={vi.fn()}
+        onRegenerated={vi.fn()}
+      />,
+    );
+
+    tryAgain();
+
+    expect(await screen.findByText(LINE)).toBeInTheDocument();
+    expect(screen.queryByText(REREAD)).not.toBeInTheDocument();
   });
 
   it("leaves any other failed re-read as it was", async () => {
@@ -347,6 +371,7 @@ describe("a re-read a safety check stopped", () => {
       await screen.findByText("Our safety check could not run, so the lesson has not been prepared."),
     ).toBeInTheDocument();
     expect(screen.queryByText(LINE)).not.toBeInTheDocument();
+    expect(screen.queryByText(REREAD)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try that again" })).toBeInTheDocument();
   });
 });

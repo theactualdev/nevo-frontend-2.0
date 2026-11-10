@@ -11,7 +11,7 @@ import type { LessonDetailResponse } from "@/lib/api/lessons";
 import { SplitSourceNotice } from "@/components/teacher/Library/SplitSourceNotice";
 import { stillToCheck } from "@/components/teacher/Library/LessonDetailActions";
 import { assignRefusal, reviewHrefFor } from "@/lib/lessons/signOff";
-import { IncidentLine, SAFETY_HELD_LINE } from "./ParseFallback";
+import { IncidentLine, SAFETY_HELD_LINE, SAFETY_HELD_REREAD_LINE } from "./ParseFallback";
 import { FinishBlock } from "./FinishBlock";
 import { finishView } from "@/components/teacher/LessonReview/reviewModel";
 
@@ -91,9 +91,10 @@ export function UploadResult({
   const rereading = regenerate.state === "running";
   /*
    * A RE-READ A SAFETY CHECK STOPPED (`reasonCode: "safety_held"`, backend
-   * 06396db). Said in Lydia's words, as the upload screens say it (9 Nov, item
-   * 6), and with no way to send it again: a refusal refuses again. The lesson
-   * above is untouched - the re-read replaces it only when it finishes.
+   * 06396db), with no way to send it again: a refusal refuses again. The
+   * lesson on screen is the earlier reading, untouched - the re-read replaces
+   * it only when it finishes. Lydia, 10 Nov (item 4): the re-read's own line,
+   * above that lesson; item 6's line only where the lesson has nothing to show.
    */
   const rereadHeld = regenerate.state === "failed" && regenerate.reasonCode === "safety_held";
   /* SCRUM-319: Assign stays pressable; a tap while held explains it. */
@@ -111,6 +112,16 @@ export function UploadResult({
 
   return (
     <div className="mx-auto w-full max-w-[820px] px-6 pb-10">
+      {rereadHeld && (
+        <p
+          role="status"
+          className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 text-[14.5px] leading-[1.55] text-nevo-near-black/82"
+        >
+          {/* Lydia's words and nothing beyond them: not the server's sentence,
+              not the reference (as on the upload screens). */}
+          {segments.length > 0 ? SAFETY_HELD_REREAD_LINE : SAFETY_HELD_LINE}
+        </p>
+      )}
       {finish ? (
         <FinishBlock
           view={finish}
@@ -269,14 +280,6 @@ export function UploadResult({
         <p className="mt-3 max-w-[62ch] text-[14px] leading-[1.55] text-nevo-near-black/68">
           Nevo is reading the same lesson again. It replaces what is above when
           it finishes, so you will not end up with two copies.
-        </p>
-      )}
-
-      {rereadHeld && (
-        <p className="mt-3 max-w-[62ch] text-[14px] leading-[1.55] text-nevo-near-black/68">
-          {/* Lydia's line and nothing beyond it: not the server's sentence, not
-              the reference (as on the upload screens). */}
-          {SAFETY_HELD_LINE}
         </p>
       )}
 
