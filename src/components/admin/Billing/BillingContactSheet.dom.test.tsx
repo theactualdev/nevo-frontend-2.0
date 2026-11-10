@@ -19,7 +19,8 @@ import { BillingContactSheet } from "./BillingContactSheet";
  * "Where invoices and payment reminders go." came off in #1008, when nothing
  * sent to a billing contact. Teslim's e8b70bd (6 Nov) emails every contact
  * each invoice as it's issued, and a reminder 7 days before it's due and on
- * the day - so the line is true again, and back.
+ * the day - so the line is true again, and back. Since 236f99b (SCRUM-310)
+ * there's also one overdue reminder once it's past due; still true.
  *
  * One contact of several (a16224d): a new one is added, an existing one
  * edited by its id.

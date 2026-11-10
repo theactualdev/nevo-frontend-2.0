@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { billingApi, type BillingContact } from "@/lib/api/billing";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
 import { BillingContactSheet } from "./BillingContactSheet";
@@ -13,7 +14,12 @@ const CARD = "rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.0
  * what the server does (a16224d routes; e8b70bd delivery, checked 6 Nov):
  *
  *  - every contact here is emailed each invoice as it is issued, and a
- *    reminder 7 days before it is due and on the day;
+ *    reminder 7 days before it is due and on the day, and ONE overdue
+ *    reminder once it is past due (SCRUM-310, 236f99b) - a paid invoice is
+ *    never chased;
+ *  - the LAST contact can't be removed (SCRUM-311, 236f99b): the server
+ *    refuses with 409 `last_billing_contact` and says why, and the row shows
+ *    the server's words - never "try again", which could not work;
  *  - one of them is the school's PRIMARY contact - the subscription's
  *    `billingContact` - so that row carries the frame's "Primary" pill;
  *  - Add a contact, Edit and Remove are the routes themselves.
@@ -45,6 +51,8 @@ export function BillingContacts({
   const [sheet, setSheet] = useState<BillingContact | "new" | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeFailed, setRemoveFailed] = useState<string | null>(null);
+  /** The server refused - the last contact (SCRUM-311) - in its own words. */
+  const [removeRefused, setRemoveRefused] = useState<{ id: string; why: string } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -72,10 +80,22 @@ export function BillingContacts({
     if (removing) return;
     setRemoving(c.id);
     setRemoveFailed(null);
+    setRemoveRefused(null);
     billingApi
       .removeContact(c.id)
       .then(reread)
-      .catch(() => setRemoveFailed(c.id))
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && apiErrorCode(err.detail) === "last_billing_contact") {
+          setRemoveRefused({
+            id: c.id,
+            why:
+              apiErrorMessage(err.detail) ??
+              "This is the school's only billing contact. Add another one before removing this one, or the school cannot be invoiced.",
+          });
+          return;
+        }
+        setRemoveFailed(c.id);
+      })
       .finally(() => setRemoving(null));
   };
 
@@ -139,7 +159,11 @@ export function BillingContacts({
                     .filter(Boolean)
                     .join(", ")}
                 </p>
-                {removeFailed === c.id ? (
+                {removeRefused?.id === c.id ? (
+                  <p role="alert" className="m-0 mt-1.5 text-[13px] text-nevo-navy">
+                    {removeRefused.why}
+                  </p>
+                ) : removeFailed === c.id ? (
                   <p className="m-0 mt-1.5 text-[13px] text-nevo-navy">
                     That didn&rsquo;t remove them, and nothing has changed. Try again in a moment.
                   </p>

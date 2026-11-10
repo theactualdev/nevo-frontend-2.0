@@ -102,7 +102,8 @@ export function BillingContactSheet({
         {/*
           * BACK, AND TRUE NOW (Teslim e8b70bd, 6 Nov). It came off in #1008
           * because nothing sent to this address. Now every billing contact is
-          * emailed each invoice as it is issued, and a reminder 7 days before
+          * emailed each invoice as it is issued, an overdue reminder once it
+          * is past due (SCRUM-310, 236f99b), and a reminder 7 days before
           * it is due and on the day (billing/email_worker.py, the daily
           * `billing.invoice_reminders` job).
           */}
