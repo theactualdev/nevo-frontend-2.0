@@ -4,7 +4,9 @@ import type { ComponentProps, ReactNode } from "react";
 import { QuickCheckSheet, RECOVERY_LINE, RETEACH_COPY } from "./QuickCheckSheet";
 import type { ReteachingResponse } from "@/lib/api/lessons";
 import {
-  LONG_HOLD_MS,
+  MARK_WAIT_LINE,
+  SEND_AGAIN,
+  SLOW_MARK_MS,
   type PendingVerdict,
   type Verdict,
 } from "@/lib/lessons/verdict";
@@ -201,19 +203,43 @@ describe("the re-teach box's retry", () => {
 /**
  * SCRUM-315 (Lydia, 7 Nov): the pick holds visibly chosen and the control
  * stays PRESSABLE - never disabled - with no spinner, no progress and no
- * verdict before the server's; and one extra state for a hold long enough to
- * look broken: a retry and nothing else.
+ * verdict before the server's. Her 9 Nov rulings, restated 10 Nov: past
+ * about two seconds, one neutral line about the system, "Nevo has your answer
+ * and is still working."; and the retry "appears only on a real failure
+ * rather than on a timer", reading "Send again".
  */
 describe("a pick held for its mark (SCRUM-315)", () => {
-  /** A reply on its way that can be sent again, as the player's is. */
+  /** A reply on its way that can be sent again, and can fail, as the player's. */
   function retryable() {
     let land: (mark: Verdict) => void = () => {};
     const reply: PendingVerdict = new Promise<Verdict>((resolve) => {
       land = resolve;
     });
-    reply.retry = vi.fn();
-    return { reply, land: (mark: Verdict) => act(async () => land(mark)) };
+    const listeners = new Set<() => void>();
+    let failing = false;
+    reply.retry = vi.fn(() => {
+      failing = false;
+    });
+    reply.onFailure = (listener) => {
+      listeners.add(listener);
+      if (failing) listener();
+      return () => {
+        listeners.delete(listener);
+      };
+    };
+    return {
+      reply,
+      land: (mark: Verdict) => act(async () => land(mark)),
+      fail: () =>
+        act(() => {
+          failing = true;
+          for (const hear of [...listeners]) hear();
+        }),
+    };
   }
+
+  const line = () => screen.queryByText(MARK_WAIT_LINE);
+  const sendAgain = () => screen.queryByRole("button", { name: SEND_AGAIN });
 
   afterEach(() => {
     vi.useRealTimers();
@@ -240,77 +266,148 @@ describe("a pick held for its mark (SCRUM-315)", () => {
     ).not.toContain("border-nevo-navy");
   });
 
-  it("offers Try again, and nothing else, once the hold has lasted long enough to look broken", () => {
+  it("says nothing for about two seconds, then her one neutral line, and offers nothing", () => {
     vi.useFakeTimers();
     const mark = retryable();
     mount(() => mark.reply);
+    const before = document.body.textContent;
     tapOption("Carbon dioxide");
-    const tryAgain = () => screen.queryByRole("button", { name: "Try again" });
 
     act(() => {
-      vi.advanceTimersByTime(LONG_HOLD_MS - 1);
+      vi.advanceTimersByTime(SLOW_MARK_MS - 1);
     });
-    expect(tryAgain()).toBeNull();
-    const before = document.body.textContent;
+    expect(line()).toBeNull();
+    expect(document.body.textContent).toBe(before);
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(tryAgain()).toBeInTheDocument();
-    // Nothing else: no line, no verdict, no way on.
-    expect(document.body.textContent).toBe(`${before}Try again`);
-    expect(screen.queryByRole("status")).toBeNull();
+    expect(line()).toBeInTheDocument();
+    // Her words exactly, and nothing else: no verdict, no way on, no retry.
+    expect(document.body.textContent).toBe(`${before}${MARK_WAIT_LINE}`);
+    expect(sendAgain()).toBeNull();
     expect(wayOn()).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
-  it("sends the same answer again on Try again, and is a new hold from there", () => {
+  it("is read out when it comes: the line lands in a polite live region", () => {
     vi.useFakeTimers();
     const mark = retryable();
-    const { props } = mount(() => mark.reply);
+    mount(() => mark.reply);
     tapOption("Carbon dioxide");
-    act(() => {
-      vi.advanceTimersByTime(LONG_HOLD_MS);
-    });
+    // The region is there, empty, from the pick - so what lands in it is heard.
+    const region = document.querySelector("[data-mark-wait-slot]");
+    expect(region).toHaveAttribute("aria-live", "polite");
+    expect(region).toBeEmptyDOMElement();
 
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-
-    expect(mark.reply.retry).toHaveBeenCalledOnce();
-    // The same answer, not a new one: the host's retry sends it.
-    expect(props.onAnswered).toHaveBeenCalledOnce();
-    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     act(() => {
-      vi.advanceTimersByTime(LONG_HOLD_MS);
+      vi.advanceTimersByTime(SLOW_MARK_MS);
     });
-    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(region).toContainElement(line());
   });
 
-  it("goes as the mark lands, Try again with it", async () => {
+  it("never offers a retry on a timer, however long the wait", () => {
+    vi.useFakeTimers();
+    const mark = retryable();
+    mount(() => mark.reply);
+    tapOption("Carbon dioxide");
+
+    act(() => {
+      vi.advanceTimersByTime(SLOW_MARK_MS * 60);
+    });
+    expect(sendAgain()).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(line()).toBeInTheDocument();
+  });
+
+  it("offers Send again, in the line's place, once the send has really failed", async () => {
     vi.useFakeTimers();
     const mark = retryable();
     mount(() => mark.reply);
     tapOption("Carbon dioxide");
     act(() => {
-      vi.advanceTimersByTime(LONG_HOLD_MS);
+      vi.advanceTimersByTime(SLOW_MARK_MS);
+    });
+
+    await mark.fail();
+
+    expect(sendAgain()).toBeInTheDocument();
+    // "Still working" is not true of a send that failed.
+    expect(line()).toBeNull();
+    expect(wayOn()).toBeNull();
+    // Secondary, never the way on.
+    expect(sendAgain()).toHaveAttribute("data-variant", "secondary");
+  });
+
+  it("offers it at once on a failure inside the two seconds, with no line first", async () => {
+    vi.useFakeTimers();
+    const mark = retryable();
+    mount(() => mark.reply);
+    tapOption("Carbon dioxide");
+
+    await mark.fail();
+
+    expect(sendAgain()).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(SLOW_MARK_MS);
+    });
+    expect(line()).toBeNull();
+  });
+
+  it("sends the same answer again on Send again, and is a new, quiet hold from there", async () => {
+    vi.useFakeTimers();
+    const mark = retryable();
+    const { props } = mount(() => mark.reply);
+    tapOption("Carbon dioxide");
+    await mark.fail();
+
+    fireEvent.click(screen.getByRole("button", { name: SEND_AGAIN }));
+
+    expect(mark.reply.retry).toHaveBeenCalledOnce();
+    // The same answer, not a new one: the host's retry sends it.
+    expect(props.onAnswered).toHaveBeenCalledOnce();
+    expect(sendAgain()).toBeNull();
+    expect(line()).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(SLOW_MARK_MS);
+    });
+    expect(line()).toBeInTheDocument();
+    expect(sendAgain()).toBeNull();
+
+    // And again, only if this send fails too.
+    await mark.fail();
+    expect(sendAgain()).toBeInTheDocument();
+  });
+
+  it("goes as the mark lands, the line with it", async () => {
+    vi.useFakeTimers();
+    const mark = retryable();
+    mount(() => mark.reply);
+    tapOption("Carbon dioxide");
+    act(() => {
+      vi.advanceTimersByTime(SLOW_MARK_MS);
     });
 
     await mark.land(true);
 
-    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(line()).toBeNull();
+    expect(sendAgain()).toBeNull();
     expect(wayOn()).toBeInTheDocument();
   });
 
-  it("offers nothing where the reply cannot be sent again", () => {
+  it("offers nothing to send where the reply reports no failure", () => {
     vi.useFakeTimers();
     mount(() => new Promise<Verdict>(() => {}));
     tapOption("Carbon dioxide");
     act(() => {
-      vi.advanceTimersByTime(LONG_HOLD_MS * 2);
+      vi.advanceTimersByTime(SLOW_MARK_MS * 30);
     });
 
-    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(sendAgain()).toBeNull();
+    expect(line()).toBeInTheDocument();
   });
 
-  it("offers Try again on the re-teach box's retry too, under Check", () => {
+  it("waits the same way on the re-teach box's retry, under Check", async () => {
     vi.useFakeTimers();
     const retry = retryable();
     const marks: (Verdict | PendingVerdict)[] = [false, retry.reply];
@@ -319,10 +416,12 @@ describe("a pick held for its mark (SCRUM-315)", () => {
     tapOption("Carbon dioxide");
     fireEvent.click(screen.getByRole("button", { name: RETEACH_COPY.check }));
     act(() => {
-      vi.advanceTimersByTime(LONG_HOLD_MS);
+      vi.advanceTimersByTime(SLOW_MARK_MS);
     });
+    expect(line()).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await retry.fail();
+    fireEvent.click(screen.getByRole("button", { name: SEND_AGAIN }));
     expect(retry.reply.retry).toHaveBeenCalledOnce();
   });
 });

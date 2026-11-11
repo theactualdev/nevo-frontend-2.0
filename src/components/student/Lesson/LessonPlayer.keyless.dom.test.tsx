@@ -11,6 +11,7 @@ import { RECOVERY_LINE } from "./QuickCheckSheet";
 import { ApiError } from "@/lib/api/client";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
+import { SEND_AGAIN } from "@/lib/lessons/verdict";
 import type {
   LessonDetailResponse,
   LessonSegment as ContentSegment,
@@ -250,7 +251,10 @@ describe("online, a check with no key is asked, and the server's mark is the onl
     await pick("First option");
 
     expect(screen.queryByText(RECOVERY_LINE)).toBeNull();
-    expect(continueButton()).toBeInTheDocument();
+    // A real failure with nothing to mark it by: the pick holds and the
+    // child can send it again (Lydia, 9 Nov, restated 10 Nov).
+    expect(continueButton()).toBeNull();
+    expect(screen.getByRole("button", { name: SEND_AGAIN })).toBeInTheDocument();
   });
 
   it("counts no miss in the error streak for an answer nothing marked", async () => {

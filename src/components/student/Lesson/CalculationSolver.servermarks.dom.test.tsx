@@ -3,7 +3,14 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { CalculationSolver, type StepGiven } from "./CalculationSolver";
 import { calculationFromVariant } from "@/lib/lessons/fromContent";
 import type { CalculationVariant } from "@/lib/api/variants";
-import { LONG_HOLD_MS, type PendingVerdict, type Verdict, type VerdictReply } from "@/lib/lessons/verdict";
+import {
+  MARK_WAIT_LINE,
+  SEND_AGAIN,
+  SLOW_MARK_MS,
+  type PendingVerdict,
+  type Verdict,
+  type VerdictReply,
+} from "@/lib/lessons/verdict";
 import type { CalculationSegment } from "@/lib/types";
 
 /**
@@ -129,23 +136,55 @@ describe("while a step's mark is on its way", () => {
   });
 });
 
-describe("a hold long enough to look broken (SCRUM-315)", () => {
+/** A reply that never lands on its own, can be sent again, and can fail. */
+function failingReply() {
+  const reply: PendingVerdict = new Promise<Verdict>(() => {});
+  const listeners = new Set<() => void>();
+  reply.retry = vi.fn();
+  reply.onFailure = (listener) => {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  };
+  const fail = () =>
+    act(() => {
+      for (const hear of [...listeners]) hear();
+    });
+  return { reply, fail };
+}
+
+describe("the wait for a mark (SCRUM-315; Lydia, 9 Nov, restated 10 Nov)", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("offers Try again under the step, which sends the same answer again", () => {
+  it("says her line under the step past two seconds, and never retries on a timer", () => {
     vi.useFakeTimers();
-    const reply: PendingVerdict = new Promise<Verdict>(() => {});
-    reply.retry = vi.fn();
+    const { reply } = failingReply();
     show(() => reply);
     answer("3");
 
-    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.queryByText(MARK_WAIT_LINE)).toBeNull();
     act(() => {
-      vi.advanceTimersByTime(LONG_HOLD_MS);
+      vi.advanceTimersByTime(SLOW_MARK_MS);
     });
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(screen.getByText(MARK_WAIT_LINE)).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(SLOW_MARK_MS * 30);
+    });
+    expect(screen.queryByRole("button", { name: SEND_AGAIN })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("offers Send again under the step on a real failure, which sends the same answer again", async () => {
+    vi.useFakeTimers();
+    const { reply, fail } = failingReply();
+    show(() => reply);
+    answer("3");
+
+    await fail();
+    fireEvent.click(screen.getByRole("button", { name: SEND_AGAIN }));
 
     expect(reply.retry).toHaveBeenCalledOnce();
   });

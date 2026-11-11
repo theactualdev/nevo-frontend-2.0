@@ -9,7 +9,7 @@ import {
 import { LessonPlayer } from "./LessonPlayer";
 import { RECOVERY_LINE } from "./QuickCheckSheet";
 import { ApiError } from "@/lib/api/client";
-import { LONG_HOLD_MS } from "@/lib/lessons/verdict";
+import { MARK_WAIT_LINE, SEND_AGAIN, SLOW_MARK_MS } from "@/lib/lessons/verdict";
 import { clearSession, setSession } from "@/lib/auth/session";
 import type { Lesson } from "@/lib/types";
 
@@ -354,35 +354,115 @@ describe("an answer marked on the device (9b)", () => {
   });
 });
 
-describe("Try again on a hold long enough to look broken (SCRUM-315)", () => {
+/*
+ * THE WAIT FOR A MARK (SCRUM-315; Lydia, 9 Nov, restated 10 Nov): one
+ * neutral line past about two seconds, and the retry "only on a real failure
+ * rather than on a timer", reading "Send again". A real failure is a send that
+ * failed - no connection, the server erring - with nothing on the device to
+ * mark it by: online, where the server holds the keys. Where the package does
+ * carry a key, it marks the answer, as offline (5 Nov), and nothing is
+ * offered. A refusal is not a failure.
+ */
+describe("the wait for a mark, and Send again on a real failure", () => {
+  /** The check as an online read has it: the server holds its key. */
+  const KEYLESS = {
+    ...LESSON,
+    segments: [
+      { ...LESSON.segments[0], quickCheck: { ...CHECK, correctId: undefined } },
+      LESSON.segments[1],
+    ],
+  } as unknown as Lesson;
+  const openKeyless = async () => {
+    progress.opened = { sessionId: SESSION, resumed: true };
+    render(<LessonPlayer lesson={KEYLESS} plan={null} live />);
+    await act(async () => {});
+  };
+  const sendAgain = () => screen.queryByRole("button", { name: SEND_AGAIN });
+
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("sends the same answer again, under its own attempt id, and the first mark back decides", async () => {
+  it("says her line past two seconds and offers nothing while the reply is only slow", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const lands: ((row: unknown) => void)[] = [];
-    api.saveAttempt.mockImplementation(
-      () => new Promise((resolve) => lands.push(resolve)),
-    );
-    await open();
+    api.saveAttempt.mockImplementation(() => new Promise(() => {}));
+    await openKeyless();
     await pick("Key says wrong");
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(LONG_HOLD_MS);
-    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(screen.queryByText(MARK_WAIT_LINE)).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SLOW_MARK_MS);
+    });
+    expect(screen.getByText(MARK_WAIT_LINE)).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SLOW_MARK_MS * 30);
+    });
+    expect(sendAgain()).toBeNull();
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(continueButton()).toBeNull();
+  });
+
+  it("holds the pick and offers Send again when the send fails with no key to mark it", async () => {
+    api.saveAttempt.mockRejectedValueOnce(new ApiError(503, "unavailable"));
+    await openKeyless();
+    await pick("Key says wrong");
+
+    expect(sendAgain()).toBeInTheDocument();
+    // Held: no way on, no verdict, and not the line - nothing is still working.
+    expect(continueButton()).toBeNull();
+    expect(screen.queryByText(RECOVERY_LINE)).toBeNull();
+    expect(screen.queryByText(MARK_WAIT_LINE)).toBeNull();
+  });
+
+  it("sends the same answer again, under its own attempt id, and the first mark back decides", async () => {
+    const lands: ((row: unknown) => void)[] = [];
+    api.saveAttempt
+      .mockRejectedValueOnce(new ApiError(0, "offline"))
+      .mockImplementation(() => new Promise((resolve) => lands.push(resolve)));
+    await openKeyless();
+    await pick("Key says wrong");
+
+    fireEvent.click(screen.getByRole("button", { name: SEND_AGAIN }));
+    await act(async () => {});
 
     expect(api.saveAttempt).toHaveBeenCalledTimes(2);
     const [[, first], [, again]] = api.saveAttempt.mock.calls;
     // The same answer: the server stores it once.
     expect(again).toEqual(first);
-    await act(async () => lands[1](reply(true)));
+    expect(sendAgain()).toBeNull();
+    await act(async () => lands[0](reply(true)));
     expect(continueButton()).toBeInTheDocument();
-    // The first, landing late, changes nothing and counts nothing.
-    await act(async () => lands[0](reply(false)));
-    expect(continueButton()).toBeInTheDocument();
-    expect(screen.queryByText(RECOVERY_LINE)).toBeNull();
     expect(streak()).toBe(0);
+  });
+
+  it("offers Send again again only when that send fails too", async () => {
+    api.saveAttempt.mockRejectedValue(new ApiError(0, "offline"));
+    await openKeyless();
+    await pick("Key says wrong");
+
+    fireEvent.click(screen.getByRole("button", { name: SEND_AGAIN }));
+    await act(async () => {});
+
+    expect(api.saveAttempt).toHaveBeenCalledTimes(2);
+    expect(sendAgain()).toBeInTheDocument();
+  });
+
+  it("lets the package's key mark it where there is one, as offline, and offers nothing", async () => {
+    api.saveAttempt.mockRejectedValue(new ApiError(0, "offline"));
+    await open();
+    await pick("Key says right");
+
+    expect(sendAgain()).toBeNull();
+    expect(continueButton()).toBeInTheDocument();
+  });
+
+  it("offers nothing on a refusal: sent again, it would be refused again", async () => {
+    api.saveAttempt.mockRejectedValue(new ApiError(422, "refused"));
+    await openKeyless();
+    await pick("Key says wrong");
+
+    expect(sendAgain()).toBeNull();
+    // Unmarkable, as before: it holds no one.
+    expect(continueButton()).toBeInTheDocument();
   });
 });
