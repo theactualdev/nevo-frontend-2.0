@@ -21,8 +21,9 @@
  * nothing to wait for. A promise is waited for with the child's pick held
  * quietly (SCRUM-315, Lydia, 7 Nov): the pick visibly chosen, the control
  * still pressable, no spinner, no progress and no verdict before the
- * server's. A hold long enough to look broken offers a retry and nothing
- * else (`LONG_HOLD_MS`, `HoldRetry`).
+ * server's. A wait past about two seconds says one neutral line about the
+ * system, and only a send that really failed offers to send it again
+ * (`SLOW_MARK_MS`, `MarkWait`; Lydia, 9 Nov, restated 10 Nov).
  */
 export type Verdict = boolean | null;
 
@@ -30,26 +31,49 @@ export type Verdict = boolean | null;
  * A mark on its way that can be asked for again: `retry` sends the same
  * answer once more (the same attempt id, so the server keeps one), and the
  * reply settles on whichever answer lands first.
+ *
+ * `onFailure` hears a send of it that REALLY FAILED - no connection, or the
+ * server erring or not answering in time - with nothing on the device to mark
+ * it by, so the reply is still unsettled and only sending it again can settle
+ * it. A listener added while such a failure stands hears it at once. Gives
+ * back the way to stop listening.
  */
-export type PendingVerdict = Promise<Verdict> & { retry?: () => void };
+export type PendingVerdict = Promise<Verdict> & {
+  retry?: () => void;
+  onFailure?: (listener: () => void) => () => void;
+};
 
 /** What an answer handler gives back: a mark now, or one on its way. */
 export type VerdictReply = Verdict | PendingVerdict;
 
 /**
- * HOW LONG A HELD PICK WAITS BEFORE IT OFFERS A RETRY (SCRUM-315, Lydia, 7
- * Nov: "one extra state for a hold long enough to look broken: a retry and
- * nothing else"). PROVISIONAL: 8 seconds, chosen here and named for her to
- * change. A reply normally lands in well under a second; the outage of 6 Nov
- * failed reads after about 10.7 seconds, so a hold of 8 has already outlasted
- * any reply that was coming soon.
+ * HOW LONG A HELD PICK WAITS BEFORE THE NEUTRAL LINE (Lydia, 9 Nov: "If a
+ * wait longer than about two seconds is still possible after his fix, bring
+ * it back to me and we will add one neutral line about the system rather
+ * than a state on the child's answer"). It was: replies ran 2.3 to 8.6 s on
+ * 9 Nov, and her 10 Nov rulings restate the line. It says nothing about the
+ * answer, and it offers nothing - the retry is not on a timer any more.
  */
-export const LONG_HOLD_MS = 8_000;
+export const SLOW_MARK_MS = 2_000;
+
+/** Her words for it (9 Nov, restated 10 Nov). */
+export const MARK_WAIT_LINE = "Nevo has your answer and is still working.";
+
+/** Her word for sending it again, shown on a real failure only. */
+export const SEND_AGAIN = "Send again";
 
 /** The retry a reply on its way offers, or null where there is none. */
 export function retryOf(reply: VerdictReply | null | undefined): (() => void) | null {
   if (!(reply instanceof Promise)) return null;
   return typeof reply.retry === "function" ? reply.retry : null;
+}
+
+/** How to hear a reply's real failures, or null where it reports none. */
+export function failureOf(
+  reply: VerdictReply | null | undefined,
+): ((listener: () => void) => () => void) | null {
+  if (!(reply instanceof Promise)) return null;
+  return typeof reply.onFailure === "function" ? reply.onFailure : null;
 }
 
 /**

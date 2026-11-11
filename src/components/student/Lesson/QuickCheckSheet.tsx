@@ -13,11 +13,10 @@ import type { ReteachingResponse } from "@/lib/api/lessons";
 import type { WayIn } from "@/lib/lessons/waysIn";
 import {
   onVerdict,
-  retryOf,
   type Verdict,
   type VerdictReply,
 } from "@/lib/lessons/verdict";
-import { HoldRetry, useLongHold } from "./HoldRetry";
+import { MarkWait } from "./MarkWait";
 import type { QuickCheck } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AnswerCheck, AnswerOption } from "./AnswerOption";
@@ -272,8 +271,8 @@ export function QuickCheckSheet({
   const ask = useRef(0);
   /**
    * THE REPLY ON ITS WAY, and a count of the holds started - each pick, each
-   * retry and each "Try again" a new one - which the long hold is timed from
-   * (SCRUM-315).
+   * retry and each "Send again" a new one - which the wait's line is timed
+   * from (SCRUM-315, `MarkWait`).
    */
   const [pending, setPending] = useState<VerdictReply | null>(null);
   const [hold, setHold] = useState(0);
@@ -463,23 +462,19 @@ export function QuickCheckSheet({
 
   /**
    * A MARK ON ITS WAY (SCRUM-315): the pick holds visibly chosen, everything
-   * stays pressable, and nothing is said - no spinner, no progress, no
-   * verdict before the server's. Held long enough to look broken, it offers
-   * "Try again" and nothing else.
+   * stays pressable - no spinner, no progress, no verdict before the
+   * server's. Past about two seconds, her one neutral line about the system;
+   * "Send again" only on a real failure (Lydia, 9 Nov, restated 10 Nov).
    */
   const holding =
     (chosenId !== null && verdict === undefined) || box?.marking === true;
-  const longHold = useLongHold(holding ? hold : null);
-  const retry = holding ? retryOf(pending) : null;
-  const holdRetry =
-    longHold && retry ? (
-      <HoldRetry
-        onRetry={() => {
-          retry();
-          setHold((h) => h + 1);
-        }}
-      />
-    ) : null;
+  const markWait = (
+    <MarkWait
+      hold={holding ? hold : null}
+      reply={pending}
+      onSentAgain={() => setHold((h) => h + 1)}
+    />
+  );
 
   const tone = (id: string) => {
     if (chosenId === null) return "idle";
@@ -577,7 +572,7 @@ export function QuickCheckSheet({
             onKeepGoing={onContinue}
             onTakeWay={(way) => onTakeWay?.(way)}
             onTakeBreak={onTakeBreak}
-            retry={holdRetry}
+            retry={markWait}
             talk={talkItThrough}
           />
         ) : (
@@ -646,7 +641,7 @@ export function QuickCheckSheet({
                 : "Finish"}
           </Button>
         )}
-        {holdRetry}
+        {markWait}
           </>
         )}
       </SheetContent>
@@ -689,7 +684,7 @@ function ReteachBox({
   onKeepGoing: () => void;
   onTakeWay: (way: WayIn) => void;
   onTakeBreak: () => void;
-  /** The long hold's "Try again", while the retry's mark is long on its way. */
+  /** The wait for the retry's mark (`MarkWait`): its line, or "Send again". */
   retry?: React.ReactNode;
   /** "Talk it through", on offer at the third miss (her 12). */
   talk?: () => void;

@@ -206,13 +206,13 @@ describe("what the live row carries onto the card", () => {
     partWay("in_progress", { segmentCount: 10 });
 
     expect(card().status).toBe("in_progress");
-    expect(card().place).toEqual({ fraction: 0.2, words: "Segment 3 of 10" });
+    expect(card().place).toEqual({ fraction: 0.2, words: "Section 3 of 10" });
   });
 
   it("reads a lesson the child left part-way the same way", () => {
     partWay("exited", { segmentCount: 4 });
 
-    expect(card().place?.words).toBe("Segment 3 of 4");
+    expect(card().place?.words).toBe("Section 3 of 4");
   });
 
   it("carries no place when the row gives no count", () => {

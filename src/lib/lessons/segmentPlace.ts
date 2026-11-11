@@ -17,8 +17,13 @@
  * as the position, so nothing is read from a second source.
  *
  * NEVER A PERCENTAGE (rule 9). The fraction is drawn, and only drawn. What a
- * screen reader says is the position in words - "Segment 3 of 10" - the same
- * words the shared `ProgressBar` speaks in the player.
+ * screen reader says is the position in words - "Section 3 of 10".
+ *
+ * IN THE CARDS' OWN WORD (Lydia, 9 Nov, restated 10 Nov: "the spoken and
+ * written labels must match whatever is actually counted"). The cards write
+ * the count as "9 sections" - the child's word for a segment, as in her 7 Nov
+ * lines - so they speak the place as a section too. It was "Segment 3 of 10",
+ * the player's line, beside a card that never says "segment".
  *
  * NULL IS THE NOTHING-STATE (rule 5): no count, a count of 0 (the schema's
  * default, which no playable lesson has), or a position the count cannot hold.
@@ -27,7 +32,7 @@
 export interface SegmentPlace {
   /** `segmentPosition / segmentCount`, 0 to just under 1. Drawn, never printed. */
   fraction: number;
-  /** "Segment 3 of 10" - what a screen reader says instead of the fraction. */
+  /** "Section 3 of 10" - what a screen reader says instead of the fraction. */
   words: string;
 }
 
@@ -52,6 +57,6 @@ export function segmentPlace(
   }
   return {
     fraction: position / count,
-    words: `Segment ${position + 1} of ${count}`,
+    words: `Section ${position + 1} of ${count}`,
   };
 }

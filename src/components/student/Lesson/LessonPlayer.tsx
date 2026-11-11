@@ -3079,6 +3079,7 @@ export function LessonPlayer({
     {
       clientAttemptId = randomId(),
       markedHere = false,
+      onFailed,
     }: {
       /** The answer's own id, kept by a retry so the server stores it once. */
       clientAttemptId?: string;
@@ -3087,6 +3088,11 @@ export function LessonPlayer({
        * package's key is what marked it, and it goes up saying so (9b).
        */
       markedHere?: boolean;
+      /**
+       * Hears the send REALLY FAILING - a failure worth sending again
+       * (`retryable`), not a refusal - before its null reply lands.
+       */
+      onFailed?: () => void;
     } = {},
   ): Promise<LessonQuestionAttempt | null> | null => {
     if (!live || !answer) return null;
@@ -3116,6 +3122,7 @@ export function LessonPlayer({
       (cause: unknown) => {
         if (retryable(cause)) {
           holdAnswer(lesson.id, { sessionId: id, body: held }, owner);
+          onFailed?.();
         }
         return null;
       },
@@ -3141,10 +3148,10 @@ export function LessonPlayer({
     onStored?: (stored: LessonQuestionAttempt) => void,
   ): VerdictReply => {
     /*
-     * ONE ANSWER, HOWEVER OFTEN IT IS SENT. "Try again" on a long hold
-     * (SCRUM-315) sends it again under the same attempt id, so the server
-     * stores it once; the mark is whichever reply lands first, and what the
-     * reply leads to (a hand-off, re-teaching, the gate) happens once.
+     * ONE ANSWER, HOWEVER OFTEN IT IS SENT. "Send again" (SCRUM-315) sends it
+     * again under the same attempt id, so the server stores it once; the mark
+     * is whichever reply lands first, and what the reply leads to (a hand-off,
+     * re-teaching, the gate) happens once.
      */
     const clientAttemptId = randomId();
     let heard = false;
@@ -3153,19 +3160,62 @@ export function LessonPlayer({
       heard = true;
       onStored?.(stored);
     };
-    const first = saveAttempt(answer, once, { clientAttemptId, markedHere: true });
-    if (!first) return packageMark();
-    let settle: (mark: Verdict) => void = () => {};
+    let resolveMark: (mark: Verdict) => void = () => {};
     const reply: PendingVerdict = new Promise<Verdict>((resolve) => {
-      settle = resolve;
+      resolveMark = resolve;
     });
-    const landed = (write: Promise<LessonQuestionAttempt | null>) =>
-      void write.then((stored) => settle(verdictOf(stored, packageMark)));
-    landed(first);
+    let settled = false;
+    const settle = (mark: Verdict) => {
+      settled = true;
+      resolveMark(mark);
+    };
+    /*
+     * A REAL FAILURE WITH NOTHING TO MARK IT BY (Lydia, 9 Nov, restated 10
+     * Nov: the retry "appears only on a real failure rather than on a
+     * timer"). A send that fails - no connection, the server erring or not
+     * answering in time - is held on the device, as before. Where the package
+     * carries a key, that key marks it, as offline (5 Nov). Where it carries
+     * none - online, where the server holds the keys - nothing can, so the
+     * reply stays unsettled and says so to whoever listens: "Send again". A
+     * refusal is not a failure: sending it again would be refused again, so it
+     * settles as before.
+     */
+    const listeners = new Set<() => void>();
+    let failing = false;
+    const send = () => {
+      let failed = false;
+      const write = saveAttempt(answer, once, {
+        clientAttemptId,
+        markedHere: true,
+        onFailed: () => {
+          failed = true;
+        },
+      });
+      if (write) {
+        void write.then((stored) => {
+          if (settled) return;
+          const mark = verdictOf(stored, packageMark);
+          if (stored === null && failed && mark === null) {
+            failing = true;
+            for (const hear of [...listeners]) hear();
+            return;
+          }
+          settle(mark);
+        });
+      }
+      return write;
+    };
+    if (!send()) return packageMark();
     reply.retry = () => {
-      const again = saveAttempt(answer, once, { clientAttemptId, markedHere: true });
-      if (again) landed(again);
-      else settle(packageMark());
+      failing = false;
+      if (!send()) settle(packageMark());
+    };
+    reply.onFailure = (listener) => {
+      listeners.add(listener);
+      if (failing && !settled) listener();
+      return () => {
+        listeners.delete(listener);
+      };
     };
     return reply;
   };

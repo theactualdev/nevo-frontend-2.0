@@ -394,7 +394,7 @@ function LessonCard({
  * as how far they are - the same for everyone, so it was the rising curve
  * again. D21 allowed the fill back only once the real fraction was on the
  * wire, and B51 put it there: the frame's conic fill now runs to this child's
- * `segmentPosition / segmentCount`, and says "Segment 3 of 10" rather than a
+ * `segmentPosition / segmentCount`, and says "Section 3 of 10" rather than a
  * number. A row that does not say keeps the plain mark.
  *
  * THE PLAIN MARK IS THE FRAME'S RING AND NOTHING IN IT. Nevo Lessons Frame,

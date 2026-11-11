@@ -23,7 +23,7 @@ import type { LessonSummary } from "./lessonCatalog";
  * on 1 Oct because its width was a fraction the wire did not carry, and a bar
  * is read as an amount exactly as a ring is. B51 put the true one on the
  * progress row, so the frame's bar runs to `lesson.place` - and says
- * "Segment 3 of 10", never a number. With no place there is no bar; the
+ * "Section 3 of 10", never a number. With no place there is no bar; the
  * frame's line stays either way, because being partway is a fact the progress
  * row states.
  *

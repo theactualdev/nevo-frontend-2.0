@@ -10,10 +10,9 @@ import { cn } from "@/lib/utils";
 import {
   keyMark,
   onVerdict,
-  retryOf,
   type VerdictReply,
 } from "@/lib/lessons/verdict";
-import { HoldRetry, useLongHold } from "./HoldRetry";
+import { MarkWait } from "./MarkWait";
 import {
   AnswerDot,
   AnswerOption,
@@ -147,14 +146,12 @@ export function AfterLessonAssessment({
   /** A confirmed answer whose mark is on its way: held, nothing said. */
   const [marking, setMarking] = useState(false);
   /**
-   * The reply on its way, and the holds started, which the long hold is
-   * timed from (SCRUM-315): held long enough to look broken, it offers "Try
-   * again" and nothing else.
+   * The reply on its way, and the holds started, which the wait's line is
+   * timed from (SCRUM-315, `MarkWait`): her one neutral line past about two
+   * seconds, and "Send again" only on a real failure.
    */
   const [pending, setPending] = useState<VerdictReply | null>(null);
   const [hold, setHold] = useState(0);
-  const longHold = useLongHold(marking ? hold : null);
-  const retry = marking ? retryOf(pending) : null;
   // When the current question was put in front of the child.
   const shownAt = useRef<number | null>(null);
   useEffect(() => {
@@ -376,14 +373,13 @@ export function AfterLessonAssessment({
 
       <div className="shrink-0 px-6 pt-3 pb-6 sm:px-8 lg:px-10">
         <div className="mx-auto w-full max-w-[600px] lg:max-w-[640px]">
-          {longHold && retry && (
-            <HoldRetry
-              onRetry={() => {
-                retry();
-                setHold((h) => h + 1);
-              }}
-            />
-          )}
+          {/* Above the way on, which it never replaces. */}
+          <MarkWait
+            hold={marking ? hold : null}
+            reply={pending}
+            onSentAgain={() => setHold((h) => h + 1)}
+            className="mb-3"
+          />
           <Button
             className="w-full"
             disabled={!selected}

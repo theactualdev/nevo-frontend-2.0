@@ -32,7 +32,7 @@ export interface LessonSummary {
   /**
    * Where the child is in an in-progress lesson, from their own progress row
    * (backend B51) - drawn as the card's ring and the preview's bar, and
-   * spoken as "Segment 3 of 10". Absent when the row does not say, and then
+   * spoken as "Section 3 of 10". Absent when the row does not say, and then
    * the card draws the plain in-progress mark (design D21) and the preview no
    * bar. See `lib/lessons/segmentPlace`.
    */

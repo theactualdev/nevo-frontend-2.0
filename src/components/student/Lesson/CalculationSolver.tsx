@@ -23,11 +23,10 @@ import type {
 import { storedMark } from "@/lib/lessons/storedAnswer";
 import {
   onVerdict,
-  retryOf,
   type Verdict,
   type VerdictReply,
 } from "@/lib/lessons/verdict";
-import { HoldRetry, useLongHold } from "./HoldRetry";
+import { MarkWait } from "./MarkWait";
 import { cn } from "@/lib/utils";
 import { NO_SOUND, PressedLine } from "./PressedLine";
 import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
@@ -320,13 +319,12 @@ export function CalculationSolver({
   /** Which commit a mark answers, so one for a step since left lands nowhere. */
   const markAsk = useRef(0);
   /**
-   * The reply on its way, and the holds started: held long enough to look
-   * broken, the step offers "Try again" and nothing else (SCRUM-315).
+   * The reply on its way, and the holds started (SCRUM-315, `MarkWait`): her
+   * one neutral line past about two seconds, and "Send again" only on a real
+   * failure.
    */
   const [pending, setPending] = useState<VerdictReply | null>(null);
   const [hold, setHold] = useState(0);
-  const longHold = useLongHold(marking ? hold : null);
-  const retry = marking ? retryOf(pending) : null;
   /**
    * Once the child has started the narration, each new step is read as it
    * arrives (17b §5, "re-reads whenever the step advances"). Never before:
@@ -1282,15 +1280,12 @@ export function CalculationSolver({
             )}
             </div>
             )}
-            {/* A mark long on its way: "Try again", and nothing else. */}
-            {longHold && retry && (
-              <HoldRetry
-                onRetry={() => {
-                  retry();
-                  setHold((h) => h + 1);
-                }}
-              />
-            )}
+            {/* A mark on its way: the line, or "Send again" on a failure. */}
+            <MarkWait
+              hold={marking ? hold : null}
+              reply={pending}
+              onSentAgain={() => setHold((h) => h + 1)}
+            />
           </>
         )}
       </div>
