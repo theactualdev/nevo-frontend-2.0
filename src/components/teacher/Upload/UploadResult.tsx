@@ -131,7 +131,14 @@ export function UploadResult({
       {/* The questions the parse left out, in the server's words. After a
           re-read, that run's notes: the upload's describe a lesson that has
           since been read again. */}
-      <QuestionsLeftOut notes={regenerate.reviewNotes ?? reviewNotes} className="mt-5" />
+      <QuestionsLeftOut
+        notes={regenerate.reviewNotes ?? reviewNotes}
+        className="mt-5"
+        segmentName={(key) =>
+          new Map(segments.map((s, i) => [s.segmentKey, s.title?.trim() || `Segment ${i + 1}`])).get(key) ??
+          null
+        }
+      />
 
       <div className="mt-5 flex max-w-[660px] items-start gap-3.5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-elevation-1">
         <span className="mt-px shrink-0 text-nevo-navy">

@@ -168,3 +168,67 @@ describe("the finish screen", () => {
     expect(said()).toBeInTheDocument();
   });
 });
+
+/**
+ * A refused picture (backend bdc6bed), shown against its segment on the
+ * upload's screens until the lesson review can read it (Hub, 9 Nov, (b)):
+ * the server's sentence, under the segment's name as each screen names it.
+ */
+describe("a refused picture", () => {
+  const PICTURE =
+    "A safety check held back the picture for this section, so the section has no picture. Its teaching text is unchanged. If that looks wrong, tell us the lesson and this section and we will look at the check rather than your material.";
+  const REFUSED = [
+    // As backend 86f8e10 sends it: no `categories`, no `phase`.
+    { code: "visual_blocked_by_safety", segment: "k-2", message: PICTURE, secondsSpent: 3.1 },
+  ];
+  const TWO: UploadStructure = {
+    ...STRUCTURE,
+    reviewNotes: REFUSED,
+    lessons: [
+      {
+        lessonId: "l-1",
+        title: "Heat transfer",
+        sequenceOrder: 1,
+        modules: [{ title: "Conductors", sequenceOrder: 1, segmentIds: ["k-1", "k-2"], recap: null, preview: null }],
+      },
+    ],
+  };
+  const ROWS = [
+    { segmentKey: "k-1", title: "Metals", contentType: "explanatory_text", sequenceOrder: 1, estimatedMinutes: 3, needsReview: false },
+    { segmentKey: "k-2", title: null, contentType: "explanatory_text", sequenceOrder: 2, estimatedMinutes: 3, needsReview: false },
+  ];
+
+  /*
+   * NOT SAID YET, on any screen (Hub, 11 Nov): the server's sentence invites a
+   * report there is nowhere to make, and Lydia's words for the note have not
+   * arrived. `QuestionsLeftOut.dom` pins how it is said once they do.
+   */
+  it("is not said on a single lesson's sections", () => {
+    const { container } = render(
+      <LiveModuleReview uploadId="u-1" structure={TWO} segments={ROWS as never} onBack={vi.fn()} onConfirmed={vi.fn()} />,
+    );
+
+    expect(screen.queryByText(PICTURE)).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/tell us|violence|3\.1/);
+  });
+
+  it("is not said on a unit's tree", () => {
+    render(<LiveStructureTree uploadId="u-1" structure={TWO} segments={ROWS as never} blockName="Physics" />);
+
+    expect(screen.queryByText(PICTURE)).not.toBeInTheDocument();
+  });
+
+  it("is not said on the finish screen", () => {
+    const lesson = {
+      ...LESSON,
+      segmentCount: 2,
+      segments: [
+        { id: "s-1", segmentKey: "k-1", sequenceOrder: 1, title: "Metals", contentType: "explanatory_text", body: "…", needsReview: false, availableModalities: ["text"] },
+        { id: "s-2", segmentKey: "k-2", sequenceOrder: 2, title: "Wood and plastic", contentType: "explanatory_text", body: "…", needsReview: true, availableModalities: ["text"] },
+      ],
+    } as unknown as LessonDetailResponse;
+    render(<UploadResult lesson={lesson} fileName="heat.pdf" onUploadAnother={vi.fn()} reviewNotes={REFUSED} />);
+
+    expect(screen.queryByText(PICTURE)).not.toBeInTheDocument();
+  });
+});

@@ -487,7 +487,24 @@ export function LiveStructureTree({
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[18px] xl:px-8 xl:py-[22px]">
         {/* The questions the parse left out, in the server's words. */}
-        <QuestionsLeftOut notes={structure.reviewNotes} className="mb-5" />
+        <QuestionsLeftOut
+          notes={structure.reviewNotes}
+          className="mb-5"
+          segmentName={(key) => {
+            for (const lesson of draft) {
+              let n = 0;
+              for (const m of lesson.modules) {
+                for (const k of m.segmentIds) {
+                  n += 1;
+                  if (k === key) {
+                    return rows?.find((r) => r.segmentKey === key)?.title?.trim() || `Segment ${n}`;
+                  }
+                }
+              }
+            }
+            return null;
+          }}
+        />
         {banner}
         <div className="mb-3 flex justify-end">
           <button
