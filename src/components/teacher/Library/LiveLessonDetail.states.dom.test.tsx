@@ -827,3 +827,18 @@ describe("a lesson whose review could not be read", () => {
     expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
   });
 });
+
+// Lydia, 10 Nov: "the parsed-segments line is dropped".
+describe("the server's parsed-segments line", () => {
+  it("is never said, even when the server sends it", () => {
+    render(
+      <LiveLessonDetail
+        lesson={{ ...LESSON, confirmationSummary: "Parsed 7 lesson segments for teacher review." } as LessonDetailResponse}
+        modules={[]}
+        assignments={[]}
+      />,
+    );
+
+    expect(screen.queryByText(/Parsed 7 lesson segments/)).not.toBeInTheDocument();
+  });
+});
