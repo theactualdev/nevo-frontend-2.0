@@ -410,7 +410,7 @@ function Captions({ items, failed, held, onHold, onSave, saving, locked, refusal
       </p>
       <div className="mt-3.5 flex flex-col gap-3">
         {items.map((item) => {
-          const label = item.segmentTitle || "this section";
+          const label = item.segmentTitle || "this segment";
           const isHeld = held.has(item.segmentId);
           const isEditing = editing === item.segmentId;
           const isSaving = saving === item.segmentId;

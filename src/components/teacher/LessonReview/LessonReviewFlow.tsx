@@ -667,10 +667,11 @@ function StepMade({
           title: m.title,
           count: plural(m.segmentIds.length, "segment", "segments"),
         }))
-      : segments.map((s, i) => ({
+      : // No sections: these rows are SEGMENTS, and say so (8 Nov).
+        segments.map((s, i) => ({
           key: s.id,
-          kicker: `Section ${i + 1}`,
-          title: s.title?.trim() || `Section ${i + 1}`,
+          kicker: `Segment ${i + 1}`,
+          title: s.title?.trim() || `Segment ${i + 1}`,
           count: "",
         }));
   return (
@@ -932,7 +933,7 @@ function AttentionCard({
               maxLength={400}
               autoFocus
               aria-label={notFound ? `Key point for ${row.label}` : "Key point wording"}
-              placeholder={notFound ? "Type the key point for this section" : "Edit the wording"}
+              placeholder={notFound ? "Type the key point for this segment" : "Edit the wording"}
               className={TEXTAREA}
             />
           ) : (

@@ -94,7 +94,7 @@ export function FinishBlock({
         <>
           <h2 className={H2}>{`“${title}” is reviewed and ready`}</h2>
           <p className={`${LINE} mt-2.5`}>
-            You&rsquo;ve reviewed every section. It&rsquo;s in your library and ready to assign to a
+            You&rsquo;ve reviewed every segment. It&rsquo;s in your library and ready to assign to a
             class.
           </p>
           {view.reviewedBy && (

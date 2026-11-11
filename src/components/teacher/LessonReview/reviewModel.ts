@@ -59,9 +59,9 @@ export function rowResolved(row: AttentionRow): boolean {
   return row.kind === "flag" ? row.resolved !== false : row.decided !== null;
 }
 
-/** "Fractions of a whole", or the section's place when the parse gave no title. */
+/** "Fractions of a whole", or the segment's place when the parse gave no title. */
 export function segmentLabel(segment: LessonSegment | undefined, index: number): string {
-  return segment?.title?.trim() || `Section ${index + 1}`;
+  return segment?.title?.trim() || `Segment ${index + 1}`;
 }
 
 /**
