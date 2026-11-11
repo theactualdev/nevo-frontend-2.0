@@ -8,10 +8,11 @@ import { Avatar, CARD } from "./primitives";
 import {
   onboardingApi,
   type ClassMergeProposal,
+  type DerivedClass,
   type OnboardingState,
   type RejectedRow,
 } from "@/lib/api/onboarding";
-import { ApiError, apiErrorMessage } from "@/lib/api/client";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { useSetupGate } from "@/hooks";
 import {
@@ -151,6 +152,11 @@ export function RosterImportView() {
   );
   /** OB-02 is a step forward from OB-01, not a different screen. */
   const [showFound, setShowFound] = useState(false);
+  /** The class being renamed or dropped (its `normalisedName`), while it saves. */
+  const [correcting, setCorrecting] = useState<string | null>(null);
+  const [correctFailed, setCorrectFailed] = useState<{ key: string; reason: string | null } | null>(
+    null,
+  );
   /*
    * Every successful write moves the school along the setup spine the
    * dashboard draws from the gate's copy of this same read. Without a refresh
@@ -246,6 +252,42 @@ export function RosterImportView() {
       .finally(() => setDeciding(null));
   };
 
+  /*
+   * RENAME OR DROP A DERIVED CLASS (Lydia, 11 Nov: allowed before anything in
+   * that import is activated). `PATCH /onboarding/classes`, keyed on
+   * `normalisedName`; the server takes it while the stage is "uploading", and
+   * answers with the state as it now stands - a dropped class leaves the
+   * list, and its students leave the counts.
+   */
+  const correct = (c: DerivedClass, change: { renameTo: string } | { drop: true }) => {
+    setCorrecting(c.normalisedName);
+    setCorrectFailed(null);
+    onboardingApi
+      .correctClasses([{ normalisedName: c.normalisedName, ...change }])
+      .then((s) => {
+        setState(s);
+        refreshGate();
+      })
+      .catch((err: unknown) => {
+        /*
+         * Confirmed meanwhile - another admin, or another tab. The page reads
+         * again and moves on to the confirmed step. The server's sentence
+         * ("The roster is confirmed. Change classes in the admin console.")
+         * is not shown: until the school is active the console pauses class
+         * changes, so it would send an admin where they can't act (raised).
+         */
+        if (err instanceof ApiError && apiErrorCode(err.detail) === "onboarding_already_confirmed") {
+          load();
+          return;
+        }
+        setCorrectFailed({
+          key: c.normalisedName,
+          reason: err instanceof ApiError ? apiErrorMessage(err.detail) : null,
+        });
+      })
+      .finally(() => setCorrecting(null));
+  };
+
   const confirm = () => {
     setConfirming(true);
     setConfirmFailed(false);
@@ -322,6 +364,9 @@ export function RosterImportView() {
             deciding={deciding}
             decideFailed={decideFailed}
             onDecide={decide}
+            correcting={correcting}
+            correctFailed={correctFailed}
+            onCorrect={correct}
           />
         ) : (
           <>
@@ -603,6 +648,9 @@ function WhatNevoFound({
   deciding,
   decideFailed,
   onDecide,
+  correcting,
+  correctFailed,
+  onCorrect,
 }: {
   state: OnboardingState;
   counts: ReturnType<typeof foundCounts>;
@@ -614,6 +662,9 @@ function WhatNevoFound({
   deciding: string | null;
   decideFailed: { key: string; reason: string | null } | null;
   onDecide: (proposal: ClassMergeProposal, merge: boolean) => void;
+  correcting: string | null;
+  correctFailed: { key: string; reason: string | null } | null;
+  onCorrect: (c: DerivedClass, change: { renameTo: string } | { drop: true }) => void;
 }) {
   const toFix = toFixLabel(counts.toFix);
   const merges = openMerges(state);
@@ -721,18 +772,14 @@ function WhatNevoFound({
           </h3>
           <div className={cn(CARD, "mt-3 divide-y divide-nevo-near-black/7")}>
             {state.classes.map((c) => (
-              <div
+              <DerivedClassRow
                 key={c.normalisedName}
-                className="flex items-center justify-between gap-4 px-[22px] py-3.5"
-              >
-                <span className="min-w-0 truncate text-[15px] font-semibold text-nevo-near-black">
-                  {c.name}
-                </span>
-                <span className="shrink-0 text-[13.5px] text-nevo-near-black/62">
-                  {c.studentCount}{" "}
-                  {c.studentCount === 1 ? "student" : "students"}
-                </span>
-              </div>
+                c={c}
+                busy={correcting !== null}
+                saving={correcting === c.normalisedName}
+                failed={correctFailed?.key === c.normalisedName ? correctFailed : null}
+                onCorrect={onCorrect}
+              />
             ))}
           </div>
         </>
@@ -794,6 +841,130 @@ function WhatNevoFound({
         </button>
       </div>
     </>
+  );
+}
+
+/**
+ * One class Nevo derived, with Rename and Drop (Lydia, 11 Nov). D24 draws the
+ * row as a name and a count only, so the controls and their two lines are
+ * ours, in plain words - raised to design. A class already created
+ * (`committed`) is past correcting, so it offers neither.
+ */
+function DerivedClassRow({
+  c,
+  busy,
+  saving,
+  failed,
+  onCorrect,
+}: {
+  c: DerivedClass;
+  busy: boolean;
+  saving: boolean;
+  failed: { reason: string | null } | null;
+  onCorrect: (c: DerivedClass, change: { renameTo: string } | { drop: true }) => void;
+}) {
+  const [mode, setMode] = useState<"idle" | "renaming" | "dropping">("idle");
+  const [name, setName] = useState(c.name);
+  const students = `${c.studentCount} ${c.studentCount === 1 ? "student" : "students"}`;
+  const next = name.trim();
+  const TEXT_BTN =
+    "cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline disabled:cursor-default disabled:opacity-55 disabled:hover:no-underline";
+
+  return (
+    <div className="px-[22px] py-3.5">
+      {mode === "renaming" ? (
+        <form
+          className="flex flex-wrap items-center gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!next || next === c.name) return;
+            onCorrect(c, { renameTo: next });
+            setMode("idle");
+          }}
+        >
+          <label className="sr-only" htmlFor={`rename-${c.normalisedName}`}>
+            New name for {c.name}
+          </label>
+          <input
+            id={`rename-${c.normalisedName}`}
+            value={name}
+            maxLength={255}
+            onChange={(e) => setName(e.target.value)}
+            className="h-10 min-w-0 flex-1 rounded-[9px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream-elevated px-3 text-[15px] text-nevo-near-black outline-none focus:border-nevo-navy"
+          />
+          <button type="submit" disabled={!next || next === c.name} className={TEXT_BTN}>
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setName(c.name);
+              setMode("idle");
+            }}
+            className={TEXT_BTN}
+          >
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <div className="flex items-center justify-between gap-4">
+          <span className="min-w-0 truncate text-[15px] font-semibold text-nevo-near-black">
+            {c.name}
+          </span>
+          <span className="flex shrink-0 items-center gap-4">
+            <span className="text-[13.5px] text-nevo-near-black/62">{students}</span>
+            {c.committed ? null : saving ? (
+              <span className="text-[13.5px] text-nevo-near-black/55">Saving&hellip;</span>
+            ) : mode === "idle" ? (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setMode("renaming")}
+                  className={TEXT_BTN}
+                >
+                  Rename
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setMode("dropping")}
+                  className={TEXT_BTN}
+                >
+                  Drop
+                </button>
+              </>
+            ) : null}
+          </span>
+        </div>
+      )}
+      {mode === "dropping" ? (
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <p className="m-0 text-[13.5px] leading-[1.5] text-nevo-near-black/70">
+            Dropping {c.name} leaves its {students} out of this roster.
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              onCorrect(c, { drop: true });
+              setMode("idle");
+            }}
+            className={TEXT_BTN}
+          >
+            Drop {c.name}
+          </button>
+          <button type="button" onClick={() => setMode("idle")} className={TEXT_BTN}>
+            Keep it
+          </button>
+        </div>
+      ) : null}
+      {failed ? (
+        <p role="alert" className="m-0 mt-2 text-[13px] leading-[1.5] text-nevo-navy">
+          {failed.reason ?? "That didn’t save, and nothing has changed. Try again in a moment."}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
