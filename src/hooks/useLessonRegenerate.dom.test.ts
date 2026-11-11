@@ -195,3 +195,38 @@ describe("a re-read that failed", () => {
     expect(result.current.incident).toBeNull();
   });
 });
+
+/**
+ * WHY, AS A CODE (backend 06396db): a failed run carries `reasonCode`, the
+ * same codes as an upload, so a re-read a safety check stopped can be said in
+ * Lydia's words (9 Nov, item 6).
+ */
+describe("the failed run's code", () => {
+  it("is kept with the failure", async () => {
+    awaitParseRun.mockResolvedValue({
+      status: "failed",
+      finished: true,
+      failureReason: "Our safety check held this file back, so the lesson has not been prepared.",
+      reasonCode: "safety_held",
+    });
+    const { result } = renderHook(() => useLessonRegenerate(vi.fn()));
+
+    act(() => result.current.run("l-1"));
+
+    await waitFor(() => expect(result.current.state).toBe("failed"));
+    expect(result.current.reasonCode).toBe("safety_held");
+  });
+
+  it("is null for a run that never said one, and forgotten on the next run", async () => {
+    awaitParseRun.mockResolvedValueOnce({ status: "failed", finished: true, failureReason: "x", reasonCode: "safety_held" });
+    const { result } = renderHook(() => useLessonRegenerate(vi.fn()));
+    act(() => result.current.run("l-1"));
+    await waitFor(() => expect(result.current.reasonCode).toBe("safety_held"));
+
+    awaitParseRun.mockResolvedValueOnce({ status: "failed", finished: true, failureReason: "y" });
+    act(() => result.current.run("l-1"));
+
+    await waitFor(() => expect(result.current.failureReason).toBe("y"));
+    expect(result.current.reasonCode).toBeNull();
+  });
+});

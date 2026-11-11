@@ -11,7 +11,7 @@ import type { LessonDetailResponse } from "@/lib/api/lessons";
 import { SplitSourceNotice } from "@/components/teacher/Library/SplitSourceNotice";
 import { stillToCheck } from "@/components/teacher/Library/LessonDetailActions";
 import { assignRefusal, reviewHrefFor } from "@/lib/lessons/signOff";
-import { IncidentLine } from "./ParseFallback";
+import { IncidentLine, SAFETY_HELD_LINE, SAFETY_HELD_REREAD_LINE } from "./ParseFallback";
 import { FinishBlock } from "./FinishBlock";
 import { finishView } from "@/components/teacher/LessonReview/reviewModel";
 
@@ -89,6 +89,14 @@ export function UploadResult({
   const blocked = !verdict.ready || awaitingReview || checking;
   const review = lesson.reviewSegmentCount;
   const rereading = regenerate.state === "running";
+  /*
+   * A RE-READ A SAFETY CHECK STOPPED (`reasonCode: "safety_held"`, backend
+   * 06396db), with no way to send it again: a refusal refuses again. The
+   * lesson on screen is the earlier reading, untouched - the re-read replaces
+   * it only when it finishes. Lydia, 10 Nov (item 4): the re-read's own line,
+   * above that lesson; item 6's line only where the lesson has nothing to show.
+   */
+  const rereadHeld = regenerate.state === "failed" && regenerate.reasonCode === "safety_held";
   /* SCRUM-319: Assign stays pressable; a tap while held explains it. */
   const [explained, setExplained] = useState(false);
   const refusal = assignRefusal(lesson.id, verdict.outstandingSteps);
@@ -104,6 +112,16 @@ export function UploadResult({
 
   return (
     <div className="mx-auto w-full max-w-[820px] px-6 pb-10">
+      {rereadHeld && (
+        <p
+          role="status"
+          className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 text-[14.5px] leading-[1.55] text-nevo-near-black/82"
+        >
+          {/* Lydia's words and nothing beyond them: not the server's sentence,
+              not the reference (as on the upload screens). */}
+          {segments.length > 0 ? SAFETY_HELD_REREAD_LINE : SAFETY_HELD_LINE}
+        </p>
+      )}
       {finish ? (
         <FinishBlock
           view={finish}
@@ -229,7 +247,7 @@ export function UploadResult({
         {/* Only where a caller can take the new lesson. No handler means no
             control, rather than a button that reads the lesson again and
             throws the result away. */}
-        {onRegenerated && (
+        {onRegenerated && !rereadHeld && (
           <button
             type="button"
             onClick={() => regenerate.run(lesson.id)}
@@ -272,7 +290,7 @@ export function UploadResult({
         </p>
       )}
 
-      {regenerate.state === "failed" && (
+      {regenerate.state === "failed" && !rereadHeld && (
         <>
           <p className="mt-3 max-w-[62ch] text-[14px] leading-[1.55] text-nevo-near-black/68">
             {/* The server's reason leads where the parse gave one - as it

@@ -42,6 +42,16 @@ export type FallbackKind =
 export const SAFETY_HELD_LINE =
   "Nevo stopped partway through this lesson because of a safety check, so the sections it would normally propose are not here. Nothing has reached your class.";
 
+/**
+ * THE SAME STOP ON A RE-READ (Lydia, 10 Nov, item 4). The earlier reading is
+ * still on screen, so "the sections … are not here" would sit above sections
+ * that are, and if the lesson was assigned in between, "Nothing has reached
+ * your class" would be false. No claim about the class. Said ABOVE the lesson,
+ * which is what "below" in it points at.
+ */
+export const SAFETY_HELD_REREAD_LINE =
+  "Nevo stopped partway through this re-reading because of a safety check, so what you see below is still the earlier reading.";
+
 export const FALLBACK_HEADINGS: Record<FallbackKind, string> = {
   noBoundary: "One continuous lesson",
   partial: "Read most of your block",
