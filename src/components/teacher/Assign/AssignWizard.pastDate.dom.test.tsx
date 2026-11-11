@@ -74,7 +74,8 @@ const continueBtn = () => screen.getByRole("button", { name: "Continue" });
 const toLater = () => {
   render(<AssignWizard preselect="l-1" />);
   fireEvent.click(continueBtn());
-  // JSS 2A, the only class, is ticked by default (the 14 Sep ruling).
+  // No class is ticked for the teacher (Hub, 9 Nov): pick JSS 2A, the only one.
+  fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
   fireEvent.click(continueBtn());
   fireEvent.click(screen.getByRole("button", { name: "Schedule for later" }));
 };

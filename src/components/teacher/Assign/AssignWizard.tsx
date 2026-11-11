@@ -441,18 +441,24 @@ export function AssignWizard({
   /** The fixtures stand in for the walkthrough only, never a failed read. */
   const offeredClasses = signedIn && classesSample ? [] : myClasses;
   /*
-   * THE CLASS SELECTOR'S DEFAULT (ruled 14 Sep, CONSOLE_INVENTORY item 9; C07i
-   * draws step 2 with its first class ticked): the class the teacher came from,
-   * else the first alphabetically. It holds only until they touch the list -
-   * from then on the choice is theirs, none included. Derived, not seeded, so
-   * a list that arrives after the first render gets its default too.
+   * NO CLASS IS CHOSEN FOR THE TEACHER, except the one they came from (Hub,
+   * 9 Nov, from a live assign test).
+   *
+   * This ticked the first class alphabetically whenever the flow was not
+   * opened from a class (ruled 14 Sep, CONSOLE_INVENTORY item 9; C07i draws
+   * step 2 with its first class ticked). Live, a teacher who picked SS 1B
+   * found JSS 2B already ticked beside it: picking ADDS to the list, so the
+   * lesson was on its way to a class nobody chose. A class is ticked here only
+   * when the teacher arrived from it (`?class=`), and only while it is theirs.
+   *
+   * It holds until they touch the list - from then on the choice is theirs,
+   * none included. Derived, not seeded, so a list that arrives after the first
+   * render still ticks the class they came from.
    */
   const firstClass =
     preselectClass && offeredClasses.some((c) => c.id === preselectClass)
       ? preselectClass
-      : [...offeredClasses].sort((a, b) =>
-          a.name.localeCompare(b.name, "en-GB", { numeric: true }),
-        )[0]?.id;
+      : undefined;
   const classes = classChoice ?? new Set(firstClass ? [firstClass] : []);
   const picked = [...chosen].filter((id) => offered.has(id));
   /*
