@@ -74,8 +74,19 @@ const SECTIONS: { heading: string; body: (child: string) => string }[] = [
   },
   {
     heading: "Where data is processed",
+    /*
+     * THE FACTUAL HALF, CORRECTED (Lydia, 11 Nov; register row 11). The
+     * database is in London and the service that runs the lessons in
+     * Frankfurt; the website is "served from" Virginia, her words, "because a
+     * parent should not have to think about servers". The LEGAL wording is
+     * today's, untouched: the US adequacy clause stays on the United States,
+     * and "Those transfers…" goes out as it stands - what it covers is
+     * counsel's. No files clause: nothing "to be confirmed" ships. The AI
+     * provider, narration, email, the delivery network and payments join the
+     * line once Teslim says where each runs.
+     */
     body: () =>
-      "Some processing happens outside Nigeria, including in the United States, which has no adequacy decision from the NDPC. Those transfers are made under Standard Contractual Clauses.",
+      "Some processing happens outside Nigeria. The database is in the United Kingdom (London), and the service that runs the lessons is in Germany (Frankfurt). The website is served from the United States (Virginia), which has no adequacy decision from the NDPC. Those transfers are made under Standard Contractual Clauses.",
   },
   {
     heading: "How long data is kept",
