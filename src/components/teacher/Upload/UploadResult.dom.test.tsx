@@ -69,6 +69,21 @@ const RECEIPT = {
 const tryAgain = () =>
   fireEvent.click(screen.getByRole("button", { name: "Try that again" }));
 
+// Lydia, 10 Nov: "the parsed-segments line is dropped".
+describe("the server's parsed-segments line", () => {
+  it("is never said, even when the server sends it", () => {
+    render(
+      <UploadResult
+        lesson={{ ...LESSON, confirmationSummary: "Parsed 2 lesson segments for teacher review." } as LessonDetailResponse}
+        fileName="fractions.pdf"
+        onUploadAnother={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/Parsed 2 lesson segments/)).not.toBeInTheDocument();
+  });
+});
+
 beforeEach(() => {
   regenerate.mockReset().mockResolvedValue(RECEIPT);
   awaitParseRun
@@ -296,20 +311,5 @@ describe("assigning from the finish screen", () => {
     tryAgain();
 
     await waitFor(() => expect(review).toHaveBeenCalledTimes(2));
-  });
-});
-
-// Lydia, 10 Nov: "the parsed-segments line is dropped".
-describe("the server's parsed-segments line", () => {
-  it("is never said, even when the server sends it", () => {
-    render(
-      <UploadResult
-        lesson={{ ...LESSON, confirmationSummary: "Parsed 2 lesson segments for teacher review." } as LessonDetailResponse}
-        fileName="fractions.pdf"
-        onUploadAnother={vi.fn()}
-      />,
-    );
-
-    expect(screen.queryByText(/Parsed 2 lesson segments/)).not.toBeInTheDocument();
   });
 });
