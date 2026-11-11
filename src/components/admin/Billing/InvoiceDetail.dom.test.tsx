@@ -44,7 +44,11 @@ const invoice = (over: Partial<Invoice> = {}): Invoice => ({
   ...over,
 });
 
-beforeEach(() => invoices.mockReset());
+// A block body: an arrow that RETURNS the mock is run by vitest as a teardown
+// after every test, making a stray call (the teacher lane's #1038).
+beforeEach(() => {
+  invoices.mockReset();
+});
 
 describe("the invoice detail page", () => {
   it("shows the invoice's own lines and its PDF", async () => {

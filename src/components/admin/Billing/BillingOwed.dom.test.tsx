@@ -23,6 +23,8 @@ const detailsRead = vi.fn<(id: string) => Promise<InvoiceTransferDetails | null>
   async () => null,
 );
 const reportTransfer = vi.fn<(id: string, ref: string) => Promise<TransferReport>>();
+const planOptionsRead = vi.fn(async () => []);
+const contactsRead = vi.fn(async () => []);
 let rows: Invoice[] = [];
 let rateType = "standard";
 /** Nevo's live support contact read (`GET /support-contact`). */
@@ -74,6 +76,11 @@ vi.mock("@/lib/api/billing", async (importOriginal) => {
       transferReports: () => reportsRead(),
       invoiceTransferDetails: (id: string) => detailsRead(id),
       reportTransfer: (id: string, ref: string) => reportTransfer(id, ref),
+      // The page's other two reads, answered here: left real, they went to
+      // the network and could answer after the test environment was torn
+      // down - "window is not defined" in other lanes' CI (10 Nov).
+      planOptions: () => planOptionsRead(),
+      contacts: () => contactsRead(),
     },
   };
 });
@@ -97,6 +104,8 @@ beforeEach(() => {
   rows = [];
   rateType = "standard";
   supportContact.mockReset().mockRejectedValue(new Error("offline"));
+  planOptionsRead.mockClear();
+  contactsRead.mockClear();
 });
 
 describe("Billing's How to pay", () => {
@@ -452,5 +461,20 @@ describe("the overdue panel's Contact billing support", () => {
     render(<BillingView />);
     await screen.findByRole("link", { name: "NEV-003" });
     expect(screen.queryByRole("link", { name: "Contact billing support" })).toBeNull();
+  });
+});
+
+/**
+ * NOTHING ON THIS PAGE GOES TO THE NETWORK IN A TEST (10 Nov). The plan list
+ * and the contacts were left real, so their requests could answer after the
+ * test environment was torn down - "window is not defined", failing other
+ * lanes' CI at random. Every read the page makes is answered here.
+ */
+describe("the billing page's reads, in a test", () => {
+  it("answers the plan list and the contacts from mocks, not the network", async () => {
+    upcoming.mockResolvedValue(charge({}));
+    render(<BillingView />);
+    await waitFor(() => expect(planOptionsRead).toHaveBeenCalled());
+    await waitFor(() => expect(contactsRead).toHaveBeenCalled());
   });
 });
