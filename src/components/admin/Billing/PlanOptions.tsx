@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { billingApi, type PlanOption, type PricingPlan } from "@/lib/api/billing";
 import { feedbackApi } from "@/lib/api/feedback";
 import { formatMoney, formatVatRate } from "@/lib/money";
@@ -45,12 +45,28 @@ export function PlanOptions({
 }) {
   const [plans, setPlans] = useState<PlanOption[] | null>(null);
   const [asked, setAsked] = useState<Asked>("idle");
+  /*
+   * GONE MEANS GONE. An answer that lands after this section has left the
+   * page sets nothing. Without this, a plan list (or a request's outcome)
+   * arriving late set state on an unmounted section - harmless in a browser,
+   * but in the test run it landed after jsdom was torn down and failed other
+   * lanes' CI with "window is not defined" (10 Nov).
+   */
+  const here = useRef(false);
 
   useEffect(() => {
+    here.current = true;
     billingApi
       .planOptions()
-      .then((rows) => setPlans(Array.isArray(rows) ? rows : []))
-      .catch(() => setPlans([]));
+      .then((rows) => {
+        if (here.current) setPlans(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (here.current) setPlans([]);
+      });
+    return () => {
+      here.current = false;
+    };
   }, []);
 
   if (!plans || plans.length === 0) return null;
@@ -66,8 +82,12 @@ export function PlanOptions({
         note: `Requesting a switch to the ${plan.name} plan.`,
         context: "/admin/billing",
       })
-      .then(() => setAsked("sent"))
-      .catch(() => setAsked("failed"));
+      .then(() => {
+        if (here.current) setAsked("sent");
+      })
+      .catch(() => {
+        if (here.current) setAsked("failed");
+      });
   };
 
   return (
