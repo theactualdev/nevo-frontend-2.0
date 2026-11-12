@@ -106,6 +106,21 @@ export function useLessonReview(
   /** What the last answer said, so a transition can be told from a repeat. */
   const wasReady = useRef<boolean | null>(null);
 
+  /*
+   * THE CALLBACK IS HELD, NOT DEPENDED ON (Hub's demo dry run, 12 Nov).
+   * `adopt` used to list `onBecameReady` as a dependency, and the read below
+   * depends on `adopt`. The lesson page passes an inline arrow, a new one on
+   * every render, so every answer re-rendered the page, changed `adopt` and
+   * fired the read again: Heat Transfer's page asked for its review 28 times
+   * in 51 seconds, for as long as it stayed open, and any one read that
+   * failed put "Needs review" back on a signed-off lesson. The read now runs
+   * once per lesson and per `refresh`, whatever the caller passes.
+   */
+  const onBecameReadyRef = useRef(onBecameReady);
+  useEffect(() => {
+    onBecameReadyRef.current = onBecameReady;
+  }, [onBecameReady]);
+
   const adopt = useCallback(
     (next: LessonReview, fromAction = false) => {
       setReview(next);
@@ -114,10 +129,10 @@ export function useLessonReview(
       wasReady.current = next.readyToAssign;
       // Only a real crossing, and only one a teacher caused.
       if (fromAction && next.readyToAssign && before === false) {
-        onBecameReady?.();
+        onBecameReadyRef.current?.();
       }
     },
-    [onBecameReady],
+    [],
   );
 
   useEffect(() => {

@@ -138,6 +138,25 @@ describe("reading the review", () => {
     expect(result.current.loading).toBe(true);
     expect(result.current.keyPoints).toEqual([]);
   });
+
+  it("reads once, even when the screen passes a new callback on every render", async () => {
+    /*
+     * The live defect (Hub's demo dry run, 12 Nov). The lesson page passes an
+     * inline arrow, so every render brought a new callback; the read depended
+     * on it through `adopt`, so every answer fired another read - 28 in 51
+     * seconds on Heat Transfer's page, for as long as it stayed open.
+     */
+    const { result, rerender } = renderHook(() => useLessonReview("l-1", () => {}));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    rerender();
+    rerender();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+
+    expect(review).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("settling a key point", () => {

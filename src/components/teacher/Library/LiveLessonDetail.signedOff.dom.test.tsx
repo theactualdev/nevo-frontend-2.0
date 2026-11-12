@@ -144,8 +144,36 @@ describe("until the server says so", () => {
     expect(screen.getByText("Needs review")).toBeInTheDocument();
   });
 
-  it("still counts them while the review is on its way", () => {
-    reviewState({ loading: true });
+});
+
+/*
+ * WHILE THE REVIEW IS ON ITS WAY, NOTHING EITHER WAY (Hub's demo dry run,
+ * 12 Nov). This block used to assert the opposite - "still counts them while
+ * the review is on its way" - and that was the defect: for the five or six
+ * seconds before the review read landed, Heat Transfer said "Needs review -
+ * A few segments need a check before you assign." over a lesson the server
+ * had signed off, then dropped it.
+ */
+describe("while the server has not answered yet", () => {
+  it("does not say the lesson needs review", () => {
+    reviewState({ loading: true, signedOff: null });
+
+    show();
+
+    expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
+    expect(screen.queryByText(/need a check before you assign/)).not.toBeInTheDocument();
+  });
+
+  it("marks none of its segments as waiting", () => {
+    reviewState({ loading: true, signedOff: null });
+
+    show();
+
+    expect(screen.queryByText("Worth a look")).not.toBeInTheDocument();
+  });
+
+  it("counts the flags once the answer is that the lesson is not signed off", () => {
+    reviewState({ loading: false, signedOff: false, ready: false });
 
     show();
 

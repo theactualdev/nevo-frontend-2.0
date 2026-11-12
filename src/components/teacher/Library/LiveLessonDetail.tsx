@@ -328,15 +328,23 @@ export function LiveLessonDetail({
    * flags never cleared, and the page contradicted the server.
    *
    * Once the server has answered that the lesson is signed off AND ready, no
-   * segment is counted or marked as waiting. Before it answers, when it could
-   * not be read, or on a deployment that does not say, the flags count as
-   * they always did.
+   * segment is counted or marked as waiting. When it could not be read, or on
+   * a deployment that does not say, the flags count as they always did.
+   *
+   * NOR WHILE THE ANSWER IS ON ITS WAY (Hub's demo dry run, 12 Nov). The
+   * review read starts only after the lesson read lands, so for its first five
+   * or six seconds this page counted the flags and said "Needs review - A few
+   * segments need a check before you assign." over Heat Transfer, which the
+   * server had signed off, and then dropped it without a word. An untrue
+   * state on screen is worse than a moment of saying nothing (Lydia, 4 Nov),
+   * so until the server answers, nothing is counted or marked either way.
    */
   const signedOffAndReady =
     !review.loading && !review.failed && review.signedOff === true && review.ready;
-  const outstandingSections = signedOffAndReady ? 0 : sections.remaining;
+  const countFlags = !review.loading && !signedOffAndReady;
+  const outstandingSections = countFlags ? sections.remaining : 0;
   /* The rows below mark only what is STILL waiting, from the hook's own list. */
-  const waitingIds = new Set(signedOffAndReady ? [] : sections.outstanding.map((s) => s.id));
+  const waitingIds = new Set(countFlags ? sections.outstanding.map((s) => s.id) : []);
   const outstandingPoints = review.outstanding;
   /** Anything at all still waiting, from either half. */
   const waiting = outstandingPoints + outstandingSections;
