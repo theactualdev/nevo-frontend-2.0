@@ -354,6 +354,8 @@ export interface CheckRow {
   level?: string | null;
   /** Nevo inferred the level, so the checks sign-off accepts it. */
   levelByNevo?: boolean;
+  /** Set on a transfer item only: which part of its set it is. */
+  transferKind?: string | null;
   segmentId: string;
   /** The section it sits in. */
   label: string;
@@ -385,6 +387,12 @@ export interface ChecksView {
   checksPending: boolean;
   /** Any check carries a level, so the step says it shows one. */
   hasLevels: boolean;
+  /**
+   * The transfer sets (C25), one per concept. Their items are still in
+   * `toSign` or `reviewed` - the one press accepts them with every other
+   * check - but they are drawn as their set, not in the lists.
+   */
+  transferSets: TransferSet[];
   /**
    * A check waiting on the sign-off carries a level Nevo inferred. Its answer
    * may have come from the file, so "Answers Nevo wrote" would be untrue.
@@ -421,6 +429,7 @@ export function checksView(review: LessonReview, segments: LessonSegment[]): Che
   const rows = (review.checks ?? []).map((c, i): CheckRow & { check: CheckReviewItem } => ({
     key: `${c.segmentId}:${c.questionId}`,
     level: levelWords(c.masteryLevel),
+    transferKind: c.transferKind ?? null,
     levelByNevo: !!levelWords(c.masteryLevel) && c.masteryLevelAuthoredBy !== "person",
     segmentId: c.segmentId,
     label: labelOf(c.segmentId, c.segmentTitle),
@@ -472,10 +481,75 @@ export function checksView(review: LessonReview, segments: LessonSegment[]): Che
     leaks,
     checksPending,
     hasLevels: rows.some((r) => !!r.level),
+    transferSets: transferSets(sorted, segments, labelOf),
     levelsToSign: toSign.some((r) => r.levelByNevo),
     guidedPending,
     signoff,
   };
+}
+
+/**
+ * One concept's transfer set, as C25 draws it (1397ec4) and SCRUM-295 rules
+ * it: two situations, the question that asks what they share, and the
+ * judgement question - find the fault or choose the better approach and say
+ * why. All four are drawn, because all four are accepted and served together.
+ */
+export interface TransferSet {
+  /** The section the set was written from - its concept's first. */
+  key: string;
+  /** That section's name, for when the concept's own name is not to hand. */
+  label: string;
+  conceptId: string | null;
+  /** The concept's name as the review sends it (8c078a8), when it does. */
+  conceptName: string | null;
+  one: CheckRow | null;
+  two: CheckRow | null;
+  question: CheckRow | null;
+  judgement: CheckRow | null;
+  /**
+   * Any further item of the set - a kind the server has not named, or a
+   * second of one kind. Drawn too: nothing the press accepts goes unseen.
+   */
+  others: CheckRow[];
+}
+
+/**
+ * Grouped by `sourceSegmentId`. The items carry no concept, but the server
+ * writes a set from its concept's FIRST section, and a section has one
+ * concept, so the section names the set.
+ */
+function transferSets(
+  rows: (CheckRow & { check: CheckReviewItem })[],
+  segments: LessonSegment[],
+  labelOf: (segmentId: string, title: string | null) => string,
+): TransferSet[] {
+  const sets = new Map<string, TransferSet>();
+  for (const row of rows) {
+    if (!row.transferKind) continue;
+    const source = row.check.sourceSegmentId ?? "";
+    let set = sets.get(source);
+    if (!set) {
+      const segment = segments.find((s) => s.id === source);
+      set = {
+        key: source,
+        label: segment ? labelOf(source, segment.title) : "",
+        conceptId: segment?.conceptId ?? row.check.conceptId ?? null,
+        conceptName: row.check.conceptName?.trim() || null,
+        one: null,
+        two: null,
+        question: null,
+        judgement: null,
+        others: [],
+      };
+      sets.set(source, set);
+    }
+    if (row.transferKind === "application_a" && !set.one) set.one = row;
+    else if (row.transferKind === "application_b" && !set.two) set.two = row;
+    else if (row.transferKind === "comparison" && !set.question) set.question = row;
+    else if (row.transferKind === "judgement" && !set.judgement) set.judgement = row;
+    else set.others.push(row);
+  }
+  return [...sets.values()];
 }
 
 /**
