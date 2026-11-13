@@ -128,6 +128,35 @@ export function withdrawnCount(
 }
 
 /**
+ * HOW the consent came, in words a school uses - never the server's own
+ * (12 Nov dry run: "by test_fixture", "by digital" on a child's record).
+ *
+ * `channel` is a free string on the server: `last_channel`, or else
+ * `confirmed_via` (`email | written | verbal | digital`), or a pending
+ * request's contact method. Seed scripts write their own ("school_office",
+ * "test_fixture"), and a parent's restore writes "parent_portal".
+ *
+ * Only the values a frame has words for are said:
+ *  - `email` and `digital` - D07b draws a parent's own confirmation through
+ *    the emailed link as "…on 3 July 2026, by email", and `digital` is the
+ *    server's name for exactly that route.
+ *  - `written` - D25's "a signed paper form".
+ * Anything else says nothing about how. Absence is an instruction: a raw
+ * word, or one made up here, would be worse than no clause at all.
+ */
+function channelWords(channel: string | null): string {
+  switch (channel) {
+    case "email":
+    case "digital":
+      return " by email";
+    case "written":
+      return " on a signed paper form";
+    default:
+      return "";
+  }
+}
+
+/**
  * The sentence under a student's consent state, when there is one to tell.
  *
  * SCRUM-40 line 354 wants the actor and the date on a withdrawal - "Mrs. Eze
@@ -143,7 +172,7 @@ export function consentDetailLine(consent: StudentConsent): string | null {
       })
     : null;
   const who = consent.actorName;
-  const via = consent.channel ? ` by ${consent.channel}` : "";
+  const via = channelWords(consent.channel);
 
   if (consent.status === "confirmed") {
     if (who && when) return `${who} confirmed on ${when}${via}.`;
