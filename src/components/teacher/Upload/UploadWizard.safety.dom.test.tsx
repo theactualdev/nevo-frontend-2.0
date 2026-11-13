@@ -124,13 +124,15 @@ describe.each([
     expect(screen.queryByText(SERVER_HELD)).not.toBeInTheDocument();
   });
 
-  it("says nothing beyond it - no reference, no retry, nothing that blames the file", async () => {
+  it("says the reference beneath it and nothing else - no retry, nothing that blames the file", async () => {
     stopped("safety_held", SERVER_HELD);
 
     startUpload(scope);
 
     await screen.findByText(LINE);
-    expect(screen.queryByText(/ca8435c98d08/)).not.toBeInTheDocument();
+    // Lydia, 11 Nov (item 7): "Reference {code}" and nothing around it.
+    expect(screen.getByText("ca8435c98d08").closest("p")).toHaveTextContent(/^Reference ca8435c98d08$/);
+    expect(screen.queryByText(/quote|tell us/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Try this file again/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Try another file/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/fine to send again/)).not.toBeInTheDocument();
@@ -142,27 +144,30 @@ describe.each([
 });
 
 /*
- * The check could not run. Lydia has given no words for it (asked), so the
- * screen keeps the server's own sentence - which says nothing is wrong with
- * the file - and offers the same file again, never another one.
+ * The check could not run: Lydia's line (11 Nov, item 7), in place of the
+ * server's sentence, and the same file again, never another one.
  */
 describe("a safety check that could not run", () => {
-  it("keeps the single lesson's screen as it is, with the server's sentence and the same file again", async () => {
+  const UNAVAILABLE = "Nevo could not run its safety check on this lesson, so it has not proposed sections. Nothing has reached your class. Try again shortly.";
+
+  it("says Lydia's line on a single lesson, and offers the same file again", async () => {
     stopped("safety_check_unavailable", SERVER_UNAVAILABLE);
 
     startUpload(SINGLE);
 
-    expect(await screen.findByText(SERVER_UNAVAILABLE)).toBeInTheDocument();
+    expect(await screen.findByText(UNAVAILABLE)).toBeInTheDocument();
+    expect(screen.queryByText(SERVER_UNAVAILABLE)).not.toBeInTheDocument();
     expect(screen.queryByText(LINE)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Try this file again/ })).toBeInTheDocument();
   });
 
-  it("offers a unit the same file again, not another one", async () => {
+  it("says it on a unit, and offers the same file again, not another one", async () => {
     stopped("safety_check_unavailable", SERVER_UNAVAILABLE);
 
     startUpload(UNIT);
 
-    expect(await screen.findByText(SERVER_UNAVAILABLE)).toBeInTheDocument();
+    expect(await screen.findByText(UNAVAILABLE)).toBeInTheDocument();
+    expect(screen.queryByText(SERVER_UNAVAILABLE)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Try another file/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Try this file again" }));
     // The same file, staged again.

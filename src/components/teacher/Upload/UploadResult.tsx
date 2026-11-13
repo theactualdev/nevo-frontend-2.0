@@ -113,14 +113,17 @@ export function UploadResult({
   return (
     <div className="mx-auto w-full max-w-[820px] px-6 pb-10">
       {rereadHeld && (
-        <p
+        <div
           role="status"
-          className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 text-[14.5px] leading-[1.55] text-nevo-near-black/82"
+          className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4"
         >
-          {/* Lydia's words and nothing beyond them: not the server's sentence,
-              not the reference (as on the upload screens). */}
-          {segments.length > 0 ? SAFETY_HELD_REREAD_LINE : SAFETY_HELD_LINE}
-        </p>
+          {/* Lydia's words, not the server's sentence, and the reference
+              beneath (11 Nov, item 7), as on the upload screens. */}
+          <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
+            {segments.length > 0 ? SAFETY_HELD_REREAD_LINE : SAFETY_HELD_LINE}
+          </p>
+          <IncidentLine id={regenerate.incident} className="mt-2 text-[12.5px] leading-[1.5] text-nevo-near-black/50" />
+        </div>
       )}
       {finish ? (
         <FinishBlock

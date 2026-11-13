@@ -17,6 +17,7 @@ import {
   BackToLibrary,
   FALLBACK_HEADINGS,
   IncidentLine,
+  SAFETY_UNAVAILABLE_LINE,
   ParseFallback,
   SAFETY_HELD_LINE,
   type FallbackKind,
@@ -846,7 +847,13 @@ export function UploadWizard() {
         <MaybeSample showing={sample} kind="teacher:upload-demo-fallback">
         <ParseFallback
           kind={fallback.kind}
-          failureReason={staged.failureReason}
+          failureReason={
+            /* The check could not run: Lydia's line (11 Nov, item 7), not the
+               server's sentence. */
+            staged.reasonCode === "safety_check_unavailable"
+              ? SAFETY_UNAVAILABLE_LINE
+              : staged.failureReason
+          }
           incident={staged.incident}
           blockName={blockName}
           onBack={() => setPhase("file")}
@@ -1130,11 +1137,13 @@ export function UploadWizard() {
                level up, no wrapper) was ever centred. */
             <div className="flex min-h-full w-full flex-col">
               {heldBySafety ? (
-                /* The unit's card for a safety stop: Lydia's line and the way
-                   back to the library, as on the single lesson's screen. No
-                   reference, no "Try another file". */
+                /* The unit's card for a safety stop: Lydia's line, the
+                   reference beneath it (11 Nov, item 7), and the way back to
+                   the library, as on the single lesson's screen. No "Try
+                   another file". */
                 <div className="w-full rounded-[16px] bg-nevo-cream-elevated p-8 shadow-elevation-1">
                   <p className="text-[15px] leading-[1.6] text-nevo-near-black">{SAFETY_HELD_LINE}</p>
+                  <IncidentLine id={staged.incident} />
                   <div className="mt-5">
                     <BackToLibrary />
                   </div>
@@ -1168,7 +1177,10 @@ export function UploadWizard() {
                         promises prose, added 24 Sep because this screen asked
                         for one. Ours stands where the server gave none, which
                         is every failure that is not the parse's own. */}
-                    {staged.failureReason ??
+                    {/* The check could not run: Lydia's line (11 Nov). */}
+                    {(staged.reasonCode === "safety_check_unavailable"
+                      ? SAFETY_UNAVAILABLE_LINE
+                      : staged.failureReason) ??
                       (staged.failureKind === "request"
                         ? "Nothing is wrong with your file, and nothing you did is lost. Try again in a moment."
                         : staged.failureKind === "file"

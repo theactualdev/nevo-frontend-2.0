@@ -332,7 +332,7 @@ describe("a re-read a safety check stopped", () => {
       <UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} onRegenerated={vi.fn()} />,
     );
 
-  it("says the re-read's line above the earlier reading, and nothing beyond it", async () => {
+  it("says the re-read's line above the earlier reading, with the reference beneath it", async () => {
     awaitParseRun.mockResolvedValue({
       status: "failed",
       finished: true,
@@ -350,7 +350,8 @@ describe("a re-read a safety check stopped", () => {
     expect(screen.queryByText(LINE)).not.toBeInTheDocument();
     expect(screen.queryByText(/reached your class/)).not.toBeInTheDocument();
     expect(screen.queryByText(SERVER)).not.toBeInTheDocument();
-    expect(screen.queryByText(/ca8435c98d08/)).not.toBeInTheDocument();
+    // Lydia, 11 Nov (item 7): "Reference {code}" and nothing around it.
+    expect(screen.getByText("ca8435c98d08").closest("p")).toHaveTextContent(/^Reference ca8435c98d08$/);
     expect(screen.queryByRole("button", { name: "Try that again" })).not.toBeInTheDocument();
   });
 

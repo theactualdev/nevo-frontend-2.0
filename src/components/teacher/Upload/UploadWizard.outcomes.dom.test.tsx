@@ -347,8 +347,10 @@ describe("a failure nobody planned for", () => {
 
     startSingleUpload();
 
-    expect(screen.getByText("a1b2c3d4")).toBeInTheDocument();
-    expect(screen.getByText(/quote/i)).toBeInTheDocument();
+    // "Reference {code}" and nothing around it (Lydia, 11 Nov): the line
+    // said "If you tell us about this, quote …", an invitation with no route.
+    expect(screen.getByText("a1b2c3d4").closest("p")).toHaveTextContent(/^Reference a1b2c3d4$/);
+    expect(screen.queryByText(/quote|tell us/i)).not.toBeInTheDocument();
   });
 
   it("says nothing when there is no reference", () => {
