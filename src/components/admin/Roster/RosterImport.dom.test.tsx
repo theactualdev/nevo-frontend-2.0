@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { ApiError } from "@/lib/api/client";
 import type { OnboardingState } from "@/lib/api/onboarding";
@@ -18,6 +18,7 @@ const stageImport = vi.fn();
 const confirm = vi.fn();
 const template = vi.fn();
 const decideMerges = vi.fn();
+const correctClasses = vi.fn();
 
 vi.mock("@/lib/api/onboarding", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/onboarding")>();
@@ -30,6 +31,7 @@ vi.mock("@/lib/api/onboarding", async (importOriginal) => {
       confirm: () => confirm(),
       template: (name: string) => template(name),
       decideMerges: (d: unknown) => decideMerges(d),
+      correctClasses: (c: unknown) => correctClasses(c),
     },
   };
 });
@@ -512,5 +514,103 @@ describe("a refusal on the roster screen", () => {
     const { container } = render(<RosterImportView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/don't have access to the roster upload/));
     expect(screen.queryByRole("button", { name: /Try again/ })).toBeNull();
+  });
+});
+
+/**
+ * RENAME AND DROP A DERIVED CLASS (Lydia, 11 Nov: allowed before anything in
+ * that import is activated). `PATCH /onboarding/classes`, keyed on
+ * `normalisedName`, which the server takes while the stage is "uploading" -
+ * so until Confirm. D24 draws the row as a name and a count; the controls and
+ * their lines are ours.
+ */
+describe("Classes Nevo derived: rename and drop", () => {
+  const reachFound = async () => {
+    get.mockResolvedValue(READ);
+    const r = render(<RosterImportView />);
+    fireEvent.click(await screen.findByRole("button", { name: /See what Nevo found/i }));
+    await screen.findByText(/What Nevo found/);
+    return r;
+  };
+  const row = () => screen.getByText("JSS 1A").closest("div.px-\\[22px\\]") as HTMLElement;
+
+  it("renames a class by its normalised name, and shows the list the server sends back", async () => {
+    correctClasses.mockResolvedValue({
+      ...READ,
+      classes: [{ ...READ.classes[0], name: "JSS 1 Alpha", normalisedName: "jss 1 alpha" }],
+    });
+    await reachFound();
+    fireEvent.click(within(row()).getByRole("button", { name: "Rename" }));
+    fireEvent.change(screen.getByLabelText("New name for JSS 1A"), { target: { value: "JSS 1 Alpha" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(correctClasses).toHaveBeenCalledWith([{ normalisedName: "jss 1a", renameTo: "JSS 1 Alpha" }]),
+    );
+    expect(await screen.findByText("JSS 1 Alpha")).toBeInTheDocument();
+  });
+
+  it("won't save a rename to the same name, or to nothing", async () => {
+    await reachFound();
+    fireEvent.click(within(row()).getByRole("button", { name: "Rename" }));
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("New name for JSS 1A"), { target: { value: "   " } });
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(correctClasses).not.toHaveBeenCalled();
+  });
+
+  it("asks before a drop, says its students are left out, and sends it only on the second press", async () => {
+    correctClasses.mockResolvedValue({ ...READ, classes: [], studentCount: 306 });
+    const { container } = await reachFound();
+    fireEvent.click(within(row()).getByRole("button", { name: "Drop" }));
+    expect(visibleText(container)).toMatch(/Dropping JSS 1A leaves its 30 students out of this roster\./);
+    expect(correctClasses).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Drop JSS 1A" }));
+    await waitFor(() => expect(correctClasses).toHaveBeenCalledWith([{ normalisedName: "jss 1a", drop: true }]));
+    await waitFor(() => expect(screen.queryByText("JSS 1A")).toBeNull());
+  });
+
+  it("keeps the class when the admin says Keep it", async () => {
+    await reachFound();
+    fireEvent.click(within(row()).getByRole("button", { name: "Drop" }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep it" }));
+    expect(screen.queryByRole("button", { name: "Drop JSS 1A" })).toBeNull();
+    expect(correctClasses).not.toHaveBeenCalled();
+  });
+
+  it("confirmed meanwhile: reads again and moves on, without the server's console sentence", async () => {
+    correctClasses.mockRejectedValue(
+      new ApiError(409, "Conflict", {
+        detail: {
+          code: "onboarding_already_confirmed",
+          message: "The roster is confirmed. Change classes in the admin console.",
+        },
+      }),
+    );
+    const { container } = await reachFound();
+    get.mockResolvedValue(state({ stage: "confirmed", studentCount: 336, classes: READ.classes }));
+    fireEvent.click(within(row()).getByRole("button", { name: "Drop" }));
+    fireEvent.click(screen.getByRole("button", { name: "Drop JSS 1A" }));
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    expect(visibleText(container)).not.toMatch(/Change classes in the admin console/);
+  });
+
+  it("says a failed save failed, and nothing changed", async () => {
+    correctClasses.mockRejectedValue(new Error("offline"));
+    await reachFound();
+    fireEvent.click(within(row()).getByRole("button", { name: "Drop" }));
+    fireEvent.click(screen.getByRole("button", { name: "Drop JSS 1A" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That didn’t save, and nothing has changed. Try again in a moment.",
+    );
+    expect(screen.getByText("JSS 1A")).toBeInTheDocument();
+  });
+
+  it("offers neither for a class already created", async () => {
+    get.mockResolvedValue({ ...READ, classes: [{ ...READ.classes[0], committed: true }] });
+    render(<RosterImportView />);
+    fireEvent.click(await screen.findByRole("button", { name: /See what Nevo found/i }));
+    await screen.findByText(/What Nevo found/);
+    expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Drop" })).toBeNull();
   });
 });
