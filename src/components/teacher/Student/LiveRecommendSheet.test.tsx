@@ -400,8 +400,9 @@ describe("a lesson that is not approved yet", () => {
     pick("Fractions 3");
     sendIt();
 
+    // Lydia, 11 Nov (item 7): review steps, not sections.
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "This lesson still has sections waiting for you, so it cannot go to students yet.",
+      "This lesson still has review steps to finish, so it cannot go to your class yet.",
     );
   });
 
