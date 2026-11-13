@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import type { TeacherFlag } from "@/hooks/useTeacherFlags";
-import { intelligenceApi } from "@/lib/api/intelligence";
 import { cn } from "@/lib/utils";
 
 /**
@@ -62,10 +61,24 @@ function noticedWhen(iso: string): string {
   });
 }
 
+/**
+ * NEITHER WAY OFF THE CARD MARKS THE FLAG SEEN (Lydia, 11 Nov addendum;
+ * SCRUM-346). "Opening a child's profile to look is not acknowledging a flag,
+ * and a teacher who taps the card to find out what it is has now cleared it
+ * without acting on it. Only an explicit acknowledgement marks a flag seen."
+ * Both links used to `POST …/seen` (SCRUM-252's tap-clears, #894). That
+ * explicit control is not drawn: C03's second actions ("See his week", "See
+ * who slowed", "Open her profile") all navigate, so there is no frame label
+ * for it, and it waits on Lydia's words.
+ *
+ * "MESSAGE {FIRST}", because "Send them a message" did not say who, and the
+ * teacher is one tap from writing to a child. The message goes to the CHILD
+ * (Connect's compose, the child preselected). With no name, no button: the
+ * card still opens the profile, and a line that cannot say who is the one she
+ * ruled out.
+ */
 export function LiveFlagCard({ flag }: { flag: TeacherFlag }) {
-  const read = () => {
-    void intelligenceApi.markFlagSeen(flag.id).catch(() => {});
-  };
+  const first = flag.name?.trim().split(/\s+/)[0] || null;
   return (
     <div className="relative flex gap-3.5 rounded-[12px] bg-nevo-cream-elevated py-4 pr-[18px] pl-[22px] shadow-elevation-1 transition-shadow focus-within:shadow-elevation-2 hover:shadow-elevation-2 xl:gap-[18px] xl:py-[22px] xl:pr-6 xl:pl-7">
       {/* Navy for a sudden change, violet for a pattern - C03's own rule. */}
@@ -105,27 +118,27 @@ export function LiveFlagCard({ flag }: { flag: TeacherFlag }) {
           /* With the child's class, so the profile can show what Nevo has
              noticed and its "{class} · Roster" way back (backlog item 9). */
           href={`/teacher/students/${flag.studentId}${flag.classId ? `?class=${flag.classId}` : ""}`}
-          onClick={read}
           className="text-[13.5px] font-semibold text-nevo-navy after:absolute after:inset-0 after:rounded-[12px] after:content-[''] focus-visible:outline-none xl:text-[14.5px]"
         >
           <span className="sr-only">
             {`Open ${flag.name ?? "this student"}’s profile`}
           </span>
         </Link>
-        <div className="mt-3 xl:mt-[18px]">
-          {/* Above the stretched link, so it stays its own action. */}
-          <Link
-            /* Names the child. A bare /teacher/connect opened the thread
-               list with no compose at all - the action did nothing a
-               teacher could see. */
-            href={`/teacher/connect?student=${flag.studentId}`}
-            onClick={read}
-            className="relative z-10 text-[13.5px] font-semibold text-nevo-navy transition-transform active:scale-[0.985] xl:text-[14.5px]"
-          >
-            Send them a message
-            <span className="ml-1.5">&rarr;</span>
-          </Link>
-        </div>
+        {first && (
+          <div className="mt-3 xl:mt-[18px]">
+            {/* Above the stretched link, so it stays its own action. */}
+            <Link
+              /* Names the child. A bare /teacher/connect opened the thread
+                 list with no compose at all - the action did nothing a
+                 teacher could see. */
+              href={`/teacher/connect?student=${flag.studentId}`}
+              className="relative z-10 text-[13.5px] font-semibold text-nevo-navy transition-transform active:scale-[0.985] xl:text-[14.5px]"
+            >
+              {`Message ${first}`}
+              <span className="ml-1.5">&rarr;</span>
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );
