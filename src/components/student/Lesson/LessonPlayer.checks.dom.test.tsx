@@ -1121,9 +1121,11 @@ describe("from the check-in (B26)", () => {
     progress.saved = completed;
     rerender(<LessonPlayer lesson={LESSON} plan={null} live />);
 
-    expect(screen.getByText("Numerators")).toBeTruthy();
-    expect(screen.getByText(/Denominators/)).toBeTruthy();
     expect(screen.getByText("You can say which number is on top.")).toBeTruthy();
+    // The server's sentence names the concepts, so no rows name them again
+    // under it (Lydia, 11 Nov addendum). The summary keeps the lists.
+    expect(screen.queryByText("Numerators")).toBeNull();
+    expect(screen.queryByText(/Denominators/)).toBeNull();
     // Concepts, never the counts behind them (rule 9).
     expect(document.body.textContent).not.toMatch(/\d/);
     expect(loadCheckOutcome("lesson-1")).toEqual({
