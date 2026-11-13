@@ -577,21 +577,21 @@ describe("Classes Nevo derived: rename and drop", () => {
     expect(correctClasses).not.toHaveBeenCalled();
   });
 
-  it("confirmed meanwhile: reads again and moves on, without the server's console sentence", async () => {
+  it("activated meanwhile: reads again and moves on, and never shows the server's message", async () => {
     correctClasses.mockRejectedValue(
       new ApiError(409, "Conflict", {
         detail: {
-          code: "onboarding_already_confirmed",
-          message: "The roster is confirmed. Change classes in the admin console.",
+          code: "onboarding_already_activated",
+          message: "This school is running. Change classes in the admin console, so nobody is billed twice for the same child.",
         },
       }),
     );
     const { container } = await reachFound();
-    get.mockResolvedValue(state({ stage: "confirmed", studentCount: 336, classes: READ.classes }));
+    get.mockResolvedValue(state({ stage: "activated", studentCount: 336, classes: READ.classes }));
     fireEvent.click(within(row()).getByRole("button", { name: "Drop" }));
     fireEvent.click(screen.getByRole("button", { name: "Drop JSS 1A" }));
     await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
-    expect(visibleText(container)).not.toMatch(/Change classes in the admin console/);
+    expect(visibleText(container)).not.toMatch(/Change classes in the admin console|This school is running/);
   });
 
   it("says a failed save failed, and nothing changed", async () => {
@@ -605,12 +605,65 @@ describe("Classes Nevo derived: rename and drop", () => {
     expect(screen.getByText("JSS 1A")).toBeInTheDocument();
   });
 
-  it("offers neither for a class already created", async () => {
-    get.mockResolvedValue({ ...READ, classes: [{ ...READ.classes[0], committed: true }] });
+  /*
+   * THE WINDOW RUNS TO ACTIVATION (server 62966f1, Lydia 11 Nov): after
+   * Confirm, while the school waits to pay, the classes - all created by now -
+   * can still be renamed and dropped. Re-uploading stays closed.
+   */
+  it("still offers Rename and Drop on the confirmed roster while the school waits to pay", async () => {
+    get.mockResolvedValue(
+      state({
+        stage: "awaiting_payment",
+        studentCount: 336,
+        classes: [{ ...READ.classes[0], committed: true }],
+      }),
+    );
+    correctClasses.mockResolvedValue(
+      state({
+        stage: "awaiting_payment",
+        studentCount: 336,
+        classes: [{ ...READ.classes[0], committed: true, name: "JSS 1 Alpha", normalisedName: "jss 1 alpha" }],
+      }),
+    );
     render(<RosterImportView />);
+    expect(await screen.findByText(/Your roster is confirmed/)).toBeInTheDocument();
+    fireEvent.click(within(row()).getByRole("button", { name: "Rename" }));
+    fireEvent.change(screen.getByLabelText("New name for JSS 1A"), { target: { value: "JSS 1 Alpha" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(correctClasses).toHaveBeenCalledWith([{ normalisedName: "jss 1a", renameTo: "JSS 1 Alpha" }]),
+    );
+    expect(await screen.findByText("JSS 1 Alpha")).toBeInTheDocument();
+    // Re-uploading stays closed after Confirm.
+    expect(screen.queryByRole("button", { name: /Choose a file|Upload/i })).toBeNull();
+  });
+
+  it("a merge refused because the school was activated meanwhile reads again, never the stale message", async () => {
+    const proposal = {
+      key: "m1",
+      proposedName: "JSS 2A",
+      studentCount: 34,
+      reason: "Same letters and digits.",
+      candidates: [
+        { name: "JSS2A", normalisedName: "jss2a", studentCount: 3, teacherCount: 0 },
+        { name: "JSS 2A", normalisedName: "jss 2a", studentCount: 31, teacherCount: 1 },
+      ],
+    };
+    get.mockResolvedValue(state({ ...READ, canConfirm: false, classMerges: [proposal] }));
+    decideMerges.mockRejectedValue(
+      new ApiError(409, "Conflict", {
+        detail: {
+          code: "onboarding_already_activated",
+          message: "The roster is confirmed. Merge classes in the admin console.",
+        },
+      }),
+    );
+    const { container } = render(<RosterImportView />);
     fireEvent.click(await screen.findByRole("button", { name: /See what Nevo found/i }));
     await screen.findByText(/What Nevo found/);
-    expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Drop" })).toBeNull();
+    get.mockResolvedValue(state({ stage: "activated" }));
+    fireEvent.click(screen.getByRole("button", { name: "Same class" }));
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    expect(visibleText(container)).not.toMatch(/Merge classes in the admin console|roster is confirmed/);
   });
 });

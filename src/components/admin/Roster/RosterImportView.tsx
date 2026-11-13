@@ -6,6 +6,7 @@ import { ReadFailed } from "../ReadFailed";
 import { NoAccess, failureKind } from "../NoAccess";
 import { Avatar, CARD } from "./primitives";
 import {
+  CLASS_WINDOW_CLOSED,
   onboardingApi,
   type ClassMergeProposal,
   type DerivedClass,
@@ -243,12 +244,17 @@ export function RosterImportView() {
         setAnswered((a) => [...a, { proposal, merge }]);
         refreshGate();
       })
-      .catch((err) =>
+      .catch((err) => {
+        // The window has closed (activated): read again, never its message.
+        if (err instanceof ApiError && CLASS_WINDOW_CLOSED.has(apiErrorCode(err.detail) ?? "")) {
+          load();
+          return;
+        }
         setDecideFailed({
           key: proposal.key,
           reason: err instanceof ApiError ? apiErrorMessage(err.detail) : null,
-        }),
-      )
+        });
+      })
       .finally(() => setDeciding(null));
   };
 
@@ -270,13 +276,11 @@ export function RosterImportView() {
       })
       .catch((err: unknown) => {
         /*
-         * Confirmed meanwhile - another admin, or another tab. The page reads
-         * again and moves on to the confirmed step. The server's sentence
-         * ("The roster is confirmed. Change classes in the admin console.")
-         * is not shown: until the school is active the console pauses class
-         * changes, so it would send an admin where they can't act (raised).
+         * The window closed meanwhile - the school was activated in another
+         * tab, or by another admin. The page reads again and moves on. The
+         * code is mapped, never the message (hub, 11 Nov).
          */
-        if (err instanceof ApiError && apiErrorCode(err.detail) === "onboarding_already_confirmed") {
+        if (err instanceof ApiError && CLASS_WINDOW_CLOSED.has(apiErrorCode(err.detail) ?? "")) {
           load();
           return;
         }
@@ -339,7 +343,14 @@ export function RosterImportView() {
    * not come back either: the server refuses imports past confirm.
    */
   if (state.stage === "confirmed" || state.stage === "awaiting_payment") {
-    return <RosterConfirmed state={state} />;
+    return (
+      <RosterConfirmed
+        state={state}
+        correcting={correcting}
+        correctFailed={correctFailed}
+        onCorrect={correct}
+      />
+    );
   }
 
   const staged = hasStaged(state);
@@ -430,7 +441,17 @@ export function RosterImportView() {
   );
 }
 
-function RosterConfirmed({ state }: { state: OnboardingState }) {
+function RosterConfirmed({
+  state,
+  correcting,
+  correctFailed,
+  onCorrect,
+}: {
+  state: OnboardingState;
+  correcting: string | null;
+  correctFailed: { key: string; reason: string | null } | null;
+  onCorrect: (c: DerivedClass, change: { renameTo: string } | { drop: true }) => void;
+}) {
   const students = `${state.studentCount} ${state.studentCount === 1 ? "student" : "students"}`;
   const classes = `${state.classes.length} ${state.classes.length === 1 ? "class" : "classes"}`;
   return (
@@ -450,6 +471,31 @@ function RosterConfirmed({ state }: { state: OnboardingState }) {
         >
           Pay for the year
         </Link>
+
+        {/*
+          * STILL CORRECTABLE WHILE THE SCHOOL WAITS TO PAY (Lydia, 11 Nov;
+          * server 62966f1): Rename and Drop stay open until activation.
+          * Re-uploading does not - it rebuilds a list the school agreed to.
+          */}
+        {state.classes.length > 0 ? (
+          <>
+            <h3 className="mt-9 text-[13px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase">
+              Classes Nevo derived
+            </h3>
+            <div className={cn(CARD, "mt-3 divide-y divide-nevo-near-black/7")}>
+              {state.classes.map((c) => (
+                <DerivedClassRow
+                  key={c.normalisedName}
+                  c={c}
+                  busy={correcting !== null}
+                  saving={correcting === c.normalisedName}
+                  failed={correctFailed?.key === c.normalisedName ? correctFailed : null}
+                  onCorrect={onCorrect}
+                />
+              ))}
+            </div>
+          </>
+        ) : null}
       </div>
     </div>
   );
@@ -847,8 +893,14 @@ function WhatNevoFound({
 /**
  * One class Nevo derived, with Rename and Drop (Lydia, 11 Nov). D24 draws the
  * row as a name and a count only, so the controls and their two lines are
- * ours, in plain words - raised to design. A class already created
- * (`committed`) is past correcting, so it offers neither.
+ * ours, in plain words - raised to design.
+ *
+ * Offered on both importer screens before activation - "What Nevo found"
+ * and the confirmed roster while the school waits to pay - because the
+ * server takes a correction at every stage short of activated (62966f1). An
+ * activated school never reaches either screen, so it never sees them.
+ * `committed` no longer closes them: after Confirm every class is created,
+ * and the server still takes the correction.
  */
 function DerivedClassRow({
   c,
@@ -913,7 +965,7 @@ function DerivedClassRow({
           </span>
           <span className="flex shrink-0 items-center gap-4">
             <span className="text-[13.5px] text-nevo-near-black/62">{students}</span>
-            {c.committed ? null : saving ? (
+            {saving ? (
               <span className="text-[13.5px] text-nevo-near-black/55">Saving&hellip;</span>
             ) : mode === "idle" ? (
               <>

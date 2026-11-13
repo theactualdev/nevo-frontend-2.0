@@ -14,9 +14,19 @@ import { api } from "./client";
  *  - ~~`PATCH /onboarding/classes` (class corrections) is typed and
  *    deliberately unused~~ - USED SINCE 11 NOV. Lydia ruled that renaming and
  *    dropping a class are allowed before anything in that import is
- *    activated; the server takes them while the stage is "uploading", so the
- *    importer's "Classes Nevo derived" offers Rename and Drop until Confirm.
+ *    activated, and the server agrees since 62966f1: corrections and merges
+ *    are taken at `uploading`, `confirmed` and `awaiting_payment`, and only an
+ *    activated school is refused (409 `onboarding_already_activated`).
  */
+
+/**
+ * The 409s the class routes answer once the window has closed. The code is
+ * mapped, never the message: the merge route's message is stale ("The roster
+ * is confirmed…"), and the screen reads the state again instead.
+ * `onboarding_already_confirmed` is the pre-62966f1 code, kept so a slower
+ * deploy can't put its message on screen either.
+ */
+export const CLASS_WINDOW_CLOSED = new Set(["onboarding_already_activated", "onboarding_already_confirmed"]);
 
 /**
  * Where a school is, AS THE SERVER SEES IT. Backend's own description says why
