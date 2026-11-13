@@ -162,12 +162,14 @@ function centredCard(): boolean {
  * SEVERAL CHECKS IN ONE SECTION: where the child is, WITHOUT A COUNT (Lydia,
  * 7 Nov, copy pass). The frame's middle line, "Still going - one more after
  * this", was untrue for a section of four or more, and "Check 2 of 3" was a
- * count in front of a child. Her words hold for any number.
+ * count in front of a child. Her words hold for any number - in a child's
+ * word for where they are, "part", since her 11 Nov addendum ("Section and
+ * segment are our words for a teacher").
  */
 export const SEVERAL_CHECKS_LINES = {
-  first: "A few quick checks on this section.",
+  first: "A few quick checks on this part.",
   middle: "Still going.",
-  last: "Last quick check for this section.",
+  last: "Last quick check for this part.",
 } as const;
 
 /** The line for where a check sits among its section's. */

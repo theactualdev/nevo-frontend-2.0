@@ -151,7 +151,7 @@ describe("a lesson the child finished, which the dashboard leaves out", () => {
       within(card(/Osmosis/)).getByRole("img", { name: "Completed" }),
     ).toBeInTheDocument();
     // Its length is the row's own count; no assignment is known to carry.
-    expect(within(card(/Osmosis/)).getByText("9 sections")).toBeInTheDocument();
+    expect(within(card(/Osmosis/)).getByText("9 parts")).toBeInTheDocument();
     fireEvent.click(card(/Osmosis/));
     fireEvent.click(screen.getByRole("button", { name: "Look again" }));
     expect(push).toHaveBeenCalledWith(`/student/lessons/${OSMOSIS}`);

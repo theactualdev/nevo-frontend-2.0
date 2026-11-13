@@ -115,7 +115,7 @@ describe("what a live lesson row says", () => {
     lessons.value = [
       lesson({
         status: "in_progress",
-        place: { fraction: 0.2, words: "Section 3 of 10" },
+        place: { fraction: 0.2, words: "Part 3 of 10" },
       }),
     ];
 
@@ -132,7 +132,7 @@ describe("what a live lesson row says", () => {
     lessons.value = [
       lesson({
         status: "completed",
-        place: { fraction: 0.2, words: "Section 3 of 10" },
+        place: { fraction: 0.2, words: "Part 3 of 10" },
       }),
     ];
 

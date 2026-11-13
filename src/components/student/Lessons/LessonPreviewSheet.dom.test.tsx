@@ -64,15 +64,15 @@ describe("what the preview says about where a child is", () => {
         lesson={{
           ...LESSON,
           status: "in_progress",
-          place: { fraction: 0.2, words: "Section 3 of 10" },
+          place: { fraction: 0.2, words: "Part 3 of 10" },
         }}
         open
         onOpenChange={() => {}}
       />,
     );
 
-    const bar = screen.getByRole("progressbar", { name: "Section 3 of 10" });
-    expect(bar).toHaveAttribute("aria-valuetext", "Section 3 of 10");
+    const bar = screen.getByRole("progressbar", { name: "Part 3 of 10" });
+    expect(bar).toHaveAttribute("aria-valuetext", "Part 3 of 10");
     expect(
       screen.getByText("You're partway through this one"),
     ).toBeInTheDocument();

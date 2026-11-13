@@ -546,6 +546,26 @@ function ResultUnread({
  * ready for it". It is D40's promise in other words - a return the scheduler
  * was never asked for - and design ruled that kind of line renders only with
  * a next-review signal behind it.
+ *
+ * THE SENTENCE IS THE SERVER'S, NOTHING LANDED INCLUDED (Lydia, 11 Nov
+ * addendum). `resultNote` is her sentence, written by the server
+ * (`_result_note`): "Today you worked on {concepts}." and what is to come back
+ * to. "When nothing landed, my sentence replaces theirs" - so the app's own
+ * line there, "This one didn't land yet, and that's completely fine.", is
+ * gone, and the server's sentence is drawn in its place as it is everywhere
+ * else. Its "come back to" is hers and the server's to say; this screen adds
+ * no promise of its own (D96 above). Only ever the SERVER's sentence when
+ * nothing landed: a lesson's authored note says what the child showed, and is
+ * never drawn over a "nothing landed". With no sentence, nothing is put in
+ * its place (rule 5).
+ *
+ * THE ROWS GO WHERE THE SENTENCE NAMES THEM (same addendum): "Drop the list
+ * below the sentence when the sentence already names them." The server's
+ * sentence names every concept the check covered and caps none, so wherever
+ * it sent one the rows are not drawn, and where it sent none they are, as
+ * sent. Whether a sentence holds "too many" is never decided here (rule 3):
+ * a sentence the server capped would have to say so. The walkthrough's
+ * authored note was written beside its rows (the frame), and keeps them.
  */
 function GrowthResult({
   verdict,
@@ -594,14 +614,27 @@ function GrowthResult({
    * B26: THE SERVER'S LISTS WHERE IT SENT THEM. A live lesson carries none of
    * its own, so before the completion write answers - or when it fails - the
    * section is simply not drawn. The authored walkthrough keeps its own.
+   *
+   * And not under a sentence of the server's, which already names every one
+   * of them (Lydia, 11 Nov addendum - see above).
    */
-  const mastered = outcome
-    ? outcome.mastered
-    : (assessment.masteredConcepts ?? []);
-  const revisit = outcome
-    ? outcome.revisit
-    : (assessment.revisitConcepts ?? []);
-  const resultNote = outcome ? outcome.note : assessment.resultNote;
+  const namedInSentence = Boolean(outcome?.note);
+  const mastered = namedInSentence
+    ? []
+    : outcome
+      ? outcome.mastered
+      : (assessment.masteredConcepts ?? []);
+  const revisit = namedInSentence
+    ? []
+    : outcome
+      ? outcome.revisit
+      : (assessment.revisitConcepts ?? []);
+  // Nothing landed: the server's sentence or none, never the authored note.
+  const sentence = nothingLanded
+    ? (outcome?.note ?? "")
+    : outcome
+      ? outcome.note
+      : (assessment.resultNote ?? "");
 
   return (
     <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col justify-center bg-nevo-cream px-6 text-nevo-near-black">
@@ -651,15 +684,13 @@ function GrowthResult({
               You&apos;re getting the hang of this
             </h2>
           )}
-          {/* The authored note says what the child SHOWED, so it is held back
-              when they showed none of it. */}
-          {nothingLanded && (
-            <p className={cn(note, "mt-[26px]")}>
-              This one didn&apos;t land yet, and that&apos;s completely fine.
+          {/* The server's sentence (Lydia, 11 Nov addendum), nothing landed
+              included - with no heading above it there, it keeps the
+              heading's space under the mark. */}
+          {sentence && (
+            <p className={cn(note, nothingLanded && "mt-[26px]")}>
+              {sentence}
             </p>
-          )}
-          {!nothingLanded && resultNote && (
-            <p className={note}>{resultNote}</p>
           )}
         </div>
 

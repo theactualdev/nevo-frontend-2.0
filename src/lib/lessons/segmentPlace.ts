@@ -17,13 +17,15 @@
  * as the position, so nothing is read from a second source.
  *
  * NEVER A PERCENTAGE (rule 9). The fraction is drawn, and only drawn. What a
- * screen reader says is the position in words - "Section 3 of 10".
+ * screen reader says is the position in words - "Part 3 of 10".
  *
- * IN THE CARDS' OWN WORD (Lydia, 9 Nov, restated 10 Nov: "the spoken and
- * written labels must match whatever is actually counted"). The cards write
- * the count as "9 sections" - the child's word for a segment, as in her 7 Nov
- * lines - so they speak the place as a section too. It was "Segment 3 of 10",
- * the player's line, beside a card that never says "segment".
+ * IN A CHILD'S WORD, WHICH IS "PART" (Lydia, 11 Nov addendum): "A child's
+ * screen says 'Part 3 of 10', in the player and on the cards. Section and
+ * segment are our words for a teacher looking at her own material." So the
+ * cards count "9 parts" and speak the place as "Part 3 of 10", and the
+ * player's line says the same of the same place (`positionLine`). The written
+ * and spoken labels still match what is counted (her 9 Nov rule); only the
+ * word changed, from the "section" of 10 Nov.
  *
  * NULL IS THE NOTHING-STATE (rule 5): no count, a count of 0 (the schema's
  * default, which no playable lesson has), or a position the count cannot hold.
@@ -32,7 +34,7 @@
 export interface SegmentPlace {
   /** `segmentPosition / segmentCount`, 0 to just under 1. Drawn, never printed. */
   fraction: number;
-  /** "Section 3 of 10" - what a screen reader says instead of the fraction. */
+  /** "Part 3 of 10" - what a screen reader says instead of the fraction. */
   words: string;
 }
 
@@ -57,6 +59,6 @@ export function segmentPlace(
   }
   return {
     fraction: position / count,
-    words: `Section ${position + 1} of ${count}`,
+    words: `Part ${position + 1} of ${count}`,
   };
 }
