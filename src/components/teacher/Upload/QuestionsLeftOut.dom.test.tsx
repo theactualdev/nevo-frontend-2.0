@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import {
   BACKUP_READER_LINE,
   QuestionsLeftOut,
+  REFUSED_PICTURE_LINE,
   TEXT_HELD_BACK_LINE,
   picturesRefused,
   questionsLeftOut,
@@ -186,39 +187,48 @@ describe("how the file was read", () => {
 
   // Hub, 11 Nov: not said until Lydia's words arrive - its sentence invites a
   // report there is nowhere to make (her 10 Nov rule).
-  it("says nothing for a refused picture, for now", () => {
-    const { container } = render(<QuestionsLeftOut notes={[blocked]} segmentName={() => "Segment 2"} />);
-
-    expect(container).toBeEmptyDOMElement();
-  });
-
-  // Hub, 9 Nov, option (b): here until the lesson review can read it. With the
-  // switch on, as it will be once Lydia's words arrive.
-  it("says a refused picture's own sentence under its segment's name - and never which rule fired or when", () => {
+  // Lydia, 11 Nov (item 7): her words, with the one route, in place of the
+  // server's sentence. Hub, 9 Nov, option (b): here until the review can read it.
+  it("says Lydia's line under the segment's name - never the server's sentence, nor which rule fired or when", () => {
     const { container } = render(
-      <QuestionsLeftOut
-        notes={[older, reader()]}
-        segmentName={(key) => (key === "k-2" ? "Segment 2" : null)}
-        refusedPictures
-      />,
+      <QuestionsLeftOut notes={[older, reader()]} segmentName={(key) => (key === "k-2" ? "Segment 2" : null)} />,
     );
 
-    expect(screen.getByText(blocked.message)).toBeInTheDocument();
+    expect(screen.getByText(REFUSED_PICTURE_LINE)).toBeInTheDocument();
     expect(screen.getByText("Segment 2")).toBeInTheDocument();
-    expect(container.textContent).not.toMatch(/violence|image_prompt|4\.2/);
+    expect(screen.queryByText(blocked.message)).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/violence|image_prompt|4\.2|tell us/);
+  });
+
+  it("says it with the route the rest of the notes use", () => {
+    expect(REFUSED_PICTURE_LINE).toBe(
+      "A safety check held back the picture for this section. Its teaching text is unchanged. If that looks wrong, use Share feedback in the sidebar and we will look at the check rather than at your material.",
+    );
   });
 
   it("still says it, under no name, where the screen has no such segment", () => {
-    const { container } = render(<QuestionsLeftOut notes={[blocked]} segmentName={() => null} refusedPictures />);
+    const { container } = render(<QuestionsLeftOut notes={[blocked]} segmentName={() => null} />);
 
-    expect(screen.getByText(blocked.message)).toBeInTheDocument();
+    expect(screen.getByText(REFUSED_PICTURE_LINE)).toBeInTheDocument();
     expect(container.querySelectorAll("span")).toHaveLength(0);
   });
 
-  it("reads only the segment and the sentence, once each", () => {
+  it("says it even where the note came with no sentence: the words are Lydia's", () => {
+    render(<QuestionsLeftOut notes={[{ ...blocked, message: "" }]} />);
+
+    expect(screen.getByText(REFUSED_PICTURE_LINE)).toBeInTheDocument();
+  });
+
+  it("reads only the segment, once each", () => {
     expect(picturesRefused([blocked, blocked, { ...blocked, message: "" }, { ...blocked, segment: null }])).toEqual([
-      { segment: "k-2", message: blocked.message },
+      { segment: "k-2" },
     ]);
+  });
+
+  it("says nothing with the switch off", () => {
+    const { container } = render(<QuestionsLeftOut notes={[blocked]} refusedPictures={false} />);
+
+    expect(container).toBeEmptyDOMElement();
   });
 });
 
@@ -250,6 +260,16 @@ describe("a part of the lesson held back", () => {
     expect(screen.getByText("Pages 3 and 4")).toBeInTheDocument();
     expect(screen.queryByText(SERVER)).not.toBeInTheDocument();
     expect(screen.queryByText(/Tell us/)).not.toBeInTheDocument();
+  });
+
+  // Lydia, 11 Nov (item 1): the last sentence returns, with its route.
+  it("ends with the Share feedback route, and reads correctly with no pages", () => {
+    expect(TEXT_HELD_BACK_LINE).toBe(
+      "A safety check held back the lesson Nevo wrote from this part of your file, so it came through as plain text with no questions. Your file passed its own check, so your material is not the problem. If that looks wrong, use Share feedback in the sidebar and we will look at the check rather than at your material.",
+    );
+    render(<QuestionsLeftOut notes={[held({ pageNumbers: [] })]} />);
+
+    expect(screen.getByText(TEXT_HELD_BACK_LINE)).toBeInTheDocument();
   });
 
   it("names one page as a page, and a run of pages as a range", () => {
