@@ -23,6 +23,7 @@ import {
   unconfirmedResendToast,
 } from "../Invitations/deliveryCopy";
 import { joinLink } from "../Invitations/joinLink";
+import { normaliseStatus } from "../Invitations/inviteStatus";
 import { LinkHandout } from "../Invitations/LinkHandout";
 import { openInviteFor } from "./openInvite";
 import { StatusPill, isInvited } from "./status";
@@ -98,6 +99,12 @@ export function TeachersView() {
   const [search, setSearch] = useState("");
   /** Each invited teacher's resendable invitation, by teacher id. */
   const [invites, setInvites] = useState<Record<string, Invitation>>({});
+  /**
+   * When the invitations were read: the one instant every row is judged
+   * against (see `normaliseStatus`). Null until that read answers, or when it
+   * fails - and then the header says nothing about invitations.
+   */
+  const [invitesJudgedAt, setInvitesJudgedAt] = useState<number | null>(null);
   const [resending, setResending] = useState<Record<string, "sending" | "done">>({});
   /** A resend nobody was confirmed emailed about: its link, in that row. */
   const [handout, setHandout] = useState<{ teacherId: string; invite: Invitation } | null>(
@@ -182,8 +189,12 @@ export function TeachersView() {
                 if (inv) found[t.id] = inv;
               });
               setInvites(found);
+              setInvitesJudgedAt(now);
             })
-            .catch(() => setInvites({}));
+            .catch(() => {
+              setInvites({});
+              setInvitesJudgedAt(null);
+            });
         }
         // The list's own count where it carries one; a read only for the rest.
         const counted = rows.filter((t) => typeof t.classCount === "number");
@@ -212,7 +223,21 @@ export function TeachersView() {
     return () => clearTimeout(id);
   }, [load, search]);
 
-  const pending = teachers.filter((t) => isInvited(t.status)).length;
+  /*
+   * INVITATIONS PENDING, JUDGED AS D19 JUDGES THEM (12 Nov dry run): this
+   * counted every teacher still `invited`, so a teacher whose only invitation
+   * expired on 16 Oct made "1 invitation pending" here while Invitations said
+   * Expired. An invited teacher is not a pending invitation. Counted only once
+   * the invitations have answered; the row keeps its Resend either way, since
+   * D19 resends an expired invitation too.
+   */
+  const pending =
+    invitesJudgedAt === null
+      ? 0
+      : teachers.filter((t) => {
+          const inv = isInvited(t.status) ? invites[t.id] : undefined;
+          return inv ? normaliseStatus(inv.status, inv.expiresAt, invitesJudgedAt) === "pending" : false;
+        }).length;
   const canResend = (t: TeacherSummary) => isInvited(t.status) && Boolean(invites[t.id]);
   const anyResend = teachers.some(canResend);
   /*
