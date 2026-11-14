@@ -158,7 +158,7 @@ function timeEstimate(lesson: {
   const minutes = lesson.estimatedMinutes;
   if (minutes && minutes > 0) return `About ${minutes} min`;
   const count = lesson.segmentCount;
-  return `${count} ${count === 1 ? "section" : "sections"}`;
+  return `${count} ${count === 1 ? "part" : "parts"}`;
 }
 
 /**

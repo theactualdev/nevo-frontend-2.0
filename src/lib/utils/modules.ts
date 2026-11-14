@@ -45,16 +45,22 @@ export function modulePositionFor(
 }
 
 /**
- * The header position line: two-level for modular lessons, the familiar
- * one-level line otherwise (segment-only lessons render exactly as today).
+ * Where the child is, as the line above the player's bar writes it and as the
+ * player's content group and the bar speak it: "Part 3 of 10", counted over
+ * the whole lesson.
+ *
+ * A CHILD'S WORD (Lydia, 11 Nov addendum): "A child's screen says 'Part 3 of
+ * 10', in the player and on the cards. Section and segment are our words for
+ * a teacher looking at her own material, and a child should not have to learn
+ * our taxonomy to find their place in a lesson." It said "Segment 3 of 10",
+ * and in a lesson of several sections "Module 2 of 3 · Segment 1 of 4 in this
+ * module" - a second count in a second word, whose number was not the one the
+ * lesson's card says. One count now, the card's (`segmentPlace`): the same
+ * place is "Part 6 of 10" on the card and in the lesson it opens. Where one
+ * section ends and the next begins is still the boundary screen's to say.
  */
-export function positionLine(
-  lesson: Lesson,
-  segmentIndex: number,
-): string {
-  const pos = modulePositionFor(lesson, segmentIndex);
-  if (!pos) return `Segment ${segmentIndex + 1} of ${lesson.segments.length}`;
-  return `Module ${pos.moduleIndex + 1} of ${pos.moduleCount} · Segment ${pos.segmentIndexInModule + 1} of ${pos.segmentCountInModule} in this module`;
+export function positionLine(lesson: Lesson, segmentIndex: number): string {
+  return `Part ${segmentIndex + 1} of ${lesson.segments.length}`;
 }
 
 /**

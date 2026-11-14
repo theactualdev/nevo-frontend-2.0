@@ -427,7 +427,8 @@ describe("a module boundary", () => {
       "break_start",
       expect.anything(),
     );
-    expect(screen.getByRole("group", { name: /Module 2 of 2/ })).toBeTruthy();
+    // One count over the whole lesson (Lydia, 11 Nov addendum).
+    expect(screen.getByRole("group", { name: "Part 3 of 3" })).toBeTruthy();
     expect(screen.getByText("Equivalence")).toBeTruthy();
   });
 });

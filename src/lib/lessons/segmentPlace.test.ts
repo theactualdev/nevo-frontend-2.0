@@ -11,34 +11,34 @@ describe("where a child is in a lesson", () => {
   it("is the position over the count, said as the segment they are on", () => {
     expect(segmentPlace({ segmentPosition: 2, segmentCount: 10 })).toEqual({
       fraction: 0.2,
-      words: "Section 3 of 10",
+      words: "Part 3 of 10",
     });
   });
 
   it("starts at none of the way, on segment 1", () => {
     expect(segmentPlace({ segmentPosition: 0, segmentCount: 4 })).toEqual({
       fraction: 0,
-      words: "Section 1 of 4",
+      words: "Part 1 of 4",
     });
   });
 
   it("is on the last segment short of the whole way", () => {
     expect(segmentPlace({ segmentPosition: 3, segmentCount: 4 })).toEqual({
       fraction: 0.75,
-      words: "Section 4 of 4",
+      words: "Part 4 of 4",
     });
   });
 
   /*
-   * Lydia, 9 Nov, restated 10 Nov: "the spoken and written labels must match
-   * whatever is actually counted". The cards write "9 sections", so they say
-   * "section" too - never the player's "segment" beside a card that says
-   * "sections".
+   * Lydia, 11 Nov addendum: "A child's screen says 'Part 3 of 10' ... Section
+   * and segment are our words for a teacher." The cards count "9 parts", and
+   * the place is said in the same word (her 9 Nov rule: the spoken and written
+   * labels match what is counted).
    */
-  it("says the place in the cards' own word, section", () => {
+  it("says the place in a child's word, part - never section or segment", () => {
     const place = segmentPlace({ segmentPosition: 2, segmentCount: 9 });
-    expect(place?.words).toBe("Section 3 of 9");
-    expect(place?.words).not.toMatch(/segment/i);
+    expect(place?.words).toBe("Part 3 of 9");
+    expect(place?.words).not.toMatch(/segment|section/i);
   });
 
   it("is nothing when the row gives no count, or the schema's 0", () => {

@@ -1086,7 +1086,7 @@ test.describe("a signed-in student", () => {
     expect(response?.status(), "A real lesson answered its hard load with an error.").toBe(200);
 
     // The segment the player opens on is a group named by its position.
-    const segment = page.getByRole("group", { name: /Segment \d+ of \d+/ });
+    const segment = page.getByRole("group", { name: /Part \d+ of \d+/ });
     const notPlayed = page.getByRole("heading", {
       name: /Something went wrong|isn.t (ready yet|open yet|on your list)|couldn.t find that lesson/,
     });

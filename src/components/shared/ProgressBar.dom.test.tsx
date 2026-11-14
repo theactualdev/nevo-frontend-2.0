@@ -15,10 +15,10 @@ afterEach(() => cleanup());
 
 describe("ProgressBar", () => {
   it("speaks the position in words, from its label", () => {
-    render(<ProgressBar value={0.4} aria-label="Segment 3 of 8" />);
+    render(<ProgressBar value={0.4} aria-label="Part 3 of 8" />);
 
     const bar = screen.getByRole("progressbar");
-    expect(bar.getAttribute("aria-valuetext")).toBe("Segment 3 of 8");
+    expect(bar.getAttribute("aria-valuetext")).toBe("Part 3 of 8");
     expect(bar.getAttribute("aria-valuetext")).not.toMatch(/%|percent/i);
   });
 
@@ -54,7 +54,7 @@ describe("ProgressBar's track", () => {
   const classes = (el: Element) => el.className.split(" ");
 
   it("is the Lesson Player frame's for the player, and stays as it was for everyone else", () => {
-    render(<ProgressBar value={0.5} aria-label="Segment 1 of 2" lesson />);
+    render(<ProgressBar value={0.5} aria-label="Part 1 of 2" lesson />);
     const lesson = screen.getByRole("progressbar");
     expect(classes(lesson)).toContain("bg-nevo-near-black/10");
     expect(classes(lesson)).not.toContain("rounded-full");

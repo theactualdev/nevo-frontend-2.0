@@ -738,7 +738,7 @@ describe("Home's two lists", () => {
     await settled(container);
 
     const pickup = section(/Pick up where you left off/);
-    const ring = within(pickup).getByRole("img", { name: "Section 3 of 10" });
+    const ring = within(pickup).getByRole("img", { name: "Part 3 of 10" });
     const arc = ring.querySelectorAll("circle")[1];
     const length = 2 * Math.PI * 24;
     expect(Number(arc.getAttribute("stroke-dashoffset"))).toBeCloseTo(
@@ -762,8 +762,8 @@ describe("Home's two lists", () => {
     await settled(container);
 
     const pickup = section(/Pick up where you left off/);
-    expect(within(pickup).getByRole("img", { name: "Section 2 of 4" })).toBeInTheDocument();
-    expect(within(pickup).getByRole("img", { name: "Section 4 of 4" })).toBeInTheDocument();
+    expect(within(pickup).getByRole("img", { name: "Part 2 of 4" })).toBeInTheDocument();
+    expect(within(pickup).getByRole("img", { name: "Part 4 of 4" })).toBeInTheDocument();
   });
 
   it("never subtracts the segments flagged for review from the count", async () => {
@@ -780,7 +780,7 @@ describe("Home's two lists", () => {
 
     expect(
       within(section(/Pick up where you left off/)).getByRole("img", {
-        name: "Section 3 of 10",
+        name: "Part 3 of 10",
       }),
     ).toBeInTheDocument();
   });
@@ -855,7 +855,7 @@ describe("Home's two lists", () => {
     expect(links[0].getAttribute("href")).toBe("/student/lessons/lib");
     expect(within(pickup).getByText("Geography")).toBeInTheDocument();
     expect(
-      within(pickup).getByRole("img", { name: "Section 2 of 5" }),
+      within(pickup).getByRole("img", { name: "Part 2 of 5" }),
     ).toBeInTheDocument();
     expect(links[1].getAttribute("href")).toBe(
       "/student/lessons/set?assignment=as-set",

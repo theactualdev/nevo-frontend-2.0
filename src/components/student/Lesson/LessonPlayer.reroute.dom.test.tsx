@@ -90,6 +90,10 @@ const LESSON = {
   assessment: { questions: [question(1), question(2)] },
 } as unknown as Lesson;
 
+/** Lydia's sentence for nothing landed (11 Nov addendum), as the server writes it. */
+const NOTHING_SENTENCE =
+  "Today you worked on halves. We will come back to all of them.";
+
 /** The completion write's answer. */
 const completed = (over: Record<string, unknown> = {}) => ({
   lessonId: "lesson-1",
@@ -246,10 +250,15 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     );
     await finishCheck();
 
-    land(rerender, completed({ resultState: "nothing_landed" }));
+    land(
+      rerender,
+      completed({ resultState: "nothing_landed", resultNote: NOTHING_SENTENCE }),
+    );
 
     expect(screen.queryByText(HEADING)).toBeNull();
-    expect(screen.getByText(/didn.t land yet/)).toBeTruthy();
+    // The server's sentence, in place of the app's own line (Lydia, 11 Nov).
+    expect(screen.getByText(NOTHING_SENTENCE)).toBeTruthy();
+    expect(screen.queryByText(/didn.t land yet/)).toBeNull();
     expect(screen.queryByRole("heading")).toBeNull();
   });
 
@@ -259,11 +268,16 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
       <LessonPlayer lesson={LESSON} plan={null} live onStartAgain={vi.fn()} />,
     );
     await finishCheck();
-    expect(screen.queryByText(/didn.t land yet/)).toBeNull();
+    expect(screen.queryByText(NOTHING_SENTENCE)).toBeNull();
 
-    land(rerender, completed({ resultState: "nothing_landed" }));
+    land(
+      rerender,
+      completed({ resultState: "nothing_landed", resultNote: NOTHING_SENTENCE }),
+    );
 
-    expect(screen.getByText(/didn.t land yet/)).toBeTruthy();
+    expect(screen.getByText(NOTHING_SENTENCE)).toBeTruthy();
+    // The revisit mark, not the success check: no heading.
+    expect(screen.queryByRole("heading")).toBeNull();
   });
 
   it("holds the result's mark and heading until the verdict comes back", async () => {

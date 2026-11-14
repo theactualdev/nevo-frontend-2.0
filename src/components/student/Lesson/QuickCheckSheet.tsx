@@ -162,12 +162,14 @@ function centredCard(): boolean {
  * SEVERAL CHECKS IN ONE SECTION: where the child is, WITHOUT A COUNT (Lydia,
  * 7 Nov, copy pass). The frame's middle line, "Still going - one more after
  * this", was untrue for a section of four or more, and "Check 2 of 3" was a
- * count in front of a child. Her words hold for any number.
+ * count in front of a child. Her words hold for any number - in a child's
+ * word for where they are, "part", since her 11 Nov addendum ("Section and
+ * segment are our words for a teacher").
  */
 export const SEVERAL_CHECKS_LINES = {
-  first: "A few quick checks on this section.",
+  first: "A few quick checks on this part.",
   middle: "Still going.",
-  last: "Last quick check for this section.",
+  last: "Last quick check for this part.",
 } as const;
 
 /** The line for where a check sits among its section's. */
@@ -307,7 +309,13 @@ export function QuickCheckSheet({
    * WHAT IT SAYS IS ALL THE SERVER'S. Which steps, which ways: its reply's.
    * Nothing here chooses by the check's level, or by anything else (rule 3).
    * Without a re-teaching for this check, a miss is held and gives way, as
-   * before.
+   * before - and so is a miss whose re-teaching has NO STEPS TO SHOW (rule
+   * 5). The box opened on it anyway, and drew "Let's work through it
+   * together" over nothing at all (12 Nov dry run, Heat Transfer's second
+   * check), while the section's own ways in, "One step at a time" among
+   * them, waited unseen behind the sheet. A heading promising a
+   * working-through is not drawn where there is none to work through; the
+   * sheet gives way to the ways the section has instead.
    */
   const [box, setBox] = useState<{
     held: string;
@@ -364,7 +372,7 @@ export function QuickCheckSheet({
 
   // A miss the server re-teaches opens the box, in place of giving way -
   // taken as the reply lands, during render, so no frame shows it giving way.
-  if (!box && missed && reteachHere && chosenId !== null) {
+  if (!box && missed && reteachHere && steps.length > 0 && chosenId !== null) {
     setBox({ held: chosenId, pick: null, after: "asking" });
   }
   // The retry is timed from the box opening (rule 4).
