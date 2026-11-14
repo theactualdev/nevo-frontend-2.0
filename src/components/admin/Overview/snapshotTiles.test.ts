@@ -169,12 +169,40 @@ describe("the teachers tile's open invitations (D04)", () => {
     );
   });
 
-  it("keeps the headcount's own words when none are open, or they could not be read", () => {
+  it("says 'with a Nevo account' only when every teacher counted has set up", () => {
     for (const pendingTeacherInvites of [0, null, undefined]) {
-      expect(tile(snapshotTiles({ ...withTeachers, pendingTeacherInvites }), "teachers").desc).toBe(
-        "with a Nevo account",
-      );
+      expect(
+        tile(snapshotTiles({ ...withTeachers, pendingTeacherInvites, teachersSetUp: 18 }), "teachers")
+          .desc,
+      ).toBe("with a Nevo account");
     }
+  });
+
+  /*
+   * 12 Nov dry run: "4 Teachers with a Nevo account" counted a teacher whose
+   * only invitation had expired - the server's figure includes invited
+   * teachers. D04's own line for that: "4 have set up so far".
+   */
+  it("says how many have set up, in D04's words, when some haven't", () => {
+    expect(tile(snapshotTiles({ ...withTeachers, teachersSetUp: 15 }), "teachers").desc).toBe(
+      "15 have set up so far",
+    );
+    expect(tile(snapshotTiles({ ...withTeachers, teachersSetUp: 1 }), "teachers").desc).toBe(
+      "1 has set up so far",
+    );
+  });
+
+  it("claims nothing about accounts when the teachers couldn't be read", () => {
+    for (const teachersSetUp of [null, undefined]) {
+      expect(tile(snapshotTiles({ ...withTeachers, teachersSetUp }), "teachers").desc).toBe("");
+    }
+  });
+
+  it("an open invitation is still the line, whatever the set-up count", () => {
+    expect(
+      tile(snapshotTiles({ ...withTeachers, pendingTeacherInvites: 2, teachersSetUp: 15 }), "teachers")
+        .desc,
+    ).toBe("2 invitations pending");
   });
 
   it("counts only live teacher invitations", () => {
