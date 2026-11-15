@@ -10,7 +10,13 @@ import { assignmentsApi } from "@/lib/api/assignments";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { useLessonLibrary } from "@/hooks/useLessonLibrary";
 import { cn } from "@/lib/utils";
-import { assignRefusal, awaitingSignOff, reviewHrefFor, UNREVIEWED_LEFT_OFF } from "@/lib/lessons/signOff";
+import {
+  assignRefusal,
+  awaitingSignOff,
+  REVIEW_STEPS_LEFT,
+  reviewHrefFor,
+  UNREVIEWED_LEFT_OFF,
+} from "@/lib/lessons/signOff";
 
 /**
  * C08c Recommend a Lesson, for a real student.
@@ -235,7 +241,8 @@ export function LiveRecommendSheet({
       ) {
         setError(
           apiErrorMessage(err.detail) ??
-            "This lesson still has sections waiting for you, so it cannot go to students yet.",
+            /* Lydia, 11 Nov (item 7): the reasonless refusal. */
+            REVIEW_STEPS_LEFT,
         );
         /* SCRUM-319: back to the STEP the 409 names (SCRUM-307), else the lesson. */
         const steps =

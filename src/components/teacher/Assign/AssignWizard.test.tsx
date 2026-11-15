@@ -767,9 +767,11 @@ describe("a 409 that names the lessons", () => {
 
     sendOne();
 
+    // Lydia, 11 Nov (item 7): review steps, not sections.
     expect(
-      await screen.findByText(/This lesson still has sections waiting for you/),
+      await screen.findByText("This lesson still has review steps to finish, so it cannot go to your class yet."),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/sections waiting/)).not.toBeInTheDocument();
   });
 
   it("says nothing of the sort for a refusal that is not this one", async () => {

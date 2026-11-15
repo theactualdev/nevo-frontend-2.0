@@ -44,6 +44,23 @@ export const reviewHrefFor = (lessonId: string) =>
 export const REVIEW_TO_ASSIGN = "Review this lesson to assign it.";
 
 /**
+ * THE REASONLESS REFUSAL (Lydia, 11 Nov, item 7): a 409 `lesson_not_approved`
+ * that carries no sentence of the server's. It said "This lesson still has
+ * sections waiting for you, so it cannot go to students yet." - but what waits
+ * is review steps, not sections (raised 9 Nov).
+ */
+export const REVIEW_STEPS_LEFT =
+  "This lesson still has review steps to finish, so it cannot go to your class yet.";
+
+/**
+ * The same refusal over SEVERAL lessons, where none can be named: her sentence
+ * with "one of these lessons", and the way to it the old line gave. Ours, built
+ * from hers - she has given no plural (asked).
+ */
+export const REVIEW_STEPS_LEFT_SEVERAL =
+  "One of these lessons still has review steps to finish, so it cannot go to your class yet. Open it from your Library and check it.";
+
+/**
  * SCRUM-319: a refused Assign names the step that holds it, and goes back to
  * it. The words are the server's own (`REVIEW_STEP_NAMES`, backend b74b5e8),
  * so the console and the 409's message call each step the same thing; the
