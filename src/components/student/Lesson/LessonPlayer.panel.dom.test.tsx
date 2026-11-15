@@ -219,12 +219,14 @@ describe("the panel sits above Back and Next, never over them", () => {
     expect(screen.getByText("Body of Numerators.")).toBeTruthy();
   });
 
-  it("leaves Next working with it open: forward, as the hand-off goes", async () => {
+  it("leaves Next working with it open: back to the check, as Keep going goes", async () => {
     await handedOff();
 
     next();
 
-    expect(screen.getByText("Body of Equivalence.")).toBeTruthy();
+    // Lydia's gate, 23 Oct: a hand-off moves no one past a wrong check.
+    expect(await screen.findByText("Which number is on top?")).toBeTruthy();
+    expect(screen.queryByText("Body of Equivalence.")).toBeNull();
     expect(screen.queryByText(PROMPT)).toBeNull();
   });
 
@@ -266,16 +268,17 @@ describe("the panel sits above Back and Next, never over them", () => {
 });
 
 describe("Keep going, from the moment the panel opens", () => {
-  it("goes on from a hand-off before anything is answered", async () => {
+  it("goes back to the check from a hand-off before anything is answered", async () => {
     await handedOff();
 
     const keepGoing = screen.getByRole("button", { name: "Keep going" });
     expect(keepGoing).toBeEnabled();
     fireEvent.click(keepGoing);
 
-    expect(screen.getByText("Body of Equivalence.")).toBeTruthy();
+    // Back at the check, asked afresh - never on past it (Lydia, 23 Oct).
+    expect(await screen.findByText("Which number is on top?")).toBeTruthy();
+    expect(screen.queryByText("Body of Equivalence.")).toBeNull();
     expect(screen.queryByText(PROMPT)).toBeNull();
-    expect(screen.queryByRole("dialog")).toBeNull();
     // Nothing was answered, so nothing went up as an answer.
     expect(answerGuided).not.toHaveBeenCalled();
   });

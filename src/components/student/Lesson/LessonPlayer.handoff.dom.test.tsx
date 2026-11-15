@@ -8,7 +8,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
-import { GIVES_WAY_AFTER_MS } from "./QuickCheckSheet";
+import {
+  GIVES_WAY_AFTER_MS,
+  RECOVERY_LINE,
+  RETEACH_COPY,
+} from "./QuickCheckSheet";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { ApiError } from "@/lib/api/client";
 import type { Lesson } from "@/lib/types";
@@ -17,12 +21,16 @@ import type { Lesson } from "@/lib/types";
  * B94 / SCRUM-241, frame 38a: the quick check gives way to the Socratic
  * panel when the SERVER says so, on its reply to a miss - "the front end
  * never counts attempts and never decides for itself". The panel arrives
- * open, with the server's prompts and nothing to accept or decline, and once
- * they are worked through the child goes "forward, never back to the
- * question". B128, 13 Oct: `advanceAfterHandoff` "is true whenever a
- * Socratic handoff exists. False means there is no handoff." What the child
- * did is reported as it was: "a concept reached this way is never recorded as
- * mastered first time".
+ * open, with the server's prompts and nothing to accept or decline. B128,
+ * 13 Oct: `advanceAfterHandoff` "is true whenever a Socratic handoff exists.
+ * False means there is no handoff." What the child did is reported as it was:
+ * "a concept reached this way is never recorded as mastered first time".
+ *
+ * AND IT NEVER MOVES THE CHILD PAST THE CHECK (Lydia's gate, 23 Oct: no
+ * advance on a wrong check, the break is the only valve). 38a's "forward,
+ * never back to the question" took the panel's Keep going on into the next
+ * part with the check still failed (the hub, 14 Nov, as Chidi on Osmosis).
+ * Keep going now goes back to the check, asked afresh.
  */
 
 const SESSION = "4f1c2a9e-8b7d-4c3a-9e2f-1a2b3c4d5e6f";
@@ -242,7 +250,7 @@ describe("the server hands a child off from the quick check (B94)", () => {
     });
   });
 
-  it("moves on into the next segment once the prompts are worked through", async () => {
+  it("goes back to the check, asked afresh, once the prompts are worked through", async () => {
     saveAttempt.mockResolvedValue(reply(HANDOFF));
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
@@ -254,17 +262,24 @@ describe("the server hands a child off from the quick check (B94)", () => {
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
 
-    // Forward, an ordinary segment, and the panel gone with the check.
-    expect(screen.getByText("Body of Denominators.")).toBeTruthy();
+    // Back to the check, never on past it (Lydia, 23 Oct): still the first
+    // part, the panel gone, and the check asked again with nothing picked -
+    // no old wrong pick and no box over it.
+    expect(checkOnScreen()).toBeTruthy();
+    expect(screen.queryByText("Body of Denominators.")).toBeNull();
     expect(screen.queryByText(PROMPT)).toBeNull();
-    expect(checkOnScreen()).toBeNull();
+    expect(screen.queryByText(RECOVERY_LINE)).toBeNull();
+    expect(screen.queryByText(RETEACH_COPY.title)).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /The denominator/ }),
+    ).not.toHaveAttribute("aria-pressed", "true");
     // The reply went up as its length, never the words.
     expect(answerGuided).toHaveBeenCalledWith(
       expect.objectContaining({ promptId: "p-1", responseLength: 9 }),
     );
   });
 
-  it("does not send the child back into the check it moved them past", async () => {
+  it("never takes the child past the failed check: tapped out, Next asks it again", async () => {
     saveAttempt.mockResolvedValue(reply(HANDOFF));
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
@@ -273,16 +288,15 @@ describe("the server hands a child off from the quick check (B94)", () => {
     await workThrough();
     fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     next();
 
-    expect(checkOnScreen()).toBeNull();
-    expect(screen.getByText("Body of Denominators.")).toBeTruthy();
-    // And no panel arrives again on the way back through.
-    expect(screen.queryByText(PROMPT)).toBeNull();
+    expect(checkOnScreen()).toBeTruthy();
+    expect(screen.queryByText("Body of Denominators.")).toBeNull();
   });
 
-  it("goes forward, not back into the check, when the child closes the panel and taps Next", async () => {
+  it("asks the check again, afresh, when the child closes the panel and taps Next", async () => {
     saveAttempt.mockResolvedValue(reply(HANDOFF));
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
@@ -292,20 +306,20 @@ describe("the server hands a child off from the quick check (B94)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     next();
 
-    // Forward - no check sheet, no old wrong pick, no "Not quite."
-    expect(screen.getByText("Body of Denominators.")).toBeTruthy();
-    expect(checkOnScreen()).toBeNull();
-    expect(screen.queryByText("Not quite.")).toBeNull();
-    expect(screen.queryByRole("dialog")).toBeNull();
-    // And on the way back through, neither the check nor the panel again.
-    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    // The check again - not the next part, and not the old wrong pick.
+    expect(checkOnScreen()).toBeTruthy();
+    expect(screen.queryByText("Body of Denominators.")).toBeNull();
+    expect(screen.queryByText(RECOVERY_LINE)).toBeNull();
     expect(screen.queryByText(PROMPT)).toBeNull();
-    next();
-    expect(checkOnScreen()).toBeNull();
+
+    // A right answer is the way on, as on any check.
+    saveAttempt.mockResolvedValue(reply({ answer: "a", correct: true }));
+    fireEvent.click(screen.getByRole("button", { name: /The numerator/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
     expect(screen.getByText("Body of Denominators.")).toBeTruthy();
   });
 
-  it("is never the check passed when the child closes the panel and moves on", async () => {
+  it("is never the check passed first time when the child closes the panel and answers it later", async () => {
     const REVIEW = { ...LESSON, assessment: undefined } as unknown as Lesson;
     saveAttempt.mockResolvedValue(reply(HANDOFF));
     // The review's completion lands, so the scheduler is told (Teslim, 19 Oct).
@@ -325,13 +339,18 @@ describe("the server hands a child off from the quick check (B94)", () => {
     await talkThrough();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     next();
+    saveAttempt.mockResolvedValue(reply({ answer: "a", correct: true }));
+    fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
     next();
 
+    // Reported as it happened on this device - a miss, then right on the
+    // second pick - and never as known first time.
     await waitFor(() =>
       expect(recordReview).toHaveBeenCalledWith({
         studentId: "stu-1",
         conceptId: "concept-1",
-        outcome: "not_recalled",
+        outcome: "second_attempt",
         sessionId: SESSION,
       }),
     );
@@ -411,7 +430,7 @@ describe("the server hands a child off from the quick check (B94)", () => {
 });
 
 describe("what a hand-off records (38a)", () => {
-  it("is never the check passed when the child moves on through it", async () => {
+  it("is never the check passed first time when the child works through it and answers it again", async () => {
     const REVIEW = { ...LESSON, assessment: undefined } as unknown as Lesson;
     saveAttempt.mockResolvedValue(reply(HANDOFF));
     // The review's completion lands, so the scheduler is told (Teslim, 19 Oct).
@@ -431,13 +450,19 @@ describe("what a hand-off records (38a)", () => {
     await talkThrough();
     await workThrough();
     fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    // Back at the check: answered right now, four picks in.
+    saveAttempt.mockResolvedValue(reply({ answer: "a", correct: true }));
+    fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
     next();
 
+    // Reported as it happened on this device - a miss, then right on the
+    // second pick - and never as known first time.
     await waitFor(() =>
       expect(recordReview).toHaveBeenCalledWith({
         studentId: "stu-1",
         conceptId: "concept-1",
-        outcome: "not_recalled",
+        outcome: "second_attempt",
         sessionId: SESSION,
       }),
     );

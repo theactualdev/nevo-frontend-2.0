@@ -267,9 +267,10 @@ export type PanelEntry = "self" | "handoff";
  * is support, not a test, and a child has to be able to leave it." So frame
  * 38's Keep going is at the panel's foot, pressable, before anything is
  * answered and whichever way the panel was reached. It closes the panel, and
- * then does what the way in says (`onKeepGoing`): on into the next segment
- * after a hand-off, nothing more on a panel the child opened, which is theirs
- * to close - no completion condition, nothing to answer first. It is the
+ * then does what the way in says (`onKeepGoing`): back to the check after a
+ * hand-off, asked afresh (Lydia's gate, 23 Oct: never on past a wrong check),
+ * nothing more on a panel the child opened, which is theirs to close - no
+ * completion condition, nothing to answer first. It is the
  * SECONDARY action, never a second navy one (Lydia, SCRUM-275, 22 Oct): Send
  * and Try again are the primary - see `KeepGoingButton`.
  *
@@ -281,9 +282,10 @@ export type PanelEntry = "self" | "handoff";
  *   line, and Keep going alone.
  * - "handoff", the system handed the child off after repeated attempts at the
  *   check: the panel arrives open, with nothing to accept or decline, and
- *   ends on "Let's keep going." over the same Keep going. No Try again:
- *   sending this child back to the question is the loop the hand-off exists
- *   to break.
+ *   ends on "Let's keep going." over the same Keep going. No Try again on
+ *   the panel itself; its Keep going is the way back to the check, asked
+ *   afresh, since a hand-off moves no one past a wrong check (Lydia's gate,
+ *   23 Oct - the player's `backToCheckAfterHandoff`).
  * Which one is never worked out from what the child does in here. The backend
  * owns the hand-off and the front end never counts attempts.
  *
@@ -324,8 +326,8 @@ export function SocraticPanel({
   /** The self-opened ending's way back to the question. */
   onTryAgain?: () => void;
   /**
-   * What Keep going does after it closes the panel: on into the next segment
-   * for a hand-off. Absent, Keep going only closes it.
+   * What Keep going does after it closes the panel: back to the check, asked
+   * afresh, for a hand-off. Absent, Keep going only closes it.
    */
   onKeepGoing?: () => void;
   /**
