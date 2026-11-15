@@ -98,7 +98,7 @@ describe("LessonPlayer — focus when the content changes", () => {
 
     expect(
       (document.activeElement as HTMLElement).getAttribute("aria-label"),
-    ).toMatch(/Segment 2 of 3/);
+    ).toMatch(/Part 2 of 3/);
   });
 
   it("keeps doing it on every advance, not just the first", () => {
@@ -108,7 +108,7 @@ describe("LessonPlayer — focus when the content changes", () => {
     next();
 
     const active = document.activeElement as HTMLElement;
-    expect(active.getAttribute("aria-label")).toMatch(/Segment 3 of 3/);
+    expect(active.getAttribute("aria-label")).toMatch(/Part 3 of 3/);
     expect(active.textContent).toContain("Equivalence");
   });
 
@@ -120,7 +120,7 @@ describe("LessonPlayer — focus when the content changes", () => {
 
     expect(
       (document.activeElement as HTMLElement).getAttribute("aria-label"),
-    ).toMatch(/Segment 1 of 3/);
+    ).toMatch(/Part 1 of 3/);
   });
 });
 
@@ -222,7 +222,7 @@ describe("LessonPlayer — the position is said once per opening (D148)", () => 
     render(<LessonPlayer lesson={LESSON} plan={null} />);
     next();
     const opened = body()!;
-    expect(opened.getAttribute("aria-label")).toMatch(/Segment 2 of 3/);
+    expect(opened.getAttribute("aria-label")).toMatch(/Part 2 of 3/);
 
     fireEvent.blur(opened, {
       relatedTarget: screen.getByRole("button", { name: "Exit lesson" }),
@@ -231,7 +231,7 @@ describe("LessonPlayer — the position is said once per opening (D148)", () => 
 
     expect(opened.getAttribute("aria-label")).toBeNull();
     // Still on screen, where a sighted child reads it.
-    expect(screen.getAllByText("Segment 2 of 3").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Part 2 of 3").length).toBeGreaterThan(0);
   });
 
   it("is kept while focus only moves inside the segment", () => {
@@ -241,7 +241,7 @@ describe("LessonPlayer — the position is said once per opening (D148)", () => 
 
     fireEvent.blur(opened, { relatedTarget: opened.firstElementChild });
 
-    expect(opened.getAttribute("aria-label")).toMatch(/Segment 2 of 3/);
+    expect(opened.getAttribute("aria-label")).toMatch(/Part 2 of 3/);
   });
 
   it("is said again when the segment is opened again", () => {
@@ -254,7 +254,7 @@ describe("LessonPlayer — the position is said once per opening (D148)", () => 
     fireEvent.click(screen.getByRole("button", { name: "Previous" }));
     next();
 
-    expect(body()!.getAttribute("aria-label")).toMatch(/Segment 2 of 3/);
+    expect(body()!.getAttribute("aria-label")).toMatch(/Part 2 of 3/);
   });
 
   it("is not said again when a new way of showing it rebuilds the segment", () => {
@@ -267,7 +267,7 @@ describe("LessonPlayer — the position is said once per opening (D148)", () => 
       })),
     } as unknown as Lesson;
     render(<LessonPlayer lesson={both} plan={null} />);
-    expect(group().getAttribute("aria-label")).toMatch(/Segment 1 of 3/);
+    expect(group().getAttribute("aria-label")).toMatch(/Part 1 of 3/);
 
     // The child picks another format in the format group.
     fireEvent.click(screen.getByRole("button", { name: "Audio" }));

@@ -135,7 +135,6 @@ describe("the recovery note (D40)", () => {
       fireEvent.click(screen.getByRole("button", { name: "Next question" }));
     }
 
-    expect(screen.getByText(/didn.t land yet/)).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/bring it back/i);
   });
 
@@ -324,6 +323,8 @@ describe("whether anything landed is the server's word (B98)", () => {
     }
   };
   const HEADING = "You're getting the hang of this";
+  const NOTHING_SENTENCE =
+    "Today you worked on halves. We will come back to all of them.";
 
   it("draws the frame's screen where the server says something landed", () => {
     // Every answer here was wrong: the client's own count would have said
@@ -348,12 +349,50 @@ describe("whether anything landed is the server's word (B98)", () => {
         assessment={ASSESSMENT}
         onFinish={() => {}}
         result="nothing_landed"
+        outcome={{ mastered: [], revisit: ["Halves"], note: NOTHING_SENTENCE }}
       />,
     );
     answerAll("A");
 
-    expect(screen.getByText(/didn.t land yet/)).toBeTruthy();
+    expect(screen.getByText(NOTHING_SENTENCE)).toBeTruthy();
     expect(screen.queryByRole("heading")).toBeNull();
+  });
+
+  /*
+   * Lydia, 11 Nov addendum: "When nothing landed, my sentence replaces
+   * theirs." The server writes it; the app's own line is gone.
+   */
+  it("draws the server's sentence where nothing landed, never a line of its own", () => {
+    render(
+      <AfterLessonAssessment
+        assessment={ASSESSMENT}
+        onFinish={() => {}}
+        result="nothing_landed"
+        outcome={{ mastered: [], revisit: ["Halves"], note: NOTHING_SENTENCE }}
+      />,
+    );
+    answerAll("A");
+
+    expect(screen.queryByText(/didn.t land yet|completely fine/)).toBeNull();
+  });
+
+  it("puts nothing in the sentence's place when nothing landed and the server sent none", () => {
+    // Rule 5. And never the lesson's authored note, which says what the child
+    // showed: a "nothing landed" is the server's word that they showed none.
+    render(
+      <AfterLessonAssessment
+        assessment={{ ...ASSESSMENT, resultNote: "You showed you know halves." }}
+        onFinish={() => {}}
+        result="nothing_landed"
+        outcome={{ mastered: [], revisit: ["Halves"], note: "" }}
+      />,
+    );
+    answerAll("A");
+
+    expect(screen.queryByText(/didn.t land yet|completely fine/)).toBeNull();
+    expect(screen.queryByText("You showed you know halves.")).toBeNull();
+    // With no sentence to name it, the concept is still drawn as sent.
+    expect(screen.getByText("Halves")).toBeTruthy();
   });
 
   it("claims nothing either way when a live lesson's verdict is not known", () => {
@@ -454,7 +493,12 @@ describe("from the check-in (B26)", () => {
     for (let i = 0; i < 4; i++) pick("A");
   };
 
-  it("draws the server's concepts and note, by name", () => {
+  it("draws the server's sentence, and no rows under it to name them again", () => {
+    // Lydia, 11 Nov addendum: "Drop the list below the sentence when the
+    // sentence already names them." The server's names every concept.
+    const sentence =
+      "Today you worked on adding like fractions and unlike denominators. " +
+      "Unlike denominators is one to come back to.";
     render(
       <AfterLessonAssessment
         assessment={ASSESSMENT}
@@ -462,7 +506,26 @@ describe("from the check-in (B26)", () => {
         outcome={{
           mastered: ["Adding like fractions"],
           revisit: ["Unlike denominators"],
-          note: "You showed you can add fractions with the same bottom.",
+          note: sentence,
+        }}
+      />,
+    );
+    finish();
+
+    expect(screen.getByText(sentence)).toBeTruthy();
+    expect(screen.queryByText("Adding like fractions")).toBeNull();
+    expect(screen.queryByText("Unlike denominators")).toBeNull();
+  });
+
+  it("draws the server's concepts, by name, where it sent no sentence", () => {
+    render(
+      <AfterLessonAssessment
+        assessment={ASSESSMENT}
+        onFinish={() => {}}
+        outcome={{
+          mastered: ["Adding like fractions"],
+          revisit: ["Unlike denominators"],
+          note: "",
         }}
       />,
     );
@@ -473,9 +536,15 @@ describe("from the check-in (B26)", () => {
     expect(screen.getByText(/Unlike denominators/).textContent).toBe(
       "Unlike denominators",
     );
-    expect(
-      screen.getByText("You showed you can add fractions with the same bottom."),
-    ).toBeTruthy();
+  });
+
+  it("keeps the walkthrough's rows beside its authored note, as the frame draws them", () => {
+    // No server wrote that note, so nothing says it names every concept.
+    render(<AfterLessonAssessment assessment={AUTHORED} onFinish={() => {}} />);
+    finish();
+
+    expect(screen.getByText("Sample note.")).toBeTruthy();
+    expect(screen.getByText("Sample concept")).toBeTruthy();
   });
 
   it("draws nothing where the server sent nothing", () => {

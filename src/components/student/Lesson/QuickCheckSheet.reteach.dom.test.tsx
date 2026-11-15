@@ -201,12 +201,26 @@ describe("the re-teach box, on a miss the server re-teaches", () => {
     expect(screen.queryByText(RETEACH_COPY.waysLine)).toBeNull();
   });
 
-  it("does not repeat the question as a step when the server has no steps but the question", () => {
-    mount({ reteaching: { ...RETEACHING, screens: [QUESTION] } });
+  /*
+   * RULE 5 (12 Nov dry run, Heat Transfer's second check): with no steps to
+   * work through, "Let's work through it together" stood over nothing while
+   * the section's own ways in waited behind the sheet. No box, then: the
+   * miss is held and gives way to them, as a miss with no re-teaching does.
+   */
+  it.each([
+    ["no steps at all", { screens: [] as string[] }],
+    ["no steps sent", { screens: undefined }],
+    ["only the question again", { screens: [QUESTION] }],
+  ])("opens no box over %s - the miss is held and gives way", (_, over) => {
+    vi.useFakeTimers();
+    const { props } = mount({ reteaching: { ...RETEACHING, ...over } });
     pickFirst("Oxygen");
 
-    expect(screen.getByText(RETEACH_COPY.title)).toBeInTheDocument();
+    expect(screen.queryByText(RETEACH_COPY.title)).toBeNull();
     expect(screen.queryByRole("listitem")).toBeNull();
+    expect(screen.getByText(RECOVERY_LINE)).toBeInTheDocument();
+    act(() => void vi.advanceTimersByTime(GIVES_WAY_AFTER_MS));
+    expect(props.onGiveWay).toHaveBeenCalledTimes(1);
   });
 
   it("never gives way while the box is open", () => {

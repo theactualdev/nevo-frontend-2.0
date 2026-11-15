@@ -3887,10 +3887,10 @@ export function LessonPlayer({
         )}
       </header>
 
-      {/* Two-level position line for modular lessons (SCRUM-101.3) - its own
-          full-width row directly above the progress bar (frame: 0 16px 7px).
-          It wraps rather than cutting off: at a larger text size a phone
-          has no room for "Module 2 of 3 · Segment 1 of 4 in this module",
+      {/* The position line, "Part 3 of 10" (`positionLine`, Lydia's 11 Nov
+          addendum) - its own full-width row directly above the progress bar
+          (frame: 0 16px 7px). It wraps rather than cutting off: at a larger
+          text size a phone had no room for the two-level line it once was,
           and "…in this modu…" told the child nothing.
 
           THE ROW IS THE FRAME'S LINE BOX (d6b9fbc, measured in its source
@@ -3911,7 +3911,7 @@ export function LessonPlayer({
       </div>
 
       {/* Progress line — the bar tracks the whole lesson, continuous across
-          module boundaries; the text above carries the module breakdown. */}
+          module boundaries, as the line above counts it. */}
       <ProgressBar
         lesson
         value={(index + 1) / total}
@@ -4076,7 +4076,7 @@ export function LessonPlayer({
                * reach the next piece of content. Nothing on screen said so.
                *
                * `role="group"` with the position as its name so that landing here
-               * announces "Module 2 of 3 · Segment 1 of 4 in this module" before
+               * announces "Part 3 of 10" before
                * the content - the orientation a sighted child gets for free from
                * the line above the progress bar. Once per opening (D148): see
                * `positionSaidOn`.

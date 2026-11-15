@@ -72,7 +72,7 @@ describe("the lesson's layout, as the frame measures it", () => {
 
   it("runs the position line inline in a row at a normal line height", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} />);
-    const text = screen.getByText(/Segment 1 of 2/, { selector: "span" });
+    const text = screen.getByText(/Part 1 of 2/, { selector: "span" });
     const row = text.parentElement!;
 
     expect(classes(text)).toEqual(

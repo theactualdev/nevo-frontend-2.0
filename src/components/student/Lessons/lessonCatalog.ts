@@ -18,7 +18,7 @@ export interface LessonSummary {
   /**
    * How long the lesson takes, as the card prints it. On a live lesson it is
    * the summary's `estimatedMinutes` ("About 12 min"), a planning figure and
-   * not a measure of this child, or the section count when there is none -
+   * not a measure of this child, or the count of parts when there is none -
    * see `useStudentLessons`.
    */
   timeEstimate: string;
@@ -32,7 +32,7 @@ export interface LessonSummary {
   /**
    * Where the child is in an in-progress lesson, from their own progress row
    * (backend B51) - drawn as the card's ring and the preview's bar, and
-   * spoken as "Section 3 of 10". Absent when the row does not say, and then
+   * spoken as "Part 3 of 10". Absent when the row does not say, and then
    * the card draws the plain in-progress mark (design D21) and the preview no
    * bar. See `lib/lessons/segmentPlace`.
    */
