@@ -64,6 +64,16 @@ vi.mock("@/lib/api/invites", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/invites")>();
   return { ...actual, invitesApi: { ...actual.invitesApi, list: () => invites() } };
 });
+// Who on the headcount has set up: decides whether "with a Nevo account" is true.
+const teacherList = vi.fn();
+vi.mock("@/lib/api/teachers", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/teachers")>();
+  return { ...actual, teachersApi: { ...actual.teachersApi, list: () => teacherList() } };
+});
+const teacherRows = (active: number, invited: number) => [
+  ...Array.from({ length: active }, (_, i) => ({ id: `a${i}`, name: `A${i}`, status: "active" })),
+  ...Array.from({ length: invited }, (_, i) => ({ id: `i${i}`, name: `I${i}`, status: "invited" })),
+];
 
 // The holds read resolves. Unmocked it fails in jsdom, and a failed read now
 // says so on its card (backlog 33) - which is not what these tests are about.
@@ -105,6 +115,8 @@ beforeEach(() => {
   overview.mockReset();
   invites.mockReset();
   invites.mockResolvedValue([]);
+  teacherList.mockReset();
+  teacherList.mockResolvedValue(teacherRows(18, 0));
   audit.mockResolvedValue(AUDIT);
   adaptationLog.mockResolvedValue({
     events: [],
@@ -395,5 +407,26 @@ describe("the teachers tile", () => {
     const { container } = render(<OverviewView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/with a Nevo account/));
     expect(visibleText(container)).not.toMatch(/invitations? pending/);
+  });
+
+  /*
+   * 12 Nov dry run: "4 Teachers with a Nevo account" counted a teacher whose
+   * only invitation had expired. The server's headcount includes invited
+   * teachers; the frame's line for that is "N have set up so far".
+   */
+  it("never says 'with a Nevo account' over a teacher who hasn't set up", async () => {
+    overview.mockResolvedValue({ schoolId: "sch1", counts: { teachers: 4, classes: 2, activeStudents: 30 } });
+    teacherList.mockResolvedValue(teacherRows(3, 1));
+    const { container } = render(<OverviewView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/3 have set up so far/));
+    expect(visibleText(container)).not.toMatch(/with a Nevo account/);
+  });
+
+  it("claims neither when the teachers can't be read", async () => {
+    teacherList.mockRejectedValue(new Error("403"));
+    const { container } = render(<OverviewView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Teachers/));
+    await waitFor(() => expect(teacherList).toHaveBeenCalled());
+    expect(visibleText(container)).not.toMatch(/with a Nevo account|set up so far/);
   });
 });

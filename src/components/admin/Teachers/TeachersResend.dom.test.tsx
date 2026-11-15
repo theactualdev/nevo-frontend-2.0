@@ -133,3 +133,38 @@ describe("resending from the Teachers list", () => {
     expect(await resendButton()).toBeDisabled();
   });
 });
+
+/*
+ * 12 Nov dry run: Teachers said "1 invitation pending" with Resend while
+ * Invitations said that invitation expired on 16 Oct. An invited teacher is
+ * not a pending invitation - judged as D19 judges it.
+ */
+describe("the header's pending count", () => {
+  it("counts an invitation that is really pending", async () => {
+    const { container } = render(<TeachersView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/2 teachers · 1 invitation pending/));
+  });
+
+  it("does not count an invited teacher whose invitation has expired, and still offers Resend", async () => {
+    invitesList.mockResolvedValue([invite({ expiresAt: "2026-10-16T00:00:00Z" })]);
+    const { container } = render(<TeachersView />);
+    await resendButton();
+    expect(visibleText(container)).toMatch(/2 teachers/);
+    expect(visibleText(container)).not.toMatch(/invitations? pending/);
+  });
+
+  it("says nothing about invitations until they have been read, or when they can't be", async () => {
+    invitesList.mockRejectedValue(new Error("403"));
+    const { container } = render(<TeachersView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/2 teachers/));
+    await waitFor(() => expect(invitesList).toHaveBeenCalled());
+    expect(visibleText(container)).not.toMatch(/invitations? pending/);
+  });
+
+  it("counts it again once a resend has renewed it", async () => {
+    invitesList.mockResolvedValue([invite({ expiresAt: "2026-10-16T00:00:00Z" })]);
+    const { container } = render(<TeachersView />);
+    fireEvent.click(await resendButton());
+    await waitFor(() => expect(visibleText(container)).toMatch(/1 invitation pending/));
+  });
+});

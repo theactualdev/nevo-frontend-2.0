@@ -84,6 +84,13 @@ export interface SnapshotInput {
    * about invitations rather than implying there are none.
    */
   pendingTeacherInvites?: number | null;
+  /**
+   * Teachers who have set up their account (`active` on the teachers list).
+   * Null or absent when that list could not be read. The headcount above is
+   * the server's every teacher not deactivated - INVITED ONES INCLUDED - so
+   * this is what decides whether "with a Nevo account" is true.
+   */
+  teachersSetUp?: number | null;
 }
 
 /**
@@ -117,6 +124,7 @@ export function snapshotTiles({
   counts,
   early,
   pendingTeacherInvites: pendingTeachers = null,
+  teachersSetUp = null,
 }: SnapshotInput): SnapshotTile[] {
   const tiles: SnapshotTile[] = [];
   const mute = (n: number) => early && n === 0;
@@ -165,11 +173,22 @@ export function snapshotTiles({
        * An invited teacher may already be a user in the headcount above, so
        * "more" could count one person twice. This says only that invitations
        * are open, which the invitations themselves establish.
+       *
+       * "WITH A NEVO ACCOUNT" ONLY WHEN EVERY ONE OF THEM HAS ONE (12 Nov dry
+       * run: "4 Teachers with a Nevo account" counted a teacher whose only
+       * invitation had expired). The server's figure is every teacher not
+       * deactivated, invited ones included. When some haven't set up, D04's
+       * own line says how many have: "4 have set up so far". When the list
+       * can't be read, nothing is claimed either way.
        */
       desc:
         typeof pendingTeachers === "number" && pendingTeachers > 0
           ? `${pendingTeachers} ${pendingTeachers === 1 ? "invitation" : "invitations"} pending`
-          : "with a Nevo account",
+          : typeof teachersSetUp !== "number"
+            ? ""
+            : teachersSetUp >= counts.teachers
+              ? "with a Nevo account"
+              : `${teachersSetUp} ${teachersSetUp === 1 ? "has" : "have"} set up so far`,
       muted: mute(counts.teachers),
     });
   }
