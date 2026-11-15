@@ -70,16 +70,15 @@ describe("LiveFlagCard", () => {
     ).toBeInTheDocument();
   });
 
-  it("opens the profile and does not acknowledge the flag", () => {
-    // Learning support's acknowledgement is its own act. A teacher's tap
-    // recording it would put "learning support saw this" on a flag nobody
-    // from learning support has seen.
+  it("opens the profile and neither acknowledges the flag nor marks it seen", () => {
+    // Learning support's acknowledgement is its own act. And opening the
+    // profile to look is not the teacher's read either (Lydia, 11 Nov
+    // addendum): only an explicit acknowledgement marks a flag seen.
     render(<LiveFlagCard flag={flag()} />);
     fireEvent.click(screen.getByRole("link", { name: /Open Amara Kalu/ }));
 
     expect(acknowledgeFlag).not.toHaveBeenCalled();
-    // It is the teacher's own read instead (SCRUM-252).
-    expect(markFlagSeen).toHaveBeenCalledWith("flag-1");
+    expect(markFlagSeen).not.toHaveBeenCalled();
     expect(
       screen.getByRole("link", { name: /Open Amara Kalu/ }),
     ).toHaveAttribute("href", "/teacher/students/student-9");
@@ -115,13 +114,18 @@ describe("LiveFlagCard", () => {
     expect(when).not.toContain("·");
   });
 
-  it("keeps 'Send them a message' a separate action from opening the profile", () => {
+  it("keeps 'Message {first}' a separate action from opening the profile", () => {
     // The card is one big stretched link, so this second action has to sit
     // above it - otherwise a teacher aiming for the message opens the profile.
+    // Lydia, 11 Nov: "Send them a message" did not say who.
     render(<LiveFlagCard flag={flag()} />);
-    expect(
-      screen.getByRole("link", { name: /Send them a message/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Message Amara/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Send them a message/)).not.toBeInTheDocument();
+  });
+
+  it("offers no message where the directory could not name the child", () => {
+    render(<LiveFlagCard flag={flag({ name: null })} />);
+    expect(screen.queryByRole("link", { name: /^Message/ })).not.toBeInTheDocument();
   });
 
   it("names the child in the link", () => {
@@ -134,7 +138,7 @@ describe("LiveFlagCard", () => {
      */
     render(<LiveFlagCard flag={flag()} />);
     expect(
-      screen.getByRole("link", { name: /Send them a message/ }),
+      screen.getByRole("link", { name: /Message Amara/ }),
     ).toHaveAttribute("href", "/teacher/connect?student=student-9");
   });
 
@@ -184,24 +188,16 @@ describe("LiveFlagCard - when it was noticed", () => {
 });
 
 /**
- * SCRUM-252: the tap is this teacher's read. It clears the card from their own
- * Home (`POST …/seen`), and from nobody else's.
+ * NOT THE TEACHER'S READ (Lydia, 11 Nov addendum; SCRUM-346). It was
+ * (SCRUM-252, #894): both links `POST …/seen`. Starting a message is not
+ * acknowledging the flag either; only an explicit acknowledgement is.
  */
 describe("LiveFlagCard - the teacher's own read", () => {
-  it("records the read when they open a message from it", () => {
+  it("does not mark the flag seen when they start a message from it", () => {
     render(<LiveFlagCard flag={flag()} />);
-    fireEvent.click(screen.getByRole("link", { name: /Send them a message/ }));
+    fireEvent.click(screen.getByRole("link", { name: /Message Amara/ }));
 
-    expect(markFlagSeen).toHaveBeenCalledWith("flag-1");
+    expect(markFlagSeen).not.toHaveBeenCalled();
     expect(acknowledgeFlag).not.toHaveBeenCalled();
-  });
-
-  it("holds nothing up when the read does not land", () => {
-    markFlagSeen.mockRejectedValueOnce(new Error("offline"));
-    render(<LiveFlagCard flag={flag()} />);
-
-    expect(() =>
-      fireEvent.click(screen.getByRole("link", { name: /Open Amara Kalu/ })),
-    ).not.toThrow();
   });
 });
