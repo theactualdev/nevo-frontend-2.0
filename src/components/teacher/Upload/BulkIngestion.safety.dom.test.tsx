@@ -78,7 +78,7 @@ afterEach(() => {
 });
 
 describe("a batch file a safety check stopped", () => {
-  it("says Lydia's line, and nothing beyond it", async () => {
+  it("says Lydia's line with the reference beneath it, and no resend", async () => {
     list.mockResolvedValue([
       {
         id: "u-1",
@@ -93,11 +93,12 @@ describe("a batch file a safety check stopped", () => {
 
     expect(screen.getByText(LINE)).toBeInTheDocument();
     expect(screen.queryByText(SERVER_HELD)).not.toBeInTheDocument();
-    expect(screen.queryByText(/ca8435c98d08/)).not.toBeInTheDocument();
+    // Lydia, 11 Nov (item 7): "Reference {code}" and nothing around it.
+    expect(screen.getByText("ca8435c98d08").closest("p")).toHaveTextContent(/^Reference ca8435c98d08$/);
     expect(screen.queryByRole("button", { name: /send this one again/i })).not.toBeInTheDocument();
   });
 
-  it("keeps the server's sentence and the resend when the check could not run", async () => {
+  it("says Lydia's could-not-run line, and keeps the resend", async () => {
     list.mockResolvedValue([
       {
         id: "u-1",
@@ -109,7 +110,8 @@ describe("a batch file a safety check stopped", () => {
 
     await toResults();
 
-    expect(screen.getByText(SERVER_UNAVAILABLE)).toBeInTheDocument();
+    expect(screen.getByText("Nevo could not run its safety check on this lesson, so it has not proposed sections. Nothing has reached your class. Try again shortly.")).toBeInTheDocument();
+    expect(screen.queryByText(SERVER_UNAVAILABLE)).not.toBeInTheDocument();
     expect(screen.queryByText(LINE)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /send this one again/i })).toBeInTheDocument();
   });

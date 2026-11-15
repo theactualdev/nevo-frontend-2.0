@@ -407,13 +407,14 @@ export function LessonLibrary() {
                       <p className="mt-1 text-[13px] leading-[1.5] text-nevo-near-black/62 xl:text-[13.5px]">
                         {lesson.failureReason ?? "Nothing you did is lost."}
                       </p>
+                      {/* "Reference {code}" and nothing around it (Lydia,
+                          11 Nov; Hub: the same form in all five places). */}
                       {lesson.incidentId && (
                         <p className="mt-[5px] text-[12px] leading-[1.45] text-nevo-near-black/50">
-                          {"If you tell us about this, quote "}
+                          Reference{" "}
                           <span className="font-mono text-nevo-near-black/70">
                             {lesson.incidentId}
                           </span>
-                          {"."}
                         </p>
                       )}
                     </div>
