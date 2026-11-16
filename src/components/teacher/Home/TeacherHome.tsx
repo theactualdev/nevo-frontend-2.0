@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { MOCK_TEACHER } from "@/components/teacher/Shell/teacherNav";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -104,17 +105,23 @@ export function TeacherHome() {
   // A flag Learning Support has seen leaves Home: the section is what still
   // needs this teacher. The roster keeps its marker (Lydia, 7 Nov).
   const open = noClasses ? [] : liveFlags.filter((f) => !f.acknowledged);
-  // A card this teacher has already opened is read, and leaves THEIR Home
-  // (SCRUM-252; Lydia, 13 Oct: "clears the card from their own view only").
-  const flags = open.filter((f) => !f.seenByMe);
   /*
-   * OPENED IS NOT CLOSED (4 Nov sweep). The cards this teacher has opened
-   * leave their Home, but the flags are still open. With every one opened,
-   * Home said "Nothing needs you right now. Everyone's moving along at their
-   * own pace" over children Nevo had flagged - and "Everything else is
+   * A card this teacher has marked as seen leaves THEIR Home (Lydia, 13 Oct:
+   * "clears the card from their own view only"; 16 Nov: "Mark as seen"). The
+   * ones marked on this visit leave at once - the server has them, and the
+   * next read would leave them out too.
+   */
+  const [seenHere, setSeenHere] = useState<ReadonlySet<string>>(() => new Set());
+  const flags = open.filter((f) => !f.seenByMe && !seenHere.has(f.id));
+  /*
+   * SEEN IS NOT RESOLVED (4 Nov sweep; Lydia, 16 Nov: "It marks seen, not
+   * resolved, and the flag stays until it resolves"). The cards this teacher
+   * has marked leave their Home, but the flags are still open. With every one
+   * gone, Home said "Nothing needs you right now. Everyone's moving along at
+   * their own pace" over children Nevo had flagged - and "Everything else is
    * running smoothly" beside the cards still waiting.
    */
-  const openedOpen = open.length - flags.length;
+  const seenOpen = open.length - flags.length;
   const fixtureFlags = noClasses || !showFixtureFlags ? [] : HOME_FLAGS;
   const flagCount = flags.length + fixtureFlags.length;
   const hasFlags = flagCount > 0;
@@ -153,12 +160,12 @@ export function TeacherHome() {
           <>
             <p className="mt-2 hidden text-[15.5px] leading-[1.55] text-nevo-near-black/60 xl:block">
               {`${flagCount} ${flagCount === 1 ? "thing is" : "things are"} worth your eye before first period.`}
-              {openedOpen === 0 && " Everything else is running smoothly."}
+              {seenOpen === 0 && " Everything else is running smoothly."}
             </p>
             {/* B1's shorter line, for a phone. */}
             <p className="mt-1.5 text-[14px] leading-[1.5] text-nevo-near-black/60 md:hidden">
               {`${flagCount} ${flagCount === 1 ? "thing is" : "things are"} worth your eye.`}
-              {openedOpen === 0 && " Everything else is steady."}
+              {seenOpen === 0 && " Everything else is steady."}
             </p>
           </>
         )}
@@ -246,7 +253,11 @@ export function TeacherHome() {
                 </div>
                 <div className="mt-3.5 flex flex-col gap-3 xl:mt-4 xl:gap-3.5">
                   {flags.map((flag) => (
-                    <LiveFlagCard key={flag.id} flag={flag} />
+                    <LiveFlagCard
+                      key={flag.id}
+                      flag={flag}
+                      onSeen={(id) => setSeenHere((s) => new Set(s).add(id))}
+                    />
                   ))}
                   {fixtureFlags.length > 0 && (
                     <SampleRegion kind="teacher:home-flags">
@@ -307,11 +318,13 @@ export function TeacherHome() {
                     <path d="M20 6L9 17l-5-5" />
                   </svg>
                 </span>
-                {openedOpen > 0 ? (
-                  /* Every card opened, the flags still open: say only that. */
+                {seenOpen > 0 ? (
+                  /* Every card marked as seen, the flags still open: say only
+                     that. Opening a card no longer marks it (11 Nov), so
+                     "You've opened everything" stopped being true. */
                   <div>
                     <h3 className="text-[16px] font-semibold text-nevo-near-black xl:text-[17px]">
-                      You&rsquo;ve opened everything waiting for you
+                      You&rsquo;ve marked everything waiting for you as seen
                     </h3>
                     <p className="mt-[5px] text-sm leading-[1.5] text-nevo-near-black/66 xl:text-[14.5px]">
                       They&rsquo;re still on each child&rsquo;s page. We&rsquo;ll

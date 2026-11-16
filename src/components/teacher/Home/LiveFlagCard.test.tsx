@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { LiveFlagCard } from "./LiveFlagCard";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { LiveFlagCard, SEEN_FAILED } from "./LiveFlagCard";
 import type { TeacherFlag } from "@/hooks/useTeacherFlags";
 
 // `vi.mock` is hoisted above ordinary consts, so the spy has to be hoisted
@@ -146,12 +146,14 @@ describe("LiveFlagCard", () => {
     const { container: sudden } = render(
       <LiveFlagCard flag={flag({ isSudden: true })} />,
     );
-    expect(sudden.querySelectorAll("svg").length).toBeGreaterThan(0);
+    // The drop glyph; the check on "Mark as seen" is in every card.
+    const GLYPH = ":not(button) > svg";
+    expect(sudden.querySelectorAll(GLYPH).length).toBeGreaterThan(0);
 
     const { container: pattern } = render(
       <LiveFlagCard flag={flag({ isSudden: false })} />,
     );
-    expect(pattern.querySelectorAll("svg")).toHaveLength(0);
+    expect(pattern.querySelectorAll(GLYPH)).toHaveLength(0);
   });
 });
 
@@ -199,5 +201,74 @@ describe("LiveFlagCard - the teacher's own read", () => {
 
     expect(markFlagSeen).not.toHaveBeenCalled();
     expect(acknowledgeFlag).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * "MARK AS SEEN" (Lydia, 16 Nov): "It marks seen, not resolved, and the flag
+ * stays until it resolves." The explicit read the 11 Nov addendum asked for.
+ */
+describe("LiveFlagCard - Mark as seen", () => {
+  const settle = () => act(async () => {});
+
+  it("records this teacher's read, and only that", async () => {
+    const onSeen = vi.fn();
+    render(<LiveFlagCard flag={flag()} onSeen={onSeen} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark as seen" }));
+    await settle();
+
+    expect(markFlagSeen).toHaveBeenCalledTimes(1);
+    expect(markFlagSeen).toHaveBeenCalledWith("flag-1");
+    // Learning support's acknowledgement is theirs, never this button's.
+    expect(acknowledgeFlag).not.toHaveBeenCalled();
+    expect(onSeen).toHaveBeenCalledWith("flag-1");
+  });
+
+  it("says whose flag it is, since every card has one", () => {
+    render(<LiveFlagCard flag={flag()} />);
+
+    expect(screen.getByRole("button", { name: "Mark as seen" })).toHaveAccessibleDescription(
+      "Amara Kalu",
+    );
+  });
+
+  it("is there when the directory could not name the child", () => {
+    render(<LiveFlagCard flag={flag({ name: null })} />);
+
+    expect(screen.getByRole("button", { name: "Mark as seen" })).toBeInTheDocument();
+  });
+
+  it("takes one press at a time", async () => {
+    let land: (v: unknown) => void = () => {};
+    markFlagSeen.mockImplementationOnce(() => new Promise((r) => (land = r)));
+    render(<LiveFlagCard flag={flag()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark as seen" }));
+    const pending = screen.getByRole("button", { name: "Marking…" });
+    expect(pending).toBeDisabled();
+    fireEvent.click(pending);
+    expect(markFlagSeen).toHaveBeenCalledTimes(1);
+
+    land({});
+    await settle();
+  });
+
+  it("says a read that did not land, keeps the card, and lets them press again", async () => {
+    markFlagSeen.mockRejectedValueOnce(new Error("503"));
+    const onSeen = vi.fn();
+    render(<LiveFlagCard flag={flag()} onSeen={onSeen} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark as seen" }));
+    await settle();
+
+    expect(screen.getByRole("status")).toHaveTextContent(SEEN_FAILED);
+    expect(onSeen).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark as seen" }));
+    expect(screen.queryByRole("status")).toBeNull();
+    await settle();
+    expect(markFlagSeen).toHaveBeenCalledTimes(2);
+    expect(onSeen).toHaveBeenCalledWith("flag-1");
   });
 });
