@@ -272,7 +272,7 @@ export function WrittenConsentView({
             </Link>
           </div>
         ) : (
-          <div className="grid items-start gap-6 lg:grid-cols-2">
+          <div className="grid items-start gap-6 xl:grid-cols-2">
             <div>
               <span className="mb-2 inline-block text-[13.5px] text-nevo-near-black/55">
                 Students &middot; Consent

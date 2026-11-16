@@ -67,7 +67,7 @@ export function SubjectSpellings({ paused }: { paused: boolean }) {
   const n = questions.length;
   return (
     <section aria-label="Subject spellings" className={cn(CARD, "mt-[22px]")}>
-      <div className="flex items-start gap-3 bg-nevo-violet/14 px-5 py-[18px] max-lg:px-[18px] max-lg:py-4">
+      <div className="flex items-start gap-3 bg-nevo-violet/14 px-5 py-[18px] max-xl:px-[18px] max-xl:py-4">
         <span aria-hidden className="mt-1.5 size-[9px] flex-none rounded-full bg-nevo-violet" />
         <div>
           <h3 className="m-0 text-[15.5px] font-semibold text-nevo-near-black">
@@ -85,9 +85,9 @@ export function SubjectSpellings({ paused }: { paused: boolean }) {
           return (
             <li
               key={q.id}
-              className="flex items-center gap-[18px] border-b border-nevo-near-black/7 px-5 py-4 last:border-b-0 max-lg:flex-col max-lg:items-start max-lg:gap-2.5 max-lg:px-[18px] max-lg:py-[15px]"
+              className="flex items-center gap-[18px] border-b border-nevo-near-black/7 px-5 py-4 last:border-b-0 max-xl:flex-col max-xl:items-start max-xl:gap-2.5 max-xl:px-[18px] max-xl:py-[15px]"
             >
-              <div className="min-w-0 flex-1 text-[15px] leading-[1.5] text-nevo-near-black max-lg:text-[14.5px]">
+              <div className="min-w-0 flex-1 text-[15px] leading-[1.5] text-nevo-near-black max-xl:text-[14.5px]">
                 <span className="font-semibold text-nevo-navy">{q.otherName}</span> and{" "}
                 <span className="font-semibold text-nevo-navy">{q.keptName}</span>: same subject or
                 different?
@@ -97,7 +97,7 @@ export function SubjectSpellings({ paused }: { paused: boolean }) {
               ) : a === "gone" ? (
                 <span className="text-[13.5px] text-nevo-near-black/62">Already answered.</span>
               ) : (
-                <div className="flex flex-none flex-col items-end gap-1.5 max-lg:items-start">
+                <div className="flex flex-none flex-col items-end gap-1.5 max-xl:items-start">
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -133,7 +133,7 @@ export function SubjectSpellings({ paused }: { paused: boolean }) {
 
 function Settled({ same, q }: { same: boolean; q: SpellingQuestion }) {
   return (
-    <div className="flex max-w-[340px] flex-none items-start gap-2.5 max-lg:max-w-full">
+    <div className="flex max-w-[340px] flex-none items-start gap-2.5 max-xl:max-w-full">
       <span className="flex size-6 flex-none items-center justify-center rounded-full bg-nevo-navy text-nevo-cream">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M5 12.5l4.5 4.5L19 7.5" />

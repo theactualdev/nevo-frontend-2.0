@@ -382,7 +382,7 @@ export function SchoolSettings({
               className={S_FIELD}
             />
           </div>
-          <div className="flex gap-4 max-lg:flex-col">
+          <div className="flex gap-4 max-xl:flex-col">
             <div className="flex-1">
               <label htmlFor="set-email" className={S_LABEL}>
                 Contact email
@@ -436,7 +436,7 @@ export function SchoolSettings({
         title="Academic year"
         note="Your terms decide what 'this half-term' means everywhere in Nevo."
       >
-        <div className="flex gap-4 max-lg:flex-col">
+        <div className="flex gap-4 max-xl:flex-col">
           <div className="flex-1">
             <label htmlFor="set-ystart" className={S_LABEL}>
               Year starts
@@ -500,7 +500,7 @@ export function SchoolSettings({
                     Remove
                   </button>
                 </div>
-                <div className="mt-3 flex gap-3 max-lg:flex-col">
+                <div className="mt-3 flex gap-3 max-xl:flex-col">
                   <input
                     type="date"
                     value={t.start}

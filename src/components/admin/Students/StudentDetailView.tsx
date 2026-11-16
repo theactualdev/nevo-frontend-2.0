@@ -336,7 +336,7 @@ export function StudentDetailView({
         <ChildAvatar look={look} size={56} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h2 className="m-0 text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black max-lg:text-[22px]">
+            <h2 className="m-0 text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black max-xl:text-[22px]">
               {name}
             </h2>
             {deactivated ? (
@@ -360,7 +360,7 @@ export function StudentDetailView({
 
       <SectionLabel>Enrolment</SectionLabel>
       <div className={cn(CARD, "mt-2.5 px-6 py-[22px]")}>
-        <dl className="m-0 grid grid-cols-2 gap-x-10 gap-y-[22px] max-lg:grid-cols-1">
+        <dl className="m-0 grid grid-cols-2 gap-x-10 gap-y-[22px] max-xl:grid-cols-1">
           <Field
             label="Class"
             value={

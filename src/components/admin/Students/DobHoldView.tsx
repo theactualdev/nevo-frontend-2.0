@@ -188,7 +188,7 @@ export function DobHoldView({ back = null }: { back?: Back | null }) {
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[820px]">
         <BackLink back={back} fallback={{ href: "/admin/students", label: "All students" }} />
-        <h2 className="m-0 mt-3 text-[28px] font-semibold tracking-[-0.018em] text-nevo-near-black max-lg:text-[24px]">
+        <h2 className="m-0 mt-3 text-[28px] font-semibold tracking-[-0.018em] text-nevo-near-black max-xl:text-[24px]">
           Date of birth checks
         </h2>
 
@@ -372,8 +372,8 @@ function RecheckCard({
   };
 
   return (
-    <li className="rounded-xl border-l-4 border-nevo-navy bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] max-lg:px-5 max-lg:py-[18px]">
-      <div className="flex items-start justify-between gap-4 max-lg:flex-col max-lg:gap-2.5">
+    <li className="rounded-xl border-l-4 border-nevo-navy bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] max-xl:px-5 max-xl:py-[18px]">
+      <div className="flex items-start justify-between gap-4 max-xl:flex-col max-xl:gap-2.5">
         <div className="min-w-0">
           <span className="block text-[18px] font-semibold tracking-[-0.01em] text-nevo-near-black">
             {person.name}
@@ -570,7 +570,7 @@ function WaitingCard({
       .finally(() => setBusy(false));
   };
   return (
-    <li className="rounded-xl bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-lg:px-5 max-lg:py-[18px]">
+    <li className="rounded-xl bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-xl:px-5 max-xl:py-[18px]">
       <span className="block text-[13.5px] font-semibold text-nevo-near-black/58">{person.name}</span>
       <h3 className="m-0 mt-1.5 text-[17px] font-semibold text-nevo-near-black">
         {done?.kind === "corrected"
@@ -660,8 +660,8 @@ function BothCheckedCard({ check, person }: { check: AgeCheck; person: Person })
     `Agreed date of birth for ${person.first}`,
   )}`;
   return (
-    <li className="rounded-xl bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-lg:px-5 max-lg:py-[18px]">
-      <div className="flex items-start justify-between gap-4 max-lg:flex-col max-lg:gap-2.5">
+    <li className="rounded-xl bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-xl:px-5 max-xl:py-[18px]">
+      <div className="flex items-start justify-between gap-4 max-xl:flex-col max-xl:gap-2.5">
         <div className="min-w-0">
           <span className="block text-[18px] font-semibold tracking-[-0.01em] text-nevo-near-black">
             {person.name}

@@ -415,7 +415,7 @@ export function InvitationsView() {
                 counted the whole list, which is not a subset anything can
                 select - so the set is now the frame's own Pending / Joined /
                 Expired, and pressing the active one clears back to all. */}
-            <div className="mt-6 flex gap-3.5 max-lg:flex-col">
+            <div className="mt-6 flex gap-3.5 max-xl:flex-col">
               {stats.map((s) => {
                 const on = status === s.key;
                 return (
@@ -496,18 +496,19 @@ export function InvitationsView() {
             </div>
 
             {/*
-              * CARDS BELOW 1024, A TABLE ABOVE (Lydia, 7 Oct): "A table at
-              * tablet width is a row of truncated columns." Below `lg` the
+              * CARDS BELOW 1280, A TABLE ABOVE (Lydia, 7 Oct): "A table at
+              * tablet width is a row of truncated columns." Desktop starts at
+              * 1280 in every console (Lydia, 16 Nov, SCRUM-347). Below `xl` the
               * shared card dissolves, the column headings go, and each
               * invitation becomes its own card - name and email in full, the
               * status pill beside them, the actions along the bottom - as
               * D19's tablet card frame draws it. One list, two layouts, so
               * the two cannot drift apart.
               */}
-            <div className={cn(CARD, "mt-4 max-lg:overflow-visible max-lg:rounded-none max-lg:bg-transparent max-lg:shadow-none")}>
-              <div className="grid grid-cols-[1.2fr_1.3fr_96px_72px_104px_150px] gap-4 border-b border-nevo-near-black/8 bg-nevo-near-black/[0.03] px-6 py-[13px] text-[11.5px] font-semibold uppercase tracking-[0.05em] text-nevo-near-black/50 max-lg:hidden">
+            <div className={cn(CARD, "mt-4 max-xl:overflow-visible max-xl:rounded-none max-xl:bg-transparent max-xl:shadow-none")}>
+              <div className="grid grid-cols-[1.2fr_1.3fr_96px_72px_104px_150px] gap-4 border-b border-nevo-near-black/8 bg-nevo-near-black/[0.03] px-6 py-[13px] text-[11.5px] font-semibold uppercase tracking-[0.05em] text-nevo-near-black/50 max-xl:hidden">
                 <span>Name</span>
-                <span className="max-lg:hidden">Email</span>
+                <span className="max-xl:hidden">Email</span>
                 <span>Class</span>
                 <span>Invited</span>
                 <span>Status</span>
@@ -515,7 +516,7 @@ export function InvitationsView() {
               </div>
 
               {visible.length === 0 ? (
-                <div className="px-6 py-12 text-center max-lg:rounded-xl max-lg:bg-nevo-cream-elevated">
+                <div className="px-6 py-12 text-center max-xl:rounded-xl max-xl:bg-nevo-cream-elevated">
                   <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
                     No invites match
                   </p>
@@ -546,20 +547,20 @@ export function InvitationsView() {
                     <div
                       key={invite.id}
                       className={cn(
-                        "px-6 py-[15px] max-lg:mb-3 max-lg:rounded-xl max-lg:bg-nevo-cream-elevated max-lg:px-5 max-lg:py-4 max-lg:shadow-[0_2px_8px_rgba(0,0,0,0.06)]",
+                        "px-6 py-[15px] max-xl:mb-3 max-xl:rounded-xl max-xl:bg-nevo-cream-elevated max-xl:px-5 max-xl:py-4 max-xl:shadow-[0_2px_8px_rgba(0,0,0,0.06)]",
                         // The divider is the table's; cards are apart already.
-                        i < rows.length - 1 && cn(ROW_DIVIDER, "max-lg:border-b-0"),
+                        i < rows.length - 1 && cn(ROW_DIVIDER, "max-xl:border-b-0"),
                       )}
                     >
-                      <div className="grid grid-cols-[1.2fr_1.3fr_96px_72px_104px_150px] items-center gap-4 max-lg:grid-cols-[minmax(0,1fr)_auto] max-lg:items-start max-lg:gap-x-3 max-lg:gap-y-3">
+                      <div className="grid grid-cols-[1.2fr_1.3fr_96px_72px_104px_150px] items-center gap-4 max-xl:grid-cols-[minmax(0,1fr)_auto] max-xl:items-start max-xl:gap-x-3 max-xl:gap-y-3">
                         <span className="min-w-0">
-                          <span className="block truncate text-[15px] font-semibold text-nevo-near-black max-lg:whitespace-normal max-lg:break-words">
+                          <span className="block truncate text-[15px] font-semibold text-nevo-near-black max-xl:whitespace-normal max-xl:break-words">
                             {invite.name ?? invite.email ?? "Invited person"}
                           </span>
                           {/* On a card the email sits under the name, whole -
                               the table gives it a column of its own. */}
                           {invite.name && invite.email ? (
-                            <span className="block break-all text-[13px] text-nevo-near-black/66 lg:hidden">
+                            <span className="block break-all text-[13px] text-nevo-near-black/66 xl:hidden">
                               {invite.email}
                             </span>
                           ) : null}
@@ -569,7 +570,7 @@ export function InvitationsView() {
                           {/* On a card, D19's tablet line carries the class
                               and "Invited 9 Jul"; the table has columns. */}
                           {className || invite.createdAt ? (
-                            <span className="block text-[12.5px] text-nevo-near-black/55 lg:hidden">
+                            <span className="block text-[12.5px] text-nevo-near-black/55 xl:hidden">
                               {[
                                 className,
                                 invite.createdAt ? `Invited ${formatDate(invite.createdAt)}` : null,
@@ -579,19 +580,19 @@ export function InvitationsView() {
                             </span>
                           ) : null}
                         </span>
-                        <span className="min-w-0 truncate text-sm text-nevo-near-black/66 max-lg:hidden">
+                        <span className="min-w-0 truncate text-sm text-nevo-near-black/66 max-xl:hidden">
                           {invite.email ?? "—"}
                         </span>
-                        <span className="min-w-0 truncate text-sm text-nevo-near-black/66 max-lg:hidden">
+                        <span className="min-w-0 truncate text-sm text-nevo-near-black/66 max-xl:hidden">
                           {className ?? "—"}
                         </span>
-                        <span className="text-sm text-nevo-near-black/66 tabular-nums max-lg:hidden">
+                        <span className="text-sm text-nevo-near-black/66 tabular-nums max-xl:hidden">
                           {invite.createdAt ? formatDate(invite.createdAt) : "—"}
                         </span>
-                        <span className="flex max-lg:col-start-2 max-lg:row-start-1 max-lg:justify-end">
+                        <span className="flex max-xl:col-start-2 max-xl:row-start-1 max-xl:justify-end">
                           <InviteStatusPill status={s} />
                         </span>
-                        <span className="flex items-center gap-3 max-lg:col-span-2 max-lg:border-t max-lg:border-nevo-near-black/[0.07] max-lg:pt-3">
+                        <span className="flex items-center gap-3 max-xl:col-span-2 max-xl:border-t max-xl:border-nevo-near-black/[0.07] max-xl:pt-3">
                           {/*
                             * EACH ACTION ONLY WHERE IT MEANS SOMETHING, as the
                             * frame draws them. All three used to show on every

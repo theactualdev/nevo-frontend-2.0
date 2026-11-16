@@ -38,22 +38,22 @@ describe("an invitation below 1024px", () => {
     render(<InvitationsView />);
     await screen.findByText("Dr. N. Obi");
     const heading = screen.getByText("Actions").parentElement as HTMLElement;
-    expect(heading.className).toMatch(/max-lg:hidden/);
+    expect(heading.className).toMatch(/max-xl:hidden/);
   });
 
   it("puts the email on its own line under the name, and keeps the table's column for wide screens", async () => {
     list.mockResolvedValue([invite()]);
     render(<InvitationsView />);
     const [card, column] = await screen.findAllByText("n.obi@brightgate.edu.ng");
-    expect(card.className).toMatch(/lg:hidden/);
-    expect(column.className).toMatch(/max-lg:hidden/);
+    expect(card.className).toMatch(/(^|\s)xl:hidden/);
+    expect(column.className).toMatch(/max-xl:hidden/);
   });
 
   it("does not truncate the name on a card", async () => {
     list.mockResolvedValue([invite({ name: "Mrs. Oluwaseun Adeyemi-Bankole" })]);
     render(<InvitationsView />);
     const name = await screen.findByText("Mrs. Oluwaseun Adeyemi-Bankole");
-    expect(name.className).toMatch(/max-lg:whitespace-normal/);
+    expect(name.className).toMatch(/max-xl:whitespace-normal/);
   });
 
   it("gives an email-only invite no second email line", async () => {

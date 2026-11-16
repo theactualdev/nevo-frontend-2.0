@@ -279,7 +279,7 @@ export function ReportsView() {
           <>
             {/* Stat tiles: label, value, no delta - there is no prior period
                 on this route to compare against. */}
-            <div className="mt-7 grid grid-cols-4 gap-3.5 max-lg:grid-cols-2">
+            <div className="mt-7 grid grid-cols-4 gap-3.5 max-xl:grid-cols-2">
               <Stat label="Students" value={health.studentCount.toLocaleString()} />
               <Stat
                 label="Active this month"
@@ -406,7 +406,7 @@ export function ReportsView() {
                 <p className="m-0 mt-1 text-[13px] text-nevo-near-black/58">
                   Volumes for the whole school, this period.
                 </p>
-                <div className="mt-5 grid grid-cols-3 gap-3.5 max-lg:grid-cols-2">
+                <div className="mt-5 grid grid-cols-3 gap-3.5 max-xl:grid-cols-2">
                   <Stat
                     label="Lessons transformed"
                     value={transformation.lessonsTransformed.toLocaleString()}
