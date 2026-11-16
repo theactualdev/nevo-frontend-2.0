@@ -53,6 +53,40 @@ describe("the boundary's one action", () => {
   });
 });
 
+/*
+ * Lydia, 16 Nov: a group of parts is a STAGE. "Stage 2 of 3 done", and the
+ * dots read "Stage 2 of 3" - in place of "Section complete" and "Module 2 of
+ * 3". Section, segment and module never reach a child.
+ */
+describe("a group of parts is a stage (Lydia, 16 Nov)", () => {
+  it("says the stage just finished, and the dots read it", () => {
+    renderBoundary({ nextModuleIndex: 2, moduleCount: 3 });
+
+    expect(screen.getByText("Stage 2 of 3 done")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Stage 2 of 3" })).toBeTruthy();
+  });
+
+  it("names the stage being entered in the chip and the bar", () => {
+    renderBoundary({ nextModuleIndex: 2, moduleCount: 3 });
+
+    expect(screen.getByText("Stage 3 of 3")).toBeTruthy();
+    expect(screen.getByRole("progressbar", { name: "Stage 3 of 3" })).toBeTruthy();
+  });
+
+  it("never says section, segment or module to the child", () => {
+    renderBoundary({
+      finished: { id: "m-1", title: "", segmentIds: ["s1"] },
+    });
+
+    expect(document.body.textContent).not.toMatch(/section|segment|module/i);
+    expect(screen.getByRole("heading").textContent).toBe(
+      "You've finished this stage. Ready for the next part?",
+    );
+    for (const el of document.querySelectorAll("[aria-label]"))
+      expect(el.getAttribute("aria-label")).not.toMatch(/section|segment|module/i);
+  });
+});
+
 describe("the heading (D186, 13 Oct)", () => {
   it("names the finished module as written, with no article and no second title", () => {
     renderBoundary({

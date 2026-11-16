@@ -197,7 +197,10 @@ describe("the re-teach box, on a miss the server re-teaches", () => {
     fireEvent.click(option("Nitrogen"));
     fireEvent.click(checkButton());
 
-    expect(screen.getByText(RETEACH_COPY.again)).toBeInTheDocument();
+    // Lydia, 16 Nov: exactly her line, and no invented help.
+    expect(screen.getByText(RETEACH_COPY.noWayIn)).toBeInTheDocument();
+    expect(RETEACH_COPY.noWayIn).toBe("Not quite. Have another look at this one.");
+    expect(screen.queryByText(RETEACH_COPY.again)).toBeNull();
     expect(screen.queryByText(RETEACH_COPY.waysLine)).toBeNull();
   });
 

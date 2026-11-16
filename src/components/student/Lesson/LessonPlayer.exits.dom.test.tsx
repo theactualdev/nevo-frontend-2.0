@@ -403,7 +403,7 @@ describe("a module boundary", () => {
     render(<LessonPlayer lesson={MODULAR} plan={null} />);
     next();
     next();
-    expect(screen.getByText("Section complete")).toBeTruthy();
+    expect(screen.getByText("Stage 1 of 2 done")).toBeTruthy();
   };
 
   it("writes the place it opens onto, so leaving here resumes in the next module", () => {
