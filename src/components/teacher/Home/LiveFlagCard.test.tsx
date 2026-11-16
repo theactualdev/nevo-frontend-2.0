@@ -240,8 +240,8 @@ describe("LiveFlagCard - Mark as seen", () => {
   });
 
   it("takes one press at a time", async () => {
-    let land: (v: unknown) => void = () => {};
-    markFlagSeen.mockImplementationOnce(() => new Promise((r) => (land = r)));
+    let land: (v: object) => void = () => {};
+    markFlagSeen.mockImplementationOnce(() => new Promise<object>((r) => (land = r)));
     render(<LiveFlagCard flag={flag()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Mark as seen" }));
