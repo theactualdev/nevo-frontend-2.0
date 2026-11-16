@@ -52,6 +52,15 @@ export const SAFETY_HELD_LINE =
 export const SAFETY_HELD_REREAD_LINE =
   "Nevo stopped partway through this re-reading because of a safety check, so what you see below is still the earlier reading.";
 
+/**
+ * A RE-READ THE SAFETY CHECK COULD NOT RUN ON (`reasonCode:
+ * "safety_check_unavailable"`; Lydia, 16 Nov), above the earlier reading as
+ * the held re-read's line is. "Try again shortly" is true: "Try that again"
+ * stays, and the same lesson goes through once the check is back.
+ */
+export const SAFETY_UNAVAILABLE_REREAD_LINE =
+  "Nevo could not run its safety check on this re-reading, so what you see below is still the earlier reading. Try again shortly.";
+
 export const FALLBACK_HEADINGS: Record<FallbackKind, string> = {
   noBoundary: "One continuous lesson",
   partial: "Read most of your block",

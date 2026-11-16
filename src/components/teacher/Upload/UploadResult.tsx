@@ -11,7 +11,13 @@ import type { LessonDetailResponse } from "@/lib/api/lessons";
 import { SplitSourceNotice } from "@/components/teacher/Library/SplitSourceNotice";
 import { stillToCheck } from "@/components/teacher/Library/LessonDetailActions";
 import { assignRefusal, reviewHrefFor } from "@/lib/lessons/signOff";
-import { IncidentLine, SAFETY_HELD_LINE, SAFETY_HELD_REREAD_LINE } from "./ParseFallback";
+import {
+  IncidentLine,
+  SAFETY_HELD_LINE,
+  SAFETY_HELD_REREAD_LINE,
+  SAFETY_UNAVAILABLE_LINE,
+  SAFETY_UNAVAILABLE_REREAD_LINE,
+} from "./ParseFallback";
 import { FinishBlock } from "./FinishBlock";
 import { finishView } from "@/components/teacher/LessonReview/reviewModel";
 
@@ -97,6 +103,24 @@ export function UploadResult({
    * above that lesson; item 6's line only where the lesson has nothing to show.
    */
   const rereadHeld = regenerate.state === "failed" && regenerate.reasonCode === "safety_held";
+  /*
+   * A RE-READ THE CHECK COULD NOT RUN ON (`safety_check_unavailable`; Lydia,
+   * 16 Nov): her line in the same place, above the earlier reading, in place of
+   * the server's sentence below. Unlike a hold it can be sent again, so "Try
+   * that again" stays. With no earlier reading to point at, the upload screens'
+   * own couldn't-run line (11 Nov, item 7), as the held case does.
+   */
+  const rereadUnchecked =
+    regenerate.state === "failed" && regenerate.reasonCode === "safety_check_unavailable";
+  const rereadSafetyLine = rereadHeld
+    ? segments.length > 0
+      ? SAFETY_HELD_REREAD_LINE
+      : SAFETY_HELD_LINE
+    : rereadUnchecked
+      ? segments.length > 0
+        ? SAFETY_UNAVAILABLE_REREAD_LINE
+        : SAFETY_UNAVAILABLE_LINE
+      : null;
   /* SCRUM-319: Assign stays pressable; a tap while held explains it. */
   const [explained, setExplained] = useState(false);
   const refusal = assignRefusal(lesson.id, verdict.outstandingSteps);
@@ -112,7 +136,7 @@ export function UploadResult({
 
   return (
     <div className="mx-auto w-full max-w-[820px] px-6 pb-10">
-      {rereadHeld && (
+      {rereadSafetyLine && (
         <div
           role="status"
           className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4"
@@ -120,7 +144,7 @@ export function UploadResult({
           {/* Lydia's words, not the server's sentence, and the reference
               beneath (11 Nov, item 7), as on the upload screens. */}
           <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
-            {segments.length > 0 ? SAFETY_HELD_REREAD_LINE : SAFETY_HELD_LINE}
+            {rereadSafetyLine}
           </p>
           <IncidentLine id={regenerate.incident} className="mt-2 text-[12.5px] leading-[1.5] text-nevo-near-black/50" />
         </div>
@@ -293,7 +317,7 @@ export function UploadResult({
         </p>
       )}
 
-      {regenerate.state === "failed" && !rereadHeld && (
+      {regenerate.state === "failed" && !rereadSafetyLine && (
         <>
           <p className="mt-3 max-w-[62ch] text-[14px] leading-[1.55] text-nevo-near-black/68">
             {/* The server's reason leads where the parse gave one - as it
