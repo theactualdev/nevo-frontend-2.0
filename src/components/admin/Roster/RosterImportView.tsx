@@ -846,9 +846,10 @@ function WhatNevoFound({
 
 /**
  * One class Nevo derived, with Rename and Drop (Lydia, 11 Nov). D24 draws the
- * row as a name and a count only, so the controls and their two lines are
- * ours, in plain words - raised to design. A class already created
- * (`committed`) is past correcting, so it offers neither.
+ * row as a name and a count only. The drop line is Lydia's (16 Nov); Save and
+ * Cancel are the controls' plain names. Confirm is the line (Lydia, 12 Nov):
+ * a class already created (`committed`) is past correcting, so it offers
+ * neither.
  */
 function DerivedClassRow({
   c,
@@ -940,8 +941,10 @@ function DerivedClassRow({
       )}
       {mode === "dropping" ? (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+          {/* Lydia's words, 16 Nov. True only before Confirm - which is the
+              only time this row offers Drop - since nothing is created yet. */}
           <p className="m-0 text-[13.5px] leading-[1.5] text-nevo-near-black/70">
-            Dropping {c.name} leaves its {students} out of this roster.
+            Remove this class from the import. It has not been created yet, so nothing is deleted.
           </p>
           <button
             type="button"
@@ -955,7 +958,7 @@ function DerivedClassRow({
             Drop {c.name}
           </button>
           <button type="button" onClick={() => setMode("idle")} className={TEXT_BTN}>
-            Keep it
+            Cancel
           </button>
         </div>
       ) : null}

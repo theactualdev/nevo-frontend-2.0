@@ -521,8 +521,8 @@ describe("a refusal on the roster screen", () => {
  * RENAME AND DROP A DERIVED CLASS (Lydia, 11 Nov: allowed before anything in
  * that import is activated). `PATCH /onboarding/classes`, keyed on
  * `normalisedName`, which the server takes while the stage is "uploading" -
- * so until Confirm. D24 draws the row as a name and a count; the controls and
- * their lines are ours.
+ * so until Confirm. D24 draws the row as a name and a count; the drop line is
+ * Lydia's (16 Nov).
  */
 describe("Classes Nevo derived: rename and drop", () => {
   const reachFound = async () => {
@@ -558,21 +558,23 @@ describe("Classes Nevo derived: rename and drop", () => {
     expect(correctClasses).not.toHaveBeenCalled();
   });
 
-  it("asks before a drop, says its students are left out, and sends it only on the second press", async () => {
+  it("asks before a drop in Lydia's words (16 Nov), and sends it only on the second press", async () => {
     correctClasses.mockResolvedValue({ ...READ, classes: [], studentCount: 306 });
     const { container } = await reachFound();
     fireEvent.click(within(row()).getByRole("button", { name: "Drop" }));
-    expect(visibleText(container)).toMatch(/Dropping JSS 1A leaves its 30 students out of this roster\./);
+    expect(visibleText(container)).toMatch(
+      /Remove this class from the import\. It has not been created yet, so nothing is deleted\./,
+    );
     expect(correctClasses).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Drop JSS 1A" }));
     await waitFor(() => expect(correctClasses).toHaveBeenCalledWith([{ normalisedName: "jss 1a", drop: true }]));
     await waitFor(() => expect(screen.queryByText("JSS 1A")).toBeNull());
   });
 
-  it("keeps the class when the admin says Keep it", async () => {
+  it("keeps the class when the admin cancels", async () => {
     await reachFound();
     fireEvent.click(within(row()).getByRole("button", { name: "Drop" }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep it" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("button", { name: "Drop JSS 1A" })).toBeNull();
     expect(correctClasses).not.toHaveBeenCalled();
   });
