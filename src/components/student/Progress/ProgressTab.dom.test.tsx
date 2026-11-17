@@ -162,7 +162,7 @@ describe("the reflection with no subject cards under it", () => {
     const para = screen.getByText("You finished a whole lesson this week.");
     expect(para.className).toMatch(/\bmax-w-\[300px\]/);
     expect(para.className).toMatch(/\bsm:max-w-\[560px\]/);
-    expect(para.className).toMatch(/\blg:max-w-\[640px\]/);
+    expect(para.className).toMatch(/\bxl:max-w-\[640px\]/);
   });
 });
 

@@ -46,7 +46,7 @@ export function LeaveLessonDialog({
         <DialogPrimitive.Content
           data-nevo-console="student"
           aria-describedby={undefined}
-          className="fixed top-1/2 left-1/2 z-50 w-[320px] max-w-[calc(100%-48px)] -translate-x-1/2 -translate-y-1/2 rounded-[16px] bg-nevo-cream p-8 text-center text-nevo-near-black shadow-[0_4px_16px_rgba(0,0,0,0.10)] duration-200 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 sm:w-[380px] lg:w-[400px]"
+          className="fixed top-1/2 left-1/2 z-50 w-[320px] max-w-[calc(100%-48px)] -translate-x-1/2 -translate-y-1/2 rounded-[16px] bg-nevo-cream p-8 text-center text-nevo-near-black shadow-[0_4px_16px_rgba(0,0,0,0.10)] duration-200 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 sm:w-[380px] xl:w-[400px]"
         >
           {resumable && (
             <span className="mx-auto mb-[18px] flex size-16 items-center justify-center rounded-full bg-nevo-violet/20">

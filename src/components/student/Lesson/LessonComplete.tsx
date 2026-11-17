@@ -74,11 +74,11 @@ export function LessonComplete({
 
   return (
     <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col items-center justify-center bg-nevo-cream px-6 text-center text-nevo-near-black">
-      <div className="flex w-full max-w-[300px] flex-col items-center sm:max-w-[430px]">
+      <div className="flex w-full max-w-[300px] flex-col items-center sm:max-w-[430px] xl:max-w-[460px]">
         {!pictureFailed && (
           <SettlingCharacter
             priority
-            className="w-[200px] sm:w-[280px] lg:w-[300px]"
+            className="w-[200px] sm:w-[280px] xl:w-[300px]"
             onError={() => setPictureFailed(true)}
           />
         )}

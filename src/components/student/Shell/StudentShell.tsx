@@ -155,12 +155,14 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
 
   // Sidebar defaults collapsed (matches the server render, so no hydration
   // mismatch), then opens on desktop after mount. Tablet stays collapsed for room.
+  // THE DESKTOP STARTS AT 1,280 (Lydia, 16 Nov, SCRUM-347): 1,024-1,279 is the
+  // wide tablet, on the tablet's 64px rail. It opened at 1,024.
   const [collapsed, setCollapsed] = useState(true);
   useEffect(() => {
     // Client-only media read, once on mount — the deliberate way to pick a
     // hydration-safe default (server can't know the viewport width).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCollapsed(!window.matchMedia("(min-width: 1024px)").matches);
+    setCollapsed(!window.matchMedia("(min-width: 1280px)").matches);
   }, []);
 
   if (isFullScreen(pathname)) {
@@ -201,7 +203,9 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
   return (
     <div
       data-nevo-console="student"
-      className="group/shell flex h-[100dvh] bg-nevo-cream text-nevo-near-black"
+      // ABOVE 1,440 IT HOLDS AND CENTRES (Lydia, 16 Nov, SCRUM-347): the rail
+      // and the content stop growing at 1,440, centred on the page's cream.
+      className="group/shell mx-auto flex h-[100dvh] w-full max-w-[1440px] bg-nevo-cream text-nevo-near-black"
     >
       {/* Sidebar — tablet & desktop */}
       <div className="hidden shrink-0 md:block">

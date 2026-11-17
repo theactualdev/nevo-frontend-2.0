@@ -3771,7 +3771,9 @@ export function LessonPlayer({
      * the fold on the first segment. Divided by the text-size zoom, which
      * scales `dvh` too - see globals.css.
      */
-    <div className="flex h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col bg-nevo-cream text-nevo-near-black">
+    // Above 1,440 the player holds and centres (Lydia, 16 Nov, SCRUM-347): its
+    // full-width header and arrows stop growing with the window.
+    <div className="mx-auto flex h-[calc(100dvh/var(--nevo-text-zoom,1))] w-full max-w-[1440px] flex-col bg-nevo-cream text-nevo-near-black">
       {/* Top bar: exit + title, then the density toggle (while the text shows).
           Frame: 10/14/12 padding, whole bar carries the secondary dim. */}
       <header
@@ -3931,7 +3933,7 @@ export function LessonPlayer({
             // trigger, which is `fixed` and would land on this column. Ask Nevo
             // is no longer mounted over lesson content (IA 31, see
             // `LessonAskNevo`), so it clears nothing now; the last line simply
-            // stops well above the chevrons. `sm:p-8` and `lg:p-10` reset it
+            // stops well above the chevrons. `sm:p-8` and `xl:p-10` reset it
             // on their own, because their media rules come after the base
             // utility.
             //
@@ -3943,7 +3945,12 @@ export function LessonPlayer({
             // 760px - at 820 wide the text is 620 at x100, at 1280 it is 680
             // at x300 - and below those widths it is the screen less the
             // padding, as the frame's is.
-            "mx-auto w-full max-w-full p-6 pb-[88px] sm:max-w-[684px] sm:p-8 lg:max-w-[760px] lg:p-10",
+            "mx-auto w-full max-w-full p-6 pb-[88px] sm:max-w-[684px] sm:p-8 xl:max-w-[760px] xl:p-10",
+            // A CALCULATION IS THE SOLVER FRAME'S COLUMN, wider than reading:
+            // 680 inside 40/44 on a tablet, 880 inside 40/48 on a desktop.
+            // It was held to the reading column, so 600 on a desktop.
+            calcShowing &&
+              "md:max-w-[768px] md:px-11 md:py-10 xl:max-w-[976px] xl:px-12 xl:py-10",
           )}
         >
           {/* The frame's mid-switch cue (51b9e2a): a quiet ring and "One
@@ -4474,13 +4481,13 @@ export function LessonPlayer({
           reacts to a hint: the forward control's glow went with design's
           D124 (6 Oct), "Anything that reacts visibly to a child's difficulty
           tells them they are being watched." */}
-      {/* In line with the step above it: the reading column's box, then
-          the solver's narrower one. */}
+      {/* In line with the step above it: the calculation's column box, then
+          the solver's own width (SCRUM-347: the Solver Frame's 680 and 880). */}
       {nextHeld && (
-        <div className="mx-auto w-full max-w-full shrink-0 px-6 pt-2 sm:max-w-[684px] sm:px-8 lg:max-w-[760px] lg:px-10">
+        <div className="mx-auto w-full max-w-full shrink-0 px-6 pt-2 sm:max-w-[684px] sm:px-8 md:max-w-[768px] md:px-11 xl:max-w-[976px] xl:px-12">
           <PressedLine
             reading={readingOn}
-            className="mx-auto text-center sm:max-w-[560px] lg:max-w-[600px]"
+            className="mx-auto text-center sm:max-w-[560px] md:max-w-[680px] xl:max-w-[880px]"
           >
             {ONE_MORE_BIT}
           </PressedLine>
