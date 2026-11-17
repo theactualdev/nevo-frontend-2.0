@@ -1177,7 +1177,14 @@ export function LessonPlayer({
   // Where the active break came from: "advance" resumes the interrupted move,
   // "offer" returns to the same segment. A module boundary offers none (D91).
   // Trigger travels into `break_start`.
-  const breakOrigin = useRef<"advance" | "offer" | "check">("advance");
+  const breakOrigin = useRef<"advance" | "offer" | "check" | "assessment">(
+    "advance",
+  );
+  /**
+   * Where the child tapped out of the end-of-lesson check (Lydia, 16 Nov):
+   * the next question to ask, for when they move on into it again this visit.
+   */
+  const tappedOutOfCheckAt = useRef<number | null>(null);
   const breakTrigger = useRef<string>("adaptation_plan");
   /**
    * The child's own break on a calculation, taken in place (see
@@ -2557,6 +2564,30 @@ export function LessonPlayer({
     setBreakActive(BREAK_TYPES.MICRO);
   };
   /**
+   * "TAKE A BREAK" ON THE END-OF-LESSON CHECK (Lydia, 16 Nov), the same
+   * child's own break as the quick check's. The check stays mounted under it,
+   * unseen, so its question, its pick and a mark still on its way are all
+   * where the child left them.
+   */
+  const takeBreakFromAssessment = () => {
+    breakOrigin.current = "assessment";
+    breakTrigger.current = "student_request";
+    breakOnSitting.current = startSittingBreak();
+    setBreakActive(BREAK_TYPES.MICRO);
+  };
+  /**
+   * THE TAP OUT FROM THE END-OF-LESSON CHECK (Lydia, 16 Nov): back to the
+   * lesson's last part, a non-linear move like Back (one
+   * `navigation_fragmentation`), and the check asked again from `at` when
+   * the child moves on into it - see `beginCheck`. Nothing is passed by it.
+   */
+  const tapOutOfAssessment = (at: number) => {
+    tappedOutOfCheckAt.current = at;
+    fragmented();
+    if (index !== total - 1) go(total - 1);
+    setPhase("segments");
+  };
+  /**
    * Back from it: the return goes once the start has landed, never before
    * it and never for a start that failed - a return that overtook its start
    * would leave the sitting paused.
@@ -3260,9 +3291,21 @@ export function LessonPlayer({
    * child who is already answering.
    */
   const beginCheck = () => {
+    const questions = lesson.assessment?.questions ?? [];
+    /*
+     * BACK FROM A TAP OUT (Lydia, 16 Nov): the same run of the check, on the
+     * question the child left - this visit's own place, ahead of any read.
+     * The answers already given are this visit's, so nothing is read back.
+     */
+    const tapped = tappedOutOfCheckAt.current;
+    if (tapped !== null) {
+      tappedOutOfCheckAt.current = null;
+      setCheckResume({ at: tapped });
+      if (tapped >= questions.length) finishCheck();
+      return;
+    }
     // A new run of the check; the last run's outcome is not this one's.
     saveCheckOutcome(lesson.id, null);
-    const questions = lesson.assessment?.questions ?? [];
     const at = live
       ? checkResumeAt(progress.saved ?? progress.opened, questions.length)
       : null;
@@ -3458,143 +3501,203 @@ export function LessonPlayer({
     );
   }
 
+  // Break module (frame 18) — a calm full screen over the lesson. Ending it
+  // resumes the advance the break interrupted (which may itself land on a
+  // module boundary next).
+  // A break the child took from a check, started on the sitting: the server
+  // writes its start and end (see `takeBreakFromCheck`).
+  const serverRecordsBreak = () =>
+    (breakOrigin.current === "check" || breakOrigin.current === "assessment") &&
+    breakOnSitting.current !== null;
+  const breakScreen = breakActive ? (
+    <BreakScreen
+      type={breakActive}
+      // The catalogue's keys and no others: the break's type (B89, 8 Oct),
+      // `trigger`, and how long it lasted. The segment is not among them.
+      onStart={() => {
+        if (serverRecordsBreak()) return;
+        trackEvent(SIGNAL_EVENT_TYPES.BREAK_START, {
+          breakType: breakActive,
+          trigger: breakTrigger.current,
+        });
+      }}
+      onEnd={(durationMs) => {
+        if (serverRecordsBreak()) return;
+        trackEvent(SIGNAL_EVENT_TYPES.BREAK_END, {
+          breakType: breakActive,
+          trigger: breakTrigger.current,
+          durationMs,
+        });
+      }}
+      onFeelings={(feelings) =>
+        // `response` is the catalogue's key for what the child picked.
+        trackEvent(SIGNAL_EVENT_TYPES.FEELING_CHECKIN, { response: feelings })
+      }
+      onDone={() => {
+        setBreakActive(null);
+        setObserved((o) => ({ ...o, breaksTaken: o.breaksTaken + 1 }));
+        // An offered break returns to the segment it interrupted; a
+        // plan-delivered one resumes the advance it intercepted; the
+        // child's own, from the check, returns to the check - and from the
+        // end-of-lesson check, to the question it was taken on.
+        if (breakOrigin.current === "advance") continueAdvance();
+        if (breakOrigin.current === "check") {
+          returnFromBreak();
+          setCheckOpen(true);
+        }
+        if (breakOrigin.current === "assessment") returnFromBreak();
+      }}
+    />
+  ) : null;
+
   if (phase === "assessment") {
+    // The child's own break, over the check, which stays mounted under it.
+    // The only break the check phase can hold: the others start, and end,
+    // among the segments.
+    const onBreak = breakScreen !== null;
     return (
-      <AfterLessonAssessment
-        assessment={lesson.assessment!}
-        reading={readingOn}
-        onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
-        resumeAt={checkResume?.at}
-        result={live ? resultStateFrom(progress.saved) : undefined}
-        resultPending={verdictPending}
-        resultUnread={resultUnread}
-        onReread={() => {
-          setRereadAsked(true);
-          progress.resend();
-        }}
-        onBackToLessons={() => {
-          // The check is finished either way: the completion is held and
-          // goes when it can (`useLessonProgress`).
-          setEnding(finishedAs);
-          exitTo(LESSONS_HREF);
-        }}
-        outcome={live ? checkOutcomeFrom(progress.saved) : null}
-        onComplete={finishCheck}
-        onLeave={(checkPosition) => {
-          /*
-           * D36: LEAVING THE CHECK IS NOT FINISHING IT, AND NOT FAILING IT.
-           *
-           * `exited` at the last segment, the same record the leave dialog
-           * makes - so the lesson stays unfinished and comes back on Home to
-           * pick up. No `resultState`, on this write or any: it is the
-           * server's to derive from its own marks since B98, and the write's
-           * field is deprecated. The answers already given were stored one by
-           * one as they were confirmed.
-           *
-           * B49: and WHERE in the check, so it reopens there the same day.
-           * None from the intro - a check not begun has no place to keep.
-           *
-           * NOTHING FOR A FINISHED LESSON REOPENED (D22), as the leave dialog
-           * writes nothing for one: `exited` here demoted a lesson the child
-           * had completed back to unfinished work on Home.
-           */
-          const last = total - 1;
-          const pos = modulePositionFor(lesson, last);
-          if (!review && !finished) {
-            reportProgress(LESSON_STATUS.EXITED, {
-              segment: last,
-              ...(pos ? { module: pos.moduleIndex } : {}),
-              ...(checkPosition !== undefined ? { check: checkPosition } : {}),
-            });
-          }
-          setEnding({
-            completionStatus: "exited",
-            exitPosition: lesson.segments[last].id,
-          });
-          exitTo(HOME_HREF);
-        }}
-        onAnswer={({ questionIndex, selectedId, responseTimeMs }) => {
-          // The pick goes up on the attempt, where the server marks it - with
-          // the time it took, as the check measured it (Lydia, 17 Oct). No
-          // hint is ever shown on the after-lesson check, so none is sent.
-          // The question moves on that mark (test 9).
-          const question = lesson.assessment?.questions[questionIndex];
-          const checkpointId = question?.id;
-          const reply = markAttempt(
-            answerFor({
-              questionId: checkpointId,
-              source: "assessment",
-              choice: question?.options.find((o) => o.id === selectedId),
-              responseTimeMs,
-            }),
-            // Offline only: the package's key - none online, where the
-            // server holds it (41c2f83), so no mark rather than a wrong one.
-            () => keyMark(selectedId, question?.correctId),
-          );
-          /*
-           * THE CATALOGUE'S KEYS, `segmentId` and `questionId`, and nothing it
-           * does not declare: correctness is decided on the server against the
-           * stored answer, so `correct` - and the pick and its timing beside it
-           * - are not sent here; the pick and its timing ride the attempt
-           * above. NO `segmentId`: an after-lesson question
-           * belongs to the lesson, not to any one segment, and naming the last
-           * one would put the answer on a segment it was never about - and
-           * the catalogue makes it optional for exactly this (9 Oct).
-           * `source` says it is the after-lesson check's (B90/B92, 8 Oct).
-           */
-          trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
-            ...(checkpointId ? { questionId: checkpointId } : {}),
-            source: "assessment",
-          });
-          // The first answer to each question, for the scheduler. `Map.set` is
-          // guarded so a re-answer cannot overwrite what they knew first time.
-          /*
-           * NO SCAFFOLD ATTEMPT RIDES BESIDE IT ANY MORE. `POST
-           * /api/intelligence/scaffolds/attempt` refuses every student write
-           * without persisted server evidence (422
-           * `server_marked_attempt_required`), and the answer above already
-           * moves support: "Review/scaffold compatibility writes require
-           * persisted server evidence; normal lesson completion/answers
-           * already update these mechanisms" (Teslim's 19 Oct contract,
-           * d461b60). It also sent a device verdict the server no longer
-           * takes from a student.
-           */
-          // Record the pick (first per question) for the Review Answers screen.
-          reviewAnswers.current = [
-            ...reviewAnswers.current.filter(
-              (a) => a.questionIndex !== questionIndex,
-            ),
-            { questionIndex, selectedId },
-          ];
-          saveReviewAnswers(lesson.id, reviewAnswers.current);
-          // Its mark, once it lands: the scheduler's first answer (#11), and
-          // the right or wrong Review Answers draws (#5). One the server
-          // could not mark is evidence of nothing.
-          onVerdict(reply, (mark) => {
-            if (mark !== null && !firstAnswers.current.has(questionIndex)) {
-              firstAnswers.current.set(questionIndex, mark);
-            }
-            reviewAnswers.current = reviewAnswers.current.map((a) =>
-              a.questionIndex === questionIndex && a.selectedId === selectedId
-                ? { ...a, correct: mark }
-                : a,
-            );
-            saveReviewAnswers(lesson.id, reviewAnswers.current);
-          });
-          return reply;
-        }}
-        onFinish={() => {
-          setPhase("complete");
-          setEnding(finishedAs);
-        }}
-        onReviewAnswers={() => {
-          // The lesson IS finished at this point - reviewing is a way of
-          // leaving it, not of abandoning it.
-          markComplete();
-          setEnding(finishedAs);
-          exitTo(`${LESSONS_HREF}/${lesson.id}/review`);
-        }}
-      />
+      <>
+        <div hidden={onBreak || undefined}>
+          <AfterLessonAssessment
+            onTakeBreak={takeBreakFromAssessment}
+            onTapOut={tapOutOfAssessment}
+            assessment={lesson.assessment!}
+            reading={readingOn}
+            onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
+            resumeAt={checkResume?.at}
+            result={live ? resultStateFrom(progress.saved) : undefined}
+            resultPending={verdictPending}
+            resultUnread={resultUnread}
+            onReread={() => {
+              setRereadAsked(true);
+              progress.resend();
+            }}
+            onBackToLessons={() => {
+              // The check is finished either way: the completion is held and
+              // goes when it can (`useLessonProgress`).
+              setEnding(finishedAs);
+              exitTo(LESSONS_HREF);
+            }}
+            outcome={live ? checkOutcomeFrom(progress.saved) : null}
+            onComplete={finishCheck}
+            onLeave={(checkPosition) => {
+              /*
+               * D36: LEAVING THE CHECK IS NOT FINISHING IT, AND NOT FAILING IT.
+               *
+               * `exited` at the last segment, the same record the leave dialog
+               * makes - so the lesson stays unfinished and comes back on Home to
+               * pick up. No `resultState`, on this write or any: it is the
+               * server's to derive from its own marks since B98, and the write's
+               * field is deprecated. The answers already given were stored one by
+               * one as they were confirmed.
+               *
+               * B49: and WHERE in the check, so it reopens there the same day.
+               * None from the intro - a check not begun has no place to keep.
+               *
+               * NOTHING FOR A FINISHED LESSON REOPENED (D22), as the leave dialog
+               * writes nothing for one: `exited` here demoted a lesson the child
+               * had completed back to unfinished work on Home.
+               */
+              const last = total - 1;
+              const pos = modulePositionFor(lesson, last);
+              if (!review && !finished) {
+                reportProgress(LESSON_STATUS.EXITED, {
+                  segment: last,
+                  ...(pos ? { module: pos.moduleIndex } : {}),
+                  ...(checkPosition !== undefined ? { check: checkPosition } : {}),
+                });
+              }
+              setEnding({
+                completionStatus: "exited",
+                exitPosition: lesson.segments[last].id,
+              });
+              exitTo(HOME_HREF);
+            }}
+            onAnswer={({ questionIndex, selectedId, responseTimeMs }) => {
+              // The pick goes up on the attempt, where the server marks it - with
+              // the time it took, as the check measured it (Lydia, 17 Oct). No
+              // hint is ever shown on the after-lesson check, so none is sent.
+              // The question moves on that mark (test 9).
+              const question = lesson.assessment?.questions[questionIndex];
+              const checkpointId = question?.id;
+              const reply = markAttempt(
+                answerFor({
+                  questionId: checkpointId,
+                  source: "assessment",
+                  choice: question?.options.find((o) => o.id === selectedId),
+                  responseTimeMs,
+                }),
+                // Offline only: the package's key - none online, where the
+                // server holds it (41c2f83), so no mark rather than a wrong one.
+                () => keyMark(selectedId, question?.correctId),
+              );
+              /*
+               * THE CATALOGUE'S KEYS, `segmentId` and `questionId`, and nothing it
+               * does not declare: correctness is decided on the server against the
+               * stored answer, so `correct` - and the pick and its timing beside it
+               * - are not sent here; the pick and its timing ride the attempt
+               * above. NO `segmentId`: an after-lesson question
+               * belongs to the lesson, not to any one segment, and naming the last
+               * one would put the answer on a segment it was never about - and
+               * the catalogue makes it optional for exactly this (9 Oct).
+               * `source` says it is the after-lesson check's (B90/B92, 8 Oct).
+               */
+              trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
+                ...(checkpointId ? { questionId: checkpointId } : {}),
+                source: "assessment",
+              });
+              // The first answer to each question, for the scheduler. `Map.set` is
+              // guarded so a re-answer cannot overwrite what they knew first time.
+              /*
+               * NO SCAFFOLD ATTEMPT RIDES BESIDE IT ANY MORE. `POST
+               * /api/intelligence/scaffolds/attempt` refuses every student write
+               * without persisted server evidence (422
+               * `server_marked_attempt_required`), and the answer above already
+               * moves support: "Review/scaffold compatibility writes require
+               * persisted server evidence; normal lesson completion/answers
+               * already update these mechanisms" (Teslim's 19 Oct contract,
+               * d461b60). It also sent a device verdict the server no longer
+               * takes from a student.
+               */
+              // Record the pick (first per question) for the Review Answers screen.
+              reviewAnswers.current = [
+                ...reviewAnswers.current.filter(
+                  (a) => a.questionIndex !== questionIndex,
+                ),
+                { questionIndex, selectedId },
+              ];
+              saveReviewAnswers(lesson.id, reviewAnswers.current);
+              // Its mark, once it lands: the scheduler's first answer (#11), and
+              // the right or wrong Review Answers draws (#5). One the server
+              // could not mark is evidence of nothing.
+              onVerdict(reply, (mark) => {
+                if (mark !== null && !firstAnswers.current.has(questionIndex)) {
+                  firstAnswers.current.set(questionIndex, mark);
+                }
+                reviewAnswers.current = reviewAnswers.current.map((a) =>
+                  a.questionIndex === questionIndex && a.selectedId === selectedId
+                    ? { ...a, correct: mark }
+                    : a,
+                );
+                saveReviewAnswers(lesson.id, reviewAnswers.current);
+              });
+              return reply;
+            }}
+            onFinish={() => {
+              setPhase("complete");
+              setEnding(finishedAs);
+            }}
+            onReviewAnswers={() => {
+              // The lesson IS finished at this point - reviewing is a way of
+              // leaving it, not of abandoning it.
+              markComplete();
+              setEnding(finishedAs);
+              exitTo(`${LESSONS_HREF}/${lesson.id}/review`);
+            }}
+          />
+        </div>
+        {onBreak && breakScreen}
+      </>
     );
   }
 
@@ -3661,53 +3764,7 @@ export function LessonPlayer({
     );
   }
 
-  // Break module (frame 18) — a calm full screen over the lesson. Ending it
-  // resumes the advance the break interrupted (which may itself land on a
-  // module boundary next).
-  if (breakActive) {
-    // A break the child took from the check, started on the sitting: the
-    // server writes its start and end (see `takeBreakFromCheck`).
-    const serverRecords = () =>
-      breakOrigin.current === "check" && breakOnSitting.current !== null;
-    return (
-      <BreakScreen
-        type={breakActive}
-        // The catalogue's keys and no others: the break's type (B89, 8 Oct),
-        // `trigger`, and how long it lasted. The segment is not among them.
-        onStart={() => {
-          if (serverRecords()) return;
-          trackEvent(SIGNAL_EVENT_TYPES.BREAK_START, {
-            breakType: breakActive,
-            trigger: breakTrigger.current,
-          });
-        }}
-        onEnd={(durationMs) => {
-          if (serverRecords()) return;
-          trackEvent(SIGNAL_EVENT_TYPES.BREAK_END, {
-            breakType: breakActive,
-            trigger: breakTrigger.current,
-            durationMs,
-          });
-        }}
-        onFeelings={(feelings) =>
-          // `response` is the catalogue's key for what the child picked.
-          trackEvent(SIGNAL_EVENT_TYPES.FEELING_CHECKIN, { response: feelings })
-        }
-        onDone={() => {
-          setBreakActive(null);
-          setObserved((o) => ({ ...o, breaksTaken: o.breaksTaken + 1 }));
-          // An offered break returns to the segment it interrupted; a
-          // plan-delivered one resumes the advance it intercepted; the
-          // child's own, from the check, returns to the check.
-          if (breakOrigin.current === "advance") continueAdvance();
-          if (breakOrigin.current === "check") {
-            returnFromBreak();
-            setCheckOpen(true);
-          }
-        }}
-      />
-    );
-  }
+  if (breakScreen) return breakScreen;
 
   // Module boundary landing (SCRUM-101) — a full player screen between modules,
   // never a modal. Its one action, Continue, completes the move (D91).
