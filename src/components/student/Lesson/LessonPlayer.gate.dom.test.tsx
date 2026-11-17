@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import {
+  GIVES_WAY_AFTER_MS,
   RECOVERY_LINE,
   RETEACH_COPY,
 } from "./QuickCheckSheet";
@@ -149,7 +150,9 @@ const RETEACHING = {
   ],
   recommendedRoute: route("format", "visual"),
   presentation: { density: "low", itemsPerScreen: 1, pacing: "slow" },
-  screens: [],
+  // A re-teaching the box can show: it opens only with a step to work
+  // through (12 Nov dry run, rule 5 - see "with no steps to show" below).
+  screens: ["Look at the number on top."],
 };
 const GATE_ON = { required: true, canAdvance: false, segmentId: SEG_1 };
 const GATE_OFF = { required: false, canAdvance: true };
@@ -276,6 +279,32 @@ describe("on every check, whatever the server's gate", () => {
 
     // The reply's three ways, not the gate's one.
     expect(ways()).toHaveLength(3);
+  });
+
+  /*
+   * 12 Nov dry run, Heat Transfer: a re-teaching with NO STEPS opened the box
+   * on "Let's work through it together" over nothing, while the section's
+   * ways in waited unseen behind the sheet. No box now: the miss is held and
+   * gives way to them, as a miss with no re-teaching does (rule 5).
+   */
+  it("opens no box over a re-teaching with no steps to show, and gives way to the ways in", async () => {
+    api.saveAttempt.mockResolvedValue(
+      reply(false, GATE_OFF, { ...RETEACHING, screens: [] }),
+    );
+    await open();
+    await missAndWait();
+
+    expect(screen.queryByText(RETEACH_COPY.title)).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe(RECOVERY_LINE);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), {
+      timeout: GIVES_WAY_AFTER_MS + 2000,
+    });
+    expect(card()).toBeInTheDocument();
+    expect(ways().map((b) => b.getAttribute("aria-label"))).toEqual([
+      "See it as a picture",
+      "A simpler version",
+      "One step at a time",
+    ]);
   });
 
   it("holds the miss and draws no card when the reply names no ways in (rule 5)", async () => {
