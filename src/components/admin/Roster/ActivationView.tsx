@@ -266,17 +266,26 @@ function Cost({
         This panel stays on your dashboard.
       </p>
 
-      <div className={cn(CARD, "mt-6 px-[26px] py-[22px]")}>
+      {/*
+        * TWO COLUMNS FROM 1280 (Lydia, 16 Nov, SCRUM-347). D24 OB-03: the
+        * roster on the left, the cost and "Pay by bank transfer" on the
+        * right, `1fr 1.1fr`, gap 20, top-aligned. One column below 1280, in
+        * the same order, as the tablet frame draws it.
+        */}
+      <div className="mt-6 flex flex-col xl:grid xl:grid-cols-[1fr_1.1fr] xl:items-start xl:gap-5">
+      <div className={cn(CARD, "min-w-0 px-[26px] py-[22px]")} data-column="roster">
         <h3 className="m-0 text-[13px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase">
           Roster
         </h3>
-        <dl className="mt-3 flex flex-wrap gap-x-10 gap-y-3">
+        <dl className="mt-3 flex flex-wrap gap-x-10 gap-y-3 xl:flex-col xl:flex-nowrap xl:gap-y-2.5">
           <Fact label="Students" value={String(state.studentCount)} />
           <Fact label="Classes" value={String(state.classes.length)} />
           {/* The frame's own "18 · free", and it is the reassurance not the aside. */}
           <Fact label="Teachers" value={`${state.teacherCount} · free`} />
         </dl>
       </div>
+
+      <div className="min-w-0" data-column="cost">
 
       {/*
         * THE COST SHEET IS THE BILLING ONE. Same invoice, same component, so
@@ -296,13 +305,13 @@ function Cost({
         * the fallback for a confirm that raised none.
         */}
       {invoice ? (
-        <InvoiceBreakdown invoice={invoice} />
+        <InvoiceBreakdown invoice={invoice} className="xl:mt-0" />
       ) : sub?.pricing ? (
-        <div className="mt-4">
+        <div className="mt-4 xl:mt-0">
           <CostSheet pricing={sub.pricing} />
         </div>
       ) : (
-        <p className="mt-4 max-w-[56ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+        <p className="mt-4 max-w-[56ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62 xl:mt-0">
           We couldn&rsquo;t load your cost breakdown just now. Nothing has
           changed and nothing has been charged &ndash; try again in a moment.
         </p>
@@ -310,10 +319,12 @@ function Cost({
 
       <Link
         href="/admin/billing"
-        className="mt-7 inline-flex h-[48px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-6 text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110"
+        className="mt-7 inline-flex h-[48px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-6 text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 xl:mt-5"
       >
         Pay by bank transfer
       </Link>
+      </div>
+      </div>
     </>
   );
 }
@@ -411,18 +422,35 @@ function Waiting({
         ) : null}
       </div>
 
-      {/* OB-04's invoice card and "Download invoice" - the invoice this school
-          is transferring against, with its PDF. */}
-      {invoice ? <InvoiceBreakdown invoice={invoice} /> : null}
-
-      <div className="mt-4">
-        <HowToPayPanel
-          account={account}
-          reference={invoice?.invoiceNumber ?? null}
-          amount={amount}
-          invoiceId={invoice?.id ?? null}
-          billedIn={currency}
-        />
+      {/*
+        * TWO COLUMNS FROM 1280 (Lydia, 16 Nov, SCRUM-347). D24 OB-04: "How to
+        * pay" on the left and the invoice on the right, `1.1fr 1fr`, gap 20,
+        * top-aligned. Below 1280 one column, How to pay first, as the tablet
+        * frame draws it. With no invoice there is nothing beside How to pay,
+        * so it stays one column.
+        */}
+      <div
+        className={cn(
+          "mt-4 flex flex-col",
+          invoice && "xl:grid xl:grid-cols-[1.1fr_1fr] xl:items-start xl:gap-5",
+        )}
+      >
+        <div className="min-w-0" data-column="how-to-pay">
+          <HowToPayPanel
+            account={account}
+            reference={invoice?.invoiceNumber ?? null}
+            amount={amount}
+            invoiceId={invoice?.id ?? null}
+            billedIn={currency}
+          />
+        </div>
+        {/* OB-04's invoice card and "Download invoice" - the invoice this
+            school is transferring against, with its PDF. */}
+        {invoice ? (
+          <div className="min-w-0" data-column="invoice">
+            <InvoiceBreakdown invoice={invoice} className="xl:mt-0" />
+          </div>
+        ) : null}
       </div>
 
       {/*
@@ -609,9 +637,11 @@ function Active({
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    // From 1280 the roster sits in its own column: one row each, label left
+    // and value right, as D24 OB-03's roster panel.
+    <div className="xl:flex xl:items-baseline xl:justify-between xl:gap-4">
       <dt className="text-[12.5px] text-nevo-near-black/55">{label}</dt>
-      <dd className="m-0 mt-0.5 text-[19px] font-semibold text-nevo-near-black">
+      <dd className="m-0 mt-0.5 text-[19px] font-semibold text-nevo-near-black xl:mt-0">
         {value}
       </dd>
     </div>
