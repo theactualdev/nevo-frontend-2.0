@@ -240,7 +240,29 @@ describe("the early-life variant", () => {
     // The snapshot's zeros are greyed; the compliance one stays navy.
     expect(muted.length).toBeGreaterThan(0);
     expect(navy.length).toBe(1);
-    expect(navy[0].className).toMatch(/text-\[38px\]/);
+    // D04's sizes: 40 from 1280, 32 below (SCRUM-347).
+    expect(navy[0].className).toMatch(/(^|\s)xl:text-\[40px\]/);
+    expect(navy[0].className).toMatch(/(^|\s)text-\[32px\]/);
+  });
+
+  /*
+   * D04 DRAWS THE COMPLIANCE CARD AS A ROW (Lydia, 16 Nov, SCRUM-347): the
+   * numeral left, the words beside it, "What we store" on the right from 1280
+   * and under the words below it. One link, moved by the grid, never two.
+   */
+  it("is D04's row: numeral, words, and one 'What we store' placed by the grid", async () => {
+    const { container } = render(<OverviewView />);
+    await waitFor(() => expect(container.querySelector("[data-compliance-row]")).not.toBeNull());
+    const row = container.querySelector("[data-compliance-row]") as HTMLElement;
+    expect(row.className).toMatch(/(^|\s)grid-cols-\[auto_minmax\(0,1fr\)\](\s|$)/);
+    expect(row.className).toMatch(/xl:grid-cols-\[auto_minmax\(0,1fr\)_auto\]/);
+    const links = [...row.querySelectorAll("a")].filter((a) => /What we store/.test(a.textContent ?? ""));
+    expect(links).toHaveLength(1);
+    expect(links[0].className).toMatch(/(^|\s)col-start-2(\s|$)/);
+    expect(links[0].className).toMatch(/xl:col-start-3/);
+    expect(links[0].className).toMatch(/xl:row-start-1/);
+    // The unit is the words' heading, beside the numeral, as drawn.
+    expect(row.children[1].textContent).toMatch(/^Diagnostic labels stored/);
   });
 });
 

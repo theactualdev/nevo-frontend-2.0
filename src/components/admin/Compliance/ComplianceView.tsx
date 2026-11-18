@@ -54,6 +54,26 @@ const CARD = "rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.0
 type Phase = "loading" | "ready" | "failed" | "denied";
 type Export = "idle" | "working" | "done" | "failed";
 
+/** D22's `shieldBig`, as drawn: 42 px at both widths, in its tile. */
+function ShieldGlyph() {
+  return (
+    <svg
+      width="42"
+      height="42"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 3l7 3v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6z" />
+      <path d="M9 12l2 2 4-4" />
+    </svg>
+  );
+}
+
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleString("en-GB", {
     day: "numeric",
@@ -192,19 +212,53 @@ export function ComplianceView({ back = null }: { back?: Back | null } = {}) {
 
         {phase === "ready" && audit && (
           <>
-            <div className={cn(CARD, "mt-6 px-[26px] py-7")}>
-              <div className="flex items-baseline gap-3">
-                <span className="text-[44px] leading-none font-semibold text-nevo-navy">
-                  {audit.diagnosticLabelsStored}
+            {hero.clear ? (
+              /*
+               * D22's HERO, AS DRAWN (Lydia, 16 Nov, SCRUM-347: "Admin BUILDS
+               * the drawn two-column layouts"): a navy row, the shield tile
+               * beside the figure. Desktop from 1280: tile 88, figure 52,
+               * padding 30/32, gap 26. Tablet: tile 64, figure 40, 22/24, 18.
+               *
+               * ZERO ONLY. D22 draws nothing else, and a shield over a count
+               * above zero would assure what the count denies - so a non-zero
+               * count keeps the plain card below (raised to design).
+               */
+              <div
+                data-hero="clear"
+                className="mt-6 flex items-center gap-[18px] rounded-[16px] bg-nevo-navy px-6 py-[22px] xl:gap-[26px] xl:px-8 xl:py-[30px]"
+              >
+                <span className="flex size-16 flex-none items-center justify-center rounded-[16px] bg-nevo-cream/10 text-nevo-cream xl:size-[88px] xl:rounded-[20px]">
+                  <ShieldGlyph />
                 </span>
-                <span className="text-[15px] font-semibold text-nevo-near-black">
-                  {hero.unit}
-                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline gap-2.5 xl:gap-3.5">
+                    <span className="text-[40px] leading-none font-bold tracking-[-0.02em] text-nevo-cream xl:text-[52px]">
+                      {audit.diagnosticLabelsStored}
+                    </span>
+                    <span className="text-[16px] font-semibold text-nevo-cream xl:text-[20px]">
+                      {hero.unit}
+                    </span>
+                  </div>
+                  <p className="mt-2 max-w-[520px] text-[13px] leading-[1.55] text-nevo-cream/75 xl:mt-2.5 xl:text-[14.5px] xl:leading-[1.6]">
+                    {hero.body}
+                  </p>
+                </div>
               </div>
-              <p className="mt-3 max-w-[64ch] text-sm leading-[1.65] text-nevo-near-black/70">
-                {hero.body}
-              </p>
-            </div>
+            ) : (
+              <div data-hero="found" className={cn(CARD, "mt-6 px-[26px] py-7")}>
+                <div className="flex items-baseline gap-3">
+                  <span className="text-[44px] leading-none font-semibold text-nevo-navy">
+                    {audit.diagnosticLabelsStored}
+                  </span>
+                  <span className="text-[15px] font-semibold text-nevo-near-black">
+                    {hero.unit}
+                  </span>
+                </div>
+                <p className="mt-3 max-w-[64ch] text-sm leading-[1.65] text-nevo-near-black/70">
+                  {hero.body}
+                </p>
+              </div>
+            )}
 
             {/* Also when the server says the check did not pass. `compliant`
                 was fetched and never read, so an audit the backend marked
