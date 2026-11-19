@@ -59,6 +59,17 @@ const QUIET =
   "mt-2.5 w-full rounded-[10px] border border-nevo-navy/25 px-5 py-3 text-[15px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-45";
 
 /**
+ * A data request's and an objection's confirmation (Lydia, 19 Nov, L35 -
+ * wording proposed for Olayinka's approval). It replaced "You will receive
+ * {child}'s data within 5 working days" and "We will respond within 48 hours
+ * to the email address your school has for you": the server records the
+ * request and the SCHOOL answers it, so a promised address and window
+ * described something Nevo does not do.
+ */
+const REQUEST_RECORDED =
+  "Your request has been recorded and sent to the school. They will reply to you directly.";
+
+/**
  * The four transparency sections. Content is the parental-notice material
  * SCRUM-80 lists; counsel drafts the final wording, so this is deliberately
  * factual and free of framework names.
@@ -401,8 +412,9 @@ export function ParentDataManagement({
           </p>
           {outcome?.right === "request_data" && phase === "done" ? (
             <p className={NOTE}>
-              Request submitted. You will receive {child}&rsquo;s data within 5
-              working days.
+              {/* Lydia, 19 Nov (L35): what actually happens - the server
+                  records it and the school answers. No address, no window. */}
+              {REQUEST_RECORDED}
             </p>
           ) : (
             <button
@@ -495,8 +507,8 @@ export function ParentDataManagement({
         </p>
         {outcome?.right === "request_data" && phase === "done" ? (
           <p className={NOTE}>
-            Request submitted. You will receive {child}&rsquo;s data within 5
-            working days.
+            {/* Lydia, 19 Nov (L35). */}
+            {REQUEST_RECORDED}
           </p>
         ) : (
           <button
@@ -544,8 +556,8 @@ export function ParentDataManagement({
         </p>
         {outcome?.right === "object" && phase === "done" ? (
           <p className={NOTE}>
-            Objection submitted. We will respond within 48 hours to the email
-            address your school has for you.
+            {/* Lydia, 19 Nov (L35): the objection's confirmation too. */}
+            {REQUEST_RECORDED}
             {/* The contract answers "did my words go anywhere". If it says no,
                 say no - promising a recorded concern that was dropped is the
                 exact failure this textarea was withheld for. */}
