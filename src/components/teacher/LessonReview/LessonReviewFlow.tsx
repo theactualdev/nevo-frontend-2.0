@@ -589,6 +589,12 @@ export function LessonReviewFlow({
               onAcceptParts={() => void flow.approveParts()}
               acceptingParts={flow.working === "parts"}
               partsRefusal={refusedHere("parts")}
+              onChangeLevel={(row, level) =>
+                flow.setLevel(
+                  { questionId: row.questionId ?? "", segmentId: row.segmentId, scope: row.scope },
+                  level,
+                )
+              }
             />
           )}
 
