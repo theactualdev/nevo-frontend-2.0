@@ -43,6 +43,7 @@ import { ConsentFormDownload } from "./ConsentFormDownload";
 import { EraseRecordModal } from "./EraseRecordModal";
 import { MoveStudentSheet } from "./MoveStudentSheet";
 import { NoAccess, failureKind } from "../NoAccess";
+import { RecordGone, isRecordGone } from "../RecordGone";
 import { BackLink } from "../BackLink";
 import { withBack, type Back } from "../back";
 import { WriteFailed } from "../WriteFailed";
@@ -73,7 +74,8 @@ import { ChildAvatar, useChildLook } from "../Roster/ChildAvatar";
  * per-guardian relationship, "Primary contact" flag and last-active line.
  */
 
-type Phase = "loading" | "ready" | "failed" | "denied";
+/** `gone`: the student's own read answered 404 - D28, never a retry. */
+type Phase = "loading" | "ready" | "failed" | "denied" | "gone";
 
 /**
  * A restore the server REFUSED for good, in its own words: the learner's
@@ -236,7 +238,13 @@ export function StudentDetailView({
   }, [studentId]);
 
   const load = useCallback(() => {
-    Promise.all([studentsApi.get(studentId), classesApi.list(true)])
+    // Only the student's own 404 says the record is gone (D28).
+    let gone = false;
+    const record = studentsApi.get(studentId).catch((err: unknown) => {
+      gone = isRecordGone(err);
+      throw err;
+    });
+    Promise.all([record, classesApi.list(true)])
       .then(([s, cls]) => {
         setStudent(s);
         setClasses(cls);
@@ -260,7 +268,7 @@ export function StudentDetailView({
             setGuardiansAnswered(true);
           });
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
+      .catch((err: unknown) => setPhase(gone ? "gone" : failureKind(err)));
   }, [studentId]);
 
   useEffect(() => {
@@ -279,6 +287,14 @@ export function StudentDetailView({
     return (
       <Wrapper>
         <NoAccess what="this student" />
+      </Wrapper>
+    );
+  }
+
+  if (phase === "gone") {
+    return (
+      <Wrapper>
+        <RecordGone what="student" back={back} />
       </Wrapper>
     );
   }
