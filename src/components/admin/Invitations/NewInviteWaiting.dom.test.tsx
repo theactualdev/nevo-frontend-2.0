@@ -26,7 +26,9 @@ vi.mock("@/lib/api/invites", async (importOriginal) => {
 
 const send = () => {
   render(<NewInviteModal classes={[]} onClose={vi.fn()} onSent={vi.fn()} />);
-  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Folake Adeyemi" } });
+  fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Folake" } });
+  fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Adeyemi" } });
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "f@school.edu.ng" } });
   fireEvent.click(screen.getByRole("button", { name: "Send invite" }));
 };
 
