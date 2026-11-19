@@ -117,7 +117,54 @@ export function pendingTeacherInvites(invites: readonly Invitation[], now: numbe
   ).length;
 }
 
-export function snapshotTiles({
+/**
+ * D04'S EARLY TILES, IN ITS ORDER AND WORDS (backlog 88): "Teachers invited",
+ * "Students enrolled", "Classes created", then "Adaptations made" - and no
+ * "Students learning", which the early frame does not draw. A zero says what
+ * to do next ("import or add your roster", "create your first class"). The
+ * teachers line is #1107's, unchanged. Where D04's line needs a figure we do
+ * not hold - "11 still to set up" counts against a class total, and Lydia
+ * ruled denominators out (7 Oct) - the tile says nothing rather than guess.
+ */
+function earlyTiles(
+  tiles: SnapshotTile[],
+  counts: SchoolRosterCounts | null,
+): SnapshotTile[] {
+  const byKey = new Map(tiles.map((t) => [t.key, t]));
+  const out: SnapshotTile[] = [];
+  const teachers = byKey.get("teachers");
+  if (teachers) out.push({ ...teachers, label: "Teachers invited" });
+  const enrolled = byKey.get("enrolled");
+  if (enrolled) {
+    out.push({
+      ...enrolled,
+      desc:
+        enrolled.value === 0
+          ? "import or add your roster"
+          : typeof counts?.invitedStudents === "number" && counts.invitedStudents > 0
+            ? enrolled.desc
+            : "keep going, or import the rest",
+    });
+  }
+  const classes = byKey.get("classes");
+  if (classes) {
+    out.push({
+      ...classes,
+      label: "Classes created",
+      desc: classes.value === 0 ? "create your first class" : "",
+    });
+  }
+  const adaptations = byKey.get("adaptations");
+  if (adaptations) out.push(adaptations);
+  return out;
+}
+
+export function snapshotTiles(input: SnapshotInput): SnapshotTile[] {
+  const tiles = allTiles(input);
+  return input.early ? earlyTiles(tiles, input.counts) : tiles;
+}
+
+function allTiles({
   studentsProfiled,
   adaptations,
   adaptationPeriod = null,

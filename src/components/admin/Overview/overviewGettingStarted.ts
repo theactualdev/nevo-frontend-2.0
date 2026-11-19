@@ -123,11 +123,58 @@ export function gettingStartedSteps(school: string): StartStep[] {
       // Was "Your school records each parent's confirmation here" - from when
       // the school warranted consent. Parents give it themselves now, from
       // the link, and a child's learning waits for it.
-      sub: "Each parent gets a link to give permission. Learning starts when they do.",
+      // D04's own line (backlog 88), and true under the consent gate (Hub,
+      // 2 Nov): a child cannot begin until a parent confirms.
+      sub: "Students can begin lessons once a parent confirms.",
       cta: "Send requests",
       href: "/admin/students",
     },
   ];
+}
+
+/**
+ * A DONE STEP IN D04'S WORDS (backlog 89): "Teachers invited · 6 invited, 4
+ * have set up their console." and "Students added · 48 enrolled so far -
+ * import the rest whenever you're ready." - where it kept the open step's
+ * "Invite your teachers" and its instruction. A figure we do not hold is left
+ * out of the line, never guessed; with no figure at all the title stands
+ * alone. Steps D04 does not redraw when done are returned as they were.
+ */
+export function doneStep(
+  step: StartStep,
+  index: number,
+  facts: {
+    teachersInvited?: number | null;
+    teachersSetUp?: number | null;
+    studentsEnrolled?: number | null;
+  },
+): StartStep {
+  if (index === STEP_TEACHERS) {
+    const invited = facts.teachersInvited;
+    const setUp = facts.teachersSetUp;
+    return {
+      title: "Teachers invited",
+      sub:
+        typeof invited !== "number"
+          ? ""
+          : typeof setUp === "number"
+            ? `${invited} invited, ${setUp} ${setUp === 1 ? "has" : "have"} set up their console.`
+            : `${invited} invited.`,
+      cta: "",
+    };
+  }
+  if (index === STEP_STUDENTS) {
+    const n = facts.studentsEnrolled;
+    return {
+      title: "Students added",
+      sub:
+        typeof n === "number"
+          ? `${n} enrolled so far - import the rest whenever you're ready.`
+          : "",
+      cta: "",
+    };
+  }
+  return step;
 }
 
 /** Indices of the steps a real signal can currently settle. */
