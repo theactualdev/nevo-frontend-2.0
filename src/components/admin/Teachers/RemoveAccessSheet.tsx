@@ -249,9 +249,10 @@ export function RemoveAccessSheet({
               >
                 Remove access
               </button>
-              {/* D06b: the stay-put choice says what it keeps (backlog 86). */}
+              {/* D06b: the stay-put choice says what it keeps (backlog 86),
+                  the name where the frame has "his". */}
               <button type="button" onClick={close} className={GHOST_BTN}>
-                Keep their access
+                Keep {firstName}&rsquo;s access
               </button>
             </>
           )
@@ -262,8 +263,9 @@ export function RemoveAccessSheet({
               there is nothing to hand over. The restore clause stands since
               the undo landed on 8 Oct (`POST /teachers/{id}/restore`). */}
           {teacher.name} isn&rsquo;t teaching any classes yet, so there&rsquo;s
-          nothing to hand over. They&rsquo;ll no longer be able to open their
-          Nevo console, and you can restore their access whenever you need to.
+          nothing to hand over. {firstName} will no longer be able to open
+          their Nevo console, and you can restore their access whenever you
+          need to.
         </p>
       </Sheet>
     );
@@ -512,8 +514,8 @@ export function RemoveAccessSheet({
         */}
       <p className="m-0 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
         {firstName}&rsquo;s notes stay with these classes and students.
-        Whoever takes over sees everything {firstName} wrote, kept under their
-        name.
+        Whoever takes over sees everything {firstName} wrote, kept under{" "}
+        {firstName}&rsquo;s name.
       </p>
     </Sheet>
   );

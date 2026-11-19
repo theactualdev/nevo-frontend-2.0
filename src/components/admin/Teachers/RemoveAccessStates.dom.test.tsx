@@ -244,10 +244,11 @@ describe("removing a teacher with no classes", () => {
 
   /*
    * BACKLOG 86: D06b's title, its opener - there is nothing to hand over - and
-   * "Keep their access" for the stay-put choice. The frame's "his" is not
-   * ours to use: nothing records how a teacher is referred to.
+   * "Keep {name}'s access" for the stay-put choice. The frame's "his" is not
+   * ours to use: nothing records how a teacher is referred to, so the name
+   * stands in (Lydia, 14 Oct).
    */
-  it("is D06b's calm confirm: its title, nothing to hand over, and Keep their access", async () => {
+  it("is D06b's calm confirm: its title, nothing to hand over, and Keep {name}'s access", async () => {
     list.mockResolvedValue([other()]);
     const { container } = render(
       <RemoveAccessSheet teacher={teacher} held={[]} onClose={() => {}} onRemoved={() => {}} />,
@@ -261,9 +262,9 @@ describe("removing a teacher with no classes", () => {
       /isn.t teaching any classes yet, so there.s nothing to hand over\./,
     );
     expect(visibleText(container)).not.toMatch(/Their classes and notes stay/);
-    expect(
-      Array.from(container.querySelectorAll("button")).map((b) => b.textContent),
-    ).toContain("Keep their access");
+    const buttons = Array.from(container.querySelectorAll("button")).map((b) => b.textContent ?? "");
+    expect(buttons.some((b) => /^Keep \S+.s access$/.test(b))).toBe(true);
+    expect(visibleText(container)).not.toMatch(/\b(his|her|he|she)\b/i);
   });
 });
 
@@ -285,7 +286,7 @@ describe("D06b's reassignment rows", () => {
     const text = visibleText(container);
     expect(text).toMatch(/Who takes this class as Primary\?/);
     expect(text).toMatch(/Who else should have this class\?/);
-    expect(text).toMatch(/notes stay with these classes and students\. Whoever takes over sees everything .+ wrote, kept under their name\./);
+    expect(text).toMatch(/notes stay with these classes and students\. Whoever takes over sees everything .+ wrote, kept under .+.s name\./);
     expect(text).not.toMatch(/Choose who takes this class/);
   });
 
