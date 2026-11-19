@@ -102,6 +102,7 @@ describe("the rights go to the signed-in routes", () => {
     render(<ParentMyData />);
     await screen.findByText(/Tunde[’']s data on Nevo/i);
 
+    fireEvent.click(screen.getByRole("button", { name: "Object to Processing" }));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "  Too much screen time  " } });
     fireEvent.click(screen.getByRole("button", { name: /Object to processing/i }));
 
