@@ -372,9 +372,22 @@ export function AssignTeachingSheet({
   const anyDone = Object.values(outcomes).some((o) => o.state === "done");
   const someFailed = phase === "settled" && !allDone;
   const n = tickedClasses.length;
-  const cta = subject
-    ? `Assign ${subject.displayName} to ${n} ${n === 1 ? "class" : "classes"}`
-    : "Assign teacher";
+  /*
+   * SCRUM-40's "Primary conflict" state: "the commit label becomes 'Assign and
+   * make Primary'" (backlog 81) - whenever the notice below shows, for any
+   * ticked class.
+   */
+  const primaryConflict =
+    role === "primary" &&
+    tickedClasses.some((c) => {
+      const incumbent = incumbentOf(c.id);
+      return Boolean(incumbent && incumbent.teacherId !== teacherId);
+    });
+  const cta = primaryConflict
+    ? "Assign and make Primary"
+    : subject
+      ? `Assign ${subject.displayName} to ${n} ${n === 1 ? "class" : "classes"}`
+      : "Assign teacher";
   const roleLegend =
     n === 1 ? `Role in ${tickedClasses[0].name}` : n > 1 ? "Role in these classes" : "Role";
   const subtitle =
