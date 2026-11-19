@@ -59,8 +59,8 @@ const QUIET =
   "mt-2.5 w-full rounded-[10px] border border-nevo-navy/25 px-5 py-3 text-[15px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-45";
 
 /**
- * A data request's and an objection's confirmation (Lydia, 19 Nov, L35 -
- * wording proposed for Olayinka's approval). It replaced "You will receive
+ * A data request's and an objection's confirmation (Lydia 19 Nov, L35,
+ * approved by Olayinka). It replaced "You will receive
  * {child}'s data within 5 working days" and "We will respond within 48 hours
  * to the email address your school has for you": the server records the
  * request and the SCHOOL answers it, so a promised address and window
