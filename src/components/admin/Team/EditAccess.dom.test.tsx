@@ -194,6 +194,21 @@ describe("a save the server refuses", () => {
     expect(within(sheet).queryByText(/try again in a moment/i)).toBeNull();
   });
 
+  it("says a coded 400 in the server's words, without try again", async () => {
+    updateScopes.mockRejectedValue(
+      new ApiError(400, "Bad Request", {
+        detail: { code: "invalid_scope", message: "That area isn't one this school has." },
+      }),
+    );
+    const sheet = await untickRoster();
+
+    expect(
+      await within(sheet).findByText("That area isn't one this school has."),
+    ).toBeInTheDocument();
+    // No retry in what the save says (the holders read keeps its own).
+    expect(within(sheet).queryByText(/try again in a moment/i)).toBeNull();
+  });
+
   it("still offers try again for a save that merely failed", async () => {
     updateScopes.mockRejectedValue(new ApiError(500, "Server", {}));
     const sheet = await untickRoster();

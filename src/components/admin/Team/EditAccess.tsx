@@ -2,7 +2,7 @@
 
 import { Fragment, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { teamApi, type TeamMember } from "@/lib/api/team";
-import { ApiError, apiErrorMessage } from "@/lib/api/client";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { ReadFailed } from "../ReadFailed";
 import { holderFor, type LearningSupportHolders } from "@/lib/api/learningSupport";
 import { getSession } from "@/lib/auth/session";
@@ -204,6 +204,16 @@ export function EditAccessPanel({
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.status === 409) {
           setRefused(apiErrorMessage(err.detail) ?? REFUSED_SAVE);
+          return;
+        }
+        // A coded 400 is refused the same way every time (item 30's pattern).
+        if (
+          err instanceof ApiError &&
+          err.status === 400 &&
+          apiErrorCode(err.detail) &&
+          apiErrorMessage(err.detail)
+        ) {
+          setRefused(apiErrorMessage(err.detail) as string);
           return;
         }
         setFailed(true);
