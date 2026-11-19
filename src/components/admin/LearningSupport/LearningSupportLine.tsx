@@ -216,9 +216,9 @@ export function CalmRefusal({
         aria-modal="true"
         aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
-        className="w-[460px] max-w-full rounded-2xl bg-nevo-cream px-8 py-[30px] shadow-[0_24px_60px_rgba(0,0,0,0.3)] motion-safe:animate-nevo-pop max-lg:w-[440px] max-lg:px-7 max-lg:py-[26px]"
+        className="w-[460px] max-w-full rounded-2xl bg-nevo-cream px-8 py-[30px] shadow-[0_24px_60px_rgba(0,0,0,0.3)] motion-safe:animate-nevo-pop max-xl:w-[440px] max-xl:px-7 max-xl:py-[26px]"
       >
-        <span className="inline-flex size-[52px] items-center justify-center rounded-full bg-nevo-violet/22 text-nevo-navy max-lg:size-12">
+        <span className="inline-flex size-[52px] items-center justify-center rounded-full bg-nevo-violet/22 text-nevo-navy max-xl:size-12">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             {icon === "shield" ? (
               <>
@@ -232,19 +232,19 @@ export function CalmRefusal({
         </span>
         <h3
           id={titleId}
-          className="m-0 mt-[18px] text-[21px] font-semibold tracking-[-0.01em] text-nevo-near-black max-lg:mt-4 max-lg:text-[19px]"
+          className="m-0 mt-[18px] text-[21px] font-semibold tracking-[-0.01em] text-nevo-near-black max-xl:mt-4 max-xl:text-[19px]"
         >
           {title}
         </h3>
-        <p className="m-0 mt-[11px] text-[15px] leading-[1.6] text-nevo-near-black/70 max-lg:mt-2.5 max-lg:text-[14.5px]">
+        <p className="m-0 mt-[11px] text-[15px] leading-[1.6] text-nevo-near-black/70 max-xl:mt-2.5 max-xl:text-[14.5px]">
           {body}
         </p>
-        <div className="mt-6 flex justify-end max-lg:mt-[22px]">
+        <div className="mt-6 flex justify-end max-xl:mt-[22px]">
           <button
             ref={close}
             type="button"
             onClick={onClose}
-            className="inline-flex h-12 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[26px] text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 max-lg:h-[46px] max-lg:px-6 max-lg:text-[14.5px]"
+            className="inline-flex h-12 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[26px] text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 max-xl:h-[46px] max-xl:px-6 max-xl:text-[14.5px]"
           >
             Close
           </button>

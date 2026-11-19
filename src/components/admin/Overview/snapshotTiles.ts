@@ -219,7 +219,8 @@ export function snapshotTiles({
  * are written out and picked between.
  *
  * `xl`, not `lg`: 1280 is this console's own desktop boundary (the sidebar
- * rail's `(min-width: 1280px)`), so 1024x768 keeps the 2 x 2 the spec asks for.
+ * rail's `(min-width: 80rem)`, the query `xl:` compiles to), so 1024x768 keeps
+ * the 2 x 2 the spec asks for.
  */
 export function snapshotColumns(count: number): string {
   if (count >= 5) return "xl:grid-cols-5";

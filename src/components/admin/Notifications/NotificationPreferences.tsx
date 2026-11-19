@@ -38,8 +38,9 @@ import { categoriesForScopes, preferencesIntro, type CategoryMeta } from "./cate
  *
  * THE TABLET VARIANTS ARE KEYED `max-xl:`, NOT `max-lg:`, AND THAT IS THE
  * CONSOLE'S RULE RATHER THAN THIS FILE'S TASTE. The admin shell collapses its
- * rail at `(min-width: 1280px)` - `AdminSidebar` reads exactly that media
- * query - so 1280 is where this console becomes a tablet, and the frames are
+ * rail at `(min-width: 80rem)` (1280 at default text size) - `AdminSidebar`
+ * reads exactly the query `xl:` compiles to - so 1280 is where this console
+ * becomes a tablet, and the frames are
  * drawn at 1440 and 1024. A `max-lg:` variant fires below 1024 and so never
  * fires at the tablet size anything here is designed for: the stacked form
  * below was written, shipped, and could not be reached at either drawn width.

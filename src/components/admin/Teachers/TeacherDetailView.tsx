@@ -296,7 +296,7 @@ export function TeacherDetailView({
 
       {/* D06's three cards. Last active joined on 8 Oct; with no timestamp
           it is left off rather than drawn empty. */}
-      <div className="mt-7 flex gap-3.5 max-lg:flex-col">
+      <div className="mt-7 flex gap-3.5 max-xl:flex-col">
         <StatCard
           value={String(activeHeld.length)}
           label="Classes"
@@ -472,7 +472,7 @@ export function TeacherDetailView({
           </div>
           <div className={cn(CARD, "mt-3.5")}>
             <LearningSupportLine
-              className="px-5 py-4 max-lg:px-[18px] max-lg:py-3.5"
+              className="px-5 py-4 max-xl:px-[18px] max-xl:py-3.5"
               person={{ userId: teacher.id, name: teacher.name }}
               holders={ls}
               you={teacher.id === me}

@@ -195,15 +195,15 @@ export function SafeguardingView() {
                   className={cn(
                     "rounded-xl",
                     seen
-                      ? "bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-lg:px-5 max-lg:py-[18px]"
-                      : "bg-nevo-navy px-7 py-6 shadow-[0_8px_32px_rgba(0,0,0,0.16)] max-lg:px-[22px] max-lg:py-5",
+                      ? "bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-xl:px-5 max-xl:py-[18px]"
+                      : "bg-nevo-navy px-7 py-6 shadow-[0_8px_32px_rgba(0,0,0,0.16)] max-xl:px-[22px] max-xl:py-5",
                   )}
                 >
-                  <div className="flex items-start justify-between gap-4 max-lg:flex-col max-lg:gap-2.5">
+                  <div className="flex items-start justify-between gap-4 max-xl:flex-col max-xl:gap-2.5">
                     <div className="min-w-0">
                       <span
                         className={cn(
-                          "block text-[19px] font-semibold tracking-[-0.01em] max-lg:text-[17px]",
+                          "block text-[19px] font-semibold tracking-[-0.01em] max-xl:text-[17px]",
                           seen ? "text-nevo-near-black" : "text-nevo-cream",
                         )}
                       >
@@ -310,7 +310,7 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 
 function Heading() {
   return (
-    <h2 className="m-0 text-[28px] font-semibold tracking-[-0.018em] text-nevo-near-black max-lg:text-[24px]">
+    <h2 className="m-0 text-[28px] font-semibold tracking-[-0.018em] text-nevo-near-black max-xl:text-[24px]">
       Safeguarding
     </h2>
   );
