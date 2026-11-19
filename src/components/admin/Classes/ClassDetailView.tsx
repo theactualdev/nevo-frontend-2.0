@@ -34,6 +34,7 @@ import { AssignTeachingSheet } from "./AssignTeachingSheet";
 import { ClassSubjects } from "./ClassSubjects";
 import { ClassFormSheet } from "./ClassFormSheet";
 import { NoAccess, failureKind } from "../NoAccess";
+import { RecordGone, isRecordGone } from "../RecordGone";
 import { BackLink } from "../BackLink";
 import { withBack, type Back } from "../back";
 import { WriteFailed } from "../WriteFailed";
@@ -79,7 +80,8 @@ import { untaughtSubjects } from "./untaught";
  * and nothing carries an `endedAt`). Those are what would make it a history.
  */
 
-type Phase = "loading" | "ready" | "failed" | "denied";
+/** `gone`: the class's own read answered 404 - D28, never a retry. */
+type Phase = "loading" | "ready" | "failed" | "denied" | "gone";
 
 export function ClassDetailView({
   classId,
@@ -119,8 +121,14 @@ export function ClassDetailView({
    * printed "nothing has changed" about a class that HAD been restored.
    */
   const load = useCallback(() => {
+    // Only the class's own 404 says the record is gone (D28).
+    let gone = false;
+    const record = classesApi.get(classId).catch((err: unknown) => {
+      gone = isRecordGone(err);
+      throw err;
+    });
     return Promise.all([
-      classesApi.get(classId),
+      record,
       classesApi.classTeachers(classId),
       classesApi.classStudents(classId),
     ])
@@ -130,7 +138,7 @@ export function ClassDetailView({
         setStudents(s);
         setPhase("ready");
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
+      .catch((err: unknown) => setPhase(gone ? "gone" : failureKind(err)));
   }, [classId]);
 
   useEffect(() => {
@@ -154,6 +162,14 @@ export function ClassDetailView({
     return (
       <Wrapper>
         <NoAccess what="this class" />
+      </Wrapper>
+    );
+  }
+
+  if (phase === "gone") {
+    return (
+      <Wrapper>
+        <RecordGone what="class" back={back} />
       </Wrapper>
     );
   }

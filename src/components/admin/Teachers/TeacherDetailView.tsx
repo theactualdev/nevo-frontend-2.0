@@ -30,6 +30,7 @@ import { RemoveAccessSheet } from "./RemoveAccessSheet";
 import { TeacherSubjects } from "./TeacherSubjects";
 import { StatusPill, isInvited } from "./status";
 import { NoAccess, failureKind } from "../NoAccess";
+import { RecordGone, isRecordGone } from "../RecordGone";
 import { BackLink } from "../BackLink";
 import { withBack, type Back } from "../back";
 import { activeLine, lastActiveCard } from "../Team/teamLines";
@@ -88,7 +89,8 @@ import {
  * `student_headcount`, naming a field that was never the one in play.)
  */
 
-type Phase = "loading" | "ready" | "failed" | "denied";
+/** `gone`: the teacher's own read answered 404 - D28, never a retry. */
+type Phase = "loading" | "ready" | "failed" | "denied" | "gone";
 
 /** "1 class", "3 classes" - grammar for a count of rows, nothing measured. */
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -147,8 +149,14 @@ export function TeacherDetailView({
     !ls.holders.some((h) => h.userId !== teacherId);
 
   const load = useCallback(() => {
+    // Only the teacher's own 404 says the record is gone (D28).
+    let gone = false;
+    const record = teachersApi.get(teacherId).catch((err: unknown) => {
+      gone = isRecordGone(err);
+      throw err;
+    });
     Promise.all([
-      teachersApi.get(teacherId),
+      record,
       classesApi.teacherClasses(teacherId),
       /*
        * INCLUDING ARCHIVED. `list()` excludes them by default, so a teacher
@@ -165,7 +173,7 @@ export function TeacherDetailView({
         setAllClasses(all);
         setPhase("ready");
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
+      .catch((err: unknown) => setPhase(gone ? "gone" : failureKind(err)));
   }, [teacherId]);
 
   useEffect(() => {
@@ -184,6 +192,14 @@ export function TeacherDetailView({
     return (
       <Wrapper>
         <NoAccess what="this teacher" />
+      </Wrapper>
+    );
+  }
+
+  if (phase === "gone") {
+    return (
+      <Wrapper>
+        <RecordGone what="teacher" back={back} />
       </Wrapper>
     );
   }
