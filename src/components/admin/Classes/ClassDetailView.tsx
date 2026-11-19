@@ -39,6 +39,7 @@ import { withBack, type Back } from "../back";
 import { WriteFailed } from "../WriteFailed";
 import { ChildAvatar } from "../Roster/ChildAvatar";
 import { lookOfChild } from "@/lib/profile/rosterLook";
+import { untaughtSubjects } from "./untaught";
 
 /**
  * D5b Class detail - one class, everything true about it.
@@ -189,6 +190,8 @@ export function ClassDetailView({
   }
 
   const archived = Boolean(klass.archivedAt);
+  /** The class's subjects nobody teaches yet, when that can be known. */
+  const untaught = teachers.length > 0 ? untaughtSubjects(klass.subjects, teachers) : null;
   // Where the provider owns the class list, membership is read-only and archive
   // is absent - the school does not hand-edit a synced roster.
   const ssoSourced = klass.source === "roster_sync";
@@ -457,6 +460,40 @@ export function ClassDetailView({
             );
           })
         )}
+        {/*
+          * D05's "No teacher yet" row (backlog 27): once anyone teaches here,
+          * the subjects nobody does were invisible. Only when it can be
+          * known - see `untaughtSubjects` - and only while some are left.
+          */}
+        {untaught && untaught.length > 0 ? (
+          <div
+            data-untaught
+            className="flex items-center gap-3.5 border-t border-nevo-near-black/[0.07] px-[22px] py-[15px]"
+          >
+            <span
+              aria-hidden
+              className="size-[38px] flex-none rounded-full border-[1.5px] border-nevo-near-black/20"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-[15px] font-semibold text-nevo-near-black/70">
+                No teacher yet
+              </div>
+              <div className="text-[13px] leading-[1.45] text-nevo-near-black/58">
+                {untaught.join(", ")}
+              </div>
+            </div>
+            {!archived && !ssoSourced ? (
+              <button
+                type="button"
+                onClick={() => setAssigning(true)}
+                disabled={writesPaused}
+                className="flex-none cursor-pointer text-[14px] font-semibold text-nevo-navy hover:underline disabled:cursor-default disabled:opacity-50 disabled:hover:no-underline"
+              >
+                Assign
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       {/* Worded identically to the same note on teacher detail: SCRUM-40's
           mirror rule says the second door is a mirror, not a variant. */}
@@ -534,9 +571,12 @@ export function ClassDetailView({
           >
             Archive this class
           </button>
+          {/* D05's words (backlog 27). "Never deleted" is the narrower claim
+              and plainly true; the confirm it promises is `ArchiveConfirm`. */}
           <p className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/55">
             Archiving keeps the records but removes the class from active lists.
-            Students and their progress are not affected.
+            Students and their progress are never deleted - you&rsquo;ll be asked
+            to confirm.
           </p>
         </div>
       ) : null}
