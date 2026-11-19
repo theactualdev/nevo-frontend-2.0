@@ -6,6 +6,7 @@ import { notificationsApi, type Notification } from "@/lib/api/notifications";
 import { cn } from "@/lib/utils";
 import { ROW_DIVIDER } from "../Roster/primitives";
 import { NotificationRow } from "./NotificationRow";
+import { WriteFailed } from "../WriteFailed";
 
 /**
  * D13.2 The panel - the quick read.
@@ -176,13 +177,23 @@ export function NotificationsPanel({
    * the list is defined by the flag just changed. A failed write puts it back,
    * rather than leaving the panel showing something the server did not accept.
    */
+  /*
+   * AND SAYS SO (backlog 73). Put back silently, the row reappeared as if the
+   * press had never happened - the screen after a failure identical to the
+   * screen before one. The page's own words for the same act.
+   */
+  const [archiveFailed, setArchiveFailed] = useState(false);
   const onArchive = (id: string) => {
     const before = rows;
+    setArchiveFailed(false);
     setRows((prev) => prev?.filter((n) => n.notificationId !== id) ?? prev);
     notificationsApi
       .archive(id)
       .then(onReadStateChanged)
-      .catch(() => setRows(before));
+      .catch(() => {
+        setRows(before);
+        setArchiveFailed(true);
+      });
   };
 
   return (
@@ -212,6 +223,9 @@ export function NotificationsPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {archiveFailed && rows && rows.length > 0 ? (
+          <WriteFailed className="mx-5 mt-3.5 mb-1" what="archive that" />
+        ) : null}
         {rows === null ? (
           <div className="space-y-3 p-5">
             <div className="h-12 animate-pulse rounded-lg bg-nevo-near-black/[0.06]" />

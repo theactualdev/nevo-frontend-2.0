@@ -303,31 +303,31 @@ export function NotificationsView() {
                 />
               </label>
 
-              <button
-                type="button"
-                onClick={() => setView(archived ? "inbox" : "archived")}
-                aria-pressed={archived}
+              {/* D13b's ONE view menu (backlog 74): Everything, Unread
+                  only, Archived. It was two pills that could be read as two
+                  filters at once, "Show archived" and "Unread only". */}
+              <label
                 className={cn(
                   FILTER_PILL,
-                  archived && "border-nevo-navy bg-nevo-navy/[0.06] text-nevo-navy",
+                  "relative",
+                  (archived || unreadOnly) && "border-nevo-navy bg-nevo-navy/[0.06] text-nevo-navy",
                 )}
               >
-                {archived ? "Archived" : "Show archived"}
-              </button>
-
-              {!archived ? (
-                <button
-                  type="button"
-                  onClick={() => setUnreadOnly((v) => !v)}
-                  aria-pressed={unreadOnly}
-                  className={cn(
-                    FILTER_PILL,
-                    unreadOnly && "border-nevo-navy bg-nevo-navy/[0.06] text-nevo-navy",
-                  )}
+                <span className="sr-only">View</span>
+                <select
+                  value={archived ? "archived" : unreadOnly ? "unread" : "everything"}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setView(v === "archived" ? "archived" : "inbox");
+                    setUnreadOnly(v === "unread");
+                  }}
+                  className="cursor-pointer appearance-none bg-transparent pr-1 outline-none"
                 >
-                  Unread only
-                </button>
-              ) : null}
+                  <option value="everything">Everything</option>
+                  <option value="unread">Unread only</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </label>
 
               {!archived ? (
                 <button

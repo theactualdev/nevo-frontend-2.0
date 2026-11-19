@@ -211,8 +211,14 @@ export function NotificationRow({
              * honoured neither: it hid the action on the page at both designed
              * widths, and revealed it in the panel only above 1024.
              */
+            /*
+             * AND IN THE ROW ON A TABLET (SCRUM-100: "a quiet action on hover
+             * (in the row on tablet)"; backlog 73). It was hover-only at every
+             * width, so on a touch tablet it never appeared at all. Revealed
+             * on hover only from 1280 and only where a pointer can hover.
+             */
             compact
-              ? "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+              ? "xl:[@media(hover:hover)_and_(pointer:fine)]:opacity-0 xl:[@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 xl:[@media(hover:hover)_and_(pointer:fine)]:group-focus-within:opacity-100"
               : "opacity-100",
           )}
         >
