@@ -16,6 +16,7 @@ import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { useSetupGate } from "@/hooks";
 import {
+  countCsvRows,
   foundCounts,
   hasStaged,
   mayConfirm,
@@ -173,6 +174,10 @@ export function RosterImportView() {
    * an active or confirmed school sees no panels, so it fetches nothing.
    */
   const [templates, setTemplates] = useState<Partial<Record<Kind, Template>>>({});
+  /** The file each panel took this visit - see `upload`. Never persisted. */
+  const [attached, setAttached] = useState<
+    Partial<Record<Kind, { name: string; rows: number | null }>>
+  >({});
   const showsPanels =
     phase === "ready" &&
     state !== null &&
@@ -220,6 +225,19 @@ export function RosterImportView() {
       .then((s) => {
         setState(s);
         refreshGate();
+        /*
+         * THE FILE LINE, FROM THE BROWSER, STORED NOWHERE (Lydia 19 Nov, L23):
+         * "{file} · N rows · Replace" confirms the right file went in, at the
+         * moment it went in. The name and the count are the browser's own;
+         * nothing is sent or kept, so after a reload the line is gone.
+         */
+        file
+          .text()
+          .then((text) => countCsvRows(text))
+          .catch(() => null)
+          .then((rows) =>
+            setAttached((a) => ({ ...a, [kind]: { name: file.name, rows } })),
+          );
       })
       /*
        * A FAILED UPLOAD LEAVES THE PREVIOUS STATE ALONE. Backend replaces a
@@ -395,6 +413,7 @@ export function RosterImportView() {
                   failed={uploadFailed?.kind === k.kind}
                   reason={uploadFailed?.kind === k.kind ? uploadFailed.reason : null}
                   onFile={(f) => upload(k.kind, f)}
+                  attached={attached[k.kind] ?? null}
                   columns={templates[k.kind]?.columns ?? null}
                   tmpl={k.tmpl}
                   fetchTemplate={() => {
@@ -502,6 +521,7 @@ function DropPanel({
   tmpl,
   fetchTemplate,
   file,
+  attached,
 }: {
   title: string;
   sub: string;
@@ -510,6 +530,8 @@ function DropPanel({
   /** The server's sentence, when it gave one. See `uploadFailed`. */
   reason: string | null;
   onFile: (f: File) => void;
+  /** The file this panel took this visit, from the browser (L23). */
+  attached: { name: string; rows: number | null } | null;
   /** The template's own header row; null draws no list. */
   columns: string[] | null;
   tmpl: string;
@@ -582,6 +604,22 @@ function DropPanel({
         {busy ? (
           <span className="text-[13.5px] text-nevo-near-black/62">
             Reading your file&hellip;
+          </span>
+        ) : attached ? (
+          /* D24 OB-01's attached row: the file, its rows, and Replace. */
+          <span data-attached className="flex w-full items-center gap-3 text-left">
+            <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-nevo-near-black">
+              {attached.rows === null
+                ? attached.name
+                : `${attached.name} · ${attached.rows} ${attached.rows === 1 ? "row" : "rows"}`}
+            </span>
+            <button
+              type="button"
+              onClick={() => input.current?.click()}
+              className="flex-none cursor-pointer text-[12px] font-semibold text-nevo-navy hover:opacity-75"
+            >
+              Replace
+            </button>
           </span>
         ) : (
           <>
@@ -963,8 +1001,10 @@ function DerivedClassRow({
           >
             Drop {c.name}
           </button>
+          {/* Lydia 19 Nov (L29), approved by Olayinka: the positive action.
+              "Cancel" could mean the import or the classes; this keeps them. */}
           <button type="button" onClick={() => setMode("idle")} className={TEXT_BTN}>
-            Cancel
+            Keep these classes
           </button>
         </div>
       ) : null}
