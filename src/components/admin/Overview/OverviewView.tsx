@@ -50,6 +50,8 @@ import { ageChecksApi, type AgeCheck } from "@/lib/api/ageChecks";
 import { failureKind } from "../NoAccess";
 import { scopeName } from "../Team/adminScopes";
 import { useCanOpen } from "../Shell/useCanOpen";
+import { analyticsApi } from "@/lib/api/analytics";
+import { TransformationLine, type TransformationRead } from "./TransformationLine";
 
 /**
  * D04 Overview Dashboard - the first thing a general-oversight admin sees,
@@ -217,6 +219,12 @@ export function OverviewView() {
   } | null>(null);
   /** The school's own name, from its record - see `school` below. */
   const [schoolName, setSchoolName] = useState<string | null>(null);
+  /**
+   * D26's figures, for D04's quiet line into them (backlog 48). Its own read,
+   * which never holds the page or marks a card unread: a failed one keeps
+   * the way in and says nothing about the figures.
+   */
+  const [transformation, setTransformation] = useState<TransformationRead>({ kind: "loading" });
   /** When the school finished setting up - D04's early-life "Set up 3 days ago". */
   const [setUp, setSetUp] = useState<SetUpAgo | null>(null);
   const [narrative, setNarrative] = useState<SchoolNarrative | null>(null);
@@ -278,6 +286,10 @@ export function OverviewView() {
       .then((sc) => {
         mark("school", false);
         setSchoolName(sc.name?.trim() || null);
+        analyticsApi
+          .getSchoolTransformation(sc.id)
+          .then((data) => setTransformation({ kind: "ready", data }))
+          .catch((err: unknown) => setTransformation({ kind: failureKind(err) }));
         setSetUp(setUpAgo(readOnboarding(sc).completedAt, Date.now()));
         const term = currentTerm(readAcademic(sc).terms ?? [], Date.now());
         const from = term ? startOfDay(term.from) : null;
@@ -893,6 +905,13 @@ export function OverviewView() {
                 />
               )}
             </div>
+
+            {/* D04's quiet line into School transformation, under the
+                compliance row as its desktop draws it (backlog 48). */}
+            <TransformationLine
+              read={transformation}
+              canOpen={mayOpen("/admin/reports/transformation")}
+            />
 
             <h3 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
               {early ? SNAPSHOT_HEADING_EARLY : SNAPSHOT_HEADING}
