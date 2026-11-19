@@ -4,7 +4,13 @@ import { useStudentLesson } from "./useStudentLesson";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { FIRST_LESSON_ID } from "@/lib/mocks";
 import { ApiError } from "@/lib/api/client";
-import { saveLesson, savedLesson } from "@/lib/offline/savedLessons";
+import {
+  forgetChecks,
+  saveLesson,
+  savedLesson,
+} from "@/lib/offline/savedLessons";
+import { resetShelfCheck } from "@/lib/offline/shelfCheck";
+import { FRESH_DOWNLOAD } from "@/lib/offline/testDownload";
 
 /**
  * The worst thing this hook could do, and did.
@@ -23,19 +29,31 @@ import { saveLesson, savedLesson } from "@/lib/offline/savedLessons";
  * least of all when something has gone wrong.
  */
 
-const { detail, modules, dashboard, adaptation, accommodations } = vi.hoisted(
-  () => ({
-    detail: vi.fn(),
-    modules: vi.fn(),
-    dashboard: vi.fn(),
-    adaptation: vi.fn(),
-    accommodations: vi.fn(),
-  }),
-);
+const {
+  detail,
+  modules,
+  dashboard,
+  adaptation,
+  accommodations,
+  offlineDownloadStatus,
+  downloadLesson,
+} = vi.hoisted(() => ({
+  detail: vi.fn(),
+  modules: vi.fn(),
+  dashboard: vi.fn(),
+  adaptation: vi.fn(),
+  accommodations: vi.fn(),
+  offlineDownloadStatus: vi.fn(),
+  downloadLesson: vi.fn(),
+}));
 
 vi.mock("@/lib/api/lessons", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
-  lessonsApi: { detail, modules },
+  lessonsApi: { detail, modules, offlineDownloadStatus },
+}));
+vi.mock("@/lib/offline/lessonPackage", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  downloadLesson,
 }));
 vi.mock("./useStudentDashboard", () => ({ useStudentDashboard: dashboard }));
 vi.mock("./useAdaptation", () => ({ useAdaptation: adaptation }));
@@ -79,6 +97,11 @@ const signIn = () =>
 
 beforeEach(() => {
   clearSession();
+  // A saved copy's check speaks for one connection; each test is a new one.
+  forgetChecks();
+  resetShelfCheck();
+  offlineDownloadStatus.mockReset();
+  downloadLesson.mockReset();
   modules.mockResolvedValue([]);
   dashboard.mockReturnValue({ data: null, loading: false, failed: false });
   // The engine has answered, with nothing to change - a settled read.
@@ -797,7 +820,7 @@ describe("a lesson the child saved for offline", () => {
 
   it("opens from the saved copy when the read cannot be made", async () => {
     signIn();
-    saveLesson("student-1", LIVE_LESSON as never);
+    saveLesson("student-1", LIVE_LESSON as never, FRESH_DOWNLOAD);
     detail.mockRejectedValue(new ApiError(0, "Network"));
 
     const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
@@ -815,7 +838,7 @@ describe("a lesson the child saved for offline", () => {
   it("says when the saved copy lacks what completion needs", async () => {
     signIn();
     // An older package copy under the detail's names: none of the three keys.
-    saveLesson("student-1", LIVE_LESSON as never);
+    saveLesson("student-1", LIVE_LESSON as never, FRESH_DOWNLOAD);
     detail.mockRejectedValue(new ApiError(0, "Network"));
 
     const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
@@ -827,12 +850,16 @@ describe("a lesson the child saved for offline", () => {
   it("does not for a copy that carries all three", async () => {
     // The detail read's, or a package's since B85: either completes.
     signIn();
-    saveLesson("student-1", {
-      ...LIVE_LESSON,
-      modules: [],
-      recap: null,
-      assessment: [],
-    } as never);
+    saveLesson(
+      "student-1",
+      {
+        ...LIVE_LESSON,
+        modules: [],
+        recap: null,
+        assessment: [],
+      } as never,
+      FRESH_DOWNLOAD,
+    );
     detail.mockRejectedValue(new ApiError(0, "Network"));
 
     const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
@@ -844,7 +871,7 @@ describe("a lesson the child saved for offline", () => {
 
   it("does not for a lesson read live", async () => {
     signIn();
-    saveLesson("student-1", LIVE_LESSON as never);
+    saveLesson("student-1", LIVE_LESSON as never, FRESH_DOWNLOAD);
     detail.mockResolvedValue(LIVE_LESSON);
 
     const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
@@ -855,7 +882,7 @@ describe("a lesson the child saved for offline", () => {
 
   it("does not bring back a lesson the school removed", async () => {
     signIn();
-    saveLesson("student-1", LIVE_LESSON as never);
+    saveLesson("student-1", LIVE_LESSON as never, FRESH_DOWNLOAD);
     detail.mockRejectedValue(new ApiError(404, "Not Found"));
 
     const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
@@ -866,7 +893,7 @@ describe("a lesson the child saved for offline", () => {
 
   it("does not open another child's saved copy", async () => {
     signIn();
-    saveLesson("someone-else", LIVE_LESSON as never);
+    saveLesson("someone-else", LIVE_LESSON as never, FRESH_DOWNLOAD);
     detail.mockRejectedValue(new ApiError(0, "Network"));
 
     const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
@@ -876,14 +903,17 @@ describe("a lesson the child saved for offline", () => {
 
   it("keeps a saved copy as fresh as the last online open", async () => {
     signIn();
-    saveLesson("student-1", { ...LIVE_LESSON, title: "Old title" } as never);
+    saveLesson("student-1", { ...LIVE_LESSON, title: "Old title" } as never, FRESH_DOWNLOAD);
     detail.mockResolvedValue(LIVE_LESSON);
 
     const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
 
     await waitFor(() => expect(result.current.lesson).not.toBeNull());
-    expect(savedLesson("student-1", FIRST_LESSON_ID)?.title).toBe(
-      "Fractions Lesson 3",
+    // After its check, which a copy downloaded on this connection has passed.
+    await waitFor(() =>
+      expect(savedLesson("student-1", FIRST_LESSON_ID)?.title).toBe(
+        "Fractions Lesson 3",
+      ),
     );
   });
 });
@@ -931,7 +961,7 @@ describe("a lesson held back until onboarding is finished (SCRUM-244)", () => {
 
   it("does not open the saved copy instead", async () => {
     signIn();
-    saveLesson("student-1", LIVE_LESSON as never);
+    saveLesson("student-1", LIVE_LESSON as never, FRESH_DOWNLOAD);
     detail.mockRejectedValue(gated());
 
     const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
@@ -984,7 +1014,7 @@ describe("a saved place that could not be read", () => {
 
   it("says when the lesson came from the offline shelf", async () => {
     signIn();
-    saveLesson("student-1", LIVE_LESSON as never);
+    saveLesson("student-1", LIVE_LESSON as never, FRESH_DOWNLOAD);
     detail.mockRejectedValue(new ApiError(0, "Network"));
     dashboard.mockReturnValue({ data: null, loading: false, failed: true });
 
@@ -993,5 +1023,137 @@ describe("a saved place that could not be read", () => {
     await waitFor(() => expect(result.current.lesson).not.toBeNull());
     expect(result.current.fromShelf).toBe(true);
     expect(result.current.placeUnknown).toBe(true);
+  });
+});
+
+/**
+ * SAFETY V2 (Teslim 9f4d763, 18 Nov): a saved copy is read only while the
+ * server can vouch for it. With no response there is no connection, and the
+ * copy opens if it is in date and was kept with a download to check. With any
+ * other failure there IS a connection, and the copy waits for its status
+ * check - "a failed status request must not be interpreted as `current`".
+ */
+describe("a saved copy the server must vouch for", () => {
+  beforeEach(() => window.localStorage.clear());
+
+  const status = (reason: "current" | "expired" | "safety_revoked") => ({
+    id: FRESH_DOWNLOAD.downloadId,
+    usable: reason === "current",
+    reason,
+    checkedAt: "2026-11-19T10:00:00Z",
+    expiresAt: "2099-01-01T00:00:00Z",
+  });
+
+  it("is checked before it is read when the read fails WITH a response, and opens on current", async () => {
+    signIn();
+    saveLesson("student-1", LIVE_LESSON as never, FRESH_DOWNLOAD);
+    forgetChecks(); // a new connection since it was saved
+    detail.mockRejectedValue(new ApiError(500, "Server"));
+    offlineDownloadStatus.mockResolvedValue(status("current"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(offlineDownloadStatus).toHaveBeenCalledExactlyOnceWith(
+      FRESH_DOWNLOAD.downloadId,
+    );
+    expect(result.current.fromShelf).toBe(true);
+  });
+
+  it("is deleted, and never opened, when a section it holds is held for safety", async () => {
+    signIn();
+    saveLesson("student-1", LIVE_LESSON as never, FRESH_DOWNLOAD);
+    forgetChecks();
+    detail.mockRejectedValue(new ApiError(500, "Server"));
+    offlineDownloadStatus.mockResolvedValue(status("safety_revoked"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    expect(result.current.lesson).toBeNull();
+    expect(savedLesson("student-1", FIRST_LESSON_ID)).toBeNull();
+  });
+
+  it("is not opened when its check fails, and stays shut once the connection drops", async () => {
+    signIn();
+    saveLesson("student-1", LIVE_LESSON as never, FRESH_DOWNLOAD);
+    forgetChecks();
+    detail.mockRejectedValue(new ApiError(500, "Server"));
+    offlineDownloadStatus.mockRejectedValue(new ApiError(503, "Server"));
+
+    const first = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+    await waitFor(() => expect(first.result.current.failed).toBe(true));
+    expect(savedLesson("student-1", FIRST_LESSON_ID)?.hold).toBe("unchecked");
+    first.unmount();
+
+    detail.mockRejectedValue(new ApiError(0, "Network"));
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    expect(result.current.lesson).toBeNull();
+  });
+
+  it("is downloaded afresh when the server does not know the download, and the old copy is not read", async () => {
+    signIn();
+    saveLesson("student-1", { ...LIVE_LESSON, title: "Old copy" } as never, FRESH_DOWNLOAD);
+    forgetChecks();
+    detail.mockRejectedValue(new ApiError(502, "Server"));
+    offlineDownloadStatus.mockRejectedValue(new ApiError(404, "Not Found"));
+    downloadLesson.mockResolvedValue({
+      detail: LIVE_LESSON,
+      sizeBytes: null,
+      includesMedia: false,
+      downloadId: "download-2",
+      expiresAt: "2099-01-01T00:00:00Z",
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.lesson?.title).toBe("Fractions Lesson 3");
+    expect(savedLesson("student-1", FIRST_LESSON_ID)?.downloadId).toBe(
+      "download-2",
+    );
+  });
+
+  it("is not opened offline when it was kept before safety v2", async () => {
+    signIn();
+    saveLesson("student-1", LIVE_LESSON as never);
+    detail.mockRejectedValue(new ApiError(0, "Network"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    expect(offlineDownloadStatus).not.toHaveBeenCalled();
+  });
+
+  it("is not opened offline once it is past its expiry", async () => {
+    signIn();
+    saveLesson("student-1", LIVE_LESSON as never, {
+      ...FRESH_DOWNLOAD,
+      expiresAt: "2020-01-01T00:00:00Z",
+    });
+    detail.mockRejectedValue(new ApiError(0, "Network"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+  });
+
+  it("is checked before an online open refreshes it, and a held one is deleted, not refreshed", async () => {
+    signIn();
+    saveLesson("student-1", { ...LIVE_LESSON, title: "Old title" } as never, FRESH_DOWNLOAD);
+    forgetChecks();
+    detail.mockResolvedValue(LIVE_LESSON);
+    offlineDownloadStatus.mockResolvedValue(status("safety_revoked"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    await waitFor(() =>
+      expect(savedLesson("student-1", FIRST_LESSON_ID)).toBeNull(),
+    );
+    // Played live, as any online open.
+    expect(result.current.fromShelf).toBe(false);
   });
 });

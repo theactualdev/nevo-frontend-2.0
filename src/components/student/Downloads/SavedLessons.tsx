@@ -15,11 +15,13 @@ import { getSession } from "@/lib/auth/session";
 import { downloadLesson, formatSize } from "@/lib/offline/lessonPackage";
 import {
   MAX_SAVED_LESSONS,
+  canOpenOffline,
   removeSavedLesson,
   saveLesson,
   savedLessons,
   type SavedLesson,
 } from "@/lib/offline/savedLessons";
+import { SHELF_CHANGED } from "@/lib/offline/shelfCheck";
 import { LessonExitProvider } from "@/components/student/Lesson/LessonExit";
 import { LessonRoute } from "@/components/student/Lesson/LessonRoute";
 import { TAB_PAGE, TAB_TITLE } from "@/components/student/Shell/TabPage";
@@ -55,6 +57,14 @@ import { BulkSaveButton } from "./BulkSaveButton";
  * NOT DRAWN: the frame has no way to open a lesson from here. The Open
  * control and the copy are ours (D43 signed them off; design confirmed on
  * 6 Oct the intro line is ours to change).
+ *
+ * SAVED MEANS IT CAN OPEN (safety v2, Teslim 18 Nov). A copy past its
+ * fourteen days, saved before safety v2, or not yet vouched for on this
+ * connection (`canOpenOffline`) is shown as not saved: the lesson with its
+ * save button. Saving it again online fetches a fresh package; offline, the
+ * save says to try again when connected - the "connect once" the contract
+ * asks for, in words this screen already had. The shelf check deletes and
+ * refreshes copies under this screen, which follows it (`SHELF_CHANGED`).
  */
 
 type RowState = "saving" | "idle";
@@ -96,19 +106,30 @@ export function SavedLessons() {
       });
   }, []);
 
+  /** The copies on the shelf that can open - see the docblock. */
+  const [openable, setOpenable] = useState<ReadonlySet<string>>(new Set());
   const reload = useCallback(() => {
-    setShelf(owner ? savedLessons(owner) : []);
+    const all = owner ? savedLessons(owner) : [];
+    setShelf(all);
+    setOpenable(
+      new Set(all.filter(canOpenOffline).map((s) => s.lessonId)),
+    );
     setShelfRead(true);
   }, [owner]);
   useEffect(() => {
     // Post-mount read of device storage, which the server cannot see.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     reload();
+    // The shelf check deletes, holds and refreshes copies under this screen.
+    window.addEventListener(SHELF_CHANGED, reload);
+    return () => window.removeEventListener(SHELF_CHANGED, reload);
   }, [reload]);
 
-  const kept = new Map(shelf.map((s) => [s.lessonId, s]));
+  const kept = new Map(
+    shelf.filter((s) => openable.has(s.lessonId)).map((s) => [s.lessonId, s]),
+  );
   // On the manifest's word, never assumed: see the docblock.
-  const textOnly = shelf.some((s) => s.includesMedia === false);
+  const textOnly = [...kept.values()].some((s) => s.includesMedia === false);
 
   /*
    * THE CHILD'S LESSONS, THEN WHAT THEY SAVED THAT THE LIST CANNOT SHOW. With
@@ -131,6 +152,8 @@ export function SavedLessons() {
       const result = saveLesson(owner, pkg.detail, {
         sizeBytes: pkg.sizeBytes,
         includesMedia: pkg.includesMedia,
+        downloadId: pkg.downloadId,
+        expiresAt: pkg.expiresAt,
       });
       if (result === "full") {
         setNotice(

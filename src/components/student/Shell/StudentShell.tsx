@@ -18,6 +18,8 @@ import { useSessionLapse } from "@/hooks/useSessionLapse";
 import { useSessionRefresh } from "@/hooks/useSessionRefresh";
 import { flushPendingProgress } from "@/lib/lessons/pendingProgress";
 import { flushPendingBaseline } from "@/lib/profiling/pendingBaseline";
+import { forgetChecks } from "@/lib/offline/savedLessons";
+import { checkShelf } from "@/lib/offline/shelfCheck";
 import { arrivedWithoutSession, getSession } from "@/lib/auth/session";
 import {
   WAITING_ROUTE,
@@ -125,6 +127,26 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     const flush = () => void flushPendingProgress();
     window.addEventListener("online", flush);
     return () => window.removeEventListener("online", flush);
+  }, []);
+  /*
+   * EVERY SAVED LESSON IS CHECKED ON EACH CONNECTION (safety v2, Teslim 18
+   * Nov): at sign-in, and whenever the connection comes back. A copy held for
+   * safety is deleted, an expired one downloaded afresh, and none is read
+   * before its check - see `lib/offline/shelfCheck`. A connection forgets the
+   * last one's checks: each speaks for one connection. `onLine` false is
+   * certain, so nothing is asked then; true proves nothing, and a request
+   * with no response changes nothing.
+   */
+  useEffect(() => {
+    const check = () => {
+      const owner = getSession()?.userId;
+      if (!owner || navigator.onLine === false) return;
+      forgetChecks();
+      void checkShelf(owner);
+    };
+    check();
+    window.addEventListener("online", check);
+    return () => window.removeEventListener("online", check);
   }, []);
   // The chrome calls the student by their own name, not the fixture's.
   const student = useDisplayName();

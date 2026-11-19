@@ -23,6 +23,13 @@ import { keepingKeys } from "./keepKeys";
  * ONE CHILD'S SHELF. Keyed by account, because the tablet is shared: a child
  * sees what they saved, never the last child's. It holds school content, not
  * anything about the child, and it never leaves the device.
+ *
+ * A COPY OPENS OFFLINE ONLY WHILE THE SERVER CAN STILL VOUCH FOR IT (safety
+ * v2, Teslim 9f4d763, 18 Nov). Each copy keeps the download it came from and
+ * that download's expiry, fourteen days from issue. It never opens after
+ * that, it never opens if it was kept without them (saved before safety v2),
+ * and on a connection it is read only once its status check says `current` -
+ * see `canOpenOffline` here and `shelfCheck.ts` for the check.
  */
 
 export interface SavedLesson {
@@ -39,12 +46,31 @@ export interface SavedLesson {
   sizeBytes?: number;
   /** The manifest's `includesMedia`. Absent when no manifest said. */
   includesMedia?: boolean;
+  /**
+   * The download this copy came from, for its status check (safety v2).
+   * Absent on a copy saved before it, which the server cannot vouch for.
+   */
+  downloadId?: string;
+  /** When the server said this copy stops opening offline. */
+  expiresAt?: string;
+  /**
+   * Why this copy will not open until it is downloaded afresh or checked
+   * `current` again. `"stale"`: the server said it expired, or did not know
+   * the download, and a fresh one has not landed. `"unchecked"`: a connection
+   * came and its check did not resolve - Teslim: "do not render cached content
+   * after the client detects a connection and the check remains unresolved".
+   */
+  hold?: "stale" | "unchecked";
 }
 
-/** What the manifest said about the copy being kept. */
+/** What the download said about the copy being kept. */
 export interface SavedPackage {
   sizeBytes?: number | null;
   includesMedia?: boolean;
+  /** The download's id, for the status check. */
+  downloadId?: string;
+  /** The manifest's `expiresAt`. */
+  expiresAt?: string | null;
 }
 
 /**
@@ -105,6 +131,82 @@ function withoutChoices(detail: LessonDetailResponse): LessonDetailResponse {
 /** A shelf, not an archive - device storage is small and shared. */
 export const MAX_SAVED_LESSONS = 10;
 
+/**
+ * Whether a copy may open without a connection (safety v2): it came from a
+ * download the server can check, nothing is holding it, and it has not passed
+ * its expiry by `trustedNow`. A copy that may not open is not presented as
+ * saved anywhere - it is not one the child can use.
+ */
+export function canOpenOffline(saved: SavedLesson): boolean {
+  if (!saved.downloadId || !saved.expiresAt || saved.hold) return false;
+  const expires = Date.parse(saved.expiresAt);
+  return !Number.isNaN(expires) && trustedNow() < expires;
+}
+
+/**
+ * THE LATEST TIME THIS DEVICE HAS SEEN, so a clock wound back cannot reopen a
+ * copy that has expired (Teslim, acceptance step 4: "Test clock rollback too
+ * and record the limitation of device-local time").
+ *
+ * It only moves forward from the device's own reading, and a status check
+ * sets it to the server's clock (`noteServerTime`), which outranks the device.
+ *
+ * THE LIMITATION, RECORDED: offline, time is the device's. A clock wound back
+ * before this device has ever seen a later time - before any status check or
+ * any later reading - is not caught, and a copy can open past its real expiry
+ * until the next connection checks it. A clock set ahead does the safe wrong
+ * thing: copies look expired early, and are downloaded afresh on connection.
+ *
+ * Device-wide, not per child: it is a time, not anything about a child.
+ */
+const CLOCK_KEY = "nevo.offline.clock";
+
+export function trustedNow(): number {
+  const now = Date.now();
+  let seen = 0;
+  try {
+    seen = Number(window.localStorage.getItem(CLOCK_KEY)) || 0;
+  } catch {
+    // Unreadable is unseen: the device's own reading stands.
+  }
+  if (now <= seen) return seen;
+  try {
+    window.localStorage.setItem(CLOCK_KEY, String(now));
+  } catch {
+    // Not kept, so the next reading is the device's again.
+  }
+  return now;
+}
+
+/** The server's clock, from a status check: it outranks the device's. */
+export function noteServerTime(at: string): void {
+  const server = Date.parse(at);
+  if (Number.isNaN(server)) return;
+  try {
+    window.localStorage.setItem(CLOCK_KEY, String(server));
+  } catch {
+    // Not kept: the device's own reading stands.
+  }
+}
+
+/**
+ * THE COPIES CHECKED `current` ON THIS CONNECTION, which may be read until the
+ * connection changes (`forgetChecks`). Memory, not storage: a check speaks for
+ * one connection, and the next one asks again. A copy downloaded on this
+ * connection counts - it is what the server has just issued.
+ */
+const checked = new Set<string>();
+const checkKey = (userId: string, lessonId: string) => `${userId}:${lessonId}`;
+
+export function isChecked(userId: string, lessonId: string): boolean {
+  return checked.has(checkKey(userId, lessonId));
+}
+
+/** A new connection: every copy is checked again before it is read. */
+export function forgetChecks(): void {
+  checked.clear();
+}
+
 const KEY_PREFIX = "nevo.offline.lessons";
 const keyFor = (userId: string) => `${KEY_PREFIX}.${userId}`;
 
@@ -160,6 +262,10 @@ export type SaveResult = "saved" | "full" | "refused";
  * Keep a lesson on the device. "full" when the shelf holds its maximum -
  * never silently dropping an older one the child chose to keep - and
  * "refused" when the device would not store it.
+ *
+ * A COPY THAT CAN NO LONGER OPEN MAKES ROOM. It is not shown as saved
+ * (`canOpenOffline`), so a child could not remove it to free its place; when
+ * the shelf is full, the oldest of those goes first.
  */
 export function saveLesson(
   userId: string,
@@ -167,8 +273,14 @@ export function saveLesson(
   pkg?: SavedPackage,
 ): SaveResult {
   const shelf = read(userId);
-  if (!shelf[detail.id] && Object.keys(shelf).length >= MAX_SAVED_LESSONS) {
-    return "full";
+  if (!shelf[detail.id]) {
+    const dead = Object.values(shelf)
+      .filter((s) => !canOpenOffline(s))
+      .sort((a, b) => a.savedAt.localeCompare(b.savedAt));
+    while (Object.keys(shelf).length >= MAX_SAVED_LESSONS && dead.length > 0) {
+      delete shelf[dead.shift()!.lessonId];
+    }
+    if (Object.keys(shelf).length >= MAX_SAVED_LESSONS) return "full";
   }
   shelf[detail.id] = {
     lessonId: detail.id,
@@ -179,8 +291,48 @@ export function saveLesson(
     ...(typeof pkg?.includesMedia === "boolean"
       ? { includesMedia: pkg.includesMedia }
       : {}),
+    ...(pkg?.downloadId ? { downloadId: pkg.downloadId } : {}),
+    ...(pkg?.expiresAt ? { expiresAt: pkg.expiresAt } : {}),
   };
-  return write(userId, shelf) ? "saved" : "refused";
+  if (!write(userId, shelf)) return "refused";
+  // Just issued by the server: current on this connection.
+  if (pkg?.downloadId) checked.add(checkKey(userId, detail.id));
+  return "saved";
+}
+
+/**
+ * Hold a copy back (see `SavedLesson.hold`). It stops counting as checked,
+ * and stays held until a fresh download or a `current` check.
+ */
+export function holdSavedLesson(
+  userId: string,
+  lessonId: string,
+  hold: NonNullable<SavedLesson["hold"]>,
+): void {
+  checked.delete(checkKey(userId, lessonId));
+  const shelf = read(userId);
+  const held = shelf[lessonId];
+  if (!held) return;
+  shelf[lessonId] = { ...held, hold };
+  write(userId, shelf);
+}
+
+/**
+ * The server says this copy is `current`: nothing holds it, its expiry is
+ * the server's, and it may be read on this connection.
+ */
+export function confirmSavedLesson(
+  userId: string,
+  lessonId: string,
+  expiresAt: string,
+): void {
+  const shelf = read(userId);
+  const held = shelf[lessonId];
+  if (!held) return;
+  const kept: SavedLesson = { ...held, expiresAt };
+  delete kept.hold;
+  shelf[lessonId] = kept;
+  if (write(userId, shelf)) checked.add(checkKey(userId, lessonId));
 }
 
 /**
@@ -194,6 +346,10 @@ export function saveLesson(
  * left out are kept from the copy it replaces, for each question that has
  * not changed since - see `keepingKeys`. Without that, one online open took
  * every check out of the lesson offline.
+ *
+ * Only for a copy checked `current` on this connection (safety v2): it reads
+ * the copy to carry its keys, and nothing cached is read before the check.
+ * `useStudentLesson` calls it only after `checkSavedLesson`.
  */
 export function refreshSavedLesson(
   userId: string,
@@ -211,6 +367,7 @@ export function refreshSavedLesson(
 }
 
 export function removeSavedLesson(userId: string, lessonId: string): void {
+  checked.delete(checkKey(userId, lessonId));
   const shelf = read(userId);
   if (!shelf[lessonId]) return;
   delete shelf[lessonId];
