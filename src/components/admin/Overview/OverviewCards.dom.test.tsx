@@ -87,6 +87,15 @@ vi.mock("@/lib/api/students", () => ({
 vi.mock("@/lib/api/intelligence", () => ({
   intelligenceApi: { allFlags: () => Promise.resolve({ flags: [], complete: true }) },
 }));
+// D26's figures, for the Overview's quiet line into them (backlog 48).
+const transformation = vi.fn();
+vi.mock("@/lib/api/analytics", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/analytics")>();
+  return {
+    ...actual,
+    analyticsApi: { ...actual.analyticsApi, getSchoolTransformation: (id: string) => transformation(id) },
+  };
+});
 
 const AUDIT = {
   schoolId: "sch1",
@@ -109,6 +118,18 @@ const NARRATIVE = {
 
 beforeEach(() => {
   academicConfig = {};
+  transformation.mockReset();
+  transformation.mockResolvedValue({
+    scope: "school",
+    scopeId: "sch1",
+    selfRegulation: { value: 78, previous: 75, trend: "up", learnerCount: 240 },
+    calibration: { reason: "Not measurable", needed: "A self-assessment" },
+    flexibility: null,
+    efficiency: null,
+    learnerCount: 240,
+    reportingFloor: 5,
+    suppressed: false,
+  });
   audit.mockReset();
   adaptationLog.mockReset();
   narrative.mockReset();
@@ -450,5 +471,34 @@ describe("the teachers tile", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/Teachers/));
     await waitFor(() => expect(teacherList).toHaveBeenCalled());
     expect(visibleText(container)).not.toMatch(/with a Nevo account|set up so far/);
+  });
+});
+
+// D04's quiet line into School transformation (backlog 48).
+describe("the School transformation line", () => {
+  it("reads the school's own figures and says one, under the compliance row", async () => {
+    const { container } = render(<OverviewView />);
+
+    await waitFor(() => expect(container.querySelector("[data-transformation-line]")).not.toBeNull());
+    const line = container.querySelector("[data-transformation-line]")!;
+    await waitFor(() =>
+      expect(line.textContent).toContain(
+        "Lessons seen through 78%, better than the four weeks before (75%).",
+      ),
+    );
+    expect(transformation).toHaveBeenCalledWith("sch1");
+    expect(line).toHaveAttribute("href", "/admin/reports/transformation");
+    const compliance = container.querySelector("[data-compliance-row]")!;
+    expect(compliance.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("costs nothing else on the page when its read fails", async () => {
+    transformation.mockRejectedValue(new Error("500"));
+    const { container } = render(<OverviewView />);
+
+    await waitFor(() => expect(container.querySelector("[data-transformation-line]")).not.toBeNull());
+    expect(visibleText(container)).not.toMatch(/Lessons seen through/);
+    expect(visibleText(container)).toMatch(/Students enrolled/);
+    expect(visibleText(container)).not.toMatch(/couldn't load your school's overview/i);
   });
 });
