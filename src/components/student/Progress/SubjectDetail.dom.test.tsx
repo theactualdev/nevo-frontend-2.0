@@ -430,6 +430,38 @@ describe("the subject's lesson list", () => {
       ).toBeTruthy(),
     );
   });
+
+  /*
+   * BACKLOG 34: 29 draws the early line under the board's empty-progress
+   * figure - the Progress tab's own - not alone.
+   */
+  it("draws the line under 29's empty-progress figure", async () => {
+    signIn();
+    hooks.useStudentProgress.mockReturnValue({
+      subjects: [{ slug: "Mathematics", name: "Mathematics", concepts: [] }],
+      lessons: [],
+      reflection: null,
+      highlights: [],
+      loading: false,
+      failed: false,
+      live: true,
+    });
+
+    const { container } = render(
+      <SubjectDetail subject={null} slug="Mathematics" />,
+    );
+
+    await waitFor(() =>
+      expect(container.querySelector("[data-subject-early]")).not.toBeNull(),
+    );
+    const early = container.querySelector("[data-subject-early]")!;
+    const art = early.querySelector("[data-empty-art] img");
+    expect(art?.getAttribute("src")).toContain("empty-progress");
+    expect(art).toHaveAttribute("alt", "");
+    // The figure first, then the line under it.
+    expect(early.firstElementChild).toHaveAttribute("data-empty-art");
+    expect(early.lastElementChild).toHaveTextContent(/just getting started/);
+  });
 });
 
 /**
