@@ -61,3 +61,22 @@ describe("Share feedback in admin Settings", () => {
     expect(screen.queryByRole("link", { name: "Share feedback" })).toBeNull();
   });
 });
+
+/**
+ * BACKLOG 103: D12's Feedback section - a card row, "Share feedback" with
+ * "Tell us what's working, or request a feature" under it - where a sentence
+ * ("Something not working, or missing?") was.
+ */
+describe("D12's Feedback row", () => {
+  it("is a section with the frame's row, named Share feedback and described by its line", () => {
+    permissions.mockReturnValue(scopes(["oversight"]));
+    render(<SettingsView />);
+
+    expect(screen.getByRole("heading", { name: "Feedback" })).toBeInTheDocument();
+    const row = screen.getByRole("button", { name: "Share feedback" });
+    expect(row).toHaveAccessibleDescription(
+      "Tell us what's working, or request a feature",
+    );
+    expect(screen.queryByText(/Something not working, or missing\?/)).toBeNull();
+  });
+});
