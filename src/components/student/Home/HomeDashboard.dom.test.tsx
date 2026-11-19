@@ -1302,22 +1302,47 @@ describe("a due review on Home (SCRUM-75)", () => {
   const settled = async (container: HTMLElement) =>
     waitFor(() => expect(container.querySelector(".animate-pulse")).toBeNull());
 
-  it("shows the review the engine puts first, as a way into its review session", async () => {
+  it("shows the review the engine puts first as 19b's card, a way into its review session", async () => {
     signIn();
     live(work());
 
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    const due = screen.getByRole("region", { name: "Ready for another look" });
-    const link = within(due).getByRole("link", {
-      name: "Take another look at Osmosis",
-    });
-    expect(link).toHaveTextContent("Osmosis");
-    expect(link).toHaveAttribute(
+    const due = screen.getByRole("region", { name: "A quick look back" });
+    expect(within(due).getByText("Review")).toBeInTheDocument();
+    // Named, never a bare count: the concept the engine sent.
+    expect(within(due).getByRole("listitem")).toHaveTextContent("Osmosis");
+    const start = within(due).getByRole("link", { name: "Start a review" });
+    expect(start).toHaveAttribute(
       "href",
       "/student/lessons/les-cells/review-session?concept=con-osmosis",
     );
+    // A card, not a chip (Lydia, 31 Oct Q1).
+    expect(screen.queryByText("Ready for another look")).toBeNull();
+  });
+
+  it("holds 19b's sentence, which claims more than the one dated-nowhere concept sent", async () => {
+    signIn();
+    live(work());
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.queryByText(/A few things from last week/)).toBeNull();
+    expect(screen.queryByText(/what makes them stick/)).toBeNull();
+  });
+
+  it("draws no empty card when nothing is due: the list is the page (Lydia, 2 Nov Q7)", async () => {
+    signIn();
+    live(null);
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.queryByText("Nothing to look back on just yet")).toBeNull();
+    expect(screen.queryByText(/Nothing to do for now/)).toBeNull();
+    expect(screen.queryByRole("region", { name: "A quick look back" })).toBeNull();
   });
 
   it("puts it before Today's lessons", async () => {
@@ -1327,7 +1352,7 @@ describe("a due review on Home (SCRUM-75)", () => {
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    const due = screen.getByRole("region", { name: "Ready for another look" });
+    const due = screen.getByRole("region", { name: "A quick look back" });
     const today = screen.getByRole("region", { name: "Today's lessons" });
     expect(
       due.compareDocumentPosition(today) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -1353,7 +1378,7 @@ describe("a due review on Home (SCRUM-75)", () => {
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    expect(screen.queryByText("Ready for another look")).toBeNull();
+    expect(screen.queryByText("A quick look back")).toBeNull();
     expect(screen.queryByText("Osmosis")).toBeNull();
   });
 
@@ -1364,7 +1389,7 @@ describe("a due review on Home (SCRUM-75)", () => {
       const { container, unmount } = render(<HomeDashboard />);
       await settled(container);
 
-      expect(screen.queryByText("Ready for another look")).toBeNull();
+      expect(screen.queryByText("A quick look back")).toBeNull();
       unmount();
     }
   });
@@ -1381,7 +1406,7 @@ describe("a due review on Home (SCRUM-75)", () => {
       expect(container.querySelector(`[${SAMPLE_ATTR}]`)).not.toBeNull(),
     );
 
-    expect(screen.queryByText("Ready for another look")).toBeNull();
+    expect(screen.queryByText("A quick look back")).toBeNull();
   });
 });
 
