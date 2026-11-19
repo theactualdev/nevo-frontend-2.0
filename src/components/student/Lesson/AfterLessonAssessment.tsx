@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ClipboardCheck } from "lucide-react";
+import { Check, ChevronLeft, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/shared";
 import type { ResultState } from "@/lib/api/lessons";
 import type { CheckOutcome } from "@/lib/lessons/checkOutcome";
@@ -51,6 +51,21 @@ const DEFAULT_RECOVERY =
  * AND BACK IN WHERE THEY LEFT (B49). `onLeave` is told the place in the list
  * - the next question to ask - and `resumeAt` reopens there, past the intro,
  * which a child who has already started does not need again.
+ *
+ * A BREAK AND A TAP OUT ON EVERY QUESTION, NOT OPTIONAL (Lydia, 16 Nov). She
+ * ruled holding on a dropped connection right "because the child is held on
+ * the answer rather than trapped in the lesson" - Break, tap out and Exit
+ * lesson staying open is what makes it acceptable - and this check had only
+ * the exit. So, as on a quick check:
+ * - "Take a break" (`onTakeBreak`), across from the way out, in the quick
+ *   check's own words and place (Lesson Check frame, `breakBtn`): the child's
+ *   own break, and back to this same question after it.
+ * - A tap out (`onTapOut`), the player's own Previous chevron beside Next:
+ *   back to the lesson's last part, the place in the check kept - told the
+ *   next question to ask, as `onLeave` is - and the check asked afresh from
+ *   there when the child moves on again. Nothing is passed by it. No frame
+ *   draws a tap out on a full-screen check; the chevron is the player's.
+ * Both stay pressable while a mark is on its way (SCRUM-315).
  */
 export function AfterLessonAssessment({
   assessment,
@@ -68,9 +83,18 @@ export function AfterLessonAssessment({
   outcome,
   reading = false,
   onAudioBusy,
+  onTakeBreak,
+  onTapOut,
 }: {
   assessment: Assessment;
   onFinish: () => void;
+  /** "Take a break" on every question: the child's own (Lydia, 16 Nov). */
+  onTakeBreak?: () => void;
+  /**
+   * Out to the lesson's last part, the place kept (Lydia, 16 Nov): told the
+   * next question to ask, as `onLeave` is.
+   */
+  onTapOut?: (checkPosition: number) => void;
   /**
    * Leave the check part way (D36). Absent, no exit is drawn. Given the next
    * question to ask once the questions have begun; nothing from the intro,
@@ -244,18 +268,33 @@ export function AfterLessonAssessment({
       {/* D36: the player's exit, where the player draws it. An answer
           already confirmed is behind the child, so the place to come back
           to is the question after it. */}
-      {onLeave && (
-        <div className="flex shrink-0 px-3.5 pt-2.5">
-          <LeaveButton
-            onLeave={() => onLeave(revealed ? qIndex + 1 : qIndex)}
-          />
+      {(onLeave || onTakeBreak) && (
+        <div className="flex shrink-0 items-center justify-between gap-3 px-3.5 pt-2.5">
+          {onLeave ? (
+            <LeaveButton
+              onLeave={() => onLeave(revealed ? qIndex + 1 : qIndex)}
+            />
+          ) : (
+            <span />
+          )}
+          {/* The quick check's own break, in its words and place (Lesson
+              Check frame), across from the way out (Lydia, 16 Nov). */}
+          {onTakeBreak && (
+            <button
+              type="button"
+              onClick={onTakeBreak}
+              className="shrink-0 cursor-pointer rounded-md px-2 py-[11px] text-[13px] font-medium text-nevo-navy outline-none focus-visible:ring-2 focus-visible:ring-nevo-navy motion-safe:transition-transform motion-safe:duration-[120ms] motion-safe:active:scale-[0.98]"
+            >
+              Take a break
+            </button>
+          )}
         </div>
       )}
       {/* Calm progress — position, never a score */}
       <div
         className={cn(
           "shrink-0 px-6 pt-5 sm:px-8 lg:px-10",
-          onLeave && "pt-1",
+          (onLeave || onTakeBreak) && "pt-1",
         )}
       >
         <div className="mx-auto w-full max-w-[600px] lg:max-w-[640px]">
@@ -380,13 +419,27 @@ export function AfterLessonAssessment({
             onSentAgain={() => setHold((h) => h + 1)}
             className="mb-3"
           />
-          <Button
-            className="w-full"
-            disabled={!selected}
-            onClick={revealed ? advance : confirm}
-          >
-            {revealed ? "Next question" : "Next"}
-          </Button>
+          <div className="flex items-center gap-3">
+            {/* The tap out (Lydia, 16 Nov): the player's own Previous, back to
+                the lesson's last part with the place kept. */}
+            {onTapOut && (
+              <button
+                type="button"
+                aria-label="Previous"
+                onClick={() => onTapOut(revealed ? qIndex + 1 : qIndex)}
+                className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-full text-nevo-navy transition-colors hover:bg-nevo-navy/[0.06] active:bg-nevo-navy/[0.12]"
+              >
+                <ChevronLeft className="size-6" strokeWidth={2} />
+              </button>
+            )}
+            <Button
+              className="w-full"
+              disabled={!selected}
+              onClick={revealed ? advance : confirm}
+            >
+              {revealed ? "Next question" : "Next"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
