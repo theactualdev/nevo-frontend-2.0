@@ -440,3 +440,61 @@ describe("how long data is kept", () => {
     expect(container.textContent).not.toMatch(/school decides|data agreement|For as long as/);
   });
 });
+
+/**
+ * D01c NAMES THE ADDRESS (backlog 113, 115), held for Lydia. The promise
+ * around it - "within 5 working days", "within 48 hours" - is counsel's and
+ * unchanged.
+ */
+describe("the confirmations name the address", () => {
+  // Through the card's toggle where it opens on a tap (backlog 114).
+  const sendObjection = () => {
+    const toggle = screen.queryByRole("button", { name: "Object to Processing" });
+    if (toggle) fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole("button", { name: "Object to processing" }));
+  };
+
+  it("names it when the data is requested", async () => {
+    exerciseRight.mockResolvedValue(receipt({}));
+    render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Request Amara[’']s data/i }));
+
+    expect(
+      await screen.findByText(
+        "Request submitted. You will receive Amara’s data at ada.okoro@example.com within 5 working days.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("names it after a withdrawal too, where the right survives", async () => {
+    exerciseRight.mockResolvedValue(receipt({}));
+    render(<ParentDataManagement token={TOKEN} invitation={inv({ status: "withdrawn" })} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Request Amara[’']s data/i }));
+
+    expect(await screen.findByText(/at ada\.okoro@example\.com within 5 working days\./)).toBeInTheDocument();
+  });
+
+  it("names it when an objection is sent", async () => {
+    exerciseRight.mockResolvedValue(receipt({ reasonRecorded: false }));
+    render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
+
+    sendObjection();
+
+    expect(
+      await screen.findByText("Objection submitted. We will respond within 48 hours to ada.okoro@example.com."),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the school's address unnamed when the page has none", async () => {
+    exerciseRight.mockResolvedValue(receipt({ reasonRecorded: false }));
+    render(<ParentDataManagement token={TOKEN} invitation={inv({ parentContact: "" })} />);
+
+    sendObjection();
+
+    expect(
+      await screen.findByText(/to the email address your school has for you\.$/),
+    ).toBeInTheDocument();
+  });
+});

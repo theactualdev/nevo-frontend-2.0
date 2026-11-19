@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { TryAgain } from "./TryAgain";
+import { usersApi } from "@/lib/api/users";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import {
   parentApi,
@@ -32,10 +33,14 @@ type Read =
   | { kind: "loading" }
   | { kind: "failed" }
   | { kind: "none" }
-  | { kind: "ready"; child: ParentChild; consents: ChildConsents | null };
+  | { kind: "ready"; child: ParentChild; consents: ChildConsents | null; email: string | null };
 
 /** The page's facts, from a signed-in parent's reads. */
-export function subjectFor(child: ParentChild, consents: ChildConsents | null): DataSubject {
+export function subjectFor(
+  child: ParentChild,
+  consents: ChildConsents | null,
+  email: string | null = null,
+): DataSubject {
   const held = consents?.consents ?? [];
   // Suspended on arrival, as on the link: a consent withdrawn that stops access.
   const withdrawn = held.find((c) => c.status === "withdrawn" && c.stopsAccess);
@@ -46,6 +51,7 @@ export function subjectFor(child: ParentChild, consents: ChildConsents | null): 
     schoolPhone: null,
     schoolEmail: null,
     parentName: null,
+    parentContact: email,
     status: withdrawn ? "withdrawn" : "confirmed",
     decidedAt: withdrawn?.decidedAt ?? null,
     // SCRUM-306: withdrawing takes every consent held, and the server refuses
@@ -69,8 +75,16 @@ export function ParentMyData() {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([parentApi.myChildren(), parentApi.myConsents()])
-      .then(([children, consents]) => {
+    Promise.all([
+      parentApi.myChildren(),
+      parentApi.myConsents(),
+      // The account's own address. A failed read costs only the address.
+      usersApi.me().then(
+        (me) => me.email?.trim() || null,
+        () => null,
+      ),
+    ])
+      .then(([children, consents, email]) => {
         if (!alive) return;
         const child = children.find((c) => c.studentId === wanted) ?? children[0];
         if (!child) {
@@ -81,6 +95,7 @@ export function ParentMyData() {
           kind: "ready",
           child,
           consents: consents.find((c) => c.studentId === child.studentId) ?? null,
+          email,
         });
       })
       .catch(() => {
@@ -159,7 +174,7 @@ export function ParentMyData() {
 
   return (
     <ParentDataManagement
-      invitation={subjectFor(read.child, read.consents)}
+      invitation={subjectFor(read.child, read.consents, read.email)}
       act={act}
       restore={restore}
       notice={notice}

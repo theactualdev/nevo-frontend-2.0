@@ -117,6 +117,15 @@ export type DataSubject = Pick<
   /** Named only on a tokenised link, which can be forwarded. */
   parentName?: string | null;
   /**
+   * The address the school holds for this parent: the invitation's
+   * `parentContact` on a link (email only since SCRUM-162), the account's
+   * own email signed in - the one D02 bound to the school's contact. The
+   * request and the objection are recorded for the school to answer
+   * (`parent_rights.py`); Nevo itself sends nothing. Absent, the page keeps
+   * "the email address your school has for you".
+   */
+  parentContact?: string | null;
+  /**
    * SCRUM-306: whether this parent may withdraw. Signed in, it is the
    * server's `canWithdraw`, and when false the Withdraw Consent card is
    * ABSENT - the ruling says absent, not present and refused. A tokenised
@@ -270,6 +279,12 @@ export function ParentDataManagement({
   // renders "your child's data on Nevo" with a lowercase y.
   const child = invitation.studentFirstName;
   const childLead = sentenceCase(child);
+  /*
+   * D01c NAMES THE ADDRESS (backlog 113, 115): "...at mrs.eze@email.com
+   * within 5 working days." HELD for Lydia: it adds to counsel's promise
+   * (14 Oct, L6). Every other word of both confirmations is unchanged.
+   */
+  const contact = invitation.parentContact?.trim() || null;
   // Suspended on ARRIVAL as well as after the act. A parent who withdrew last
   // week must not be shown the withdrawal actions again.
   const suspended =
@@ -385,8 +400,9 @@ export function ParentDataManagement({
           </p>
           {outcome?.right === "request_data" && phase === "done" ? (
             <p className={NOTE}>
-              Request submitted. You will receive {child}&rsquo;s data within 5
-              working days.
+              {contact
+                ? `Request submitted. You will receive ${child}’s data at ${contact} within 5 working days.`
+                : `Request submitted. You will receive ${child}’s data within 5 working days.`}
             </p>
           ) : (
             <button
@@ -485,8 +501,9 @@ export function ParentDataManagement({
         </p>
         {outcome?.right === "request_data" && phase === "done" ? (
           <p className={NOTE}>
-            Request submitted. You will receive {child}&rsquo;s data within 5
-            working days.
+            {contact
+              ? `Request submitted. You will receive ${child}’s data at ${contact} within 5 working days.`
+              : `Request submitted. You will receive ${child}’s data within 5 working days.`}
           </p>
         ) : (
           <button
@@ -507,8 +524,9 @@ export function ParentDataManagement({
         </p>
         {outcome?.right === "object" && phase === "done" ? (
           <p className={NOTE}>
-            Objection submitted. We will respond within 48 hours to the email
-            address your school has for you.
+            {contact
+              ? `Objection submitted. We will respond within 48 hours to ${contact}.`
+              : "Objection submitted. We will respond within 48 hours to the email address your school has for you."}
             {/* The contract answers "did my words go anywhere". If it says no,
                 say no - promising a recorded concern that was dropped is the
                 exact failure this textarea was withheld for. */}

@@ -20,6 +20,8 @@ const { myChildren, myConsents, myWithdraw, myRestore, myObjection, myDataReques
 vi.mock("@/lib/api/parent", () => ({
   parentApi: { myChildren, myConsents, myWithdraw, myRestore, myObjection, myDataRequest, exerciseRight },
 }));
+const { me } = vi.hoisted(() => ({ me: vi.fn() }));
+vi.mock("@/lib/api/users", () => ({ usersApi: { me } }));
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(search.value),
 }));
@@ -63,6 +65,7 @@ const outcome = (studentId: string) => ({
 beforeEach(() => {
   for (const f of [myChildren, myConsents, myWithdraw, myRestore, myObjection, myDataRequest, exerciseRight]) f.mockReset();
   search.value = "";
+  me.mockReset().mockResolvedValue({ email: null });
   myChildren.mockResolvedValue([AMARA, TUNDE]);
   myConsents.mockResolvedValue([consents("s-1"), consents("s-2")]);
   myWithdraw.mockImplementation(async (id: string) => outcome(id));
@@ -329,5 +332,26 @@ describe("restoring from the account (SCRUM-321)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Restore consent" }));
     expect(await screen.findByText(/Nothing has changed/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Restore consent" })).toBeEnabled();
+  });
+});
+
+// Signed in, the address is the account's own (backlog 113), held for Lydia.
+describe("the signed-in confirmations name the address", () => {
+  it("names the account's address", async () => {
+    me.mockResolvedValue({ email: "ada.okoro@gmail.com" });
+    render(<ParentMyData />);
+    fireEvent.click(await screen.findByRole("button", { name: /Request Amara[’']s data/i }));
+
+    expect(await screen.findByText(/at ada\.okoro@gmail\.com within 5 working days\./)).toBeInTheDocument();
+  });
+
+  it("still opens the page when the account read fails, without an address", async () => {
+    me.mockRejectedValue(new Error("down"));
+    render(<ParentMyData />);
+    fireEvent.click(await screen.findByRole("button", { name: /Request Amara[’']s data/i }));
+
+    expect(
+      await screen.findByText("Request submitted. You will receive Amara’s data within 5 working days."),
+    ).toBeInTheDocument();
   });
 });
