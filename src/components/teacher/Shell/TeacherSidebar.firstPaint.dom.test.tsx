@@ -106,3 +106,18 @@ describe("once the client has measured", () => {
     expect(getByText("Home").className).not.toMatch(/(^| )hidden( |$)/);
   });
 });
+
+/**
+ * SCRUM-347: the effect asks the question the `xl:` classes ask, in their unit.
+ * Tailwind 4's `xl` is `80rem`; asked as `1280px`, a browser with larger text
+ * drew the wide rail beside a page still laid out for a tablet.
+ */
+describe("the width the rail widens at", () => {
+  it("is the xl breakpoint, in rem", () => {
+    const mq = atWidth(true);
+    render(<TeacherSidebar />);
+
+    expect(mq).toHaveBeenCalledWith("(min-width: 80rem)");
+    expect(mq).not.toHaveBeenCalledWith("(min-width: 1280px)");
+  });
+});
