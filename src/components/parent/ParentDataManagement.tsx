@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import {
   parentApi,
@@ -195,10 +195,6 @@ export function ParentDataManagement({
    * words inside it are unchanged - they are request wording, counsel's.
    */
   const [objecting, setObjecting] = useState(false);
-  const concernRef = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    if (objecting) concernRef.current?.focus();
-  }, [objecting]);
   /**
    * The server said this consent is another guardian's to withdraw (403,
    * SCRUM-306) - its own words, or its plainest. Trying again can't work, so
@@ -566,7 +562,8 @@ export function ParentDataManagement({
               </span>
             </label>
             <textarea
-              ref={concernRef}
+              /* Opened by the parent's own tap, so the box takes the focus. */
+              autoFocus
               id="objection-reason"
               value={reason}
               maxLength={2000}
