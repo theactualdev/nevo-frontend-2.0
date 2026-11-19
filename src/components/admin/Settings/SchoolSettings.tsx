@@ -781,7 +781,14 @@ export function SchoolSettings({
           several classes at once.
         </p>
 
-        <SaveRow phase={taxonomy} onSave={saveTaxonomy} dirty={taxonomyDirty} />
+        {/* SCRUM-99, D12.4: "plus a line noting the change is now live on
+            every screen" - the labels are read through one lookup. */}
+        <SaveRow
+          phase={taxonomy}
+          onSave={saveTaxonomy}
+          dirty={taxonomyDirty}
+          savedNote="Now live on every screen."
+        />
       </SettingsSection>
 
       {/* ---------------------------------------------------------- PROMOTION */}

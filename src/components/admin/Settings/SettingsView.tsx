@@ -7,6 +7,7 @@ import { FeedbackPanel } from "@/components/teacher/Shell/FeedbackPanel";
 import { usePermissions, useSetupGate } from "@/hooks";
 import { PERMISSION_SCOPES } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
+import { CheckIcon } from "../Roster/primitives";
 import { AccountSettings } from "./AccountSettings";
 import { SchoolSettings } from "./SchoolSettings";
 
@@ -214,12 +215,20 @@ export function NotBuiltNote({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Save button plus its quiet confirmation. */
+/**
+ * Save button plus its quiet confirmation - D12's per-section pattern
+ * (backlog 68): a spinner while it saves, then the check and "Saved just now".
+ *
+ * D12 then settles on "Last saved 3 days ago". Neither the school's record nor
+ * the admin's carries when it was last saved (no `updatedAt`), so that line
+ * is absent rather than guessed (rule 5).
+ */
 export function SaveRow({
   phase,
   onSave,
   disabled,
-  savedLabel = "Saved",
+  savedLabel = "Saved just now",
+  savedNote,
   failureNote,
   dirty = false,
 }: {
@@ -227,6 +236,11 @@ export function SaveRow({
   onSave: () => void;
   disabled?: boolean;
   savedLabel?: string;
+  /**
+   * What the save changed beyond this section, said once it has landed -
+   * the taxonomy's "now live on every screen" (SCRUM-99, D12.4).
+   */
+  savedNote?: string;
   /**
    * Something in this section differs from what is saved. D12.1: "A quiet
    * inline line by the section's Save, not a browser dialog."
@@ -257,7 +271,17 @@ export function SaveRow({
         disabled={disabled || writesPaused || phase === "saving"}
         className="cursor-pointer rounded-[10px] bg-nevo-navy px-5 py-3 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:brightness-100"
       >
-        {phase === "saving" ? "Saving…" : "Save changes"}
+        {phase === "saving" ? (
+          <span className="inline-flex items-center gap-2">
+            <span
+              aria-hidden
+              className="size-3.5 rounded-full border-2 border-nevo-cream/35 border-t-nevo-cream motion-safe:animate-spin"
+            />
+            Saving…
+          </span>
+        ) : (
+          "Save changes"
+        )}
       </button>
       {writesPaused && note ? (
         <span className="text-[13px] text-nevo-near-black/55">{note}</span>
@@ -268,8 +292,17 @@ export function SaveRow({
         </span>
       ) : null}
       {phase === "saved" ? (
-        <span className="text-[13px] font-semibold text-nevo-navy motion-safe:animate-nevo-reveal">
+        <span role="status" className="inline-flex items-center gap-2 text-[13.5px] text-nevo-near-black/55">
+          <span
+            aria-hidden
+            className="flex size-[22px] flex-none items-center justify-center rounded-full bg-nevo-navy text-nevo-cream motion-safe:animate-nevo-pop"
+          >
+            <CheckIcon size={12} />
+          </span>
           {savedLabel}
+          {/* A space a screen reader hears; the gap draws it on screen. */}
+          {savedNote ? " " : null}
+          {savedNote ? <span className="text-nevo-near-black/62">{savedNote}</span> : null}
         </span>
       ) : null}
       {phase === "failed" ? (
