@@ -466,14 +466,14 @@ const CALC_ROWS = [
 ];
 
 const CALC_KEY =
-  "flex h-[var(--calc-key,56px)] min-w-0 flex-1 cursor-pointer items-center justify-center rounded-lg text-nevo-near-black select-none sm:h-[var(--calc-key,64px)] lg:h-[var(--calc-key,62px)]";
+  "flex h-[var(--calc-key,56px)] min-w-0 flex-1 cursor-pointer items-center justify-center rounded-lg text-nevo-near-black select-none sm:h-[var(--calc-key,64px)] xl:h-[var(--calc-key,62px)]";
 const CALC_DIGIT = cn(
   CALC_KEY,
-  "bg-nevo-cream text-[24px] font-normal shadow-[0_1px_1px_rgba(43,43,47,0.28)] sm:text-[28px] lg:text-[27px]",
+  "bg-nevo-cream text-[24px] font-normal shadow-[0_1px_1px_rgba(43,43,47,0.28)] sm:text-[28px] xl:text-[27px]",
 );
 const CALC_SIGN = cn(
   CALC_KEY,
-  "bg-[#d8d0be] text-[26px] font-medium shadow-[0_1px_1px_rgba(43,43,47,0.22)] sm:text-[30px] lg:text-[29px]",
+  "bg-[#d8d0be] text-[26px] font-medium shadow-[0_1px_1px_rgba(43,43,47,0.22)] sm:text-[30px] xl:text-[29px]",
 );
 const CALC_ROW = "flex justify-center gap-2 sm:gap-2.5";
 
@@ -512,7 +512,7 @@ function CalcLayout({
   return (
     <div
       data-step-rows={extra.length > 0 ? stepRows(extra.length) : undefined}
-      className="nevo-calc-pad mx-auto flex w-full flex-col gap-[var(--calc-gap,10px)] border-t border-nevo-near-black/8 bg-[#e4ddcc] px-2 pt-[var(--calc-pad-t,8px)] pb-[var(--calc-pad-b,14px)] sm:mb-2 sm:max-w-[460px] sm:gap-[var(--calc-gap,12px)] sm:rounded-t-[16px] sm:px-3.5 sm:pt-[var(--calc-pad-t,14px)] sm:pb-[var(--calc-pad-b,20px)] lg:max-w-[420px]"
+      className="nevo-calc-pad mx-auto flex w-full flex-col gap-[var(--calc-gap,10px)] border-t border-nevo-near-black/8 bg-[#e4ddcc] px-2 pt-[var(--calc-pad-t,8px)] pb-[var(--calc-pad-b,14px)] sm:mb-2 sm:max-w-[460px] sm:gap-[var(--calc-gap,12px)] sm:rounded-t-[16px] sm:px-3.5 sm:pt-[var(--calc-pad-t,14px)] sm:pb-[var(--calc-pad-b,20px)] xl:max-w-[420px]"
     >
       {extra.length > 0 && (
         <div data-step-keys className={STEP_KEYS}>

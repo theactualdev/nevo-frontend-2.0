@@ -62,12 +62,12 @@ describe("the lesson's layout, as the frame measures it", () => {
         "max-w-full",
         "sm:max-w-[684px]",
         "sm:p-8",
-        "lg:max-w-[760px]",
-        "lg:p-10",
+        "xl:max-w-[760px]",
+        "xl:p-10",
       ]),
     );
     expect(classes(column)).not.toContain("sm:max-w-[620px]");
-    expect(classes(column)).not.toContain("lg:max-w-[680px]");
+    expect(classes(column)).not.toContain("xl:max-w-[680px]");
   });
 
   it("runs the position line inline in a row at a normal line height", () => {

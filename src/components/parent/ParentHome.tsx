@@ -9,6 +9,7 @@ import { getSession } from "@/lib/auth/session";
 import { parentApi, type ParentChild } from "@/lib/api/parent";
 import { ageChecksApi, holdStage } from "@/lib/api/ageChecks";
 import { ChildWeek } from "./ChildWeek";
+import { legalHref } from "@/lib/legal/returns";
 
 /**
  * The signed-in parent portal: D02's portal home, one subject card per subject.
@@ -336,6 +337,16 @@ function Shell({
           {children}
         </div>
       </div>
+      {/* Privacy & Terms' persistent portal link (its Entry 4), on every
+          state of home - signed out too. */}
+      <footer className="px-4 pb-8 text-center md:px-12">
+        <Link
+          href={legalHref("privacy", "parent-home")}
+          className="cursor-pointer text-[13px] font-medium text-nevo-navy underline underline-offset-2"
+        >
+          Privacy &amp; Terms
+        </Link>
+      </footer>
     </main>
   );
 }

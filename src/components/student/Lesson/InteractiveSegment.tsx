@@ -53,7 +53,7 @@ export function InteractiveSegment({
 
   return (
     <article>
-      <h2 className="text-[22px] font-semibold leading-[normal] tracking-[-0.01em] text-nevo-near-black sm:text-[26px] lg:text-[28px]">
+      <h2 className="text-[22px] font-semibold leading-[normal] tracking-[-0.01em] text-nevo-near-black sm:text-[26px] xl:text-[28px]">
         {content.heading}
       </h2>
 
@@ -130,7 +130,7 @@ export function InteractiveSegment({
                 <span className="font-mono text-[10px] leading-[normal] tracking-[0.06em] text-nevo-near-black/50 uppercase">
                   Step {i + 1}
                 </span>
-                <span className="text-base leading-[1.5] text-nevo-near-black sm:text-[18px] lg:text-[19px]">
+                <span className="text-base leading-[1.5] text-nevo-near-black sm:text-[18px] xl:text-[19px]">
                   {step}
                 </span>
               </span>
@@ -141,7 +141,7 @@ export function InteractiveSegment({
 
       {line && (
         <div className="mt-3.5 rounded-[12px] bg-nevo-cream-elevated px-4 py-3.5 shadow-elevation-1">
-          <p className="text-base leading-[1.65] text-nevo-near-black sm:text-[18px] lg:text-[19px]">
+          <p className="text-base leading-[1.65] text-nevo-near-black sm:text-[18px] xl:text-[19px]">
             {line}
           </p>
         </div>

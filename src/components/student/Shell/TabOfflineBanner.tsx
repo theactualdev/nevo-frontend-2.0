@@ -34,7 +34,7 @@ export function TabOfflineBanner() {
   return (
     <div
       role="status"
-      className="relative z-20 flex h-10 shrink-0 items-center gap-2 bg-nevo-cream-elevated px-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] md:h-11 md:gap-2.5 md:px-7 lg:px-8"
+      className="relative z-20 flex h-10 shrink-0 items-center gap-2 bg-nevo-cream-elevated px-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] md:h-11 md:gap-2.5 md:px-7 xl:px-8"
     >
       {/* The frame's own glyph, not a library icon that looks like it. */}
       <svg

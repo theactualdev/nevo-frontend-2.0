@@ -66,6 +66,16 @@ export interface AdaptationEventRow {
   trigger: string;
   adaptation: string;
   eventType: string;
+  /**
+   * What the lesson was either side of the change (D21's expanded row), as
+   * the server words it - null when it has no pair for that kind of event.
+   * Words, never engine values: a format ("Text", "Audio") for a change of
+   * format on that lesson, or "Original" / "Simplified", "Core" / "Expanded",
+   * "Standard pace" / "Slower pace", "Lesson flow" / "Break suggested"
+   * (`adaptation_before_after`, backend `intelligence/adaptation_log.py`).
+   */
+  before?: string | null;
+  after?: string | null;
 }
 
 export interface AdaptationLog {

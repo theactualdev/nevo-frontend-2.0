@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   classesApi,
   type AdminClass,
@@ -116,6 +116,7 @@ export function AssignTeachingSheet({
   onClose: () => void;
   onAssigned: () => void;
 }) {
+  const failureId = useId();
   const [subjects, setSubjects] = useState<Read<SchoolSubject[]>>({ state: "loading" });
   const [classes, setClasses] = useState<Read<AdminClass[]>>(
     given ? { state: "ready", value: given } : { state: "loading" },
@@ -404,12 +405,19 @@ export function AssignTeachingSheet({
           </div>
         ) : someFailed ? (
           <>
-            <FailureLine>
+            <FailureLine id={failureId}>
               {anyDone
                 ? "Some of that went through. What didn’t is marked beside each class."
                 : "That didn’t go through. Your choices are still here."}
             </FailureLine>
-            <button type="button" onClick={submit} className={PRIMARY_BTN}>
+            <button
+              type="button"
+              onClick={submit}
+              // Named by the failure beside it, so it is never one of two
+              // bare "Try again"s to a screen reader (see ReadFailed).
+              aria-describedby={failureId}
+              className={PRIMARY_BTN}
+            >
               Try again
             </button>
             <button type="button" onClick={anyDone ? onAssigned : onClose} className={GHOST_BTN}>

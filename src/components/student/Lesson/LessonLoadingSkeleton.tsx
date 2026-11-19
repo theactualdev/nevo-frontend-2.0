@@ -50,8 +50,8 @@ export function LessonLoadingSkeleton() {
           and 680px column sits inside its 32px and 40px padding - see the
           player's column. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-full flex-col gap-4 px-6 py-8 sm:max-w-[684px] sm:px-8 lg:max-w-[760px] lg:px-10">
-          <div className="h-[22px] w-[62%] rounded-lg bg-nevo-near-black/[0.08] sm:h-[26px] lg:h-[28px]" />
+        <div className="mx-auto flex w-full max-w-full flex-col gap-4 px-6 py-8 sm:max-w-[684px] sm:px-8 xl:max-w-[760px] xl:px-10">
+          <div className="h-[22px] w-[62%] rounded-lg bg-nevo-near-black/[0.08] sm:h-[26px] xl:h-[28px]" />
           <div className="mt-2 flex flex-col gap-4">
             <div className="h-4 w-full rounded-md bg-nevo-near-black/[0.06]" />
             <div className="h-4 w-[92%] rounded-md bg-nevo-near-black/[0.06]" />

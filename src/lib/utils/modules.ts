@@ -75,8 +75,9 @@ export function opensLaterModule(lesson: Lesson, segmentIndex: number): boolean 
 }
 
 /**
- * The finished module's name in the boundary's sentence, or "this section"
- * where it has no title.
+ * The finished module's name in the boundary's sentence, or "this stage"
+ * where it has no title - a child's word for a group of parts (Lydia, 16
+ * Nov), never "section".
  *
  * THE TITLE AS WRITTEN. It was lowercased to sit mid-sentence, which is right
  * for the frame's "introduction" and wrong for any real title with a name in
@@ -87,5 +88,5 @@ export function opensLaterModule(lesson: Lesson, segmentIndex: number): boolean 
  * plants need".
  */
 export function moduleName(module: LessonModule): string {
-  return module.title || "this section";
+  return module.title || "this stage";
 }

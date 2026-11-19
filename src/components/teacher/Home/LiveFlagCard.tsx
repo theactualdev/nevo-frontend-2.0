@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useId, useState } from "react";
 import type { TeacherFlag } from "@/hooks/useTeacherFlags";
+import { intelligenceApi } from "@/lib/api/intelligence";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,17 +30,22 @@ import { cn } from "@/lib/utils";
  * the acknowledgement would refuse a class teacher, and for a holder it would
  * record "learning support is on it" from a tap that meant "I've read it".
  *
- * AND THE TAP CLEARS IT FROM THE TAPPER'S OWN HOME (SCRUM-252). Opening the
- * card, or its "Send them a message", records `POST …/seen` - this viewer's
- * read, and nobody else's - so the next Home read leaves it out. A read that
- * does not land costs nothing but the card staying; it is never retried in
- * a way that holds the teacher up.
+ * THE TEACHER'S OWN READ IS ITS OWN BUTTON, "MARK AS SEEN" (Lydia, 16 Nov).
+ * It records `POST …/seen` - this viewer's read, and nobody else's - and the
+ * card leaves their Home. It is not the flag resolving: the flag stays open on
+ * the child's page and in the class's count until its evidence stops holding.
+ * Opening the card used to record that read (SCRUM-252, #894); since the
+ * 11 Nov addendum nothing but this button does.
  *
  * An earlier note here said the profile could not be linked because
  * `/teacher/students/{id}` resolved against fixtures and would 404 on a real
  * id. That is no longer true: `StudentRoute` resolves live first and falls
  * back to a fixture only when the live read fails.
  */
+
+/** The admin console's words for the same act not landing (`WriteFailed`). */
+export const SEEN_FAILED =
+  "We couldn’t record that as seen just now, so nothing has changed. Try again in a moment.";
 
 const DROP_GLYPH = (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -66,10 +73,17 @@ function noticedWhen(iso: string): string {
  * SCRUM-346). "Opening a child's profile to look is not acknowledging a flag,
  * and a teacher who taps the card to find out what it is has now cleared it
  * without acting on it. Only an explicit acknowledgement marks a flag seen."
- * Both links used to `POST …/seen` (SCRUM-252's tap-clears, #894). That
- * explicit control is not drawn: C03's second actions ("See his week", "See
- * who slowed", "Open her profile") all navigate, so there is no frame label
- * for it, and it waits on Lydia's words.
+ * Both links used to `POST …/seen` (SCRUM-252's tap-clears, #894). The
+ * explicit control is "Mark as seen" (Lydia, 16 Nov): "It marks seen, not
+ * resolved, and the flag stays until it resolves." C03 draws no such control,
+ * so it takes the look of the one drawn for the same act on learning
+ * support's concern card (D08, design fc0b7ae): the check and the words, in
+ * navy, beside the card's other action.
+ *
+ * A READ THAT DID NOT LAND SAYS SO, in the words the admin console uses for
+ * the same act, and the button stays: the card staying put with nothing said
+ * would look like a press that did nothing. The card leaves only once the
+ * server has the read.
  *
  * "MESSAGE {FIRST}", because "Send them a message" did not say who, and the
  * teacher is one tap from writing to a child. The message goes to the CHILD
@@ -77,8 +91,30 @@ function noticedWhen(iso: string): string {
  * card still opens the profile, and a line that cannot say who is the one she
  * ruled out.
  */
-export function LiveFlagCard({ flag }: { flag: TeacherFlag }) {
+export function LiveFlagCard({
+  flag,
+  onSeen,
+}: {
+  flag: TeacherFlag;
+  /** The server has this teacher's read: the card can leave their Home. */
+  onSeen?: (flagId: string) => void;
+}) {
   const first = flag.name?.trim().split(/\s+/)[0] || null;
+  const nameId = useId();
+  const [marking, setMarking] = useState(false);
+  const [seenFailed, setSeenFailed] = useState(false);
+
+  const markSeen = () => {
+    if (marking) return;
+    setMarking(true);
+    setSeenFailed(false);
+    intelligenceApi
+      .markFlagSeen(flag.id)
+      .then(() => onSeen?.(flag.id))
+      .catch(() => setSeenFailed(true))
+      .finally(() => setMarking(false));
+  };
+
   return (
     <div className="relative flex gap-3.5 rounded-[12px] bg-nevo-cream-elevated py-4 pr-[18px] pl-[22px] shadow-elevation-1 transition-shadow focus-within:shadow-elevation-2 hover:shadow-elevation-2 xl:gap-[18px] xl:py-[22px] xl:pr-6 xl:pl-7">
       {/* Navy for a sudden change, violet for a pattern - C03's own rule. */}
@@ -95,7 +131,10 @@ export function LiveFlagCard({ flag }: { flag: TeacherFlag }) {
               {DROP_GLYPH}
             </span>
           )}
-          <span className="text-[15.5px] font-semibold tracking-[-0.01em] text-nevo-near-black xl:text-[16.5px]">
+          <span
+            id={nameId}
+            className="text-[15.5px] font-semibold tracking-[-0.01em] text-nevo-near-black xl:text-[16.5px]"
+          >
             {flag.name ?? "One of your students"}
           </span>
           <span className="text-[12.5px] text-nevo-near-black/50 xl:text-[13px]">
@@ -124,9 +163,9 @@ export function LiveFlagCard({ flag }: { flag: TeacherFlag }) {
             {`Open ${flag.name ?? "this student"}’s profile`}
           </span>
         </Link>
-        {first && (
-          <div className="mt-3 xl:mt-[18px]">
-            {/* Above the stretched link, so it stays its own action. */}
+        {/* Above the stretched link, so each stays its own action. */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-[18px] gap-y-2 xl:mt-[18px]">
+          {first && (
             <Link
               /* Names the child. A bare /teacher/connect opened the thread
                  list with no compose at all - the action did nothing a
@@ -137,7 +176,28 @@ export function LiveFlagCard({ flag }: { flag: TeacherFlag }) {
               {`Message ${first}`}
               <span className="ml-1.5">&rarr;</span>
             </Link>
-          </div>
+          )}
+          <button
+            type="button"
+            onClick={markSeen}
+            disabled={marking}
+            /* Every card has one; the child's name says whose this is. */
+            aria-describedby={nameId}
+            className="relative z-10 inline-flex cursor-pointer items-center gap-1.5 text-[13.5px] text-nevo-navy transition-opacity hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50 xl:text-[14.5px]"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+            {marking ? "Marking…" : "Mark as seen"}
+          </button>
+        </div>
+        {seenFailed && (
+          <p
+            role="status"
+            className="relative z-10 mt-2.5 rounded-[10px] bg-nevo-violet/[0.18] px-3.5 py-2.5 text-[13px] leading-[1.5] text-nevo-navy xl:text-[13.5px]"
+          >
+            {SEEN_FAILED}
+          </p>
         )}
       </div>
     </div>

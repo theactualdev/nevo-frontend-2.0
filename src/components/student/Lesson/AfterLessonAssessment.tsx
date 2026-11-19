@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ClipboardCheck } from "lucide-react";
+import { Check, ChevronLeft, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/shared";
 import type { ResultState } from "@/lib/api/lessons";
 import type { CheckOutcome } from "@/lib/lessons/checkOutcome";
 import type { Assessment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
+  SAVING_LESSON_LINE,
+  SEND_AGAIN,
   keyMark,
   onVerdict,
   type VerdictReply,
 } from "@/lib/lessons/verdict";
-import { MarkWait } from "./MarkWait";
+import { MarkWait, useMarkWait } from "./MarkWait";
 import {
   AnswerDot,
   AnswerOption,
@@ -51,6 +53,21 @@ const DEFAULT_RECOVERY =
  * AND BACK IN WHERE THEY LEFT (B49). `onLeave` is told the place in the list
  * - the next question to ask - and `resumeAt` reopens there, past the intro,
  * which a child who has already started does not need again.
+ *
+ * A BREAK AND A TAP OUT ON EVERY QUESTION, NOT OPTIONAL (Lydia, 16 Nov). She
+ * ruled holding on a dropped connection right "because the child is held on
+ * the answer rather than trapped in the lesson" - Break, tap out and Exit
+ * lesson staying open is what makes it acceptable - and this check had only
+ * the exit. So, as on a quick check:
+ * - "Take a break" (`onTakeBreak`), across from the way out, in the quick
+ *   check's own words and place (Lesson Check frame, `breakBtn`): the child's
+ *   own break, and back to this same question after it.
+ * - A tap out (`onTapOut`), the player's own Previous chevron beside Next:
+ *   back to the lesson's last part, the place in the check kept - told the
+ *   next question to ask, as `onLeave` is - and the check asked afresh from
+ *   there when the child moves on again. Nothing is passed by it. No frame
+ *   draws a tap out on a full-screen check; the chevron is the player's.
+ * Both stay pressable while a mark is on its way (SCRUM-315).
  */
 export function AfterLessonAssessment({
   assessment,
@@ -68,9 +85,18 @@ export function AfterLessonAssessment({
   outcome,
   reading = false,
   onAudioBusy,
+  onTakeBreak,
+  onTapOut,
 }: {
   assessment: Assessment;
   onFinish: () => void;
+  /** "Take a break" on every question: the child's own (Lydia, 16 Nov). */
+  onTakeBreak?: () => void;
+  /**
+   * Out to the lesson's last part, the place kept (Lydia, 16 Nov): told the
+   * next question to ask, as `onLeave` is.
+   */
+  onTapOut?: (checkPosition: number) => void;
   /**
    * Leave the check part way (D36). Absent, no exit is drawn. Given the next
    * question to ask once the questions have begun; nothing from the intro,
@@ -98,7 +124,7 @@ export function AfterLessonAssessment({
    * `onBackToLessons`, the result is design's "couldn't load" screen instead.
    */
   resultUnread?: boolean;
-  /** Read the result again: send the completion again (D183's Try again). */
+  /** Read the result again: send the completion again (D183's Send again). */
   onReread?: () => void;
   /** D183's Back to my lessons. */
   onBackToLessons?: () => void;
@@ -244,21 +270,36 @@ export function AfterLessonAssessment({
       {/* D36: the player's exit, where the player draws it. An answer
           already confirmed is behind the child, so the place to come back
           to is the question after it. */}
-      {onLeave && (
-        <div className="flex shrink-0 px-3.5 pt-2.5">
-          <LeaveButton
-            onLeave={() => onLeave(revealed ? qIndex + 1 : qIndex)}
-          />
+      {(onLeave || onTakeBreak) && (
+        <div className="flex shrink-0 items-center justify-between gap-3 px-3.5 pt-2.5">
+          {onLeave ? (
+            <LeaveButton
+              onLeave={() => onLeave(revealed ? qIndex + 1 : qIndex)}
+            />
+          ) : (
+            <span />
+          )}
+          {/* The quick check's own break, in its words and place (Lesson
+              Check frame), across from the way out (Lydia, 16 Nov). */}
+          {onTakeBreak && (
+            <button
+              type="button"
+              onClick={onTakeBreak}
+              className="shrink-0 cursor-pointer rounded-md px-2 py-[11px] text-[13px] font-medium text-nevo-navy outline-none focus-visible:ring-2 focus-visible:ring-nevo-navy motion-safe:transition-transform motion-safe:duration-[120ms] motion-safe:active:scale-[0.98]"
+            >
+              Take a break
+            </button>
+          )}
         </div>
       )}
       {/* Calm progress — position, never a score */}
       <div
         className={cn(
-          "shrink-0 px-6 pt-5 sm:px-8 lg:px-10",
-          onLeave && "pt-1",
+          "shrink-0 px-6 pt-5 sm:px-8 xl:px-10",
+          (onLeave || onTakeBreak) && "pt-1",
         )}
       >
-        <div className="mx-auto w-full max-w-[600px] lg:max-w-[640px]">
+        <div className="mx-auto w-full max-w-[600px] xl:max-w-[640px]">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-[13px] font-medium text-nevo-near-black/60">
               Question {qIndex + 1} of {total}
@@ -283,8 +324,8 @@ export function AfterLessonAssessment({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-7 sm:px-8 lg:px-10">
-        <div className="mx-auto w-full max-w-[600px] lg:max-w-[640px]">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-7 sm:px-8 xl:px-10">
+        <div className="mx-auto w-full max-w-[600px] xl:max-w-[640px]">
           {/* B16: a spoken question, keyed so each one is said on arrival. */}
           {question.promptAudio && (
             <div className="mb-4">
@@ -371,8 +412,8 @@ export function AfterLessonAssessment({
         </div>
       </div>
 
-      <div className="shrink-0 px-6 pt-3 pb-6 sm:px-8 lg:px-10">
-        <div className="mx-auto w-full max-w-[600px] lg:max-w-[640px]">
+      <div className="shrink-0 px-6 pt-3 pb-6 sm:px-8 xl:px-10">
+        <div className="mx-auto w-full max-w-[600px] xl:max-w-[640px]">
           {/* Above the way on, which it never replaces. */}
           <MarkWait
             hold={marking ? hold : null}
@@ -380,13 +421,27 @@ export function AfterLessonAssessment({
             onSentAgain={() => setHold((h) => h + 1)}
             className="mb-3"
           />
-          <Button
-            className="w-full"
-            disabled={!selected}
-            onClick={revealed ? advance : confirm}
-          >
-            {revealed ? "Next question" : "Next"}
-          </Button>
+          <div className="flex items-center gap-3">
+            {/* The tap out (Lydia, 16 Nov): the player's own Previous, back to
+                the lesson's last part with the place kept. */}
+            {onTapOut && (
+              <button
+                type="button"
+                aria-label="Previous"
+                onClick={() => onTapOut(revealed ? qIndex + 1 : qIndex)}
+                className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-full text-nevo-navy transition-colors hover:bg-nevo-navy/[0.06] active:bg-nevo-navy/[0.12]"
+              >
+                <ChevronLeft className="size-6" strokeWidth={2} />
+              </button>
+            )}
+            <Button
+              className="w-full"
+              disabled={!selected}
+              onClick={revealed ? advance : confirm}
+            >
+              {revealed ? "Next question" : "Next"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -418,7 +473,7 @@ function Intro({
           <LeaveButton onLeave={onLeave} />
         </div>
       )}
-      <div className="flex w-full max-w-[300px] flex-col items-center sm:max-w-[430px]">
+      <div className="flex w-full max-w-[300px] flex-col items-center sm:max-w-[430px] xl:max-w-[460px]">
         <span className="flex size-[88px] items-center justify-center rounded-full bg-nevo-violet/20">
           <ClipboardCheck className="size-10 text-nevo-navy" strokeWidth={2} />
         </span>
@@ -456,9 +511,14 @@ function Intro({
  * Nevo - offline, or failed - there is nothing to show. The result screen
  * drew its Continue alone over a blank, which said nothing at all. Lydia's
  * words now, and only them: "No claim about what was or was not saved,
- * because we cannot confirm it." Try again sends the completion again, whose
- * answer is the only read of the result there is; it holds its place while
- * that is on its way.
+ * because we cannot confirm it." Send again sends the completion again,
+ * whose answer is the only read of the result there is; it holds its place
+ * while that is on its way.
+ *
+ * "SEND AGAIN", NOT "TRY AGAIN" (Lydia, 10 and 11 Nov: "The retry button:
+ * 'Send again', appearing only on a real failure rather than on a timer").
+ * Her 13 Oct "Try again" was the label before the waits had their words; this
+ * screen already shows only on a real failure, so only the label moved.
  *
  * NOT DRAWN: design's frame for this state is not pushed yet, so it takes the
  * result's own column and type, with no mark - a mark here would say how the
@@ -477,7 +537,7 @@ function ResultUnread({
 }) {
   return (
     <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col justify-center bg-nevo-cream px-6 text-nevo-near-black">
-      <div className="mx-auto w-full max-w-[300px] sm:max-w-[430px]">
+      <div className="mx-auto w-full max-w-[300px] sm:max-w-[430px] xl:max-w-[460px]">
         <h2
           className={cn(
             "text-center text-[23px] font-semibold tracking-[-0.01em] text-pretty sm:text-[26px]",
@@ -487,7 +547,7 @@ function ResultUnread({
           We couldn&apos;t load your result just now.
         </h2>
         <Button className="mt-7 w-full" loading={rereading} onClick={onReread}>
-          Try again
+          {SEND_AGAIN}
         </Button>
         <Button
           variant="ghost"
@@ -601,6 +661,8 @@ function GrowthResult({
     "text-[15px] font-medium",
     reading && [READING_BODY, READING_INK],
   );
+  // Her end-of-lesson wait, past about two seconds of a result still held.
+  const { slow: savingSlow } = useMarkWait(held ? 0 : null, null);
   const nothingLanded = verdict === "nothing_landed";
   // The frame's screen: where the server says something landed, and in the
   // walkthrough. While the verdict is on its way it holds that place, unseen.
@@ -637,7 +699,27 @@ function GrowthResult({
       : (assessment.resultNote ?? "");
 
   return (
-    <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col justify-center bg-nevo-cream px-6 text-nevo-near-black">
+    <div className="relative flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col justify-center bg-nevo-cream px-6 text-nevo-near-black">
+      {/*
+        THE WAIT, SAID (Lydia, 10 and 11 Nov). The cream page alone for about
+        two seconds, then her one line in the middle of it, over the result's
+        held place: about the system, never the answer, and no spinner. It
+        goes as the result lands. A polite live region, there from the start,
+        so the line is read out when it arrives.
+      */}
+      <div
+        aria-live="polite"
+        className="pointer-events-none absolute inset-x-6 top-1/2 -translate-y-1/2 text-center"
+      >
+        {held && savingSlow && (
+          <p
+            data-saving-lesson
+            className="text-[13.5px] leading-[1.5] text-nevo-near-black/70"
+          >
+            {SAVING_LESSON_LINE}
+          </p>
+        )}
+      </div>
       {/*
         RULE 8: THE RESULT LANDS ONCE (the hub, 9 Nov). Only the mark and the
         heading were held for the completion write, so the screen landed in
@@ -653,7 +735,7 @@ function GrowthResult({
       <div
         aria-hidden={held || undefined}
         className={cn(
-          "mx-auto w-full max-w-[300px] sm:max-w-[430px]",
+          "mx-auto w-full max-w-[300px] sm:max-w-[430px] xl:max-w-[460px]",
           held && "invisible",
         )}
       >

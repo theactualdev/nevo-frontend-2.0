@@ -56,7 +56,7 @@ describe("Unread only", () => {
   it("says up to date only when every page is loaded", async () => {
     list.mockResolvedValue({ notifications: [note("n1")], unreadCount: 0, total: 1, hasMore: false });
     const { container } = render(<NotificationsView />);
-    fireEvent.click(await screen.findByRole("button", { name: "Unread only" }));
+    fireEvent.change(await screen.findByRole("combobox", { name: "View" }), { target: { value: "unread" } });
     await waitFor(() => expect(visibleText(container)).toMatch(/You're up to date\./));
     expect(visibleText(container)).toMatch(/Everything here has been read\./);
   });
@@ -64,7 +64,7 @@ describe("Unread only", () => {
   it("does not claim it while older notifications are unfetched", async () => {
     list.mockResolvedValue({ notifications: [note("n1")], unreadCount: 3, total: 40, hasMore: true });
     const { container } = render(<NotificationsView />);
-    fireEvent.click(await screen.findByRole("button", { name: "Unread only" }));
+    fireEvent.change(await screen.findByRole("combobox", { name: "View" }), { target: { value: "unread" } });
     await waitFor(() => expect(visibleText(container)).toMatch(/Nothing unread among the latest/));
     expect(visibleText(container)).not.toMatch(/up to date/);
     expect(screen.getAllByRole("button", { name: "Show older" }).length).toBeGreaterThan(0);
@@ -73,7 +73,7 @@ describe("Unread only", () => {
 
 describe("Archived", () => {
   const openArchived = async () => {
-    fireEvent.click(await screen.findByRole("button", { name: "Show archived" }));
+    fireEvent.change(await screen.findByRole("combobox", { name: "View" }), { target: { value: "archived" } });
   };
 
   it("counts what is archived from the feed's own total", async () => {

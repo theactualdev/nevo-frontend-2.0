@@ -250,3 +250,20 @@ describe("the code", () => {
     expect(setSession).not.toHaveBeenCalled();
   });
 });
+
+// D03 as drawn (backlog 110): the wordmark above the line, and the field's hint.
+describe("the sign-in screen, as D03 draws it", () => {
+  it("puts the Nevo wordmark above 'Learning, made fluid.'", () => {
+    render(<ParentSignIn />);
+
+    const mark = screen.getByRole("img", { name: "Nevo" });
+    const line = screen.getByText("Learning, made fluid.");
+    expect(mark.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("hints the address with the frame's example", () => {
+    render(<ParentSignIn />);
+
+    expect(screen.getByLabelText("Email address")).toHaveAttribute("placeholder", "you@example.com");
+  });
+});

@@ -57,7 +57,7 @@ export function SchoolCodeCard() {
   if (failed) {
     return (
       <div className={cn(CARD, "mt-5 px-5 py-[15px]")}>
-        <h3 className="m-0 text-[11.5px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase lg:text-[12px]">
+        <h3 className="m-0 text-[11.5px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase xl:text-[12px]">
           School code
         </h3>
         <CardUnread className="mt-2" onRetry={() => setAttempt((a) => a + 1)} />
@@ -70,7 +70,7 @@ export function SchoolCodeCard() {
 
   /*
    * D04'S ROW, VALUE FOR VALUE (QA, 10 Oct): "School code" over the code in
-   * monospace, weight 600, 22px (19px below 1024), 0.12em tracking, navy; a
+   * monospace, weight 600, 22px (19px below 1280, the console's desktop line), 0.12em tracking, navy; a
    * plain "Copy" beside it; the sentence on the right. This was a taller card
    * with the code at 28px regular, 0.18em, near-black, and a bordered button.
    *
@@ -85,11 +85,11 @@ export function SchoolCodeCard() {
       )}
     >
       <div className="min-w-0 flex-auto">
-        <h3 className="m-0 text-[11.5px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase lg:text-[12px]">
+        <h3 className="m-0 text-[11.5px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase xl:text-[12px]">
           School code
         </h3>
-        <div className="mt-1 flex items-center gap-[11px] lg:mt-[5px] lg:gap-3">
-          <p className="m-0 font-mono text-[19px] font-semibold tracking-[0.12em] text-nevo-navy lg:text-[22px]">
+        <div className="mt-1 flex items-center gap-[11px] xl:mt-[5px] xl:gap-3">
+          <p className="m-0 font-mono text-[19px] font-semibold tracking-[0.12em] text-nevo-navy xl:text-[22px]">
             {code}
           </p>
           <button
@@ -107,7 +107,7 @@ export function SchoolCodeCard() {
                 .catch(() => setCopied(false));
             }}
             aria-label={copied ? "Copied" : "Copy school code"}
-            className="cursor-pointer rounded-sm text-[12.5px] font-semibold text-nevo-navy hover:opacity-75 lg:text-[13px]"
+            className="cursor-pointer rounded-sm text-[12.5px] font-semibold text-nevo-navy hover:opacity-75 xl:text-[13px]"
           >
             {copied ? "Copied" : "Copy"}
           </button>

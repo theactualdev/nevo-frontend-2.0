@@ -23,6 +23,12 @@ import type { LessonModule } from "@/lib/types";
  * a preview of the next render between the heading and the actions -
  * supportive, never required, and absent text degrades cleanly to the plain
  * screen.
+ *
+ * A GROUP OF PARTS IS A STAGE (Lydia, 16 Nov): "Stage 2 of 3 done", and the
+ * dots read "Stage 2 of 3". They replace "Section complete" and "Module 2 of
+ * 3": section, segment and module are a teacher's words, and never reach a
+ * child. The line and the dots name the stage just finished (the dots mark it
+ * in violet); the chip and the bar name the one being entered.
  */
 export function ModuleBoundaryScreen({
   lessonTitle,
@@ -69,6 +75,10 @@ export function ModuleBoundaryScreen({
    */
   const heading = `You've finished ${moduleName(finished)}. Ready for the next part?`;
 
+  // 1-based: the stage just finished, and the one being entered.
+  const finishedStage = nextModuleIndex;
+  const nextStage = nextModuleIndex + 1;
+
   const recap = showRecap ? finished.recap : undefined;
   const preview = showRecap ? next.preview : undefined;
 
@@ -80,7 +90,7 @@ export function ModuleBoundaryScreen({
           {lessonTitle}
         </span>
         <span className="shrink-0 rounded-full bg-nevo-navy/8 px-3 py-[5px] font-mono text-[11px] font-semibold tracking-[0.04em] text-nevo-navy/75">
-          Module {nextModuleIndex + 1} of {moduleCount}
+          Stage {nextStage} of {moduleCount}
         </span>
       </div>
 
@@ -105,14 +115,19 @@ export function ModuleBoundaryScreen({
             </div>
 
             <span className="font-mono text-[11px] font-semibold tracking-[0.1em] text-nevo-near-black/48 uppercase">
-              Section complete
+              Stage {finishedStage} of {moduleCount} done
             </span>
             <h2 className="mt-3 text-[23px] leading-[1.28] font-semibold tracking-[-0.012em] text-pretty text-nevo-near-black sm:text-[30px]">
               {heading}
             </h2>
 
-            {/* Module dots: done navy, just-finished violet pill, upcoming outline */}
-            <div className="mt-[18px] flex items-center justify-center gap-[9px]">
+            {/* Stage dots: done navy, just-finished violet pill, upcoming
+                outline - read as the stage they mark (Lydia, 16 Nov). */}
+            <div
+              role="img"
+              aria-label={`Stage ${finishedStage} of ${moduleCount}`}
+              className="mt-[18px] flex items-center justify-center gap-[9px]"
+            >
               {Array.from({ length: moduleCount }, (_, m) => (
                 <span
                   key={m}
@@ -167,7 +182,7 @@ export function ModuleBoundaryScreen({
       <ProgressBar
         value={lessonProgress}
         className="shrink-0"
-        aria-label={`Module ${nextModuleIndex + 1} of ${moduleCount}`}
+        aria-label={`Stage ${nextStage} of ${moduleCount}`}
       />
     </div>
   );

@@ -196,7 +196,8 @@ describe("the re-teach box's retry", () => {
     fireEvent.click(screen.getByRole("button", { name: RETEACH_COPY.check }));
 
     expect(screen.queryByText(RETEACH_COPY.done)).toBeNull();
-    expect(screen.getByText(RETEACH_COPY.again)).toBeInTheDocument();
+    // A second miss, and no way in here to offer: Lydia's line (16 Nov).
+    expect(screen.getByText(RETEACH_COPY.noWayIn)).toBeInTheDocument();
   });
 });
 

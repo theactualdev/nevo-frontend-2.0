@@ -761,7 +761,7 @@ export function WarmUpRun({
         <div className="flex min-h-0 flex-1 items-center justify-center px-5 pb-10 sm:px-7">
           {/* The frame's column (`cw`): the width on a phone, 440px on a
               tablet and 480px on a desktop. It was 480px from tablet up. */}
-          <div className="flex w-full max-w-[440px] flex-col items-center gap-[26px] lg:max-w-[480px]">
+          <div className="flex w-full max-w-[440px] flex-col items-center gap-[26px] xl:max-w-[480px]">
             <WarmUpTask
               dimension={dimension}
               band={band}

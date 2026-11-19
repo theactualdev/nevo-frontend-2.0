@@ -1,7 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
+import { legalHref, markLegalOpenedFrom } from "@/lib/legal/returns";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import {
   parentApi,
@@ -75,18 +77,25 @@ const SECTIONS: { heading: string; body: (child: string) => string }[] = [
   {
     heading: "Where data is processed",
     /*
-     * THE FACTUAL HALF, CORRECTED (Lydia, 11 Nov; register row 11). The
-     * database is in London and the service that runs the lessons in
-     * Frankfurt; the website is "served from" Virginia, her words, "because a
-     * parent should not have to think about servers". The LEGAL wording is
-     * today's, untouched: the US adequacy clause stays on the United States,
-     * and "Those transfers…" goes out as it stands - what it covers is
-     * counsel's. No files clause: nothing "to be confirmed" ships. The AI
-     * provider, narration, email, the delivery network and payments join the
-     * line once Teslim says where each runs.
+     * THE FACTUAL HALF, KEPT TRUE (Lydia, 11 Nov, item 6; register row 11):
+     * "corrected today rather than waiting for the rest of the line", and it
+     * "cannot ship with a location to be confirmed in it".
+     *
+     * 19 Nov: the database moved to Render Postgres in Frankfurt (Teslim, 16
+     * Nov; live /health `databaseHost` …frankfurt-postgres.render.com, read
+     * 19 Nov 12:16Z), so "the United Kingdom (London)" was untrue. The
+     * service that runs the lessons now runs on Heroku in a region not yet
+     * known, so its clause is LEFT OUT until Teslim names it - never a guess.
+     *
+     * The website is "served from" Virginia, her words, "because a parent
+     * should not have to think about servers". The LEGAL wording is today's,
+     * untouched: the US adequacy clause stays on the United States, and
+     * "Those transfers…" goes out as it stands - what it covers is counsel's.
+     * No files clause. The AI provider, narration, email, the delivery
+     * network and payments join the line once Teslim says where each runs.
      */
     body: () =>
-      "Some processing happens outside Nigeria. The database is in the United Kingdom (London), and the service that runs the lessons is in Germany (Frankfurt). The website is served from the United States (Virginia), which has no adequacy decision from the NDPC. Those transfers are made under Standard Contractual Clauses.",
+      "Some processing happens outside Nigeria. The database is in Germany (Frankfurt). The website is served from the United States (Virginia), which has no adequacy decision from the NDPC. Those transfers are made under Standard Contractual Clauses.",
   },
   {
     heading: "How long data is kept",
@@ -179,6 +188,13 @@ export function ParentDataManagement({
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState("");
+  /**
+   * D01c's objection card opens on a tap (backlog 114): the frame draws it
+   * closed, with the box only once the parent has chosen to object, and its
+   * open state has no way to close it again. The words inside are unchanged -
+   * they are request wording, counsel's.
+   */
+  const [objecting, setObjecting] = useState(false);
   /**
    * The server said this consent is another guardian's to withdraw (403,
    * SCRUM-306) - its own words, or its plainest. Trying again can't work, so
@@ -415,20 +431,14 @@ export function ParentDataManagement({
         <h1 className="text-[21px] font-semibold tracking-[-0.015em] text-nevo-near-black">
           {childLead}&rsquo;s data on Nevo
         </h1>
-        <p className={BODY}>
-          {invitation
-            ? `${invitation.schoolName} enrolled ${child} on Nevo.`
-            : "Your child’s school enrolled them on Nevo."}{" "}
-          This page explains what that means, and lets you act on it.
-        </p>
-        {/* A tokenised link can be forwarded. Naming the parent the school
-            recorded lets someone who received it in error see that at once.
-            FLAGGED TO DESIGN: the wording is ours, not from a frame. */}
-        {invitation?.parentName && (
-          <p className="mt-2.5 text-[13px] text-nevo-near-black/50">
-            This link was sent to {invitation.parentName}.
+        {/* D01c's line under the title (backlog 112), where this page
+            used to write its own two sentences and an undrawn "This link was
+            sent to {parent}." */}
+        {invitation.schoolName?.trim() ? (
+          <p className="mt-1 text-[14px] text-nevo-violet">
+            Enrolled by {invitation.schoolName}
           </p>
-        )}
+        ) : null}
       </div>
 
       <div className="mt-3.5 overflow-hidden rounded-[14px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
@@ -500,8 +510,35 @@ export function ParentDataManagement({
         )}
       </div>
 
-      <div className={`${CARD} mt-3.5`}>
-        <h3 className={H3}>Object to Processing</h3>
+      <div className={`${CARD} relative mt-3.5`}>
+        {/*
+          * ONE BUTTON BY THIS NAME AT A TIME. Closed, the card's title is the
+          * disclosure (aria-expanded, as D01c's row opens on a tap). Open, the
+          * title is only a heading again - the frame's open card has no way to
+          * close it - so a screen reader meets "Object to processing" once,
+          * on the button that sends. Both names are the frame's and the page's
+          * own; no new words.
+          */}
+        {objecting || (outcome?.right === "object" && phase === "done") ? (
+          <h3 className={H3}>Object to Processing</h3>
+        ) : (
+          <h3 className={`${H3} flex items-center justify-between gap-3`}>
+            {/* The whole card opens it, as D01c's row does. */}
+            <button
+              type="button"
+              aria-expanded={false}
+              onClick={() => setObjecting(true)}
+              className="cursor-pointer text-left after:absolute after:inset-0 after:rounded-[14px] after:content-['']"
+            >
+              Object to Processing
+            </button>
+            <span aria-hidden className="text-nevo-violet">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </span>
+          </h3>
+        )}
         <p className={BODY}>
           Tell us your concern. We will review it within 48 hours.
         </p>
@@ -516,7 +553,7 @@ export function ParentDataManagement({
               ? " We could not attach your note to this request, so please repeat it when we contact you."
               : ""}
           </p>
-        ) : (
+        ) : objecting ? (
           <>
             <label
               htmlFor="objection-reason"
@@ -528,6 +565,9 @@ export function ParentDataManagement({
               </span>
             </label>
             <textarea
+              /* Opened by the parent's own tap, so the box takes the focus -
+                 where the toggle they pressed was. */
+              autoFocus
               id="objection-reason"
               value={reason}
               maxLength={2000}
@@ -544,7 +584,7 @@ export function ParentDataManagement({
               {phase === "sending" ? "Sending…" : "Object to processing"}
             </button>
           </>
-        )}
+        ) : null}
       </div>
 
       {invitation.canWithdraw === false ? null : notTheirs ? (
@@ -651,7 +691,18 @@ function withdrawalSentence(decidedAt: string | null): string {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-dvh bg-nevo-cream px-5 py-8 text-nevo-near-black">
-      <div className="mx-auto w-full max-w-[560px]">{children}</div>
+      <div className="mx-auto w-full max-w-[560px]">
+        {/* D01c's wordmark, above the card (backlog 112). */}
+        <Image
+          src="/brand/nevo-wordmark.png"
+          alt="Nevo"
+          width={344}
+          height={116}
+          priority
+          className="mb-[22px] h-5 w-auto"
+        />
+        {children}
+      </div>
     </main>
   );
 }
@@ -705,6 +756,17 @@ function Footer({ school }: { school: DataSubject | null }) {
         >
           ndpc.gov.ng
         </a>
+      </p>
+      {/* The portal's persistent Privacy & Terms link (backlog 116), on the
+          link page and the signed-in page alike. */}
+      <p className="m-0 mt-1.5">
+        <Link
+          href={legalHref("privacy", "parent-data")}
+          onClick={() => markLegalOpenedFrom("parent-data")}
+          className="font-medium text-nevo-navy underline underline-offset-2"
+        >
+          Privacy &amp; Terms
+        </Link>
       </p>
     </div>
   );

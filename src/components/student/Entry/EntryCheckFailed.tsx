@@ -87,7 +87,11 @@ export function EntryCheckFailed({ next }: { next?: string }) {
   if (online) {
     return (
       <main className="w-full">
-        <ErrorScreen retry={retry} onBack={backToTheDoor} />
+        <ErrorScreen
+          retry={retry}
+          retrying={checking}
+          onBack={backToTheDoor}
+        />
       </main>
     );
   }
@@ -110,9 +114,12 @@ export function EntryCheckFailed({ next }: { next?: string }) {
       <p className="mt-2 max-w-[440px] text-[15px] leading-[1.55] text-nevo-near-black/60 sm:mt-2.5 sm:text-base">
         No internet connection right now.
       </p>
+      {/* Its read on its way shows, as online (backlog 28). */}
       <Button
         variant="ghost"
         className="mt-8 h-12 w-full max-w-[290px] text-[15px] font-normal sm:max-w-[340px]"
+        loading={checking}
+        aria-busy={checking || undefined}
         onClick={retry}
       >
         Try again

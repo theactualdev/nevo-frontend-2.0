@@ -287,3 +287,62 @@ describe("sending to the selection", () => {
     expect(visibleText(container)).not.toMatch(/invitations? sent/);
   });
 });
+
+/**
+ * BACKLOG 62: D07's "View students missing an email address" (`filterNoEmail`)
+ * after a bulk send - the roster narrowed to the rows that could not be sent
+ * for want of a parent email, from each row's own request state.
+ */
+describe("the students a bulk send could not reach", () => {
+  it("narrows the roster to them, and Clear filters brings everyone back", async () => {
+    const { container } = render(<StudentsView />);
+    await screen.findByText("Chisom Eze");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Select every student/ }));
+    sendSelection();
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/1 could not be sent/),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "View students missing an email address" }),
+    );
+
+    expect(screen.getByText("Ngozi Uche")).toBeInTheDocument();
+    expect(screen.queryByText("Chisom Eze")).toBeNull();
+    expect(screen.queryByText("Tunde Bello")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "View students missing an email address" }),
+    ).toBeNull();
+  });
+
+  it("is not offered when every request had an email to go to", async () => {
+    parentLinks.mockImplementation(async (id: string) => [link({ studentId: id })]);
+    const { container } = render(<StudentsView />);
+    await screen.findByText("Chisom Eze");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Select every student/ }));
+    sendSelection();
+    await waitFor(() => expect(visibleText(container)).toMatch(/invitations? sent\./));
+
+    expect(
+      screen.queryByRole("button", { name: "View students missing an email address" }),
+    ).toBeNull();
+  });
+});
+
+/**
+ * BACKLOG 63: D07's empty roster - "No students enrolled yet" and its first
+ * sentence. Its consent sentence is held against SCRUM-156 (activation sends
+ * the requests), so nothing here promises when families hear.
+ */
+describe("an empty roster", () => {
+  it("says D07's heading and first sentence, and no promise about consent", async () => {
+    list.mockResolvedValue([]);
+    const { container } = render(<StudentsView />);
+
+    expect(await screen.findByText("No students enrolled yet")).toBeInTheDocument();
+    expect(visibleText(container)).toMatch(
+      /Import a roster from your school system, or add students one at a time\./,
+    );
+    expect(visibleText(container)).not.toMatch(/until you.re ready|Consent requests come after/);
+  });
+});

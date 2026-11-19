@@ -113,6 +113,38 @@ describe("Try again", () => {
     expect(replace).toHaveBeenCalledWith("/student/unavailable");
   });
 
+  /*
+   * BACKLOG 27 AND 28: the read on its way shows. Try again takes the
+   * button's own loading state, online and offline, and comes back when the
+   * answer is in - a button that changed nothing looked inert.
+   */
+  it.each([
+    ["online", true],
+    ["offline", false],
+  ])("shows its read on its way, %s, and is pressable again once it answers", async (_, isOnline) => {
+    online.mockReturnValue(isOnline);
+    let answer: (to: string) => void = () => {};
+    studentDestination.mockImplementation(
+      () => new Promise<string>((resolve) => (answer = resolve)),
+    );
+    render(<EntryCheckFailed next={LESSON} />);
+    const tryAgain = screen.getByRole("button", { name: "Try again" });
+
+    fireEvent.click(tryAgain);
+
+    expect(tryAgain).toBeDisabled();
+    expect(tryAgain).toHaveAttribute("aria-busy", "true");
+    fireEvent.click(tryAgain);
+    expect(studentDestination).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      answer(STILL_UNCHECKED);
+    });
+
+    expect(tryAgain).toBeEnabled();
+    expect(tryAgain).not.toHaveAttribute("aria-busy");
+  });
+
   it("stays, and can be pressed again, when the read fails again", async () => {
     studentDestination.mockResolvedValue(STILL_UNCHECKED);
     render(<EntryCheckFailed next={LESSON} />);

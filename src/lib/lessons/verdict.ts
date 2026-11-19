@@ -62,6 +62,15 @@ export const MARK_WAIT_LINE = "Nevo has your answer and is still working.";
 /** Her word for sending it again, shown on a real failure only. */
 export const SEND_AGAIN = "Send again";
 
+/**
+ * THE END-OF-LESSON WAIT (Lydia, 10 Nov: "the same line covers the
+ * end-of-lesson wait, worded for that screen"; her words, 11 Nov). Past
+ * `SLOW_MARK_MS` of a completion write still on its way - on the check's
+ * result and on "That's the lesson done." - and never for a lesson that
+ * writes nothing. A write that fails says so in its own words instead.
+ */
+export const SAVING_LESSON_LINE = "Nevo is saving your lesson.";
+
 /** The retry a reply on its way offers, or null where there is none. */
 export function retryOf(reply: VerdictReply | null | undefined): (() => void) | null {
   if (!(reply instanceof Promise)) return null;

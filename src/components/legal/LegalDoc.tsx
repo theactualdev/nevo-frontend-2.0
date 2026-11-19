@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useSyncExternalStore } from "react";
+import { LEGAL_RETURNS, legalOpenedFrom, legalReturnOf } from "@/lib/legal/returns";
 import {
   LEGAL_DOCS,
   LEGAL_DRAFT_BADGE,
@@ -18,30 +20,72 @@ import { cn } from "@/lib/utils";
  *
  * The draft badge is not decoration: the wording is placeholder text pending
  * counsel, and the frame says so on the page. It stays until real text lands.
+ *
+ * THE WAY BACK IS SET BY WHERE IT WAS OPENED FROM (the frame's own rule;
+ * `LEGAL_RETURNS`). It used to be "Back" to "/" from everywhere, so a parent
+ * reading the privacy policy mid-consent was sent to the landing page. An
+ * entry behind a token goes back through history - and only when this tab
+ * followed that entry's link here and has history to go back through (see
+ * `markLegalOpenedFrom`). Opened any other way, it says the plain "Back" to
+ * "/", never "Back to consent" to somewhere that is not the consent.
  */
+const noSubscription = () => () => {};
+
 export function LegalDoc({
   doc,
+  from,
   backHref = "/",
   backLabel = "Back",
 }: {
   doc: LegalDocId;
+  /** Where it was opened from - the `?from=` its links carry. */
+  from?: string;
   backHref?: string;
   backLabel?: string;
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<LegalDocId>(doc);
   const active = LEGAL_DOCS[tab];
+  const entry = legalReturnOf(from);
+  const way = entry ? LEGAL_RETURNS[entry] : null;
+  // The server cannot see the tab; it draws the way back, and the client
+  // takes it away unless this tab came here from that entry.
+  const cameFromEntry = useSyncExternalStore(
+    noSubscription,
+    () => entry !== null && window.history.length > 1 && legalOpenedFrom(entry),
+    () => true,
+  );
+
+  const BACK =
+    "inline-flex cursor-pointer items-center gap-[7px] text-sm text-nevo-near-black/60 transition-transform active:scale-[0.99]";
+  const chevron = (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M15 6l-6 6 6 6" />
+    </svg>
+  );
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-6 py-12 text-nevo-near-black">
-      <Link
-        href={backHref}
-        className="inline-flex cursor-pointer items-center gap-[7px] text-sm text-nevo-near-black/60 transition-transform active:scale-[0.99]"
-      >
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M15 6l-6 6 6 6" />
-        </svg>
-        {backLabel}
-      </Link>
+      {way?.href ? (
+        <Link href={way.href} className={BACK}>
+          {chevron}
+          {way.label}
+        </Link>
+      ) : way && cameFromEntry ? (
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className={cn(BACK, "border-none bg-transparent p-0")}
+        >
+          {chevron}
+          {way.label}
+        </button>
+      ) : (
+        <Link href={backHref} className={BACK}>
+          {chevron}
+          {backLabel}
+        </Link>
+      )}
 
       <div className="mt-6 flex gap-2">
         {(["privacy", "terms"] as const).map((id) => (

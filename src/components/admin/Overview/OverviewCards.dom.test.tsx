@@ -87,6 +87,15 @@ vi.mock("@/lib/api/students", () => ({
 vi.mock("@/lib/api/intelligence", () => ({
   intelligenceApi: { allFlags: () => Promise.resolve({ flags: [], complete: true }) },
 }));
+// D26's figures, for the Overview's quiet line into them (backlog 48).
+const transformation = vi.fn();
+vi.mock("@/lib/api/analytics", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/analytics")>();
+  return {
+    ...actual,
+    analyticsApi: { ...actual.analyticsApi, getSchoolTransformation: (id: string) => transformation(id) },
+  };
+});
 
 const AUDIT = {
   schoolId: "sch1",
@@ -109,6 +118,18 @@ const NARRATIVE = {
 
 beforeEach(() => {
   academicConfig = {};
+  transformation.mockReset();
+  transformation.mockResolvedValue({
+    scope: "school",
+    scopeId: "sch1",
+    selfRegulation: { value: 78, previous: 75, trend: "up", learnerCount: 240 },
+    calibration: { reason: "Not measurable", needed: "A self-assessment" },
+    flexibility: null,
+    efficiency: null,
+    learnerCount: 240,
+    reportingFloor: 5,
+    suppressed: false,
+  });
   audit.mockReset();
   adaptationLog.mockReset();
   narrative.mockReset();
@@ -240,7 +261,29 @@ describe("the early-life variant", () => {
     // The snapshot's zeros are greyed; the compliance one stays navy.
     expect(muted.length).toBeGreaterThan(0);
     expect(navy.length).toBe(1);
-    expect(navy[0].className).toMatch(/text-\[38px\]/);
+    // D04's sizes: 40 from 1280, 32 below (SCRUM-347).
+    expect(navy[0].className).toMatch(/(^|\s)xl:text-\[40px\]/);
+    expect(navy[0].className).toMatch(/(^|\s)text-\[32px\]/);
+  });
+
+  /*
+   * D04 DRAWS THE COMPLIANCE CARD AS A ROW (Lydia, 16 Nov, SCRUM-347): the
+   * numeral left, the words beside it, "What we store" on the right from 1280
+   * and under the words below it. One link, moved by the grid, never two.
+   */
+  it("is D04's row: numeral, words, and one 'What we store' placed by the grid", async () => {
+    const { container } = render(<OverviewView />);
+    await waitFor(() => expect(container.querySelector("[data-compliance-row]")).not.toBeNull());
+    const row = container.querySelector("[data-compliance-row]") as HTMLElement;
+    expect(row.className).toMatch(/(^|\s)grid-cols-\[auto_minmax\(0,1fr\)\](\s|$)/);
+    expect(row.className).toMatch(/xl:grid-cols-\[auto_minmax\(0,1fr\)_auto\]/);
+    const links = [...row.querySelectorAll("a")].filter((a) => /What we store/.test(a.textContent ?? ""));
+    expect(links).toHaveLength(1);
+    expect(links[0].className).toMatch(/(^|\s)col-start-2(\s|$)/);
+    expect(links[0].className).toMatch(/xl:col-start-3/);
+    expect(links[0].className).toMatch(/xl:row-start-1/);
+    // The unit is the words' heading, beside the numeral, as drawn.
+    expect(row.children[1].textContent).toMatch(/^Diagnostic labels stored/);
   });
 });
 
@@ -428,5 +471,34 @@ describe("the teachers tile", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/Teachers/));
     await waitFor(() => expect(teacherList).toHaveBeenCalled());
     expect(visibleText(container)).not.toMatch(/with a Nevo account|set up so far/);
+  });
+});
+
+// D04's quiet line into School transformation (backlog 48).
+describe("the School transformation line", () => {
+  it("reads the school's own figures and says one, under the compliance row", async () => {
+    const { container } = render(<OverviewView />);
+
+    await waitFor(() => expect(container.querySelector("[data-transformation-line]")).not.toBeNull());
+    const line = container.querySelector("[data-transformation-line]")!;
+    await waitFor(() =>
+      expect(line.textContent).toContain(
+        "Lessons seen through 78%, better than the four weeks before (75%).",
+      ),
+    );
+    expect(transformation).toHaveBeenCalledWith("sch1");
+    expect(line).toHaveAttribute("href", "/admin/reports/transformation");
+    const compliance = container.querySelector("[data-compliance-row]")!;
+    expect(compliance.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("costs nothing else on the page when its read fails", async () => {
+    transformation.mockRejectedValue(new Error("500"));
+    const { container } = render(<OverviewView />);
+
+    await waitFor(() => expect(container.querySelector("[data-transformation-line]")).not.toBeNull());
+    expect(visibleText(container)).not.toMatch(/Lessons seen through/);
+    expect(visibleText(container)).toMatch(/Students enrolled/);
+    expect(visibleText(container)).not.toMatch(/couldn't load your school's overview/i);
   });
 });

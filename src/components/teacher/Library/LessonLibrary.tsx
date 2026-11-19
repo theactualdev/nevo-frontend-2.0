@@ -235,9 +235,13 @@ export function LessonLibrary() {
       {/* C06's stat cards: uploaded, live, in review - no trend arrows. The
           SERVER's counts across the whole library (SCRUM-245), so they hold
           past the first page; absent rather than summed when the read did
-          not come back. */}
+          not come back.
+          AS THE FRAME DRAWS THEM AT EACH WIDTH (SCRUM-347, item 5): a 640 row
+          with 16 between at desktop, where it ran the full 936 at 14; the
+          whole width at 12 on a tablet, with the tablet card's 16 padding,
+          5 gap and 28 number. */}
       {live && totals && (
-        <div className="mt-[18px] grid max-w-[1000px] grid-cols-3 gap-3 xl:mt-[22px] xl:gap-3.5">
+        <div className="mt-[18px] grid grid-cols-3 gap-3 xl:mt-[22px] xl:max-w-[640px] xl:gap-4">
           {[
             { n: totals.lessonsUploaded, label: "Lessons uploaded" },
             { n: totals.liveToClasses, label: "Live to classes" },
@@ -245,9 +249,9 @@ export function LessonLibrary() {
           ].map((s) => (
             <div
               key={s.label}
-              className="flex flex-col gap-1.5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-elevation-1"
+              className="flex flex-col gap-[5px] rounded-[12px] bg-nevo-cream-elevated p-4 shadow-elevation-1 xl:gap-1.5 xl:px-[22px] xl:py-5"
             >
-              <span className="text-[30px] leading-none font-semibold tracking-[-0.02em] text-nevo-navy xl:text-[34px]">
+              <span className="text-[28px] leading-none font-semibold tracking-[-0.02em] text-nevo-navy xl:text-[34px]">
                 {s.n.toLocaleString("en-GB")}
               </span>
               <span className="text-[12.5px] font-semibold tracking-[0.04em] text-nevo-near-black/50 uppercase">

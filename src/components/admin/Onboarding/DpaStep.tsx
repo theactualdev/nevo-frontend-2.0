@@ -148,7 +148,7 @@ export function DpaStep({
           ref={pane}
           onScroll={onScroll}
           tabIndex={0}
-          className="max-h-[420px] overflow-y-auto rounded-xl bg-nevo-cream-elevated px-7 py-[26px] outline-none max-lg:max-h-[340px]"
+          className="max-h-[420px] overflow-y-auto rounded-xl bg-nevo-cream-elevated px-7 py-[26px] outline-none max-xl:max-h-[340px]"
         >
           {agreement.state === "ready" ? <AgreementDetails agreement={agreement.value} /> : null}
           {clauses.map((c) => (

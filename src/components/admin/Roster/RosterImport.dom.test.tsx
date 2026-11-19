@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { ApiError } from "@/lib/api/client";
 import type { OnboardingState } from "@/lib/api/onboarding";
@@ -18,6 +18,7 @@ const stageImport = vi.fn();
 const confirm = vi.fn();
 const template = vi.fn();
 const decideMerges = vi.fn();
+const correctClasses = vi.fn();
 
 vi.mock("@/lib/api/onboarding", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/onboarding")>();
@@ -30,6 +31,7 @@ vi.mock("@/lib/api/onboarding", async (importOriginal) => {
       confirm: () => confirm(),
       template: (name: string) => template(name),
       decideMerges: (d: unknown) => decideMerges(d),
+      correctClasses: (c: unknown) => correctClasses(c),
     },
   };
 });
@@ -102,7 +104,7 @@ describe("OB-01 upload", () => {
     const { container } = render(<RosterImportView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Add your roster/));
 
-    fireEvent.change(screen.getByLabelText(/Upload students/i), {
+    fireEvent.change(screen.getByLabelText(/Upload student file/i), {
       target: { files: [file()] },
     });
 
@@ -117,7 +119,7 @@ describe("OB-01 upload", () => {
 
     expect(screen.queryByRole("button", { name: /See what Nevo found/i })).toBeNull();
 
-    fireEvent.change(screen.getByLabelText(/Upload students/i), {
+    fireEvent.change(screen.getByLabelText(/Upload student file/i), {
       target: { files: [file()] },
     });
 
@@ -139,7 +141,7 @@ describe("OB-01 upload", () => {
       expect(screen.getByRole("button", { name: /See what Nevo found/i })).toBeEnabled(),
     );
 
-    fireEvent.change(screen.getByLabelText(/Upload staff/i), {
+    fireEvent.change(screen.getByLabelText(/Upload teacher file/i), {
       target: { files: [file()] },
     });
 
@@ -164,7 +166,7 @@ describe("OB-01 upload", () => {
     const { container } = render(<RosterImportView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Add your roster/));
 
-    fireEvent.change(screen.getByLabelText(/Upload students/i), {
+    fireEvent.change(screen.getByLabelText(/Upload student file/i), {
       target: { files: [file()] },
     });
 
@@ -179,7 +181,7 @@ describe("OB-01 upload", () => {
     const { container } = render(<RosterImportView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Add your roster/));
 
-    fireEvent.change(screen.getByLabelText(/Upload students/i), {
+    fireEvent.change(screen.getByLabelText(/Upload student file/i), {
       target: { files: [file()] },
     });
 
@@ -200,7 +202,7 @@ describe("OB-01 upload", () => {
         expect(visibleText(container)).toMatch(/Your roster is confirmed/),
       );
       expect(visibleText(container)).toMatch(/336 students across 1 class/);
-      expect(screen.queryByLabelText(/Upload students/i)).toBeNull();
+      expect(screen.queryByLabelText(/Upload student file/i)).toBeNull();
       expect(screen.getByRole("link", { name: /Pay for the year/ })).toHaveAttribute(
         "href",
         "/admin/activate",
@@ -221,7 +223,7 @@ describe("OB-01 upload", () => {
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/already set up/i),
     );
-    expect(screen.queryByLabelText(/Upload students/i)).toBeNull();
+    expect(screen.queryByLabelText(/Upload student file/i)).toBeNull();
     expect(screen.getByRole("link", { name: /Go to Students/ })).toHaveAttribute(
       "href",
       "/admin/students",
@@ -365,8 +367,8 @@ describe("OB-01's expected columns and templates", () => {
 
   it("shows each template's own header row before anything is uploaded", async () => {
     const { container } = render(<RosterImportView />);
-    await waitFor(() => expect(screen.getByRole("list", { name: /for students/ })).toBeInTheDocument());
-    expect(columnsOf(/for students/)).toEqual([
+    await waitFor(() => expect(screen.getByRole("list", { name: /for student file/ })).toBeInTheDocument());
+    expect(columnsOf(/for student file/)).toEqual([
       "First name",
       "Surname",
       "Class",
@@ -377,8 +379,8 @@ describe("OB-01's expected columns and templates", () => {
       "Guardian email",
       "Relationship to the child",
     ]);
-    await waitFor(() => expect(screen.getByRole("list", { name: /for staff/ })).toBeInTheDocument());
-    expect(columnsOf(/for staff/)).toEqual(["First name", "Surname", "Email", "Subject", "Class"]);
+    await waitFor(() => expect(screen.getByRole("list", { name: /for teacher file/ })).toBeInTheDocument());
+    expect(columnsOf(/for teacher file/)).toEqual(["First name", "Surname", "Email", "Subject", "Class"]);
     expect(template).toHaveBeenCalledWith("students");
     expect(template).toHaveBeenCalledWith("teachers");
     expect(stageImport).not.toHaveBeenCalled();
@@ -412,7 +414,7 @@ describe("OB-01's expected columns and templates", () => {
         saved.push(this.download);
       });
     render(<RosterImportView />);
-    await waitFor(() => expect(screen.getByRole("list", { name: /for staff/ })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("list", { name: /for teacher file/ })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Download the teacher template" }));
     await waitFor(() => expect(saved).toEqual(["nevo-teacher-import.csv"]));
     expect(template).toHaveBeenCalledTimes(2);
@@ -512,5 +514,126 @@ describe("a refusal on the roster screen", () => {
     const { container } = render(<RosterImportView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/don't have access to the roster upload/));
     expect(screen.queryByRole("button", { name: /Try again/ })).toBeNull();
+  });
+});
+
+/**
+ * RENAME AND DROP A DERIVED CLASS (Lydia, 11 Nov: allowed before anything in
+ * that import is activated). `PATCH /onboarding/classes`, keyed on
+ * `normalisedName`, which the server takes while the stage is "uploading" -
+ * so until Confirm. D24 draws the row as a name and a count; the drop line is
+ * Lydia's (16 Nov).
+ */
+describe("Classes Nevo derived: rename and drop", () => {
+  const reachFound = async () => {
+    get.mockResolvedValue(READ);
+    const r = render(<RosterImportView />);
+    fireEvent.click(await screen.findByRole("button", { name: /See what Nevo found/i }));
+    await screen.findByText(/What Nevo found/);
+    return r;
+  };
+  const row = () => screen.getByText("JSS 1A").closest("div.px-\\[22px\\]") as HTMLElement;
+
+  it("renames a class by its normalised name, and shows the list the server sends back", async () => {
+    correctClasses.mockResolvedValue({
+      ...READ,
+      classes: [{ ...READ.classes[0], name: "JSS 1 Alpha", normalisedName: "jss 1 alpha" }],
+    });
+    await reachFound();
+    fireEvent.click(within(row()).getByRole("button", { name: "Rename" }));
+    fireEvent.change(screen.getByLabelText("New name for JSS 1A"), { target: { value: "JSS 1 Alpha" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(correctClasses).toHaveBeenCalledWith([{ normalisedName: "jss 1a", renameTo: "JSS 1 Alpha" }]),
+    );
+    expect(await screen.findByText("JSS 1 Alpha")).toBeInTheDocument();
+  });
+
+  it("won't save a rename to the same name, or to nothing", async () => {
+    await reachFound();
+    fireEvent.click(within(row()).getByRole("button", { name: "Rename" }));
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("New name for JSS 1A"), { target: { value: "   " } });
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(correctClasses).not.toHaveBeenCalled();
+  });
+
+  it("asks before a drop in Lydia's words (16 Nov), and sends it only on the second press", async () => {
+    correctClasses.mockResolvedValue({ ...READ, classes: [], studentCount: 306 });
+    const { container } = await reachFound();
+    fireEvent.click(within(row()).getByRole("button", { name: "Drop" }));
+    expect(visibleText(container)).toMatch(
+      /Remove this class from the import\. It has not been created yet, so nothing is deleted\./,
+    );
+    expect(correctClasses).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Drop JSS 1A" }));
+    await waitFor(() => expect(correctClasses).toHaveBeenCalledWith([{ normalisedName: "jss 1a", drop: true }]));
+    await waitFor(() => expect(screen.queryByText("JSS 1A")).toBeNull());
+  });
+
+  it("keeps the class when the admin cancels", async () => {
+    await reachFound();
+    fireEvent.click(within(row()).getByRole("button", { name: "Drop" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("button", { name: "Drop JSS 1A" })).toBeNull();
+    expect(correctClasses).not.toHaveBeenCalled();
+  });
+
+  it("confirmed meanwhile: reads again and moves on, without the server's console sentence", async () => {
+    correctClasses.mockRejectedValue(
+      new ApiError(409, "Conflict", {
+        detail: {
+          code: "onboarding_already_confirmed",
+          message: "The roster is confirmed. Change classes in the admin console.",
+        },
+      }),
+    );
+    const { container } = await reachFound();
+    get.mockResolvedValue(state({ stage: "confirmed", studentCount: 336, classes: READ.classes }));
+    fireEvent.click(within(row()).getByRole("button", { name: "Drop" }));
+    fireEvent.click(screen.getByRole("button", { name: "Drop JSS 1A" }));
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    expect(visibleText(container)).not.toMatch(/Change classes in the admin console/);
+  });
+
+  it("says a failed save failed, and nothing changed", async () => {
+    correctClasses.mockRejectedValue(new Error("offline"));
+    await reachFound();
+    fireEvent.click(within(row()).getByRole("button", { name: "Drop" }));
+    fireEvent.click(screen.getByRole("button", { name: "Drop JSS 1A" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That didn’t save, and nothing has changed. Try again in a moment.",
+    );
+    expect(screen.getByText("JSS 1A")).toBeInTheDocument();
+  });
+
+  it("offers neither for a class already created", async () => {
+    get.mockResolvedValue({ ...READ, classes: [{ ...READ.classes[0], committed: true }] });
+    render(<RosterImportView />);
+    fireEvent.click(await screen.findByRole("button", { name: /See what Nevo found/i }));
+    await screen.findByText(/What Nevo found/);
+    expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Drop" })).toBeNull();
+  });
+});
+
+/**
+ * D24 OB-01's two panels, in its order and by its names (backlog 36): "Teacher
+ * file", then "Student file" - they read "Students" then "Staff". Side by side
+ * from 1280 only; one column below, as the tablet frame draws it.
+ */
+describe("OB-01's panels", () => {
+  it("are the Teacher file then the Student file, two across from 1280 only", async () => {
+    get.mockResolvedValue(state({ stage: "uploading" }));
+    render(<RosterImportView />);
+    await screen.findByText("Add your roster");
+    const titles = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(titles.indexOf("Teacher file")).toBeGreaterThanOrEqual(0);
+    expect(titles.indexOf("Teacher file")).toBeLessThan(titles.indexOf("Student file"));
+    expect(titles).not.toContain("Staff");
+    expect(titles).not.toContain("Students");
+    const grid = screen.getByText("Teacher file").closest("div.grid") as HTMLElement;
+    expect(grid.className).toMatch(/(^|\s)xl:grid-cols-2(\s|$)/);
+    expect(grid.className).not.toMatch(/md:grid-cols-2/);
   });
 });

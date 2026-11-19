@@ -203,7 +203,7 @@ export function SavedLessons() {
 
   return (
     <div className={TAB_PAGE}>
-      <div className="max-w-[640px]">
+      <div>
       <h1 className={TAB_TITLE}>Downloads</h1>
       {/* Straight apostrophes, as the student screens and the frames write
           them; this screen mixed both. */}

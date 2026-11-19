@@ -62,17 +62,17 @@ export function LessonSummaryScreen({
     // Grows to the foot of the shell's region, so on a short page the
     // actions sit at the foot as 18a draws them, not under the last card.
     <div className="flex min-h-full flex-1 flex-col bg-nevo-cream text-nevo-near-black">
-      <div className="flex-1 px-6 pt-8 pb-6 sm:px-8 lg:px-10">
-        <div className="mx-auto w-full max-w-[560px] lg:max-w-[640px]">
+      <div className="flex-1 px-6 pt-8 pb-6 sm:px-8 xl:px-10">
+        <div className="mx-auto w-full max-w-[560px] md:max-w-[600px] xl:max-w-[640px]">
           <span className="font-mono text-[11px] tracking-[0.08em] text-nevo-navy">
             LESSON SUMMARY
           </span>
-          <h1 className="mt-2.5 text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
+          <h1 className="mt-2.5 text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] xl:text-[32px]">
             {lesson.title}
           </h1>
 
           {summary?.recap && (
-            <p className="mt-5 text-base leading-[1.7] text-nevo-near-black/72 sm:mt-6 sm:text-[17px] lg:text-lg">
+            <p className="mt-5 text-base leading-[1.7] text-nevo-near-black/72 sm:mt-6 sm:text-[17px] xl:text-lg">
               {summary.recap}
             </p>
           )}
@@ -88,7 +88,7 @@ export function LessonSummaryScreen({
             screen the frame makes most prominent.
           */}
           {summary?.covered && (
-            <div className="mt-7 rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-[22px] lg:p-6">
+            <div className="mt-7 rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-[22px] xl:p-6">
               <span className="font-mono text-[11px] tracking-[0.06em] text-nevo-near-black/55">
                 WHAT YOU COVERED
               </span>
@@ -149,8 +149,8 @@ export function LessonSummaryScreen({
         too. The cream shadow, that clearance tall, covers what scrolls in
         the gap below them; it must follow `<main>`'s padding.
       */}
-      <div className="sticky bottom-0 shrink-0 bg-nevo-cream px-6 pb-8 shadow-[0_68px_0_0_var(--color-nevo-cream)] sm:px-8 md:shadow-[0_76px_0_0_var(--color-nevo-cream)] lg:px-10">
-        <div className="mx-auto flex w-full max-w-[560px] flex-col gap-2 sm:flex-row sm:gap-3 lg:max-w-[640px]">
+      <div className="sticky bottom-0 shrink-0 bg-nevo-cream px-6 pb-8 shadow-[0_68px_0_0_var(--color-nevo-cream)] sm:px-8 md:shadow-[0_76px_0_0_var(--color-nevo-cream)] xl:px-10">
+        <div className="mx-auto flex w-full max-w-[560px] flex-col gap-2 sm:flex-row sm:gap-3 xl:max-w-[640px]">
           <Button
             className="w-full sm:flex-1"
             onClick={() => router.push(LESSONS_HREF)}

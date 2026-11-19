@@ -60,7 +60,13 @@ const AUDIT = {
 
 /** The row is the whole list item; scope assertions to it, not the page. */
 function stepRow(container: HTMLElement, title: string): HTMLElement {
-  const hit = Array.from(container.querySelectorAll("a, div")).find((el) => {
+  // Inside the checklist's own card: D04's early tile shares a done row's
+  // words ("Teachers invited"), so the page as a whole is the wrong scope.
+  const card =
+    Array.from(container.querySelectorAll("h3")).find(
+      (h) => h.textContent?.trim().toLowerCase() === "getting started",
+    )?.nextElementSibling ?? container;
+  const hit = Array.from(card.querySelectorAll("a, div")).find((el) => {
     const t = el.textContent ?? "";
     return t.includes(title) && t.length < 300;
   });
@@ -89,10 +95,11 @@ describe("Overview getting-started - the teachers row", () => {
   it("ticks when the roster carries teachers", async () => {
     const { container } = render(<OverviewView />);
 
+    // Done, the row takes D04's done title (backlog 89).
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/Invite your teachers/),
+      expect(visibleText(container)).toMatch(/Teachers invited/),
     );
-    expect(visibleText(stepRow(container, "Invite your teachers"))).toMatch(
+    expect(visibleText(stepRow(container, "Teachers invited"))).toMatch(
       /\(done\)/,
     );
     // Control: a row that can settle, and one that cannot.
@@ -107,9 +114,9 @@ describe("Overview getting-started - the teachers row", () => {
     const { container } = render(<OverviewView />);
 
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/Invite your teachers/),
+      expect(visibleText(container)).toMatch(/Teachers invited/),
     );
-    expect(visibleText(stepRow(container, "Invite your teachers"))).toMatch(
+    expect(visibleText(stepRow(container, "Teachers invited"))).toMatch(
       /\(done\)/,
     );
   });
@@ -156,13 +163,20 @@ describe("Overview getting-started - the teachers row", () => {
     );
   });
 
-  it("keeps D04's copy on a ticked row", async () => {
+  /*
+   * BACKLOG 89: D04's done row - "Teachers invited · 6 invited, 4 have set up
+   * their console." - where it kept the open step's title and instruction.
+   * Here the teachers list is not read, so the set-up half is left out.
+   */
+  it("says D04's done copy on a ticked row, and nothing it cannot count", async () => {
     const { container } = render(<OverviewView />);
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/Invite your teachers/),
+      expect(visibleText(container)).toMatch(/Teachers invited/),
     );
-    const row = visibleText(stepRow(container, "Invite your teachers"));
-    expect(row).toMatch(/They each get a link to set up their own console\./);
+    const row = visibleText(stepRow(container, "Teachers invited"));
+    expect(row).toMatch(/3 invited/);
+    expect(row).not.toMatch(/They each get a link/);
+    expect(row).not.toMatch(/Invite teachers/);
   });
 });
 
@@ -211,7 +225,7 @@ describe("the roll-up reads and the page", () => {
     // The checklist is below the fold of the page gate: if `phase` were still
     // "loading" this would time out, which is exactly the bug.
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/Invite your teachers/),
+      expect(visibleText(container)).toMatch(/Add your students/),
     );
   });
 });
@@ -237,7 +251,7 @@ describe("Overview getting-started - writes paused", () => {
     setupGate.mockReturnValue(PAUSED);
     const { container } = render(<OverviewView />);
 
-    const row = await waitFor(() => stepRow(container, "Invite your teachers"));
+    const row = await waitFor(() => stepRow(container, "Add your students"));
     expect(row.closest("a")).toBeNull();
     expect(row.textContent).toMatch(/Paused until your email is confirmed\./);
   });
@@ -248,8 +262,8 @@ describe("Overview getting-started - writes paused", () => {
     setupGate.mockReturnValue(PAUSED);
     const { container } = render(<OverviewView />);
 
-    const row = await waitFor(() => stepRow(container, "Invite your teachers"));
-    expect(row.textContent).toMatch(/Invite teachers/);
+    const row = await waitFor(() => stepRow(container, "Add your students"));
+    expect(row.textContent).toMatch(/Enrol students/);
     // ...but not dressed as a live link.
     expect(row.textContent).not.toMatch(/→/);
   });
@@ -257,7 +271,7 @@ describe("Overview getting-started - writes paused", () => {
   it("leaves the rows alone when nothing is paused", async () => {
     const { container } = render(<OverviewView />);
 
-    const row = await waitFor(() => stepRow(container, "Invite your teachers"));
+    const row = await waitFor(() => stepRow(container, "Add your students"));
     expect(row.closest("a")).not.toBeNull();
     expect(row.textContent).not.toMatch(/Paused until/);
   });

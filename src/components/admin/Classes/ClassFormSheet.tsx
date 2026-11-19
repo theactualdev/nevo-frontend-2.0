@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
 import { yearGroupOptions } from "@/lib/constants/yearGroups";
@@ -51,6 +51,7 @@ export function ClassFormSheet({
   onSaved: (classId: string) => void;
 }) {
   const editing = Boolean(existing);
+  const failureId = useId();
   const [name, setName] = useState(existing?.name ?? "");
   const [year, setYear] = useState(existing?.yearGroup ?? "");
   /*
@@ -170,11 +171,18 @@ export function ClassFormSheet({
           </div>
         ) : phase === "failed" ? (
           <>
-            <FailureLine>
+            <FailureLine id={failureId}>
               That didn&rsquo;t save. We&rsquo;re on it, and what you typed is
               still here.
             </FailureLine>
-            <button type="button" onClick={submit} className={PRIMARY_BTN}>
+            <button
+              type="button"
+              onClick={submit}
+              // Named by the failure beside it, so it is never one of two
+              // bare "Try again"s to a screen reader (see ReadFailed).
+              aria-describedby={failureId}
+              className={PRIMARY_BTN}
+            >
               Try again
             </button>
             {/* SCRUM-40 names both: "Primary 'Try again', secondary

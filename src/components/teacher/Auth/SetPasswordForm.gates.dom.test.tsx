@@ -77,6 +77,22 @@ describe("the consent box on activation", () => {
     expect(screen.getByRole("button", { name: "Activate my account" })).toBeEnabled();
   });
 
+  // Privacy & Terms' Entry 1: its way back is "Back to activation", and the
+  // invitation token stays in this page's own address.
+  it("links to the policy and the terms, saying they were opened from activation", () => {
+    params.value = new URLSearchParams("token=inv-1");
+    render(<SetPasswordForm mode="activation" />);
+
+    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute(
+      "href",
+      "/legal/privacy?from=activation",
+    );
+    expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute(
+      "href",
+      "/legal/terms?from=activation",
+    );
+  });
+
   it("is not asked for on a reset, which is not an agreement", () => {
     params.value = new URLSearchParams("token=r-1");
     render(<SetPasswordForm mode="reset" />);

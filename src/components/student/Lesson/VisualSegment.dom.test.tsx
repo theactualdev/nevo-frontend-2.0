@@ -341,7 +341,7 @@ describe("reading support on the introduction", () => {
     const intro = screen.getByText("Follow the arrows.").className;
     expect(intro).toMatch(/(^|\s)text-\[18px\]/);
     expect(intro).toMatch(/(^|\s)leading-\[2\]/);
-    expect(intro).toMatch(/(^|\s)lg:text-\[19px\]/);
+    expect(intro).toMatch(/(^|\s)xl:text-\[19px\]/);
   });
 });
 

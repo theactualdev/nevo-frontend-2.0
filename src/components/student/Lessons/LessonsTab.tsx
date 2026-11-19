@@ -147,7 +147,7 @@ export function LessonsTab() {
   // their own assignments.
   if (!hydrated || (signedIn && loading)) {
     return shell(
-      <div className="mt-6 grid grid-cols-2 gap-3.5 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-2 gap-3.5 xl:grid-cols-3">
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
@@ -189,7 +189,7 @@ export function LessonsTab() {
         art={
           <EmptyArt
             src="/illustrations/empty-lessons.png"
-            className="h-[200px] md:h-[240px] lg:h-[250px]"
+            className="h-[200px] md:h-[240px] xl:h-[250px]"
           />
         }
         line="When your teacher sets your first lesson, you'll find it right here."
@@ -270,7 +270,7 @@ export function LessonsTab() {
           art={
             <EmptyArt
               src="/illustrations/empty-lessons.png"
-              className="h-[210px] md:h-[240px] lg:h-[250px]"
+              className="h-[210px] md:h-[240px] xl:h-[250px]"
             />
           }
           line={FILTERED_EMPTY[filter]}
@@ -318,7 +318,7 @@ export function LessonsTab() {
                   {subject}
                 </h2>
               )}
-              <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-3">
                 {lessons.map((lesson) => (
                   <LessonCard
                     key={lesson.id}

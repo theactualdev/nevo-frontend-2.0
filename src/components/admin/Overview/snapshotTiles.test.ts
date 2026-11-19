@@ -91,9 +91,12 @@ describe("snapshotTiles", () => {
         ...base,
         studentsProfiled: 0,
         adaptations: 0,
+        counts: { classes: 0 },
         early: true,
       });
-      expect(tile(early, "profiled").muted).toBe(true);
+      // The early frame draws no "Students learning" (backlog 88).
+      expect(keys(early)).not.toContain("profiled");
+      expect(tile(early, "classes").muted).toBe(true);
       expect(tile(early, "adaptations").muted).toBe(true);
 
       // The same zeros on a live school are a fact about the school, not an
@@ -233,5 +236,46 @@ describe("the teachers tile's open invitations (D04)", () => {
         now,
       ),
     ).toBe(2);
+  });
+});
+
+/**
+ * BACKLOG 88: D04's early tiles, in its order and words - "Teachers invited",
+ * "Students enrolled · import or add your roster", "Classes created · create
+ * your first class", then "Adaptations made" - and #1107's teachers line kept.
+ */
+describe("D04's early tiles", () => {
+  const early = (counts: SchoolRosterCounts, extra = {}) =>
+    snapshotTiles({ ...base, adaptations: 0, counts, early: true, ...extra });
+
+  it("comes in the frame's order, with no Students learning", () => {
+    const t = early({ teachers: 2, activeStudents: 0, classes: 0 });
+    expect(keys(t)).toEqual(["teachers", "enrolled", "classes", "adaptations"]);
+  });
+
+  it("says what to do next at zero, in D04's words", () => {
+    const t = early({ teachers: 2, activeStudents: 0, classes: 0 }, { pendingTeacherInvites: 2 });
+    expect(tile(t, "teachers").label).toBe("Teachers invited");
+    expect(tile(t, "teachers").desc).toBe("2 invitations pending");
+    expect(tile(t, "enrolled").desc).toBe("import or add your roster");
+    expect(tile(t, "classes").label).toBe("Classes created");
+    expect(tile(t, "classes").desc).toBe("create your first class");
+  });
+
+  it("keeps #1107's set-up line, and guesses no class total", () => {
+    const t = early(
+      { teachers: 6, activeStudents: 48, classes: 3 },
+      { pendingTeacherInvites: 0, teachersSetUp: 4 },
+    );
+    expect(tile(t, "teachers").desc).toBe("4 have set up so far");
+    expect(tile(t, "enrolled").desc).toBe("keep going, or import the rest");
+    // D04's "11 still to set up" counts against a total we do not hold.
+    expect(tile(t, "classes").desc).toBe("");
+  });
+
+  it("leaves the live tiles as they were", () => {
+    const live = snapshotTiles({ ...base, counts: { classes: 3 }, early: false });
+    expect(tile(live, "classes").label).toBe("Classes");
+    expect(keys(live)).toContain("profiled");
   });
 });

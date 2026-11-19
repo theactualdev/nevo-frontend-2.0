@@ -41,10 +41,12 @@ import {
  * way D20's cohort journeys do it. The API being able to say more is not a
  * reason to.
  *
- * WHAT THE FRAME DRAWS THAT THE API CANNOT FILL:
- * - Before / after. Each row expands to show what the lesson looked like
- *   either side of the change; the response carries `adaptation` and `trigger`
- *   and nothing describing the prior state. The expander shows what exists.
+ * BEFORE / AFTER IS FILLED NOW (backlog 49). Each row expands to show what
+ * the lesson was either side of the change, as D21 draws it. The response
+ * carries `before` and `after` on every row - nullable, and in the server's
+ * words, never an engine value - and the pair is drawn only when both came.
+ * A format change here is that lesson's, at that moment: nothing about the
+ * learner is stored or implied by it (rule 1).
  *
  * THE RANGE IS THE FRAME'S NOW: This week, This half-term, Custom range - see
  * `logWindow`. It was rolling 7, 30 and 120 days with the 120 labelled "This
@@ -75,9 +77,6 @@ import {
  * was nothing to populate a filter from. Backend enumerated the eight values
  * and made it a repeatable query parameter on 15 Sep. The engine's vocabulary
  * is mapped to readable labels in `eventTypes.ts`, once.
- *
- * TODO(api): a before/after pair on the event - the one thing D21 draws that
- * still has no source.
  */
 
 const CARD = "rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
@@ -729,6 +728,37 @@ export function AdaptationLogView({ back = null }: { back?: Back | null } = {}) 
                     </button>
                     {open && (
                       <div className="px-[22px] pb-5 pl-[166px]">
+                        {/* D21's Before / After (backlog 49), only where the
+                            server sent both: half a pair says nothing. */}
+                        {r.before?.trim() && r.after?.trim() ? (
+                          <div
+                            data-before-after
+                            className="mb-4 flex flex-wrap items-stretch gap-3.5"
+                          >
+                            <div className="min-w-0 flex-[1_1_200px]">
+                              <span className="text-[12.5px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase">
+                                Before
+                              </span>
+                              <p className="mt-2 rounded-[10px] bg-nevo-near-black/[0.05] px-3.5 py-3 text-[13px] leading-[1.5] text-nevo-near-black/72">
+                                {r.before}
+                              </p>
+                            </div>
+                            <span aria-hidden className="flex flex-none items-center pt-6 text-nevo-violet">
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M5 12h14" />
+                                <path d="M13 6l6 6-6 6" />
+                              </svg>
+                            </span>
+                            <div className="min-w-0 flex-[1_1_200px]">
+                              <span className="text-[12.5px] font-semibold tracking-[0.05em] text-nevo-navy uppercase">
+                                After
+                              </span>
+                              <p className="mt-2 rounded-[10px] bg-nevo-violet/16 px-3.5 py-3 text-[13px] leading-[1.5] text-nevo-near-black">
+                                {r.after}
+                              </p>
+                            </div>
+                          </div>
+                        ) : null}
                         <span className="text-[12.5px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase">
                           Signal behind it
                         </span>

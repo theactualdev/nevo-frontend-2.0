@@ -65,6 +65,8 @@ export function SubjectPicker({
   onChange,
   subjects,
   disabled,
+  size = "md",
+  maxPills = 0,
 }: {
   id: string;
   /** What the pills are, for a screen reader. */
@@ -74,7 +76,19 @@ export function SubjectPicker({
   /** The school's list. Null while it is unread: nothing is offered to add. */
   subjects: SchoolSubject[] | null;
   disabled?: boolean;
+  /**
+   * D27's "Compact, in a grid cell" (`size="sm"`): a 40px field, smaller
+   * pills, a shorter list. For D05 Add several, where each class is a row.
+   */
+  size?: "md" | "sm";
+  /**
+   * D27 collapses the pills to this many while the picker is closed, with
+   * "+N more" after them. Open, every pill shows so each can be removed.
+   * 0 shows them all.
+   */
+  maxPills?: number;
 }) {
+  const sm = size === "sm";
   const root = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const panelId = useId();
@@ -157,6 +171,9 @@ export function SubjectPicker({
     input.current?.focus();
   };
 
+  const collapsed = maxPills > 0 && !open && value.length > maxPills;
+  const pills = collapsed ? value.slice(0, maxPills) : value;
+
   const listHead = ql
     ? rows.length
       ? "Matching subjects"
@@ -172,17 +189,21 @@ export function SubjectPicker({
           input.current?.focus();
         }}
         className={cn(
-          "flex min-h-[50px] cursor-text flex-wrap items-center gap-1.5 rounded-[10px] bg-nevo-cream px-[9px] py-[7px] transition-colors",
+          "flex cursor-text flex-wrap items-center gap-1.5 rounded-[10px] bg-nevo-cream transition-colors",
+          sm ? "min-h-[40px] px-[7px] py-[5px]" : "min-h-[50px] px-[9px] py-[7px]",
           open ? "border-2 border-nevo-navy" : "border-[1.5px] border-nevo-near-black/16",
           disabled && "cursor-not-allowed opacity-60",
         )}
       >
         {value.length > 0 ? (
           <ul aria-label={listLabel} className="m-0 contents list-none p-0">
-            {value.map((n) => (
+            {pills.map((n) => (
               <li
                 key={n}
-                className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-nevo-navy/12 py-[5px] pr-[5px] pl-3 text-[13.5px] font-semibold text-nevo-navy"
+                className={cn(
+                  "inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-nevo-navy/12 font-semibold text-nevo-navy",
+                  sm ? "py-[3px] pr-1 pl-2.5 text-[12.5px]" : "py-[5px] pr-[5px] pl-3 text-[13.5px]",
+                )}
               >
                 {label(n)}
                 <button
@@ -193,7 +214,10 @@ export function SubjectPicker({
                     e.stopPropagation();
                     onChange(value.filter((v) => v !== n));
                   }}
-                  className="flex size-5 cursor-pointer items-center justify-center rounded-full hover:bg-nevo-navy/16 disabled:cursor-not-allowed"
+                  className={cn(
+                    "flex cursor-pointer items-center justify-center rounded-full hover:bg-nevo-navy/16 disabled:cursor-not-allowed",
+                    sm ? "size-[18px]" : "size-5",
+                  )}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
                     <path d="M6 6l12 12M18 6L6 18" />
@@ -201,6 +225,11 @@ export function SubjectPicker({
                 </button>
               </li>
             ))}
+            {collapsed ? (
+              <li className="whitespace-nowrap px-1 text-[12.5px] font-semibold text-nevo-near-black/55">
+                {`+${value.length - maxPills} more`}
+              </li>
+            ) : null}
           </ul>
         ) : null}
         {subjects ? (
@@ -237,7 +266,10 @@ export function SubjectPicker({
                 }
               }
             }}
-            className="h-[34px] min-w-[90px] flex-[1_1_110px] border-none bg-transparent px-1 text-[15px] text-nevo-near-black outline-none placeholder:text-nevo-near-black/50 disabled:cursor-not-allowed"
+            className={cn(
+              "min-w-[90px] flex-[1_1_110px] border-none bg-transparent px-1 text-nevo-near-black outline-none placeholder:text-nevo-near-black/50 disabled:cursor-not-allowed",
+              sm ? "h-7 text-[13.5px]" : "h-[34px] text-[15px]",
+            )}
           />
         ) : null}
       </div>
@@ -250,7 +282,7 @@ export function SubjectPicker({
           <div className="px-3.5 pt-2.5 pb-1 text-[11.5px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase">
             {listHead}
           </div>
-          <div className="max-h-[248px] overflow-y-auto pb-1.5">
+          <div className={cn("overflow-y-auto pb-1.5", sm ? "max-h-[196px]" : "max-h-[248px]")}>
             {rows.map((o) => {
               const on = chosen(o);
               return (
@@ -260,7 +292,10 @@ export function SubjectPicker({
                   role="checkbox"
                   aria-checked={on}
                   onClick={() => toggle(o)}
-                  className="flex w-full cursor-pointer items-center gap-[11px] px-3.5 py-2.5 text-left text-[14.5px] text-nevo-near-black hover:bg-nevo-navy/6"
+                  className={cn(
+                    "flex w-full cursor-pointer items-center gap-[11px] px-3.5 text-left text-nevo-near-black hover:bg-nevo-navy/6",
+                    sm ? "py-2 text-[13.5px]" : "py-2.5 text-[14.5px]",
+                  )}
                 >
                   <span
                     aria-hidden
@@ -283,7 +318,10 @@ export function SubjectPicker({
               <button
                 type="button"
                 onClick={add}
-                className="flex w-full cursor-pointer items-center gap-[11px] px-3.5 py-2.5 text-left text-[14.5px] text-nevo-near-black hover:bg-nevo-navy/6"
+                className={cn(
+                  "flex w-full cursor-pointer items-center gap-[11px] px-3.5 text-left text-nevo-near-black hover:bg-nevo-navy/6",
+                  sm ? "py-2 text-[13.5px]" : "py-2.5 text-[14.5px]",
+                )}
               >
                 <span aria-hidden className="flex size-5 flex-none items-center justify-center rounded-[6px] bg-nevo-navy/12 text-nevo-navy">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">

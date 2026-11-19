@@ -20,7 +20,10 @@ import {
   PRIMARY_BTN,
   Spinner,
 } from "../Roster/primitives";
-import { splitName } from "./csv";
+/** D19's own test for an email the form can send to. */
+function validEmail(v: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+}
 
 /**
  * D19's New Invite modal, for a teacher - the only person a school invites.
@@ -58,7 +61,8 @@ export function NewInviteModal({
   onClose: () => void;
   onSent: () => void;
 }) {
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [classId, setClassId] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
@@ -71,11 +75,27 @@ export function NewInviteModal({
   /** Whether `sent` came back from a reissue rather than a new invitation. */
   const [reissued, setReissued] = useState(false);
 
-  // A teacher needs a way to be reached or a link to be handed.
-  const ready = name.trim().length > 0 || email.trim().length > 0;
+  /*
+   * D19'S FORM, AS FAR AS THE CONTRACT GOES (backlog 16): a first and a last
+   * name as two fields - the request has both, and a single "Name" split on
+   * the device guessed wrong for every name that isn't two words - and an
+   * email, required, as the frame requires it. Its "N things still to fill in"
+   * line counts what is left, and Send waits for none. No "(optional)"
+   * anywhere (SCRUM-207).
+   *
+   * BUILT REDUCED: D19's "Classes and subjects" - a class, the subjects ticked
+   * for it, Other, Add another class - is one class here. `POST /invites`
+   * takes one `classId` and no subjects, and an invitation creates no teacher
+   * account until it is accepted, so no assignment call can carry the rest
+   * either. Raised under rule 10.
+   */
+  const missing =
+    (firstName.trim() ? 0 : 1) + (lastName.trim() ? 0 : 1) + (validEmail(email) ? 0 : 1);
+  const ready = missing === 0;
 
   const reset = () => {
-    setName("");
+    setFirstName("");
+    setLastName("");
     setEmail("");
     setClassId("");
     setSent(null);
@@ -87,14 +107,14 @@ export function NewInviteModal({
   };
 
   const send = () => {
+    if (!ready) return;
     setPhase("sending");
-    const { firstName, lastName } = splitName(name);
     invitesApi
       .create({
         role: "teacher",
-        firstName: firstName || null,
-        lastName,
-        email: email.trim() || null,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
         classId: classId || null,
       })
       .then((invite) => {
@@ -340,45 +360,69 @@ export function NewInviteModal({
             <span className="text-sm text-nevo-near-black/60">Sending…</span>
           </div>
         ) : (
-          <>
-            <button
-              type="button"
-              onClick={onClose}
-              className={cn(GHOST_BTN, "flex-1")}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={send}
-              disabled={!ready}
-              className={cn(PRIMARY_BTN, "flex-1 justify-center")}
-            >
-              Send invite
-            </button>
-          </>
+          <div className="flex w-full flex-col gap-2.5">
+            {missing > 0 ? (
+              <p
+                data-missing
+                className="m-0 text-[13px] leading-[1.5] text-nevo-near-black/58"
+              >
+                {`${missing} ${missing === 1 ? "thing" : "things"} still to fill in`}
+              </p>
+            ) : null}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className={cn(GHOST_BTN, "flex-1")}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={send}
+                disabled={!ready}
+                className={cn(PRIMARY_BTN, "flex-1 justify-center")}
+              >
+                Send invite
+              </button>
+            </div>
+          </div>
         )
       }
     >
       <div className="flex flex-col gap-5">
-        <div>
-          <label htmlFor="invite-name" className={LABEL}>
-            Name
-          </label>
-          <input
-            id="invite-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Folake Adeyemi"
-            autoComplete="off"
-            className={FIELD}
-          />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label htmlFor="invite-first-name" className={LABEL}>
+              First name
+            </label>
+            <input
+              id="invite-first-name"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="Folake"
+              autoComplete="off"
+              className={FIELD}
+            />
+          </div>
+          <div>
+            <label htmlFor="invite-last-name" className={LABEL}>
+              Last name
+            </label>
+            <input
+              id="invite-last-name"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder="Adeyemi"
+              autoComplete="off"
+              className={FIELD}
+            />
+          </div>
         </div>
 
         <div>
           <label htmlFor="invite-class" className={LABEL}>
-            Class assignment{" "}
-            <span className="font-normal">(optional)</span>
+            Class
           </label>
           <select
             id="invite-class"
@@ -399,8 +443,7 @@ export function NewInviteModal({
 
         <div>
           <label htmlFor="invite-email" className={LABEL}>
-            Email{" "}
-            <span className="font-normal">(optional)</span>
+            Email
           </label>
           <input
             id="invite-email"

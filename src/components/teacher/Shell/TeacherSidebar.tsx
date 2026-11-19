@@ -181,6 +181,9 @@ const ACCOUNT_MENU: {
   },
 ];
 
+/** Desktop, where the rail is wide: the `xl` breakpoint, in its own unit. */
+export const WIDE_RAIL = "(min-width: 80rem)";
+
 export function TeacherSidebar() {
   const pathname = usePathname();
   // C18: a sidebar link asks first while a screen holds unsaved work.
@@ -233,8 +236,15 @@ export function TeacherSidebar() {
    * nothing moves.
    */
   const [expanded, setExpanded] = useState<boolean | null>(null);
+  /*
+   * THE SAME QUESTION THE CSS ASKS (SCRUM-347). Tailwind 4 writes `xl:` as
+   * `80rem`, and a media query reads rem against the browser's own font size,
+   * not this page's. Asked in px, a teacher whose browser text is set larger
+   * got the wide rail from this effect while every `xl:` class on the page
+   * still drew the tablet layout beside it.
+   */
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1280px)");
+    const mq = window.matchMedia(WIDE_RAIL);
     const sync = () => setExpanded(mq.matches);
     sync();
     mq.addEventListener("change", sync);

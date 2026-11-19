@@ -78,6 +78,14 @@ export const CALC_SUPPORT_LINES = {
 export const SLOWER_LINE = "No rush. Let's take this one a step at a time.";
 
 /**
+ * THE MISS LINE (Lydia, 10 Nov: "Calculation steps get a miss line"; her
+ * words, 11 Nov). Said once the server marks a step - or one of its
+ * mini-steps - not right, and gone with the next answer or the next step.
+ * The ring's pulse still plays beside it; neither decides anything.
+ */
+export const CALC_MISS_LINE = "Not quite. Have another go at this step.";
+
+/**
  * Calculation Solver (17b, co-construction), rendered from the engine's
  * payload (SCRUM-181, on SCRUM-177).
  *
@@ -310,6 +318,12 @@ export function CalculationSolver({
    * nothing: no hint, no emphasis and no copy reads it.
    */
   const [nudge, setNudge] = useState(0);
+  /**
+   * Which step, or which of its mini-steps, the server last marked not right
+   * - see `CALC_MISS_LINE`. Said only while the child is still on it and no
+   * new answer is on its way.
+   */
+  const [missedOn, setMissedOn] = useState<string | null>(null);
   /**
    * A COMMITTED ANSWER WHOSE MARK IS ON ITS WAY (test 9). The child's answer
    * stays as it is - no new words, no spinner (rule 7) - and nothing more is
@@ -711,6 +725,7 @@ export function CalculationSolver({
           // Put back to the child: the next try is its own, timed from here.
           askedAt.current = performance.now();
           setNudge((n) => n + 1);
+          setMissedOn(stepId);
           return;
         }
         // A confirmation waits for the child's "Next step" (17b step 1). On
@@ -747,6 +762,7 @@ export function CalculationSolver({
     const responseTimeMs = msSince(miniAskedAt.current);
     const at = fewer.at;
     const stepId = step.stepId;
+    const missKey = `${stepId}/${mini.id}`;
     // Moved on by its mark, as a step is (test 9).
     send(
       {
@@ -762,6 +778,7 @@ export function CalculationSolver({
         if (mark === false) {
           miniAskedAt.current = performance.now();
           setNudge((n) => n + 1);
+          setMissedOn(missKey);
           return;
         }
         if (at + 1 >= miniSteps.length) {
@@ -818,7 +835,9 @@ export function CalculationSolver({
   return (
     // Frame: the calc column is narrower than the reading column (560/600 vs
     // the player's 620/680).
-    <div className="mx-auto sm:max-w-[560px] lg:max-w-[600px]">
+    // The Solver Frame's column: 680 on a tablet, 880 on a desktop
+    // (SCRUM-347); it was 600 at every width from 1,024.
+    <div className="mx-auto sm:max-w-[560px] md:max-w-[680px] xl:max-w-[880px]">
       {/*
         THE CHILD'S OWN ROW, as the frame's gate controls draw it: pills under
         the title, navy while on, gone once the solve is done. Slower; More
@@ -1280,6 +1299,24 @@ export function CalculationSolver({
             )}
             </div>
             )}
+            {/*
+              HER MISS LINE, in a polite live region there from the start, so
+              it is read out as it lands. Keyed by the miss, so a second miss
+              on the same step is said again.
+            */}
+            <div aria-live="polite">
+              {!marking &&
+                missedOn ===
+                  (mini ? `${step.stepId}/${mini.id}` : step.stepId) && (
+                  <p
+                    key={nudge}
+                    data-calc-miss
+                    className="mt-4 text-center text-[13.5px] leading-[1.5] text-nevo-near-black/70"
+                  >
+                    {CALC_MISS_LINE}
+                  </p>
+                )}
+            </div>
             {/* A mark on its way: the line, or "Send again" on a failure. */}
             <MarkWait
               hold={marking ? hold : null}
@@ -1986,7 +2023,7 @@ function PadEntry({
           {/* The field is `outline-none`, so its box carries the focus ring. */}
           <div
             data-reveal="field"
-            className="flex min-h-[72px] min-w-0 flex-1 items-center gap-1 rounded-[10px] border-[1.5px] border-nevo-navy/40 bg-nevo-cream-elevated px-[18px] py-2.5 transition-colors focus-within:border-nevo-navy has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-nevo-navy has-[input:focus-visible]:ring-offset-2 has-[input:focus-visible]:ring-offset-nevo-cream sm:min-h-[82px] lg:min-h-[80px]"
+            className="flex min-h-[72px] min-w-0 flex-1 items-center gap-1 rounded-[10px] border-[1.5px] border-nevo-navy/40 bg-nevo-cream-elevated px-[18px] py-2.5 transition-colors focus-within:border-nevo-navy has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-nevo-navy has-[input:focus-visible]:ring-offset-2 has-[input:focus-visible]:ring-offset-nevo-cream sm:min-h-[82px] xl:min-h-[80px]"
           >
             <input
               ref={field}
@@ -1998,7 +2035,7 @@ function PadEntry({
               value={drawn(value)}
               onChange={(e) => onChange(kept(e.target.value))}
               aria-label={step.prompt}
-              className="min-w-0 flex-1 bg-transparent text-[38px] leading-[1.1] font-semibold text-nevo-navy caret-nevo-navy outline-none sm:text-[48px] lg:text-[46px]"
+              className="min-w-0 flex-1 bg-transparent text-[38px] leading-[1.1] font-semibold text-nevo-navy caret-nevo-navy outline-none sm:text-[48px] xl:text-[46px]"
             />
             {value.length > 0 && (
               <button
@@ -2125,7 +2162,7 @@ const RING = "outline-2 outline-offset-2 outline-nevo-violet";
 
 /** 17b's bar cell, at the frame's 28 / 34 / 30 per variant. */
 const BAR_CELL =
-  "h-7 rounded-[5px] transition-colors duration-200 sm:h-[34px] lg:h-[30px]";
+  "h-7 rounded-[5px] transition-colors duration-200 sm:h-[34px] xl:h-[30px]";
 const BAR_EMPTY = "border border-nevo-near-black/12 bg-nevo-near-black/[0.08]";
 /** D149's square place, at its 40px where the row has room. */
 const ARRAY_CELL = "aspect-square rounded-lg transition-colors duration-200";

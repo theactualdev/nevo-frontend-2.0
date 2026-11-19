@@ -21,6 +21,7 @@ import type {
   SubjectDetail as SubjectDetailData,
 } from "./progressData";
 import { SubjectTexture } from "./ProgressTab";
+import { EmptyArt } from "@/components/student/Shell/TabPage";
 import { SessionDetailSheet } from "./SessionDetailSheet";
 
 /**
@@ -174,8 +175,8 @@ export function SubjectDetail({
           </span>
         </div>
 
-        <div className="mx-auto w-full max-w-[680px] px-6 pb-8 sm:px-8">
-          <h1 className="text-[26px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
+        <div className="mx-auto w-full max-w-[680px] px-6 pb-8 sm:px-8 md:max-w-[908px] md:px-11 md:pb-11 xl:max-w-[924px] xl:px-[52px] xl:pb-[52px]">
+          <h1 className="text-[26px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] xl:text-[32px]">
             {subject.name}
           </h1>
 
@@ -258,7 +259,9 @@ function DetailFrame({ children }: { children: React.ReactNode }) {
           Progress
         </span>
       </div>
-      <div className="mx-auto w-full max-w-[680px] px-6 pb-8 sm:px-8">
+      {/* A column that fills what is left, so an early subject's figure and
+          line can sit centred in it, as 29 draws them. */}
+      <div className="mx-auto flex w-full max-w-[680px] flex-1 flex-col px-6 pb-8 sm:px-8 md:max-w-[908px] md:px-11 md:pb-11 xl:max-w-[924px] xl:px-[52px] xl:pb-[52px]">
         {children}
       </div>
     </div>
@@ -337,7 +340,7 @@ function LiveSubjectDetail({
 
   return (
     <DetailFrame>
-      <h1 className="text-[26px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
+      <h1 className="text-[26px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] xl:text-[32px]">
         {name}
       </h1>
 
@@ -452,12 +455,33 @@ function LiveSubjectDetail({
       )}
 
       {concepts.length === 0 && lessons.length === 0 && !lessonsFailed && (
-        // 29 Empty States, "Subject Detail (Early)".
-        <p className="mt-6 text-[15px] leading-[1.55] text-nevo-near-black/60">
-          You&apos;re just getting started in {name}. Check back after a few
-          more lessons.
-        </p>
+        <SubjectEarly name={name} />
       )}
     </DetailFrame>
+  );
+}
+
+/**
+ * 29 EMPTY STATES, "SUBJECT DETAIL (EARLY)" (backlog 34): the board's own
+ * empty-progress figure - the Progress tab's - at 200 / 240 / 250 tall, and
+ * the line under it at 16 / 17 / 17, at most 280 / 360 / 400 wide, 28px
+ * under the figure on a phone and 32 from a tablet. Centred in what is left
+ * under the subject's name. It drew the line alone, with no figure.
+ */
+export function SubjectEarly({ name }: { name: string }) {
+  return (
+    <div
+      data-subject-early
+      className="flex flex-1 flex-col items-center justify-center pt-6 text-center"
+    >
+      <EmptyArt
+        src="/illustrations/empty-progress.png"
+        className="h-[200px] shrink-0 md:h-[240px] xl:h-[250px]"
+      />
+      <p className="mt-7 max-w-[280px] text-base leading-[1.55] text-nevo-near-black/70 md:mt-8 md:max-w-[360px] md:text-[17px] xl:max-w-[400px]">
+        You&apos;re just getting started in {name}. Check back after a few
+        more lessons.
+      </p>
+    </div>
   );
 }

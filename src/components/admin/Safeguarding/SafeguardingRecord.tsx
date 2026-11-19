@@ -63,17 +63,17 @@ export function SafeguardingRecord({
       <h3 className="mb-0 mt-7 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-nevo-near-black/45">
         Safeguarding
       </h3>
-      <div className="mt-2.5 rounded-xl bg-nevo-cream-elevated px-[22px] py-5 max-lg:px-[18px] max-lg:py-4">
-        <p className="m-0 text-[14px] leading-[1.6] text-nevo-near-black max-lg:text-[12.5px]">
+      <div className="mt-2.5 rounded-xl bg-nevo-cream-elevated px-[22px] py-5 max-xl:px-[18px] max-xl:py-4">
+        <p className="m-0 text-[14px] leading-[1.6] text-nevo-near-black max-xl:text-[12.5px]">
           A safeguarding concern was recorded for {firstName}
           {recorded ? ` on ${recorded}` : ""}. What {firstName} asked is never shown here.
         </p>
         {seenOn ? (
           <>
-            <p className="m-0 mt-2.5 text-[13.5px] leading-[1.5] text-nevo-near-black/62 max-lg:text-[12px]">
+            <p className="m-0 mt-2.5 text-[13.5px] leading-[1.5] text-nevo-near-black/62 max-xl:text-[12px]">
               {by ? `${by} recorded this as seen on ${seenOn}.` : `This was recorded as seen on ${seenOn}.`}
             </p>
-            <p className="m-0 mt-2.5 text-[13px] leading-[1.55] text-[#5b5e8f] max-lg:text-[11.5px]">
+            <p className="m-0 mt-2.5 text-[13px] leading-[1.55] text-[#5b5e8f] max-xl:text-[11.5px]">
               Seeing it is not the same as resolving it. Your school&rsquo;s own safeguarding steps
               continue outside Nevo.
             </p>
@@ -81,7 +81,7 @@ export function SafeguardingRecord({
         ) : null}
         <Link
           href="/admin/safeguarding"
-          className="mt-3.5 inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-nevo-navy hover:underline max-lg:text-[12.5px]"
+          className="mt-3.5 inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-nevo-navy hover:underline max-xl:text-[12.5px]"
         >
           Open the safeguarding list
           <span aria-hidden>&rarr;</span>
