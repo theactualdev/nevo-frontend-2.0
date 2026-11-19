@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AfterLessonAssessment } from "./AfterLessonAssessment";
+import { SAVING_LESSON_LINE, SLOW_MARK_MS } from "@/lib/lessons/verdict";
 import type { Assessment } from "@/lib/types";
 
 /**
@@ -449,6 +450,65 @@ describe("whether anything landed is the server's word (B98)", () => {
     expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Review answers" })).toBeTruthy();
     expect(document.querySelector(".invisible")).toBeNull();
+  });
+
+  /*
+   * LYDIA'S END-OF-LESSON WAIT (10 and 11 Nov): the cream page alone for
+   * about two seconds, then "Nevo is saving your lesson." over the held
+   * result, read out politely, and gone as the result lands.
+   */
+  it("says her end-of-lesson wait past two seconds of a held result, and drops it as the result lands", () => {
+    vi.useFakeTimers();
+    try {
+      const props = {
+        assessment: ASSESSMENT,
+        onFinish: () => {},
+        onReviewAnswers: () => {},
+        resumeAt: 4,
+      };
+      const { rerender } = render(
+        <AfterLessonAssessment {...props} result={null} resultPending />,
+      );
+      expect(SAVING_LESSON_LINE).toBe("Nevo is saving your lesson.");
+      expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(SLOW_MARK_MS);
+      });
+
+      const line = screen.getByText(SAVING_LESSON_LINE);
+      expect(line).toBeVisible();
+      expect(line.closest("[aria-live]")).toHaveAttribute("aria-live", "polite");
+      expect(line.closest(".invisible")).toBeNull();
+
+      rerender(<AfterLessonAssessment {...props} result="landed" />);
+
+      expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
+      expect(screen.getByRole("heading", { name: HEADING })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("never says it over a result that is not waiting on a write", () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <AfterLessonAssessment
+          assessment={ASSESSMENT}
+          onFinish={() => {}}
+          resumeAt={4}
+          result="landed"
+        />,
+      );
+      act(() => {
+        vi.advanceTimersByTime(SLOW_MARK_MS * 5);
+      });
+
+      expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("shows the walkthrough, which no server marks, as the frame draws it", () => {

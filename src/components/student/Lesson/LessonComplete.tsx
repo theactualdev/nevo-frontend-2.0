@@ -3,7 +3,9 @@
 import { useContext, useEffect, useState } from "react";
 import { Button, SettlingCharacter } from "@/components/shared";
 import { LessonContext } from "@/context/LessonContext";
+import { SAVING_LESSON_LINE } from "@/lib/lessons/verdict";
 import { cn } from "@/lib/utils";
+import { useMarkWait } from "./MarkWait";
 
 /**
  * Lesson Complete (Lesson Check frame) — the calm close of a lesson. A settling
@@ -35,6 +37,7 @@ export function LessonComplete({
   heading = "That's the lesson done.",
   headingHeld = false,
   note,
+  saving = false,
   doneLabel = "Back to lessons",
 }: {
   onDone: () => void;
@@ -47,8 +50,17 @@ export function LessonComplete({
    */
   headingHeld?: boolean;
   note?: string;
+  /**
+   * The completion write is still on its way. Past about two seconds, and
+   * while no note has been handed in, Lydia's end-of-lesson wait takes the
+   * note's place: "Nevo is saving your lesson." (10 and 11 Nov). Never for a
+   * lesson that writes nothing - the caller says only what is in flight.
+   */
+  saving?: boolean;
   doneLabel?: string;
 }) {
+  const { slow } = useMarkWait(saving && !note ? 0 : null, null);
+  const said = note ?? (saving && slow ? SAVING_LESSON_LINE : undefined);
   /*
    * THE FIRST SCREEN OF A LESSON ASK NEVO MAY SIT OVER. IA 31 keeps it off
    * active lesson content - the segments, a break, a module boundary, the
@@ -95,9 +107,12 @@ export function LessonComplete({
         {/* Live and always present, because the save can land a moment after
             the screen does and a screen reader should hear that it did. */}
         <div aria-live="polite">
-          {note && (
-            <p className="mt-2.5 text-base text-pretty text-nevo-near-black/70 sm:text-[17px]">
-              {note}
+          {said && (
+            <p
+              data-saving-lesson={said === SAVING_LESSON_LINE || undefined}
+              className="mt-2.5 text-base text-pretty text-nevo-near-black/70 sm:text-[17px]"
+            >
+              {said}
             </p>
           )}
         </div>

@@ -8,11 +8,12 @@ import type { CheckOutcome } from "@/lib/lessons/checkOutcome";
 import type { Assessment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
+  SAVING_LESSON_LINE,
   keyMark,
   onVerdict,
   type VerdictReply,
 } from "@/lib/lessons/verdict";
-import { MarkWait } from "./MarkWait";
+import { MarkWait, useMarkWait } from "./MarkWait";
 import {
   AnswerDot,
   AnswerOption,
@@ -654,6 +655,8 @@ function GrowthResult({
     "text-[15px] font-medium",
     reading && [READING_BODY, READING_INK],
   );
+  // Her end-of-lesson wait, past about two seconds of a result still held.
+  const { slow: savingSlow } = useMarkWait(held ? 0 : null, null);
   const nothingLanded = verdict === "nothing_landed";
   // The frame's screen: where the server says something landed, and in the
   // walkthrough. While the verdict is on its way it holds that place, unseen.
@@ -690,7 +693,27 @@ function GrowthResult({
       : (assessment.resultNote ?? "");
 
   return (
-    <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col justify-center bg-nevo-cream px-6 text-nevo-near-black">
+    <div className="relative flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col justify-center bg-nevo-cream px-6 text-nevo-near-black">
+      {/*
+        THE WAIT, SAID (Lydia, 10 and 11 Nov). The cream page alone for about
+        two seconds, then her one line in the middle of it, over the result's
+        held place: about the system, never the answer, and no spinner. It
+        goes as the result lands. A polite live region, there from the start,
+        so the line is read out when it arrives.
+      */}
+      <div
+        aria-live="polite"
+        className="pointer-events-none absolute inset-x-6 top-1/2 -translate-y-1/2 text-center"
+      >
+        {held && savingSlow && (
+          <p
+            data-saving-lesson
+            className="text-[13.5px] leading-[1.5] text-nevo-near-black/70"
+          >
+            {SAVING_LESSON_LINE}
+          </p>
+        )}
+      </div>
       {/*
         RULE 8: THE RESULT LANDS ONCE (the hub, 9 Nov). Only the mark and the
         heading were held for the completion write, so the screen landed in

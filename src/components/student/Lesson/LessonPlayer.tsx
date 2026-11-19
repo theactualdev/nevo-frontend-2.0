@@ -3755,6 +3755,12 @@ export function LessonPlayer({
       <LessonComplete
         onDone={() => exitTo(LESSONS_HREF)}
         note={savedNote}
+        // Her end-of-lesson wait while the completion write is on its way. A
+        // partial copy writes no completion and a review closes on its own
+        // words, so neither says it.
+        saving={
+          live && !progress.completionSaved && !progress.completionFailed
+        }
         onSeeSummary={
           lesson.summary
             ? () => exitTo(`${LESSONS_HREF}/${lesson.id}/summary`)
