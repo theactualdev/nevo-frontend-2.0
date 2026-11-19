@@ -58,6 +58,12 @@ export const RETEACH_COPY = {
   again: "Let's try it a different way",
   waysLine:
     "Here are some other ways to look at it. Take any of them, as many times as you like.",
+  /**
+   * A second miss with no way in to offer (Lydia, 16 Nov): exactly this, in
+   * place of "Let's try it a different way", and no invented help. A missing
+   * format is SCRUM-331's to fix, not this line's.
+   */
+  noWayIn: "Not quite. Have another look at this one.",
   shortBreak: "Take a short break",
   /** 17f's fourth way: the Socratic panel, offered at the third miss. */
   talk: "Talk it through",
@@ -699,11 +705,15 @@ function ReteachBox({
 }) {
   const asking = box.after === "asking";
   const right = box.after === "right";
+  // A second miss with nothing to offer: "a different way" would be untrue.
+  const noWayIn = box.after === "again" && ways.length === 0 && !talk;
   const title = right
     ? RETEACH_COPY.done
     : asking
       ? RETEACH_COPY.title
-      : RETEACH_COPY.again;
+      : noWayIn
+        ? RETEACH_COPY.noWayIn
+        : RETEACH_COPY.again;
   const body = cn("text-[14px] leading-[1.5] text-nevo-near-black/82", reading && READING_BODY);
   return (
     <div data-reteach-box={box.after}>
