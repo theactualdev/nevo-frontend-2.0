@@ -104,7 +104,7 @@ describe("OB-01 upload", () => {
     const { container } = render(<RosterImportView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Add your roster/));
 
-    fireEvent.change(screen.getByLabelText(/Upload students/i), {
+    fireEvent.change(screen.getByLabelText(/Upload student file/i), {
       target: { files: [file()] },
     });
 
@@ -119,7 +119,7 @@ describe("OB-01 upload", () => {
 
     expect(screen.queryByRole("button", { name: /See what Nevo found/i })).toBeNull();
 
-    fireEvent.change(screen.getByLabelText(/Upload students/i), {
+    fireEvent.change(screen.getByLabelText(/Upload student file/i), {
       target: { files: [file()] },
     });
 
@@ -141,7 +141,7 @@ describe("OB-01 upload", () => {
       expect(screen.getByRole("button", { name: /See what Nevo found/i })).toBeEnabled(),
     );
 
-    fireEvent.change(screen.getByLabelText(/Upload staff/i), {
+    fireEvent.change(screen.getByLabelText(/Upload teacher file/i), {
       target: { files: [file()] },
     });
 
@@ -166,7 +166,7 @@ describe("OB-01 upload", () => {
     const { container } = render(<RosterImportView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Add your roster/));
 
-    fireEvent.change(screen.getByLabelText(/Upload students/i), {
+    fireEvent.change(screen.getByLabelText(/Upload student file/i), {
       target: { files: [file()] },
     });
 
@@ -181,7 +181,7 @@ describe("OB-01 upload", () => {
     const { container } = render(<RosterImportView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Add your roster/));
 
-    fireEvent.change(screen.getByLabelText(/Upload students/i), {
+    fireEvent.change(screen.getByLabelText(/Upload student file/i), {
       target: { files: [file()] },
     });
 
@@ -202,7 +202,7 @@ describe("OB-01 upload", () => {
         expect(visibleText(container)).toMatch(/Your roster is confirmed/),
       );
       expect(visibleText(container)).toMatch(/336 students across 1 class/);
-      expect(screen.queryByLabelText(/Upload students/i)).toBeNull();
+      expect(screen.queryByLabelText(/Upload student file/i)).toBeNull();
       expect(screen.getByRole("link", { name: /Pay for the year/ })).toHaveAttribute(
         "href",
         "/admin/activate",
@@ -223,7 +223,7 @@ describe("OB-01 upload", () => {
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/already set up/i),
     );
-    expect(screen.queryByLabelText(/Upload students/i)).toBeNull();
+    expect(screen.queryByLabelText(/Upload student file/i)).toBeNull();
     expect(screen.getByRole("link", { name: /Go to Students/ })).toHaveAttribute(
       "href",
       "/admin/students",
@@ -367,8 +367,8 @@ describe("OB-01's expected columns and templates", () => {
 
   it("shows each template's own header row before anything is uploaded", async () => {
     const { container } = render(<RosterImportView />);
-    await waitFor(() => expect(screen.getByRole("list", { name: /for students/ })).toBeInTheDocument());
-    expect(columnsOf(/for students/)).toEqual([
+    await waitFor(() => expect(screen.getByRole("list", { name: /for student file/ })).toBeInTheDocument());
+    expect(columnsOf(/for student file/)).toEqual([
       "First name",
       "Surname",
       "Class",
@@ -379,8 +379,8 @@ describe("OB-01's expected columns and templates", () => {
       "Guardian email",
       "Relationship to the child",
     ]);
-    await waitFor(() => expect(screen.getByRole("list", { name: /for staff/ })).toBeInTheDocument());
-    expect(columnsOf(/for staff/)).toEqual(["First name", "Surname", "Email", "Subject", "Class"]);
+    await waitFor(() => expect(screen.getByRole("list", { name: /for teacher file/ })).toBeInTheDocument());
+    expect(columnsOf(/for teacher file/)).toEqual(["First name", "Surname", "Email", "Subject", "Class"]);
     expect(template).toHaveBeenCalledWith("students");
     expect(template).toHaveBeenCalledWith("teachers");
     expect(stageImport).not.toHaveBeenCalled();
@@ -414,7 +414,7 @@ describe("OB-01's expected columns and templates", () => {
         saved.push(this.download);
       });
     render(<RosterImportView />);
-    await waitFor(() => expect(screen.getByRole("list", { name: /for staff/ })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("list", { name: /for teacher file/ })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Download the teacher template" }));
     await waitFor(() => expect(saved).toEqual(["nevo-teacher-import.csv"]));
     expect(template).toHaveBeenCalledTimes(2);
@@ -614,5 +614,26 @@ describe("Classes Nevo derived: rename and drop", () => {
     await screen.findByText(/What Nevo found/);
     expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Drop" })).toBeNull();
+  });
+});
+
+/**
+ * D24 OB-01's two panels, in its order and by its names (backlog 36): "Teacher
+ * file", then "Student file" - they read "Students" then "Staff". Side by side
+ * from 1280 only; one column below, as the tablet frame draws it.
+ */
+describe("OB-01's panels", () => {
+  it("are the Teacher file then the Student file, two across from 1280 only", async () => {
+    get.mockResolvedValue(state({ stage: "uploading" }));
+    render(<RosterImportView />);
+    await screen.findByText("Add your roster");
+    const titles = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(titles.indexOf("Teacher file")).toBeGreaterThanOrEqual(0);
+    expect(titles.indexOf("Teacher file")).toBeLessThan(titles.indexOf("Student file"));
+    expect(titles).not.toContain("Staff");
+    expect(titles).not.toContain("Students");
+    const grid = screen.getByText("Teacher file").closest("div.grid") as HTMLElement;
+    expect(grid.className).toMatch(/(^|\s)xl:grid-cols-2(\s|$)/);
+    expect(grid.className).not.toMatch(/md:grid-cols-2/);
   });
 });
