@@ -164,7 +164,7 @@ describe("an admin without General Oversight", () => {
     render(<OverviewView />);
     expect(await screen.findByRole("link", { name: /Open Learning Support/ })).toHaveAttribute(
       "href",
-      "/admin/senco",
+      "/admin/senco?back=%2Fadmin%2Fdashboard&backLabel=Overview",
     );
   });
 });

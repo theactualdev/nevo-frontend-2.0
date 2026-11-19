@@ -14,9 +14,11 @@ import {
   STEP_TEACHERS,
   STEP_WORKSPACE,
   consentRequestsSent,
+  doneStep,
   gettingStartedSteps,
   teachersOnRoster,
 } from "./overviewGettingStarted";
+import { withBack } from "../back";
 import { SetupPausedBanner } from "../SetupPausedBanner";
 import { SchoolCodeCard } from "./SchoolCodeCard";
 import { CardUnread } from "./CardUnread";
@@ -605,7 +607,9 @@ export function OverviewView() {
             return mayOpen(g.href) ? (
               <Link
                 key={g.key}
-                href={g.href}
+                // Back returns here (the admin back-links rule; backlog 89:
+                // Back on D30 went to All students, not the Overview).
+                href={withBack(g.href, { href: "/admin/dashboard", label: "Overview" })}
                 className={cn(rowClass, "transition-[filter] hover:brightness-[0.985]")}
               >
                 {body}
@@ -978,7 +982,7 @@ export function OverviewView() {
 
             {early && (
               <div className={cn(CARD, "mt-3 overflow-hidden")}>
-                {gettingStartedSteps(school).map((k, i) => {
+                {gettingStartedSteps(school).map((open, i) => {
                   // A tick is a claim about this school, so it is only ever set
                   // from a signal we hold. The rest carry no mark at all rather
                   // than an unticked box, which would assert the school has not
@@ -991,6 +995,14 @@ export function OverviewView() {
                     (i === STEP_STUDENTS && (audit?.studentsProfiled ?? 0) > 0) ||
                     (i === STEP_TEACHERS && teachersOnRoster(counts)) ||
                     (i === STEP_CONSENT && consentRequestsSent(roster));
+                  // A done step in D04's own words (backlog 89).
+                  const k = done
+                    ? doneStep(open, i, {
+                        teachersInvited: counts?.teachers ?? null,
+                        teachersSetUp,
+                        studentsEnrolled: counts?.activeStudents ?? null,
+                      })
+                    : open;
                   const row = (
                     <>
                       <span

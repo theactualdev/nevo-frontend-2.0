@@ -153,7 +153,10 @@ describe("the early Overview with a child already held (D04, 27 Oct)", () => {
     render(<OverviewView />);
     const row = await screen.findByText(/1 student is on hold/);
     // No permission context here, so the row is a link (useCanOpen's default).
-    expect(row.closest("a")?.getAttribute("href")).toBe("/admin/students/date-of-birth");
+    // Carrying the way back here (backlog 89; the admin back-links rule).
+    expect(row.closest("a")?.getAttribute("href")).toBe(
+      "/admin/students/date-of-birth?back=%2Fadmin%2Fdashboard&backLabel=Overview",
+    );
   });
 
   it("claims nothing of the school when the hold is waiting on the parent", async () => {
