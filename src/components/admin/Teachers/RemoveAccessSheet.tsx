@@ -187,13 +187,20 @@ export function RemoveAccessSheet({
     }
   };
 
+  /*
+   * D06B'S TITLE, BOTH CASES (backlog 84 and 86): "Remove Ms. Adeyemi's
+   * access". The frame's pronouns (he, she, his, her) are not ours to use -
+   * nothing records how a teacher is referred to - so the name or "they"
+   * stands in for them, here and in every line below.
+   */
+  const title = `Remove ${teacher.name}’s access`;
+
   // No classes held: a calm confirm about access, not about the person.
   if (held.length === 0) {
     return (
       <Sheet
       busy={phase === "working"}
-        title="Remove access?"
-        subtitle={teacher.name}
+        title={title}
         onClose={close}
         footer={
           phase === "working" ? (
@@ -242,20 +249,21 @@ export function RemoveAccessSheet({
               >
                 Remove access
               </button>
+              {/* D06b: the stay-put choice says what it keeps (backlog 86). */}
               <button type="button" onClick={close} className={GHOST_BTN}>
-                Cancel
+                Keep their access
               </button>
             </>
           )
         }
       >
         <p className="m-0 text-[14.5px] leading-[1.6] text-nevo-near-black/72">
-          {/* D06b's own words for this case. The restore clause was cut while
-              nothing undid `POST /teachers/{id}/revoke`; the undo landed on
-              8 Oct (`POST /teachers/{id}/restore`). */}
-          {teacher.name} will no longer be able to open their Nevo console,
-          and you can restore their access whenever you need to. Their
-          classes and notes stay with the school.
+          {/* D06b's own words for this case (backlog 86), its opener first:
+              there is nothing to hand over. The restore clause stands since
+              the undo landed on 8 Oct (`POST /teachers/{id}/restore`). */}
+          {teacher.name} isn&rsquo;t teaching any classes yet, so there&rsquo;s
+          nothing to hand over. They&rsquo;ll no longer be able to open their
+          Nevo console, and you can restore their access whenever you need to.
         </p>
       </Sheet>
     );
@@ -264,8 +272,7 @@ export function RemoveAccessSheet({
   return (
     <Sheet
       busy={phase === "working"}
-      title="Remove admin-side access"
-      subtitle={teacher.name}
+      title={title}
       onClose={close}
       footer={
         phase === "working" ? (
@@ -328,11 +335,11 @@ export function RemoveAccessSheet({
           </>
         ) : ready ? (
           <>
-            <button
-              type="button"
-              onClick={apply}
-              className={cn(PRIMARY_BTN, "flex-1 justify-center")}
-            >
+            {/* D06b's ready line where the count stood (backlog 85). */}
+            <p className="m-0 flex-1 text-[13.5px] font-medium text-nevo-navy">
+              Every class has a teacher. Ready when you are.
+            </p>
+            <button type="button" onClick={apply} className={PRIMARY_BTN}>
               Reassign and remove access
             </button>
             <button type="button" onClick={close} className={GHOST_BTN}>
@@ -427,7 +434,13 @@ export function RemoveAccessSheet({
                 <RolePill role={h.role} />
               </div>
               <label className="mt-3 block">
-                <span className="sr-only">Who takes {h.className}?</span>
+                {/* D06b's two labels (backlog 84): a Primary row is handed
+                    on as Primary; a Co-teacher row asks who else. */}
+                <span className="mb-1.5 block text-[13px] font-medium text-nevo-near-black/62">
+                  {h.role === "primary"
+                    ? "Who takes this class as Primary?"
+                    : "Who else should have this class?"}
+                </span>
                 <select
                   value={value}
                   disabled={read === "loading"}
@@ -445,10 +458,13 @@ export function RemoveAccessSheet({
                   }}
                   className="h-[46px] w-full cursor-pointer rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-3.5 text-sm text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
                 >
-                  <option value="">Choose who takes this class</option>
+                  <option value="">Choose a teacher</option>
                   {staff.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {h.role === "primary" ? `${t.name} — as Primary` : t.name}
+                      {/* D06b's value: "Mr. Bello · takes Primary". */}
+                      {h.role === "primary"
+                        ? `${t.name} · takes Primary`
+                        : `${t.name} · Co-teacher`}
                     </option>
                   ))}
                   {/*
@@ -459,28 +475,46 @@ export function RemoveAccessSheet({
                     * with no remove option left the commit disabled behind
                     * that instruction, with no way through.
                     */}
-                  {h.role === "co_teacher" || (read === "ready" && staff.length === 0) ? (
+                  {h.role === "co_teacher" && value === "__remove" ? (
+                    <option value="__remove">
+                      No replacement, just remove {firstName}
+                    </option>
+                  ) : h.role === "primary" && read === "ready" && staff.length === 0 ? (
                     <option value="__remove">
                       Just remove {firstName} from this class
                     </option>
                   ) : null}
                 </select>
               </label>
+              {/* D06b draws this apart from the select, under a Co-teacher
+                  row, where the class keeps its Primary (backlog 84). */}
+              {h.role === "co_teacher" && value !== "__remove" ? (
+                <button
+                  type="button"
+                  disabled={read === "loading"}
+                  onClick={() =>
+                    setPlan((prev) => ({ ...prev, [h.assignmentId]: { kind: "remove" } }))
+                  }
+                  className="mt-2 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline disabled:cursor-default disabled:opacity-50"
+                >
+                  Just remove {firstName} from this class
+                </button>
+              ) : null}
             </div>
           );
         })}
       </div>
 
-      {ready ? (
-        <p className="m-0 rounded-[10px] bg-nevo-violet/24 px-4 py-3 text-[13.5px] leading-[1.55] text-nevo-navy">
-          {/* "...and you can restore access later" was cut: the contract has
-              `POST /teachers/{id}/revoke` and nothing that undoes it, so the
-              sentence promised a button that does not exist. */}
-          {firstName}&rsquo;s classes will be handed over first, then their
-          console access ends. Their notes stay with the school, attributed to
-          them.
-        </p>
-      ) : null}
+      {/*
+        * D06B'S NOTES LINE, always under the rows (backlog 84) - in place of
+        * our own summary that showed once ready (backlog 85). Notes belong to
+        * the class, not the teacher (SCRUM-40): authorship is kept.
+        */}
+      <p className="m-0 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+        {firstName}&rsquo;s notes stay with these classes and students.
+        Whoever takes over sees everything {firstName} wrote, kept under their
+        name.
+      </p>
     </Sheet>
   );
 }
