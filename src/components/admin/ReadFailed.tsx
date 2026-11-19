@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -33,15 +34,23 @@ export function ReadFailed({
   onRetry: () => void;
   className?: string;
 }) {
+  /*
+   * WHICH "TRY AGAIN" IS THIS ONE. A sheet can hold this beside its own
+   * failed save, and then a screen reader met two buttons both called "Try
+   * again" with nothing to tell them apart. The button keeps its words and is
+   * described by the sentence above it - no new words are invented.
+   */
+  const messageId = useId();
   return (
     <div className={cn("text-sm text-nevo-near-black/62", className)}>
-      <p className="m-0">
+      <p id={messageId} className="m-0">
         We couldn&rsquo;t read {what} just now, so there&rsquo;s nothing to show
         here yet &ndash; this is not a record that it&rsquo;s empty.
       </p>
       <button
         type="button"
         onClick={onRetry}
+        aria-describedby={messageId}
         className="mt-2.5 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
       >
         Try again

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { sessionLabel } from "./groupByYear";
 import {
   classesApi,
@@ -112,6 +112,7 @@ export function BulkClassSheet({
   onCreated: () => void;
 }) {
   /** Null until the school's classes are read - the rows start from them. */
+  const failureId = useId();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [created, setCreated] = useState(0);
@@ -382,10 +383,17 @@ export function BulkClassSheet({
           </div>
         ) : phase === "failed" ? (
           <>
-            <FailureLine>
+            <FailureLine id={failureId}>
               That didn&rsquo;t go through, and no classes were created.
             </FailureLine>
-            <button type="button" onClick={submit} className={PRIMARY_BTN}>
+            <button
+              type="button"
+              onClick={submit}
+              // Named by the failure beside it, so it is never one of two
+              // bare "Try again"s to a screen reader (see ReadFailed).
+              aria-describedby={failureId}
+              className={PRIMARY_BTN}
+            >
               Try again
             </button>
             {/* SCRUM-40: "Primary 'Try again', secondary 'Close'." A failure with
