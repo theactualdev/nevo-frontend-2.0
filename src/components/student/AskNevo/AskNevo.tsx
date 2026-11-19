@@ -145,6 +145,13 @@ function replyFor(text: string): Message {
 }
 
 /**
+ * Design's exact words (31 Aug) for the drawer header, under the zero-tag
+ * ruling that conversation evidence is aggregate-only (30 Aug, #158).
+ */
+export const TEACHERS_CAN_SEE =
+  "Teachers can see how often you ask for help, never what you ask.";
+
+/**
  * Ask Nevo (screen 26 / `Nevo Ask Nevo Frame`) - one drawer, every state.
  * Always reachable from the app tabs, never interruptive: a docked button on
  * mobile, a corner pill on desktop, opening a full-width bottom sheet (mobile)
@@ -419,7 +426,7 @@ export function AskNevo() {
             top-right corner. The history button was pushed to the right edge
             underneath it, so tapping "Past conversations" closed the drawer.
           */}
-          <div className="flex h-14 shrink-0 items-center gap-2 border-b border-nevo-near-black/8 pr-16 pl-5">
+          <div className="flex min-h-14 shrink-0 items-center gap-2 border-b border-nevo-near-black/8 py-2 pr-16 pl-5">
             {history.transcript || view === "history" ? (
               <button
                 type="button"
@@ -438,9 +445,23 @@ export function AskNevo() {
                 <ChevronLeft className="size-5" strokeWidth={2} />
               </button>
             ) : null}
-            <SheetTitle className="text-[17px] font-semibold text-nevo-near-black">
-              {view === "history" ? "Past conversations" : "Ask Nevo"}
-            </SheetTitle>
+            <div className="min-w-0">
+              <SheetTitle className="text-[17px] font-semibold text-nevo-near-black">
+                {view === "history" ? "Past conversations" : "Ask Nevo"}
+              </SheetTitle>
+              {/*
+                WHAT A TEACHER CAN SEE, SAID TO THE CHILD (the zero-tag
+                ruling Olayinka ratified on 30 Aug, recorded by #158; design's
+                copy, 31 Aug). Conversation evidence is aggregate-only - a
+                teacher sees how often, never a question - and the child is
+                told so, here, in small text under the drawer's title. The
+                teacher half has shipped ("Asked Nevo for help N times this
+                week..."), so this half is owed.
+              */}
+              <p className="text-xs leading-[1.35] text-nevo-near-black/60">
+                {TEACHERS_CAN_SEE}
+              </p>
+            </div>
             {/*
               SIGNED-IN ONLY. There is no server history behind the designed
               walkthrough, so offering a clock to a signed-out visitor would

@@ -8,7 +8,7 @@ import {
   vi,
 } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { AskNevo } from "./AskNevo";
+import { AskNevo, TEACHERS_CAN_SEE } from "./AskNevo";
 
 /**
  * THE DRAWER HAD NO MEMORY OF ANY CONVERSATION A CHILD HAD EVER HAD WITH IT.
@@ -314,5 +314,31 @@ describe("a visitor with no account", () => {
     openDrawer();
 
     expect(threadsCall).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * THE ZERO-TAG RULING, SAID TO THE CHILD (30 Aug, #158; design's copy, 31
+ * Aug): the drawer's header carries, in small text, what a teacher can see.
+ */
+describe("what a teacher can see", () => {
+  it("is said under the drawer's title, in design's exact words", () => {
+    openDrawer();
+
+    expect(TEACHERS_CAN_SEE).toBe(
+      "Teachers can see how often you ask for help, never what you ask.",
+    );
+    const line = screen.getByText(TEACHERS_CAN_SEE);
+    expect(line).toBeVisible();
+    // In the header, beside the title - not in the conversation.
+    expect(line.parentElement).toContainElement(
+      screen.getByRole("heading", { name: "Ask Nevo" }),
+    );
+  });
+
+  it("stays in the header over past conversations too", async () => {
+    await openHistory();
+
+    expect(screen.getByText(TEACHERS_CAN_SEE)).toBeVisible();
   });
 });
