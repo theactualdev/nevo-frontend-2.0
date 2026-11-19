@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { legalHref, markLegalOpenedFrom } from "@/lib/legal/returns";
@@ -187,6 +188,13 @@ export function ParentDataManagement({
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState("");
+  /**
+   * D01c's objection card opens on a tap (backlog 114): the frame draws it
+   * closed, with the box only once the parent has chosen to object, and its
+   * open state has no way to close it again. The words inside are unchanged -
+   * they are request wording, counsel's.
+   */
+  const [objecting, setObjecting] = useState(false);
   /**
    * The server said this consent is another guardian's to withdraw (403,
    * SCRUM-306) - its own words, or its plainest. Trying again can't work, so
@@ -423,20 +431,14 @@ export function ParentDataManagement({
         <h1 className="text-[21px] font-semibold tracking-[-0.015em] text-nevo-near-black">
           {childLead}&rsquo;s data on Nevo
         </h1>
-        <p className={BODY}>
-          {invitation
-            ? `${invitation.schoolName} enrolled ${child} on Nevo.`
-            : "Your child’s school enrolled them on Nevo."}{" "}
-          This page explains what that means, and lets you act on it.
-        </p>
-        {/* A tokenised link can be forwarded. Naming the parent the school
-            recorded lets someone who received it in error see that at once.
-            FLAGGED TO DESIGN: the wording is ours, not from a frame. */}
-        {invitation?.parentName && (
-          <p className="mt-2.5 text-[13px] text-nevo-near-black/50">
-            This link was sent to {invitation.parentName}.
+        {/* D01c's line under the title (backlog 112), where this page
+            used to write its own two sentences and an undrawn "This link was
+            sent to {parent}." */}
+        {invitation.schoolName?.trim() ? (
+          <p className="mt-1 text-[14px] text-nevo-violet">
+            Enrolled by {invitation.schoolName}
           </p>
-        )}
+        ) : null}
       </div>
 
       <div className="mt-3.5 overflow-hidden rounded-[14px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
@@ -508,8 +510,35 @@ export function ParentDataManagement({
         )}
       </div>
 
-      <div className={`${CARD} mt-3.5`}>
-        <h3 className={H3}>Object to Processing</h3>
+      <div className={`${CARD} relative mt-3.5`}>
+        {/*
+          * ONE BUTTON BY THIS NAME AT A TIME. Closed, the card's title is the
+          * disclosure (aria-expanded, as D01c's row opens on a tap). Open, the
+          * title is only a heading again - the frame's open card has no way to
+          * close it - so a screen reader meets "Object to processing" once,
+          * on the button that sends. Both names are the frame's and the page's
+          * own; no new words.
+          */}
+        {objecting || (outcome?.right === "object" && phase === "done") ? (
+          <h3 className={H3}>Object to Processing</h3>
+        ) : (
+          <h3 className={`${H3} flex items-center justify-between gap-3`}>
+            {/* The whole card opens it, as D01c's row does. */}
+            <button
+              type="button"
+              aria-expanded={false}
+              onClick={() => setObjecting(true)}
+              className="cursor-pointer text-left after:absolute after:inset-0 after:rounded-[14px] after:content-['']"
+            >
+              Object to Processing
+            </button>
+            <span aria-hidden className="text-nevo-violet">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </span>
+          </h3>
+        )}
         <p className={BODY}>
           Tell us your concern. We will review it within 48 hours.
         </p>
@@ -524,7 +553,7 @@ export function ParentDataManagement({
               ? " We could not attach your note to this request, so please repeat it when we contact you."
               : ""}
           </p>
-        ) : (
+        ) : objecting ? (
           <>
             <label
               htmlFor="objection-reason"
@@ -536,6 +565,9 @@ export function ParentDataManagement({
               </span>
             </label>
             <textarea
+              /* Opened by the parent's own tap, so the box takes the focus -
+                 where the toggle they pressed was. */
+              autoFocus
               id="objection-reason"
               value={reason}
               maxLength={2000}
@@ -552,7 +584,7 @@ export function ParentDataManagement({
               {phase === "sending" ? "Sending…" : "Object to processing"}
             </button>
           </>
-        )}
+        ) : null}
       </div>
 
       {invitation.canWithdraw === false ? null : notTheirs ? (
@@ -659,7 +691,18 @@ function withdrawalSentence(decidedAt: string | null): string {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-dvh bg-nevo-cream px-5 py-8 text-nevo-near-black">
-      <div className="mx-auto w-full max-w-[560px]">{children}</div>
+      <div className="mx-auto w-full max-w-[560px]">
+        {/* D01c's wordmark, above the card (backlog 112). */}
+        <Image
+          src="/brand/nevo-wordmark.png"
+          alt="Nevo"
+          width={344}
+          height={116}
+          priority
+          className="mb-[22px] h-5 w-auto"
+        />
+        {children}
+      </div>
     </main>
   );
 }
