@@ -1,5 +1,6 @@
 "use client";
 
+import { MessageCircle } from "lucide-react";
 import { useState } from "react";
 // The shared feedback panel (SCRUM-68 `Nevo Feedback`). It lives in the teacher
 // shell because that console mounted it first; nothing in it is teacher-only.
@@ -146,17 +147,40 @@ export function SettingsView() {
           * to a page with no feedback on it, and an admin without oversight
           * never saw it at all. It is every admin's now, and it opens the
           * shared feedback panel against the live `POST /api/v1/feedback`.
+          *
+          * D12'S FEEDBACK SECTION, AS DRAWN (backlog 103): a card row - the
+          * speech mark, "Share feedback", and "Tell us what's working, or
+          * request a feature" under it - where a sentence was. The line
+          * invites, and the row it sits on is the route: Share feedback, the
+          * one route Lydia names for anything a teacher or admin would tell
+          * us (11 Nov), so it is not the invitation-with-no-route her 10 Nov
+          * rule stops.
           */}
-        <p className="mt-8 text-[13px] text-nevo-near-black/55">
-          Something not working, or missing?{" "}
-          <button
-            type="button"
-            onClick={() => setFeedbackOpen(true)}
-            className="cursor-pointer font-semibold text-nevo-navy hover:opacity-75"
-          >
-            Share feedback
-          </button>
-        </p>
+        <SuperHeading id="settings-feedback">Feedback</SuperHeading>
+        <button
+          type="button"
+          aria-label="Share feedback"
+          aria-describedby="settings-feedback-line"
+          onClick={() => setFeedbackOpen(true)}
+          className="mt-3.5 flex w-full cursor-pointer items-center gap-3 rounded-xl bg-nevo-cream-elevated px-[22px] py-[18px] text-left shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-colors hover:bg-nevo-navy/[0.06]"
+        >
+          <MessageCircle
+            className="size-5 shrink-0 text-nevo-navy/75"
+            strokeWidth={1.9}
+            aria-hidden
+          />
+          <span className="flex flex-col gap-0.5">
+            <span className="text-[15px] font-medium text-nevo-near-black">
+              Share feedback
+            </span>
+            <span
+              id="settings-feedback-line"
+              className="text-[13px] text-nevo-near-black/55"
+            >
+              Tell us what&apos;s working, or request a feature
+            </span>
+          </span>
+        </button>
       </div>
       {feedbackOpen ? <FeedbackPanel onClose={() => setFeedbackOpen(false)} /> : null}
     </div>
