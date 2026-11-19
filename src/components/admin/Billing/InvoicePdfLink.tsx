@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   billingApi,
   externalPdfUrl,
@@ -31,6 +31,12 @@ import {
  *
  * The download is an anchor click rather than `window.open`, because a popup
  * opened after an await is exactly what a popup blocker eats.
+ *
+ * SCRUM-98's THREE STATES (backlog 105): idle, a brief working label, then a
+ * settled "Downloaded" - "no toast". It went back to "PDF" when the file had
+ * arrived, which looked the same as a press that did nothing. A failure is
+ * the spec's violet line, in full - "That didn't download. We're on it, and
+ * the invoice is unchanged." - with Try again.
  */
 export function InvoicePdfLink({
   invoice,
@@ -42,7 +48,8 @@ export function InvoicePdfLink({
   /** "PDF" in a list row; the detail page's button says "Download PDF". */
   label?: string;
 }) {
-  const [state, setState] = useState<"" | "loading" | "failed">("");
+  const [state, setState] = useState<"" | "loading" | "done" | "failed">("");
+  const failedLineId = useId();
   const path = invoicePdfPath(invoice.pdfUrl);
 
   if (!path) {
@@ -74,7 +81,7 @@ export function InvoicePdfLink({
         a.click();
         a.remove();
         URL.revokeObjectURL(href);
-        setState("");
+        setState("done");
       })
       // No red, and no dead end: it says what happened and stays pressable.
       .catch(() => setState("failed"));
@@ -82,12 +89,28 @@ export function InvoicePdfLink({
 
   return (
     <span className="flex shrink-0 flex-col items-end">
-      <button type="button" onClick={fetchIt} className={className}>
-        {state === "loading" ? "Fetching…" : state === "failed" ? "Try again" : label}
+      {/* Downloaded stays pressable: another copy is a fair thing to want. */}
+      <button
+        type="button"
+        onClick={fetchIt}
+        aria-describedby={state === "failed" ? failedLineId : undefined}
+        className={className}
+      >
+        {state === "loading"
+          ? "Fetching…"
+          : state === "failed"
+            ? "Try again"
+            : state === "done"
+              ? "Downloaded"
+              : label}
       </button>
       {state === "failed" && (
-        <span className="mt-0.5 text-[12px] text-nevo-near-black/55">
-          That didn&rsquo;t download
+        <span
+          id={failedLineId}
+          role="status"
+          className="mt-0.5 max-w-[260px] text-right text-[12px] leading-[1.45] text-nevo-violet-text"
+        >
+          That didn&rsquo;t download. We&rsquo;re on it, and the invoice is unchanged.
         </span>
       )}
     </span>
