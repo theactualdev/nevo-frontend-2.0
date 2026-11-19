@@ -87,21 +87,25 @@ const KINDS: {
   /** The server's own name for the file. */
   file: string;
 }[] = [
-  {
-    kind: "student",
-    title: "Students",
-    sub: "One row per student, with the class they are in.",
-    template: "students",
-    tmpl: "student",
-    file: "nevo-student-roster.csv",
-  },
+  /*
+   * D24 OB-01's two panels, in its order and by its names (backlog 36):
+   * "Teacher file", then "Student file". They read "Students" then "Staff".
+   */
   {
     kind: "teacher",
-    title: "Staff",
+    title: "Teacher file",
     sub: "One row per member of staff, with the classes they teach.",
     template: "teachers",
     tmpl: "teacher",
     file: "nevo-teacher-import.csv",
+  },
+  {
+    kind: "student",
+    title: "Student file",
+    sub: "One row per student, with the class they are in.",
+    template: "students",
+    tmpl: "student",
+    file: "nevo-student-roster.csv",
   },
 ];
 
@@ -379,7 +383,9 @@ export function RosterImportView() {
               arrives first sets the class list.
             </p>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {/* Side by side from 1280 (D24 desktop); one column below, as
+                its tablet frame draws it (SCRUM-347: desktop starts at 1280). */}
+            <div className="mt-6 grid gap-4 xl:grid-cols-2">
               {KINDS.map((k) => (
                 <DropPanel
                   key={k.kind}
