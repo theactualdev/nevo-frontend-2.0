@@ -75,22 +75,44 @@ export function NotActiveDashboard({ state }: { state: OnboardingState }) {
           {leadFor(state)}
         </p>
 
-        <h3 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
-          What&rsquo;s left
-        </h3>
-        <ol className={cn(CARD, "mt-3 list-none overflow-hidden p-0")}>
-          {setupSteps(state, payLine).map((s, i, all) => (
-            <StepRow key={s.n} step={s} last={i === all.length - 1} />
-          ))}
-        </ol>
+        {/*
+          * TWO COLUMNS FROM 1280 (Lydia, 16 Nov, SCRUM-347: "Admin BUILDS the
+          * drawn two-column layouts"). D24 moments B and C: the steps on the
+          * left, the counts or the price on the right, `1.4fr 1fr`, gap 20,
+          * top-aligned. Moment A has nothing beside its steps, so it stays one
+          * column. Below 1280 it is one column; moment C puts the price above
+          * the steps there, as D24's tablet frame draws it.
+          */}
+        <div
+          className={cn(
+            "flex flex-col",
+            moment !== "nothing_uploaded" &&
+              "xl:grid xl:grid-cols-[1.4fr_1fr] xl:items-start xl:gap-5",
+          )}
+        >
+          <div className="min-w-0">
+            <h3 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
+              What&rsquo;s left
+            </h3>
+            <ol className={cn(CARD, "mt-3 list-none overflow-hidden p-0")}>
+              {setupSteps(state, payLine).map((s, i, all) => (
+                <StepRow key={s.n} step={s} last={i === all.length - 1} />
+              ))}
+            </ol>
+          </div>
 
-        {moment === "part_uploaded" && (
-          <SoFar state={state} pricing={pricing} />
-        )}
+          {moment === "part_uploaded" && (
+            <div className="min-w-0" data-column="so-far">
+              <SoFar state={state} pricing={pricing} />
+            </div>
+          )}
 
-        {moment === "to_pay" && (
-          <WhatYoullPay state={state} pricing={pricing} amount={amount} />
-        )}
+          {moment === "to_pay" && (
+            <div className="order-first min-w-0 xl:order-none" data-column="to-pay">
+              <WhatYoullPay state={state} pricing={pricing} amount={amount} />
+            </div>
+          )}
+        </div>
 
         <p className="mt-6 max-w-[640px] text-[13.5px] leading-[1.55] text-nevo-near-black/55">
           {moment === "nothing_uploaded"
@@ -175,7 +197,9 @@ function SoFar({ state, pricing }: { state: OnboardingState; pricing: Pricing | 
         Your school so far
       </h3>
       <div className={cn(CARD, "mt-3 px-[22px] py-[18px]")}>
-        <dl className="m-0 grid gap-x-10 gap-y-3 sm:grid-cols-3">
+        {/* Three across below 1280; in the narrow right column from 1280,
+            one row each, label left and value right, as D24's count panel. */}
+        <dl className="m-0 grid gap-x-10 gap-y-3 sm:grid-cols-3 xl:grid-cols-1 xl:gap-y-2">
           <Fact
             label="Teachers"
             value={state.teacherCount > 0 ? String(state.teacherCount) : "Not added yet"}
@@ -253,9 +277,11 @@ function WhatYoullPay({
 
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="xl:flex xl:items-baseline xl:justify-between xl:gap-4">
       <dt className="text-[12.5px] text-nevo-near-black/55">{label}</dt>
-      <dd className="m-0 mt-0.5 text-[16px] font-semibold text-nevo-near-black">{value}</dd>
+      <dd className="m-0 mt-0.5 text-[16px] font-semibold text-nevo-near-black xl:mt-0 xl:text-right">
+        {value}
+      </dd>
     </div>
   );
 }

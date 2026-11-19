@@ -46,9 +46,16 @@ export function InvoiceLines({ invoice }: { invoice: Invoice }) {
 }
 
 /** The invoice as a card: its number, period, lines and PDF. */
-export function InvoiceBreakdown({ invoice }: { invoice: Invoice }) {
+export function InvoiceBreakdown({
+  invoice,
+  className,
+}: {
+  invoice: Invoice;
+  /** For a caller that places the card itself, e.g. in a grid column. */
+  className?: string;
+}) {
   return (
-    <div className={cn(CARD, "mt-4 px-[26px] py-[22px]")}>
+    <div className={cn(CARD, "mt-4 px-[26px] py-[22px]", className)}>
       <div className="flex items-baseline justify-between gap-4">
         <h3 className="m-0 text-[15.5px] font-semibold text-nevo-near-black">
           Invoice {invoice.invoiceNumber}
