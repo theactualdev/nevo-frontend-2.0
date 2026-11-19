@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -9,6 +10,7 @@ import {
 import { LessonPlayer } from "./LessonPlayer";
 import { GIVES_WAY_AFTER_MS } from "./QuickCheckSheet";
 import { LESSON_STATUS } from "@/lib/api/lessons";
+import { SAVING_LESSON_LINE, SLOW_MARK_MS } from "@/lib/lessons/verdict";
 import { clearSession, setSession } from "@/lib/auth/session";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
 
@@ -209,6 +211,68 @@ describe("finishing", () => {
     finish();
 
     expect(screen.getByText("Your progress is saved.")).toBeTruthy();
+  });
+
+  /*
+   * LYDIA'S END-OF-LESSON WAIT (10 and 11 Nov): a live lesson whose
+   * completion write is still on its way says so past about two seconds -
+   * and a lesson that writes nothing never does.
+   */
+  describe("while the completion is on its way", () => {
+    afterEach(() => vi.useRealTimers());
+    const waitOut = () =>
+      act(() => {
+        vi.advanceTimersByTime(SLOW_MARK_MS);
+      });
+
+    it("says her line past two seconds, for a live lesson", () => {
+      vi.useFakeTimers();
+      render(<LessonPlayer lesson={LESSON} plan={null} live />);
+      next();
+      next();
+      next();
+      expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
+
+      waitOut();
+
+      expect(screen.getByText(SAVING_LESSON_LINE)).toBeTruthy();
+      expect(screen.queryByText(/progress is saved/i)).toBeNull();
+    });
+
+    it("never says it for the walkthrough, which writes nothing", () => {
+      vi.useFakeTimers();
+      finish();
+
+      waitOut();
+
+      expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
+    });
+
+    it("never says it for a partial copy, which writes no completion", () => {
+      vi.useFakeTimers();
+      render(<LessonPlayer lesson={LESSON} plan={null} live partial />);
+      next();
+      next();
+      next();
+
+      waitOut();
+
+      expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
+    });
+
+    it("says the save failed, not that it is saving, when the write did not reach Nevo", () => {
+      vi.useFakeTimers();
+      progress.completionFailed = true;
+      render(<LessonPlayer lesson={LESSON} plan={null} live />);
+      next();
+      next();
+      next();
+
+      waitOut();
+
+      expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
+      expect(screen.getByText(/We couldn.t save that just now/)).toBeTruthy();
+    });
   });
 });
 

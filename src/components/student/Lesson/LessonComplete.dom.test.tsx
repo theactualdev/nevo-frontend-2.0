@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonComplete } from "./LessonComplete";
+import { SAVING_LESSON_LINE, SLOW_MARK_MS } from "@/lib/lessons/verdict";
 import {
   preloadSettlingCharacter,
   SettlingCharacter,
@@ -43,5 +44,58 @@ describe("the ending's picture", () => {
       screen.getByRole("heading", { name: "That's the lesson done." }),
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: "Back to lessons" })).toBeTruthy();
+  });
+});
+
+/**
+ * LYDIA'S END-OF-LESSON WAIT (10 and 11 Nov): while the completion write is
+ * on its way, past about two seconds, "Nevo is saving your lesson." in the
+ * note's polite slot - and the note the caller hands in, once there is one,
+ * in its place.
+ */
+describe("the end-of-lesson wait", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("says nothing for two seconds, then her line, read out politely", () => {
+    vi.useFakeTimers();
+    render(<LessonComplete onDone={() => {}} saving />);
+    expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(SLOW_MARK_MS);
+    });
+
+    const line = screen.getByText(SAVING_LESSON_LINE);
+    expect(line.parentElement).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("gives way to the note once the write has answered", () => {
+    vi.useFakeTimers();
+    const { rerender } = render(<LessonComplete onDone={() => {}} saving />);
+    act(() => {
+      vi.advanceTimersByTime(SLOW_MARK_MS);
+    });
+
+    rerender(
+      <LessonComplete
+        onDone={() => {}}
+        saving={false}
+        note="Your progress is saved."
+      />,
+    );
+
+    expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
+    expect(screen.getByText("Your progress is saved.")).toBeTruthy();
+  });
+
+  it("is never said where nothing is being saved", () => {
+    vi.useFakeTimers();
+    render(<LessonComplete onDone={() => {}} />);
+
+    act(() => {
+      vi.advanceTimersByTime(SLOW_MARK_MS * 5);
+    });
+
+    expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
   });
 });
