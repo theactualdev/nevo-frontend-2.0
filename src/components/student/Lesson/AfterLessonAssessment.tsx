@@ -9,6 +9,7 @@ import type { Assessment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
   SAVING_LESSON_LINE,
+  SEND_AGAIN,
   keyMark,
   onVerdict,
   type VerdictReply,
@@ -123,7 +124,7 @@ export function AfterLessonAssessment({
    * `onBackToLessons`, the result is design's "couldn't load" screen instead.
    */
   resultUnread?: boolean;
-  /** Read the result again: send the completion again (D183's Try again). */
+  /** Read the result again: send the completion again (D183's Send again). */
   onReread?: () => void;
   /** D183's Back to my lessons. */
   onBackToLessons?: () => void;
@@ -510,9 +511,14 @@ function Intro({
  * Nevo - offline, or failed - there is nothing to show. The result screen
  * drew its Continue alone over a blank, which said nothing at all. Lydia's
  * words now, and only them: "No claim about what was or was not saved,
- * because we cannot confirm it." Try again sends the completion again, whose
- * answer is the only read of the result there is; it holds its place while
- * that is on its way.
+ * because we cannot confirm it." Send again sends the completion again,
+ * whose answer is the only read of the result there is; it holds its place
+ * while that is on its way.
+ *
+ * "SEND AGAIN", NOT "TRY AGAIN" (Lydia, 10 and 11 Nov: "The retry button:
+ * 'Send again', appearing only on a real failure rather than on a timer").
+ * Her 13 Oct "Try again" was the label before the waits had their words; this
+ * screen already shows only on a real failure, so only the label moved.
  *
  * NOT DRAWN: design's frame for this state is not pushed yet, so it takes the
  * result's own column and type, with no mark - a mark here would say how the
@@ -541,7 +547,7 @@ function ResultUnread({
           We couldn&apos;t load your result just now.
         </h2>
         <Button className="mt-7 w-full" loading={rereading} onClick={onReread}>
-          Try again
+          {SEND_AGAIN}
         </Button>
         <Button
           variant="ghost"
