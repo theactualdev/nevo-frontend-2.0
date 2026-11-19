@@ -799,41 +799,59 @@ export function OverviewView() {
                 both asserting that nothing of the kind is held, above a live
                 count that can come back non-zero. One source now, so they
                 cannot drift apart again. */}
-            <div className={cn(CARD, "mt-4 px-[26px] py-7")}>
+            <div
+              className={cn(
+                CARD,
+                audit
+                  ? "mt-4 px-[22px] py-5 xl:px-[30px] xl:py-[26px]"
+                  : "mt-4 px-[26px] py-7",
+              )}
+            >
               {audit ? (
-                <>
-                  <div className="flex items-baseline gap-3">
-                    {/* NAVY AT ZERO, ALWAYS. SCRUM-39 is explicit that the
-                        compliance zero is "the expected reading forever" and
-                        "must not look like missing data" - the muting the
-                        snapshot tiles do in the early state is deliberately
-                        wrong here, and this numeral is not built from
-                        `snapshotTiles.ts` for that reason. */}
-                    <span className="text-[38px] leading-none font-semibold text-nevo-navy">
-                      {audit.diagnosticLabelsStored}
-                    </span>
-                    <span className="text-[15px] font-semibold text-nevo-near-black">
+                /*
+                 * D04'S ROW (Lydia, 16 Nov, SCRUM-347: "Admin BUILDS the
+                 * drawn two-column layouts"). The numeral on the left, the
+                 * words beside it; "What we store" on the right from 1280,
+                 * under the words below it. One link, placed by the grid, so
+                 * it is never in the page twice. Desktop: numeral 40, gap 26,
+                 * padding 26/30. Tablet: numeral 32, gap 18, padding 20/22.
+                 */
+                <div
+                  data-compliance-row
+                  className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-[18px] xl:grid-cols-[auto_minmax(0,1fr)_auto] xl:gap-x-[26px]"
+                >
+                  {/* NAVY AT ZERO, ALWAYS. SCRUM-39 is explicit that the
+                      compliance zero is "the expected reading forever" and
+                      "must not look like missing data" - the muting the
+                      snapshot tiles do in the early state is deliberately
+                      wrong here, and this numeral is not built from
+                      `snapshotTiles.ts` for that reason. */}
+                  <span className="row-span-2 text-[32px] leading-none font-semibold tracking-[-0.02em] text-nevo-navy xl:row-span-1 xl:text-[40px]">
+                    {audit.diagnosticLabelsStored}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="m-0 text-[14px] font-semibold text-nevo-near-black xl:text-[15px]">
                       {labelHero(audit.diagnosticLabelsStored, "overview").unit}
-                    </span>
+                    </p>
+                    <p className="mt-[5px] max-w-[600px] text-[13px] leading-[1.55] text-nevo-near-black/66 xl:mt-1.5 xl:text-sm xl:leading-[1.6]">
+                      {labelHero(audit.diagnosticLabelsStored, "overview").body}
+                    </p>
+                    <p className="mt-3 text-[13px] text-nevo-near-black/50">
+                      {onDay(audit.generatedAt)
+                        ? `Checked ${onDay(audit.generatedAt)}`
+                        : "Checked"}
+                      {audit.findings.length > 0
+                        ? ` · ${audit.findings.length} finding${audit.findings.length === 1 ? "" : "s"} to review`
+                        : ""}
+                    </p>
                   </div>
-                  <p className="mt-3 max-w-[62ch] text-sm leading-[1.6] text-nevo-near-black/66">
-                    {labelHero(audit.diagnosticLabelsStored, "overview").body}
-                  </p>
-                  <p className="mt-3 text-[13px] text-nevo-near-black/50">
-                    {onDay(audit.generatedAt)
-                      ? `Checked ${onDay(audit.generatedAt)}`
-                      : "Checked"}
-                    {audit.findings.length > 0
-                      ? ` · ${audit.findings.length} finding${audit.findings.length === 1 ? "" : "s"} to review`
-                      : ""}
-                  </p>
                   <Link
                     href="/admin/compliance"
-                    className="mt-4 inline-block text-[13.5px] font-semibold text-nevo-navy hover:underline"
+                    className="col-start-2 mt-2.5 justify-self-start text-[13px] font-semibold whitespace-nowrap text-nevo-navy hover:underline xl:col-start-3 xl:row-start-1 xl:mt-0.5 xl:text-[13.5px]"
                   >
                     What we store &rarr;
                   </Link>
-                </>
+                </div>
               ) : auditPhase === "denied" ? (
                 /* Not a failure and not a finding: this admin's account does
                    not include the check. Said once, with who can change it -
