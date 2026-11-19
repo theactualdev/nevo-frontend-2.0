@@ -22,7 +22,14 @@ export const MAX_ROWS = 500;
 export interface ParsedRow {
   /** 1-based, matching what a spreadsheet shows the person fixing the file. */
   line: number;
+  /** What the preview shows: the two name columns joined, or the one. */
   name: string;
+  /**
+   * The file's own first and last name, when it has those columns (D19, and
+   * the server's teacher template). Sent as they are - never re-split.
+   */
+  firstName?: string;
+  lastName?: string;
   email: string;
   className: string;
   /** Null when the row is fine. */
@@ -44,7 +51,7 @@ export interface ParsedRow {
  * children on Students, which has its own roster import.
  */
 export const TEMPLATE =
-  "name,email,class\nFolake Adeyemi,adeyemi.f@school.edu.ng,JSS 2A\n";
+  "first_name,last_name,email,class\nFolake,Adeyemi,adeyemi.f@school.edu.ng,JSS 2A\n";
 
 /**
  * A small RFC-4180 reader: quoted fields, escaped quotes, and CRLF.
@@ -141,15 +148,24 @@ export function parseInviteCsv(
     };
   }
 
+  /*
+   * THE NAME COLUMNS D19 DRAWS, AND THE SERVER'S TEACHER TEMPLATE USES:
+   * first_name and last_name (backlog 18). Only a single "name" column was
+   * read, so the frame's file and the server's own template were refused
+   * outright. Both are read now; a file with one "name" column still works.
+   */
+  const iFirst = headerIndex(header, "firstname", "first");
+  const iLast = headerIndex(header, "lastname", "surname", "last");
   const iName = headerIndex(header, "name", "fullname");
   const iEmail = headerIndex(header, "email");
   const iClass = headerIndex(header, "class", "classname");
+  const split = iFirst !== -1;
 
-  if (iName === -1) {
+  if (!split && iName === -1) {
     return {
       rows: [],
       fatal:
-        "We couldn't find a 'name' column. Download the template to see the columns we expect.",
+        "We couldn't find a 'first_name' column. Download the template to see the columns we expect.",
     };
   }
 
@@ -161,7 +177,9 @@ export function parseInviteCsv(
 
   const rows = body.map((cells, i): ParsedRow => {
     const at = (idx: number) => (idx === -1 ? "" : (cells[idx] ?? "").trim());
-    const name = at(iName);
+    const first = split ? at(iFirst) : "";
+    const last = split ? at(iLast) : "";
+    const name = split ? [first, last].filter(Boolean).join(" ") : at(iName);
     const email = at(iEmail);
     const className = at(iClass);
 
@@ -193,6 +211,7 @@ export function parseInviteCsv(
     return {
       line: i + 2, // +1 for the header, +1 because spreadsheets count from one.
       name,
+      ...(split ? { firstName: first, lastName: last } : {}),
       email,
       className,
       classId: matched?.id ?? null,
@@ -212,7 +231,11 @@ export function splitName(name: string): { firstName: string; lastName: string |
 }
 
 export function toDraft(row: ParsedRow): InviteDraft {
-  const { firstName, lastName } = splitName(row.name);
+  // The file's own columns when it has them; a one-column name is split.
+  const { firstName, lastName } =
+    row.firstName !== undefined
+      ? { firstName: row.firstName, lastName: row.lastName || null }
+      : splitName(row.name);
   return {
     role: "teacher",
     firstName,
