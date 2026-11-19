@@ -818,7 +818,9 @@ export function CalculationSolver({
   return (
     // Frame: the calc column is narrower than the reading column (560/600 vs
     // the player's 620/680).
-    <div className="mx-auto sm:max-w-[560px] lg:max-w-[600px]">
+    // The Solver Frame's column: 680 on a tablet, 880 on a desktop
+    // (SCRUM-347); it was 600 at every width from 1,024.
+    <div className="mx-auto sm:max-w-[560px] md:max-w-[680px] xl:max-w-[880px]">
       {/*
         THE CHILD'S OWN ROW, as the frame's gate controls draw it: pills under
         the title, navy while on, gone once the solve is done. Slower; More
@@ -1986,7 +1988,7 @@ function PadEntry({
           {/* The field is `outline-none`, so its box carries the focus ring. */}
           <div
             data-reveal="field"
-            className="flex min-h-[72px] min-w-0 flex-1 items-center gap-1 rounded-[10px] border-[1.5px] border-nevo-navy/40 bg-nevo-cream-elevated px-[18px] py-2.5 transition-colors focus-within:border-nevo-navy has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-nevo-navy has-[input:focus-visible]:ring-offset-2 has-[input:focus-visible]:ring-offset-nevo-cream sm:min-h-[82px] lg:min-h-[80px]"
+            className="flex min-h-[72px] min-w-0 flex-1 items-center gap-1 rounded-[10px] border-[1.5px] border-nevo-navy/40 bg-nevo-cream-elevated px-[18px] py-2.5 transition-colors focus-within:border-nevo-navy has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-nevo-navy has-[input:focus-visible]:ring-offset-2 has-[input:focus-visible]:ring-offset-nevo-cream sm:min-h-[82px] xl:min-h-[80px]"
           >
             <input
               ref={field}
@@ -1998,7 +2000,7 @@ function PadEntry({
               value={drawn(value)}
               onChange={(e) => onChange(kept(e.target.value))}
               aria-label={step.prompt}
-              className="min-w-0 flex-1 bg-transparent text-[38px] leading-[1.1] font-semibold text-nevo-navy caret-nevo-navy outline-none sm:text-[48px] lg:text-[46px]"
+              className="min-w-0 flex-1 bg-transparent text-[38px] leading-[1.1] font-semibold text-nevo-navy caret-nevo-navy outline-none sm:text-[48px] xl:text-[46px]"
             />
             {value.length > 0 && (
               <button
@@ -2125,7 +2127,7 @@ const RING = "outline-2 outline-offset-2 outline-nevo-violet";
 
 /** 17b's bar cell, at the frame's 28 / 34 / 30 per variant. */
 const BAR_CELL =
-  "h-7 rounded-[5px] transition-colors duration-200 sm:h-[34px] lg:h-[30px]";
+  "h-7 rounded-[5px] transition-colors duration-200 sm:h-[34px] xl:h-[30px]";
 const BAR_EMPTY = "border border-nevo-near-black/12 bg-nevo-near-black/[0.08]";
 /** D149's square place, at its 40px where the row has room. */
 const ARRAY_CELL = "aspect-square rounded-lg transition-colors duration-200";

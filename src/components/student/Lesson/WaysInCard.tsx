@@ -41,7 +41,7 @@ export function WaysInCard({
     >
       <p
         className={cn(
-          "text-base font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[18px] lg:text-[19px]",
+          "text-base font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[18px] xl:text-[19px]",
           reading && READING_BODY,
         )}
       >
@@ -63,7 +63,7 @@ export function WaysInCard({
           >
             <span
               className={cn(
-                "text-base font-medium text-nevo-near-black sm:text-[18px] lg:text-[19px]",
+                "text-base font-medium text-nevo-near-black sm:text-[18px] xl:text-[19px]",
                 reading && READING_BODY,
               )}
             >

@@ -129,8 +129,10 @@ const PICKUP_MAX = 5;
  * tablet the greeting sat at (114, 24) where the frame puts it at (108, 44).
  * Between a phone and a tablet (640-767, no frame) the old 32/24 stands.
  */
-const HOME_PAGE = "px-5 pt-2 pb-6 sm:px-8 sm:py-6 md:p-11 lg:p-[52px]";
-const HOME_COLUMN = "mx-auto w-full max-w-[720px] lg:max-w-[860px]";
+const HOME_PAGE = "px-5 pt-2 pb-6 sm:px-8 sm:py-6 md:p-11 xl:p-[52px]";
+// Design's 820 column, centred (Lydia, 16 Nov) - the system value every
+// tab now shares, in place of the frame's own 720 and 860.
+const HOME_COLUMN = "mx-auto w-full max-w-[820px]";
 
 /**
  * The greeting, the same over every state of the page, and the first thing

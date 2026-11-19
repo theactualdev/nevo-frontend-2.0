@@ -180,7 +180,7 @@ export function TextSegment({
    * `Math.max(L.body, 18)` - see READING_BODY.
    */
   const bodyType = cn(
-    "text-base leading-[1.75] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+    "text-base leading-[1.75] text-nevo-near-black/82 sm:text-[18px] xl:text-[19px]",
     reading && [READING_BODY, READING_INK],
   );
 
@@ -210,7 +210,7 @@ export function TextSegment({
 
   return (
     <article>
-      <h2 className="text-[22px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black sm:text-[26px] lg:text-[28px]">
+      <h2 className="text-[22px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black sm:text-[26px] xl:text-[28px]">
         {content.heading}
       </h2>
 
@@ -228,7 +228,7 @@ export function TextSegment({
               </span>
               <p
                 className={cn(
-                  "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+                  "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] xl:text-[19px]",
                   // Frame 17 sizes a step like the body: the reading size,
                   // never smaller, on the card's own 1.6 line height.
                   reading && [BOX_READING, "leading-[1.6]"],
@@ -257,7 +257,7 @@ export function TextSegment({
               )}
               <p
                 className={cn(
-                  "text-base leading-[1.7] font-medium text-nevo-near-black sm:text-[18px] lg:text-[19px]",
+                  "text-base leading-[1.7] font-medium text-nevo-near-black sm:text-[18px] xl:text-[19px]",
                   reading && BOX_READING,
                 )}
               >
@@ -275,7 +275,7 @@ export function TextSegment({
           </p>
           <p
             className={cn(
-              "mt-2.5 text-base leading-[1.7] font-medium text-nevo-near-black sm:text-[18px] lg:text-[19px]",
+              "mt-2.5 text-base leading-[1.7] font-medium text-nevo-near-black sm:text-[18px] xl:text-[19px]",
               reading && BOX_READING,
             )}
           >
@@ -299,7 +299,7 @@ export function TextSegment({
               <li
                 key={i}
                 className={cn(
-                  "text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+                  "text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] xl:text-[19px]",
                   reading && BOX_READING,
                 )}
               >

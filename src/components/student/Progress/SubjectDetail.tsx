@@ -174,8 +174,8 @@ export function SubjectDetail({
           </span>
         </div>
 
-        <div className="mx-auto w-full max-w-[680px] px-6 pb-8 sm:px-8">
-          <h1 className="text-[26px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
+        <div className="mx-auto w-full max-w-[680px] px-6 pb-8 sm:px-8 md:max-w-[908px] md:px-11 md:pb-11 xl:max-w-[924px] xl:px-[52px] xl:pb-[52px]">
+          <h1 className="text-[26px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] xl:text-[32px]">
             {subject.name}
           </h1>
 
@@ -258,7 +258,7 @@ function DetailFrame({ children }: { children: React.ReactNode }) {
           Progress
         </span>
       </div>
-      <div className="mx-auto w-full max-w-[680px] px-6 pb-8 sm:px-8">
+      <div className="mx-auto w-full max-w-[680px] px-6 pb-8 sm:px-8 md:max-w-[908px] md:px-11 md:pb-11 xl:max-w-[924px] xl:px-[52px] xl:pb-[52px]">
         {children}
       </div>
     </div>
@@ -337,7 +337,7 @@ function LiveSubjectDetail({
 
   return (
     <DetailFrame>
-      <h1 className="text-[26px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
+      <h1 className="text-[26px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] xl:text-[32px]">
         {name}
       </h1>
 

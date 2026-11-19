@@ -293,11 +293,11 @@ export function AfterLessonAssessment({
       {/* Calm progress — position, never a score */}
       <div
         className={cn(
-          "shrink-0 px-6 pt-5 sm:px-8 lg:px-10",
+          "shrink-0 px-6 pt-5 sm:px-8 xl:px-10",
           (onLeave || onTakeBreak) && "pt-1",
         )}
       >
-        <div className="mx-auto w-full max-w-[600px] lg:max-w-[640px]">
+        <div className="mx-auto w-full max-w-[600px] xl:max-w-[640px]">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-[13px] font-medium text-nevo-near-black/60">
               Question {qIndex + 1} of {total}
@@ -322,8 +322,8 @@ export function AfterLessonAssessment({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-7 sm:px-8 lg:px-10">
-        <div className="mx-auto w-full max-w-[600px] lg:max-w-[640px]">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-7 sm:px-8 xl:px-10">
+        <div className="mx-auto w-full max-w-[600px] xl:max-w-[640px]">
           {/* B16: a spoken question, keyed so each one is said on arrival. */}
           {question.promptAudio && (
             <div className="mb-4">
@@ -410,8 +410,8 @@ export function AfterLessonAssessment({
         </div>
       </div>
 
-      <div className="shrink-0 px-6 pt-3 pb-6 sm:px-8 lg:px-10">
-        <div className="mx-auto w-full max-w-[600px] lg:max-w-[640px]">
+      <div className="shrink-0 px-6 pt-3 pb-6 sm:px-8 xl:px-10">
+        <div className="mx-auto w-full max-w-[600px] xl:max-w-[640px]">
           {/* Above the way on, which it never replaces. */}
           <MarkWait
             hold={marking ? hold : null}
@@ -471,7 +471,7 @@ function Intro({
           <LeaveButton onLeave={onLeave} />
         </div>
       )}
-      <div className="flex w-full max-w-[300px] flex-col items-center sm:max-w-[430px]">
+      <div className="flex w-full max-w-[300px] flex-col items-center sm:max-w-[430px] xl:max-w-[460px]">
         <span className="flex size-[88px] items-center justify-center rounded-full bg-nevo-violet/20">
           <ClipboardCheck className="size-10 text-nevo-navy" strokeWidth={2} />
         </span>
@@ -530,7 +530,7 @@ function ResultUnread({
 }) {
   return (
     <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col justify-center bg-nevo-cream px-6 text-nevo-near-black">
-      <div className="mx-auto w-full max-w-[300px] sm:max-w-[430px]">
+      <div className="mx-auto w-full max-w-[300px] sm:max-w-[430px] xl:max-w-[460px]">
         <h2
           className={cn(
             "text-center text-[23px] font-semibold tracking-[-0.01em] text-pretty sm:text-[26px]",
@@ -706,7 +706,7 @@ function GrowthResult({
       <div
         aria-hidden={held || undefined}
         className={cn(
-          "mx-auto w-full max-w-[300px] sm:max-w-[430px]",
+          "mx-auto w-full max-w-[300px] sm:max-w-[430px] xl:max-w-[460px]",
           held && "invisible",
         )}
       >

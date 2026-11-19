@@ -118,8 +118,10 @@ export function ProfileSettings() {
     });
 
   return (
-    <div className="mx-auto w-full max-w-[600px] px-5 py-2 pb-8 sm:px-8 sm:py-6 md:mx-0 md:max-w-[688px] md:p-11 lg:max-w-[704px] lg:p-[52px]">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] md:mt-2 lg:text-[32px]">
+    // Design's 820 column, centred (Lydia, 16 Nov, SCRUM-347): it sat left
+    // at 600, 336-496px short of the right edge on a desktop.
+    <div className="mx-auto w-full max-w-[600px] px-5 py-2 pb-8 sm:px-8 sm:py-6 md:max-w-[908px] md:p-11 xl:max-w-[924px] xl:p-[52px]">
+      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] md:mt-2 xl:text-[32px]">
         Profile &amp; Settings
       </h1>
 

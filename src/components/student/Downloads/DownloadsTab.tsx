@@ -102,7 +102,7 @@ export function DownloadsTab() {
   return (
     <SampleRegion kind="student:downloads">
     <div className={TAB_PAGE}>
-      <div className="max-w-[640px]">
+      <div>
       <h1 className={TAB_TITLE}>Downloads</h1>
 
       {/* Finished, not blocked, so never grey (D211): see `BulkSaveButton`.
@@ -143,7 +143,7 @@ export function DownloadsTab() {
 function DownloadsShell() {
   return (
     <div className={TAB_PAGE}>
-      <div className="max-w-[640px]">
+      <div>
         <h1 className={TAB_TITLE}>Downloads</h1>
         <div className="mt-5 h-[52px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />
       </div>
