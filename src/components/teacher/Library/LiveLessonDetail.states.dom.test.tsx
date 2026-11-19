@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { LessonDetailResponse, LessonSegment } from "@/lib/api/lessons";
 
 const { useLessonReview, useSegmentReview } = vi.hoisted(() => ({
@@ -815,9 +815,18 @@ describe("a lesson whose review could not be read", () => {
     expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
     expect(screen.queryByText("Ready")).not.toBeInTheDocument();
     expect(
-      screen.getByText("We couldn’t load the review just now. Try again in a moment."),
+      screen.getByText(/^We couldn’t load the review just now. Try again in a moment./),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Nothing is wrong with the lesson/)).not.toBeInTheDocument();
+  });
+
+  // Backlog item 34: a line that says "try again" gives the teacher something to press.
+  it("offers Try again beside it", () => {
+    reviewState({ failed: true });
+    show();
+
+    const line = screen.getByText(/^We couldn’t load the review just now/);
+    expect(within(line).getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
   it("draws no ready card over a review that said no", () => {
