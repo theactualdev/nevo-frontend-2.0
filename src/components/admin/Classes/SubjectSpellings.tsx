@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { subjectsApi, type SpellingQuestion } from "@/lib/api/subjects";
 import { cn } from "@/lib/utils";
 import { CARD } from "../Roster/primitives";
+import { failureKind } from "../NoAccess";
 
 /**
  * D05 "Subject spellings · same or different, asked once each, listed
@@ -22,8 +23,14 @@ import { CARD } from "../Roster/primitives";
  * of your file uses"; design and Lydia corrected it on 14 Oct to "We kept the
  * fuller spelling."
  *
- * Absent when nothing is waiting, and when the read fails: the card is a
- * question, not a status, and the subjects are safely one until it's asked.
+ * Absent when nothing is waiting. A FAILED READ IS SAID (backlog 76): it was
+ * swallowed (`.catch(() => {})`), so open questions vanished without a word
+ * and an administrator could not tell "nothing to answer" from "couldn't
+ * ask". It says so in SCRUM-39's per-card words, with its own Try again. A
+ * 403 stays absent: there is nothing this admin could answer.
+ *
+ * Under the card, D05's footnote - true of this version: the server has no
+ * route that renames a subject.
  */
 
 type Answer = { same: boolean } | "saving" | "failed" | "gone";
@@ -31,19 +38,50 @@ type Answer = { same: boolean } | "saving" | "failed" | "gone";
 export function SubjectSpellings({ paused }: { paused: boolean }) {
   const [questions, setQuestions] = useState<SpellingQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
+  const [readFailed, setReadFailed] = useState(false);
+  /** Bumped by Try again, to ask for the questions again. */
+  const [attempt, setAttempt] = useState(0);
+  const failedLineId = useId();
 
   useEffect(() => {
     let alive = true;
     subjectsApi
       .spellingQuestions()
       .then((q) => {
-        if (alive) setQuestions(q);
+        if (!alive) return;
+        setQuestions(q);
+        setReadFailed(false);
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        if (alive) setReadFailed(failureKind(err) === "failed");
+      });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [attempt]);
+
+  if (readFailed) {
+    return (
+      <section aria-label="Subject spellings" className={cn(CARD, "mt-[22px] px-5 py-[18px]")}>
+        <h3 className="m-0 text-[15.5px] font-semibold text-nevo-near-black">Subject spellings</h3>
+        <p id={failedLineId} className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-violet-text">
+          We couldn&rsquo;t pull this in just now. We&rsquo;re on it.
+        </p>
+        <button
+          type="button"
+          /* Tied to its own line: the page can hold another Try again. */
+          aria-describedby={failedLineId}
+          onClick={() => {
+            setReadFailed(false);
+            setAttempt((a) => a + 1);
+          }}
+          className="mt-3 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
+        >
+          Try again
+        </button>
+      </section>
+    );
+  }
 
   if (questions.length === 0) return null;
 
@@ -66,6 +104,7 @@ export function SubjectSpellings({ paused }: { paused: boolean }) {
 
   const n = questions.length;
   return (
+    <>
     <section aria-label="Subject spellings" className={cn(CARD, "mt-[22px]")}>
       <div className="flex items-start gap-3 bg-nevo-violet/14 px-5 py-[18px] max-xl:px-[18px] max-xl:py-4">
         <span aria-hidden className="mt-1.5 size-[9px] flex-none rounded-full bg-nevo-violet" />
@@ -128,6 +167,12 @@ export function SubjectSpellings({ paused }: { paused: boolean }) {
         })}
       </ul>
     </section>
+    {/* D05's footnote, under the card. */}
+    <p className="mx-0.5 mt-3.5 mb-0 text-[13px] leading-[1.55] text-nevo-near-black/55">
+      The name that stays is the one Nevo shows on screen when you choose Same. Subject names
+      can&rsquo;t be edited in this version.
+    </p>
+    </>
   );
 }
 

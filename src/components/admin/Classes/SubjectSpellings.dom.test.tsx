@@ -92,22 +92,66 @@ describe("subject spellings", () => {
     expect(await screen.findByText("Already answered.")).toBeInTheDocument();
   });
 
-  it("is absent when nothing is waiting, or the read fails", async () => {
+  // THIS TEST ASSERTED THE DEFECT until backlog 76: it pinned an empty card
+  // over a failed read, so open questions vanished without a word. A failed
+  // read is said now - see "a read of the questions that fails" below.
+  it("is absent when nothing is waiting", async () => {
     questions.mockResolvedValue([]);
-    const { container, unmount } = render(<SubjectSpellings paused={false} />);
+    const { container } = render(<SubjectSpellings paused={false} />);
     await waitFor(() => expect(questions).toHaveBeenCalled());
     expect(container).toBeEmptyDOMElement();
-    unmount();
-
-    questions.mockRejectedValue(new Error("down"));
-    const second = render(<SubjectSpellings paused={false} />);
-    await waitFor(() => expect(questions).toHaveBeenCalledTimes(2));
-    expect(second.container).toBeEmptyDOMElement();
   });
 
   it("can't be answered while setup pauses changes", async () => {
     render(<SubjectSpellings paused />);
     await screen.findByText(/spells 2 subjects/);
     expect(within(row(/Maths/)).getByRole("button", { name: "Same" })).toBeDisabled();
+  });
+});
+
+// D05's footnote, under the card (backlog 76).
+describe("the footnote", () => {
+  it("says what stays and that names can't be edited, under the card", async () => {
+    render(<SubjectSpellings paused={false} />);
+    const card = await screen.findByRole("region", { name: "Subject spellings" });
+
+    const note = screen.getByText(
+      "The name that stays is the one Nevo shows on screen when you choose Same. Subject names can’t be edited in this version.",
+    );
+    expect(card.contains(note)).toBe(false);
+    expect(card.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("is not there when nothing is waiting", async () => {
+    questions.mockResolvedValue([]);
+    const { container } = render(<SubjectSpellings paused={false} />);
+    await waitFor(() => expect(questions).toHaveBeenCalled());
+
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
+// A failed read is said, not swallowed (backlog 76).
+describe("a read of the questions that fails", () => {
+  it("says so in SCRUM-39's words, with its own Try again", async () => {
+    questions.mockRejectedValueOnce(new ApiError(500, "boom", {}));
+    render(<SubjectSpellings paused={false} />);
+
+    const line = await screen.findByText("We couldn’t pull this in just now. We’re on it.");
+    const again = screen.getByRole("button", { name: "Try again" });
+    expect(again).toHaveAttribute("aria-describedby", line.id);
+    expect(screen.getByRole("heading", { name: "Subject spellings" })).toBeInTheDocument();
+
+    fireEvent.click(again);
+    expect(await screen.findByText("Your teacher file spells 2 subjects two ways")).toBeInTheDocument();
+    expect(questions).toHaveBeenCalledTimes(2);
+  });
+
+  it("stays absent when the admin may not see them", async () => {
+    questions.mockRejectedValueOnce(new ApiError(403, "no", {}));
+    const { container } = render(<SubjectSpellings paused={false} />);
+    await waitFor(() => expect(questions).toHaveBeenCalled());
+
+    expect(container).toBeEmptyDOMElement();
   });
 });
