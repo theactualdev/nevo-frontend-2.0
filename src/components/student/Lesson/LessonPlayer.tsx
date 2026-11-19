@@ -1177,9 +1177,9 @@ export function LessonPlayer({
   // Where the active break came from: "advance" resumes the interrupted move,
   // "offer" returns to the same segment. A module boundary offers none (D91).
   // Trigger travels into `break_start`.
-  const breakOrigin = useRef<"advance" | "offer" | "check" | "assessment">(
-    "advance",
-  );
+  const breakOrigin = useRef<
+    "advance" | "offer" | "check" | "assessment" | "leave"
+  >("advance");
   /**
    * Where the child tapped out of the end-of-lesson check (Lydia, 16 Nov):
    * the next question to ask, for when they move on into it again this visit.
@@ -2569,6 +2569,18 @@ export function LessonPlayer({
    * unseen, so its question, its pick and a mark still on its way are all
    * where the child left them.
    */
+  /**
+   * "TAKE A BREAK" FROM THE LEAVE DIALOG (17d S7, the Lesson Check Frame's
+   * leave screen): the same child's own break, in place of leaving, and back
+   * to the part it was taken on.
+   */
+  const takeBreakFromLeave = () => {
+    setLeaveOpen(false);
+    breakOrigin.current = "leave";
+    breakTrigger.current = "student_request";
+    breakOnSitting.current = startSittingBreak();
+    setBreakActive(BREAK_TYPES.MICRO);
+  };
   const takeBreakFromAssessment = () => {
     breakOrigin.current = "assessment";
     breakTrigger.current = "student_request";
@@ -3507,7 +3519,9 @@ export function LessonPlayer({
   // A break the child took from a check, started on the sitting: the server
   // writes its start and end (see `takeBreakFromCheck`).
   const serverRecordsBreak = () =>
-    (breakOrigin.current === "check" || breakOrigin.current === "assessment") &&
+    (breakOrigin.current === "check" ||
+      breakOrigin.current === "assessment" ||
+      breakOrigin.current === "leave") &&
     breakOnSitting.current !== null;
   const breakScreen = breakActive ? (
     <BreakScreen
@@ -3546,6 +3560,8 @@ export function LessonPlayer({
           setCheckOpen(true);
         }
         if (breakOrigin.current === "assessment") returnFromBreak();
+        // From the leave dialog: back to the part it was taken on.
+        if (breakOrigin.current === "leave") returnFromBreak();
       }}
     />
   ) : null;
@@ -4504,6 +4520,7 @@ export function LessonPlayer({
         open={leaveOpen}
         onOpenChange={setLeaveOpen}
         resumable={live && !review && !finished}
+        onTakeBreak={takeBreakFromLeave}
         onLeave={() => {
           // `exited` is a status the contract defines and nothing ever sent.
           // Leaving deliberately is not the same fact as drifting off mid
