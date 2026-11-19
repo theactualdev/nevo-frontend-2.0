@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Tooltip as TooltipPrimitive } from "radix-ui";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -140,6 +141,42 @@ const ICONS: Record<string, React.ReactNode> = {
 };
 
 /** 38px square, navy-filled when the row is the current one. */
+/**
+ * A COLLAPSED ROW'S LABEL, ON HOVER (SCRUM-39 spec, "Collapsed (tablet)":
+ * "Labels appear on hover as a quiet tooltip, cream on navy" - backlog 90).
+ * It was the browser's own `title`. Drawn through a portal, so the rail's
+ * scrolling nav cannot clip it; on keyboard focus too. Expanded, the label
+ * is on the row and nothing is added.
+ */
+/** The access retry's words, expanded or collapsed. */
+const RETRY_ACCESS = "Try loading your access again";
+
+function RailTip({
+  label,
+  show,
+  children,
+}: {
+  label: string;
+  show: boolean;
+  children: React.ReactElement;
+}) {
+  if (!show) return children;
+  return (
+    <TooltipPrimitive.Root delayDuration={250}>
+      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Portal>
+        <TooltipPrimitive.Content
+          side="right"
+          sideOffset={10}
+          className="z-50 rounded-[7px] bg-nevo-navy px-2.5 py-1.5 text-[12.5px] font-medium whitespace-nowrap text-nevo-cream shadow-[0_4px_12px_rgba(0,0,0,0.12)]"
+        >
+          {label}
+        </TooltipPrimitive.Content>
+      </TooltipPrimitive.Portal>
+    </TooltipPrimitive.Root>
+  );
+}
+
 function IconWrap({ on, children }: { on: boolean; children: React.ReactNode }) {
   return (
     <span
@@ -256,6 +293,7 @@ export function AdminSidebar() {
   const scopesFailed = status === "failed";
 
   return (
+    <TooltipPrimitive.Provider delayDuration={250}>
     <aside
       aria-label="Admin"
       className={cn(
@@ -335,10 +373,12 @@ export function AdminSidebar() {
                     className="mx-2 my-2 h-px shrink-0 bg-nevo-near-black/9"
                   />
                 ))}
+              <RailTip label={item.label} show={!expanded}>
               <Link
                 href={item.href}
                 aria-current={on ? "page" : undefined}
-                title={expanded ? undefined : item.label}
+                // Named for a screen reader while only the icon shows.
+                aria-label={expanded ? undefined : item.label}
                 className={cn(
                   "relative flex h-11 shrink-0 cursor-pointer items-center gap-[13px] rounded-[10px] transition-colors duration-[130ms] ease-out",
                   expanded ? "px-3" : "justify-center",
@@ -365,17 +405,18 @@ export function AdminSidebar() {
                   </span>
                 )}
               </Link>
+              </RailTip>
             </div>
           );
         })}
       </nav>
 
+      <RailTip label="Notifications" show={!expanded}>
       <button
         type="button"
         data-notification-toggle
         aria-label="Notifications"
         aria-expanded={panelOpen}
-        title={expanded ? undefined : "Notifications"}
         onClick={() => setPanelOpen((v) => !v)}
         className={cn(
           "relative mt-2 flex h-11 shrink-0 cursor-pointer items-center gap-[13px] rounded-[10px] transition-colors duration-[130ms] ease-out hover:bg-nevo-navy/5",
@@ -413,6 +454,7 @@ export function AdminSidebar() {
           />
         ) : null}
       </button>
+      </RailTip>
 
       {panelOpen ? (
         <NotificationsPanel
@@ -557,11 +599,36 @@ export function AdminSidebar() {
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nevo-navy",
           )}
         >
-          Try loading your access again
+          {RETRY_ACCESS}
         </button>
+      )}
+      {/*
+        AND ON THE COLLAPSED RAIL (backlog 90). It rendered only expanded, so
+        a rail collapsed below 1280 with a failed permissions read offered no
+        way to ask again. The same words, as the control's name and its
+        tooltip, on a glyph that fits the 64px rail.
+      */}
+      {signedIn && scopesFailed && !expanded && (
+        <RailTip label={RETRY_ACCESS} show>
+          <button
+            type="button"
+            aria-label={RETRY_ACCESS}
+            onClick={refresh}
+            className={cn(
+              "mx-auto mt-1 flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-nevo-navy transition-colors hover:bg-nevo-navy/6",
+              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nevo-navy",
+            )}
+          >
+            <svg {...GLYPH} width={17} height={17} strokeWidth={2} aria-hidden>
+              <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+              <path d="M21 3v5h-5" />
+            </svg>
+          </button>
+        </RailTip>
       )}
 
       {signOutOpen && <AdminSignOutModal onStay={() => setSignOutOpen(false)} />}
     </aside>
+    </TooltipPrimitive.Provider>
   );
 }
