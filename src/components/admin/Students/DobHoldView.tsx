@@ -10,6 +10,7 @@ import {
   ageChecksApi,
   holdStage,
   type AgeCheck,
+  type AgeCheckEdit,
 } from "@/lib/api/ageChecks";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { studentsApi, type AdminStudentDetail } from "@/lib/api/students";
@@ -98,6 +99,28 @@ interface Person {
 
 /** What the admin just did here, so the card can say it in their terms. */
 type Done = { kind: "confirmed" } | { kind: "corrected"; to: string };
+
+/**
+ * WHAT THE SCHOOL DID, FROM THE CHECK'S OWN HISTORY (backlog 13). What the
+ * admin just pressed is page state, so after a reload a correction read
+ * "You've confirmed…" and lost "Your record now reads {date}". The history
+ * (`GET /age-checks/{id}/history`) keeps it: the school's latest re-check is
+ * a correction when its dates differ, and a confirmation when they don't (a
+ * confirm writes the same date either side). A parent's confirmation is never
+ * the school's act, and its date is never read here. Null when the history
+ * holds no school re-check - then nothing is claimed.
+ */
+export function outcomeFromHistory(rows: readonly AgeCheckEdit[]): Done | null {
+  const school = rows
+    .filter((r) => (r.source ?? "school_recheck") !== "parent_confirmation")
+    .sort((a, b) => Date.parse(b.changedAt) - Date.parse(a.changedAt));
+  const last = school[0];
+  if (!last) return null;
+  if (last.newSchoolDateOfBirth && last.previousSchoolDateOfBirth !== last.newSchoolDateOfBirth) {
+    return { kind: "corrected", to: last.newSchoolDateOfBirth };
+  }
+  return { kind: "confirmed" };
+}
 
 /**
  * A hold for a missing year group (item 17): the dates agree, and no single
@@ -541,6 +564,29 @@ function WaitingCard({
   const [resent, setResent] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
 
+  /*
+   * After a reload there is no `done`, so the check's history says which it
+   * was (backlog 13). Until it answers - and if it can't - the heading is left
+   * out: "You've confirmed" over a correction is the untrue state this fixes.
+   */
+  const [fromHistory, setFromHistory] = useState<Done | null>(null);
+  useEffect(() => {
+    if (done) return;
+    let alive = true;
+    // Through a promise, so even a read that throws as it starts is only a
+    // read that failed - the card stands either way.
+    Promise.resolve()
+      .then(() => ageChecksApi.history(check.id))
+      .then((rows) => {
+        if (alive) setFromHistory(outcomeFromHistory(Array.isArray(rows) ? rows : []));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [check.id, done]);
+  const outcome = done ?? fromHistory;
+
   const resend = () => {
     if (busy) return;
     setBusy(true);
@@ -572,14 +618,16 @@ function WaitingCard({
   return (
     <li className="rounded-xl bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-xl:px-5 max-xl:py-[18px]">
       <span className="block text-[13.5px] font-semibold text-nevo-near-black/58">{person.name}</span>
-      <h3 className="m-0 mt-1.5 text-[17px] font-semibold text-nevo-near-black">
-        {done?.kind === "corrected"
-          ? `You’ve updated ${person.first}’s date of birth`
-          : `You’ve confirmed ${person.first}’s date of birth`}
-      </h3>
+      {outcome ? (
+        <h3 className="m-0 mt-1.5 text-[17px] font-semibold text-nevo-near-black">
+          {outcome.kind === "corrected"
+            ? `You’ve updated ${person.first}’s date of birth`
+            : `You’ve confirmed ${person.first}’s date of birth`}
+        </h3>
+      ) : null}
       <p className="m-0 mt-2 text-[14px] leading-[1.6] text-nevo-near-black/70">
-        {done?.kind === "corrected" && longDate(done.to)
-          ? `Your record now reads ${longDate(done.to)}. `
+        {outcome?.kind === "corrected" && longDate(outcome.to)
+          ? `Your record now reads ${longDate(outcome.to)}. `
           : ""}
         {/*
           * LYDIA'S WORDS, SCRUM-321 (7 Nov). "This notice went to everyone
