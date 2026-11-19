@@ -158,12 +158,53 @@ describe("leaving part way", () => {
 
     expect(screen.queryByText(/progress is saved/i)).toBeNull();
     expect(screen.queryByText(/pick up where you left off/i)).toBeNull();
-    // What is true whatever has landed: the last point that did is where they
-    // come back to.
-    expect(screen.getByRole("heading", { name: LAST_SAVED })).toBeTruthy();
-    // And the two choices, exactly as they were.
-    expect(screen.getByRole("button", { name: "Keep learning" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Leave for now" })).toBeTruthy();
+    // Nor the frame's "right where you are" (7 Nov), which is the same claim.
+    expect(screen.queryByText(/right where you are/i)).toBeNull();
+    // The frame's heading, and what is true whatever has landed: the last
+    // point that did is where they come back to.
+    expect(
+      screen.getByRole("heading", { name: "Leaving for now?" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("dialog")).toHaveAccessibleDescription(
+      `${LAST_SAVED} Stepping away and coming back later is a good thing to do.`,
+    );
+    // And the frame's three choices, in its order (17d S7).
+    expect(
+      screen
+        .getAllByRole("button")
+        .filter((b) => b.closest("[role='dialog']"))
+        .map((b) => b.textContent),
+    ).toEqual(["Keep learning", "Take a break", "Leave for now"]);
+  });
+
+  it("takes the child's own break from the dialog, and comes back to the same part (17d S7)", async () => {
+    vi.useFakeTimers();
+    try {
+      render(<LessonPlayer lesson={LESSON} plan={null} live />);
+      next();
+      expect(screen.getByText("Body of Denominators.")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
+
+      fireEvent.click(screen.getByRole("button", { name: "Take a break" }));
+
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.getByText("Take a breath")).toBeTruthy();
+      expect(trackEvent).toHaveBeenCalledWith(
+        "break_start",
+        expect.objectContaining({ breakType: "micro", trigger: "student_request" }),
+      );
+      // Not a leave: nothing written as exited, nobody sent anywhere.
+      expect(push).not.toHaveBeenCalled();
+      expect(writes().map(([s]) => s)).not.toContain(LESSON_STATUS.EXITED);
+
+      await act(async () => {
+        vi.advanceTimersByTime(8_100);
+      });
+
+      expect(screen.getByText("Body of Denominators.")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([
@@ -177,8 +218,11 @@ describe("leaving part way", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
 
-    expect(screen.queryByText(LAST_SAVED)).toBeNull();
+    expect(screen.queryByText(new RegExp(LAST_SAVED))).toBeNull();
     expect(screen.queryByText(/saved/i)).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Leaving for now?" }),
+    ).toBeTruthy();
     expect(screen.getByRole("button", { name: "Leave for now" })).toBeTruthy();
   });
 });
