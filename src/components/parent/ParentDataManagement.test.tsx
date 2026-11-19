@@ -440,3 +440,19 @@ describe("how long data is kept", () => {
     expect(container.textContent).not.toMatch(/school decides|data agreement|For as long as/);
   });
 });
+
+// The portal's persistent Privacy & Terms link (backlog 116).
+describe("Privacy & Terms from the data page", () => {
+  it("links to it, without the link's token", () => {
+    render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
+
+    const link = screen.getByRole("link", { name: "Privacy & Terms" });
+    expect(link).toHaveAttribute("href", "/legal/privacy?from=parent-data");
+  });
+
+  it("keeps it on a suspended account too", () => {
+    render(<ParentDataManagement token={TOKEN} invitation={inv({ status: "withdrawn" })} />);
+
+    expect(screen.getByRole("link", { name: "Privacy & Terms" })).toBeInTheDocument();
+  });
+});

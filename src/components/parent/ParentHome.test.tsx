@@ -276,3 +276,17 @@ describe("when a read fails", () => {
     expect(subjectProgress).toHaveBeenCalledTimes(2);
   });
 });
+
+// The portal's persistent Privacy & Terms link (backlog 116), signed out too.
+describe("Privacy & Terms from home", () => {
+  it("links to it on every state of home, so its way back is home", async () => {
+    getSession.mockReturnValue(null);
+    render(<ParentHome />);
+
+    await screen.findByRole("link", { name: "Sign in" });
+    expect(screen.getByRole("link", { name: "Privacy & Terms" })).toHaveAttribute(
+      "href",
+      "/legal/privacy?from=parent-home",
+    );
+  });
+});

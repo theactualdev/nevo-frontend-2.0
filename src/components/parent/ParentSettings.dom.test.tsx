@@ -115,3 +115,15 @@ describe("parent settings", () => {
     expect(await screen.findByText("Ada Okoro · ada.okoro@gmail.com")).toBeInTheDocument();
   });
 });
+
+// Privacy & Terms' Entry 4, "Back to settings" (backlog 116).
+describe("Privacy & Terms from settings", () => {
+  it("links to it, so its way back is settings", async () => {
+    render(<ParentSettings />);
+
+    expect(await screen.findByRole("link", { name: "Privacy & Terms" })).toHaveAttribute(
+      "href",
+      "/legal/privacy?from=parent-settings",
+    );
+  });
+});
