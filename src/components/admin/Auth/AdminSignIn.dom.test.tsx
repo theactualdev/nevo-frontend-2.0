@@ -2,19 +2,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ApiError } from "@/lib/api/client";
 
-const { push, loginPassword, signIn, logout, search } = vi.hoisted(() => ({
-  search: { current: "" },
-  push: vi.fn(),
-  loginPassword: vi.fn(),
-  signIn: vi.fn(),
-  logout: vi.fn(),
-}));
+const { push, loginPassword, signIn, logout, search, school, perms } =
+  vi.hoisted(() => ({
+    search: { current: "" },
+    push: vi.fn(),
+    loginPassword: vi.fn(),
+    signIn: vi.fn(),
+    logout: vi.fn(),
+    school: vi.fn(),
+    perms: vi.fn(),
+  }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: push, prefetch: vi.fn() }),
   useSearchParams: () => new URLSearchParams(search.current),
 }));
-vi.mock("@/lib/api", () => ({ authApi: { loginPassword, logout } }));
+vi.mock("@/lib/api", () => ({
+  authApi: { loginPassword, logout },
+  schoolApi: { get: school },
+  permissionsApi: { me: perms },
+}));
 // The screen reads `signIn` off the auth context; mocking the hook is lighter
 // than wrapping every render in a provider, and nothing here exercises it.
 vi.mock("@/hooks", () => ({
@@ -49,6 +56,8 @@ beforeEach(() => {
   signIn.mockReset();
   logout.mockReset();
   logout.mockResolvedValue(undefined);
+  school.mockReset().mockResolvedValue({ name: "Brightgate Academy" });
+  perms.mockReset().mockResolvedValue({ scopes: ["oversight"] });
 });
 
 const submit = () => {
@@ -264,6 +273,63 @@ describe("a valid account at the wrong door", () => {
     await screen.findByText(/can.t be used to sign in here/i);
     expect(signIn).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * BACKLOG 96: D02's "Taking you to Brightgate Academy's Overview." Every admin
+ * was told "your Overview", which IT and finance admins never reach.
+ */
+describe("the line that says where they're going", () => {
+  it("names the school and the Overview, as D02 draws it", async () => {
+    accept("senco_admin");
+    submit();
+
+    expect(
+      await screen.findByText("Taking you to Brightgate Academy's Overview."),
+    ).toBeInTheDocument();
+  });
+
+  it("names the IT admin's own home, never the Overview", async () => {
+    perms.mockResolvedValue({ scopes: ["it_sso"] });
+    accept("other_admin");
+    submit();
+
+    expect(
+      await screen.findByText("Taking you to Brightgate Academy's Systems overview."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Overview\.$/)).toBeNull();
+  });
+
+  it("says 'your' home when the school's name could not be read", async () => {
+    school.mockRejectedValue(new Error("offline"));
+    accept("senco_admin");
+    submit();
+
+    expect(
+      await screen.findByText("Taking you to your Overview."),
+    ).toBeInTheDocument();
+  });
+
+  it("names no destination when the home is not known, or a deep link wins", async () => {
+    perms.mockRejectedValue(new Error("offline"));
+    accept("senco_admin");
+    submit();
+    await screen.findByText(/You.re in/);
+    await act(async () => {});
+
+    expect(screen.queryByText(/Taking you to/)).toBeNull();
+    cleanup();
+
+    perms.mockResolvedValue({ scopes: ["oversight"] });
+    search.current = `next=${encodeURIComponent("/admin/students")}`;
+    accept("senco_admin");
+    submit();
+    await screen.findByText(/You.re in/);
+    await act(async () => {});
+
+    expect(screen.queryByText(/Taking you to/)).toBeNull();
+    expect(perms).toHaveBeenCalledTimes(1);
   });
 });
 
