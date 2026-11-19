@@ -7,9 +7,12 @@ import {
   type AdminClass,
   type ClassRejection,
 } from "@/lib/api/classes";
+import { subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
 import { YEAR_GROUPS, yearGroupLabel, yearGroupOptions } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
+import { CopyDown, type CopyTarget } from "./CopyDown";
+import { SubjectPicker } from "./SubjectPicker";
 import {
   CheckIcon,
   FailureLine,
@@ -80,6 +83,26 @@ const newRow = (yearGroup: string): Row => ({
 const byLevel = (a: string, b: string) =>
   (YEAR_GROUPS as readonly string[]).indexOf(a) - (YEAR_GROUPS as readonly string[]).indexOf(b);
 
+/** One composed class, keyed the same way everywhere on this sheet. */
+const keyOf = (c: { yearGroup: string; section: string }) => `${c.yearGroup}-${c.section}`;
+
+const fold = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+
+/** `into` plus anything in `add` it doesn't hold yet. Copy down only adds. */
+function union(into: readonly string[], add: readonly string[]): string[] {
+  const held = new Set(into.map(fold));
+  return [...into, ...add.filter((s) => !held.has(fold(s)))];
+}
+
+/** The last copy, for its confirmation line and its Undo. */
+interface Copied {
+  key: string;
+  from: string;
+  count: number;
+  /** Every row's subjects as they were before - what Undo puts back. */
+  before: Record<string, string[]>;
+}
+
 export function BulkClassSheet({
   onClose,
   onCreated,
@@ -110,6 +133,35 @@ export function BulkClassSheet({
    */
   const [existing, setExisting] = useState<readonly AdminClass[] | null>(null);
   const [readFailed, setReadFailed] = useState(false);
+
+  /*
+   * SUBJECTS FOR EACH CLASS (D05 Add several, D27; SCRUM-194). Bulk-made
+   * classes went out with none, so no teacher could be assigned to any of
+   * them until each class's subjects were set one at a time - the hour this
+   * sheet exists to save, spent again. `POST /classes/bulk` takes `subjects`
+   * per class, and the server settles each name on save as it does for one.
+   *
+   * Keyed by year group and section, so a row keeps its subjects while other
+   * sections are ticked and unticked around it.
+   */
+  const [subjectsByClass, setSubjectsByClass] = useState<Record<string, string[]>>({});
+  const [schoolSubjects, setSchoolSubjects] = useState<SchoolSubject[] | null>(null);
+  const [subjectsFailed, setSubjectsFailed] = useState(false);
+  const [copied, setCopied] = useState<Copied | null>(null);
+
+  const fetchSubjects = useCallback(() => {
+    subjectsApi
+      .list()
+      .then(setSchoolSubjects)
+      .catch(() => setSubjectsFailed(true));
+  }, []);
+  const loadSubjects = () => {
+    setSubjectsFailed(false);
+    fetchSubjects();
+  };
+  useEffect(() => {
+    fetchSubjects();
+  }, [fetchSubjects]);
 
   const loadExisting = useCallback(() => {
     classesApi
@@ -171,6 +223,41 @@ export function BulkClassSheet({
       picked: [],
     }));
 
+  const subjectsOf = (key: string) => subjectsByClass[key] ?? [];
+
+  /** A row's own change. Any edit after a copy retires that copy's Undo. */
+  const setSubjects = (key: string, next: string[]) => {
+    setSubjectsByClass((prev) => ({ ...prev, [key]: next }));
+    setCopied(null);
+  };
+
+  /** The rows a copy from `index` would reach: sendable rows beneath it. */
+  const targetsFrom = (index: number, target: CopyTarget) => {
+    const from = toSend[index];
+    return toSend
+      .slice(index + 1)
+      .filter((c) => target === "below" || c.yearGroup === from.yearGroup);
+  };
+
+  const copyDown = (index: number, target: CopyTarget) => {
+    const from = toSend[index];
+    const source = subjectsOf(keyOf(from));
+    if (source.length === 0) return;
+    const before = subjectsByClass;
+    const next = { ...subjectsByClass };
+    for (const c of targetsFrom(index, target)) {
+      next[keyOf(c)] = union(next[keyOf(c)] ?? [], source);
+    }
+    setSubjectsByClass(next);
+    setCopied({ key: keyOf(from), from: from.name, count: source.length, before });
+  };
+
+  const undoCopy = () => {
+    if (!copied) return;
+    setSubjectsByClass(copied.before);
+    setCopied(null);
+  };
+
   const addYear = (yearGroup: string) => {
     if (!yearGroup) return;
     setRows((prev) =>
@@ -188,6 +275,8 @@ export function BulkClassSheet({
           // Each class its own year group - a batch spans several now.
           yearGroup: c.yearGroup,
           section: c.section,
+          // Only when the row has some: an empty list is no subjects either way.
+          ...(subjectsOf(keyOf(c)).length > 0 ? { subjects: subjectsOf(keyOf(c)) } : {}),
           /*
            * THE SESSION THE SCHOOL IS ALREADY IN, and this sheet was creating
            * classes without one.
@@ -281,7 +370,7 @@ export function BulkClassSheet({
     <Sheet
       busy={phase === "saving"}
       title="Add several at once"
-      subtitle="Pick a year group and tick the sections you run. Nevo composes the names."
+      subtitle="Tick the sections you run, then give each class its subjects. Nevo composes the names."
       onClose={onClose}
       footer={
         phase === "saving" ? (
@@ -416,30 +505,99 @@ export function BulkClassSheet({
 
           {composed.length > 0 ? (
             <div>
-              <span className={LABEL}>About to be created</span>
-              <ul className="m-0 list-none space-y-0 overflow-hidden rounded-[10px] border border-nevo-near-black/10 p-0">
-                {composed.map((c) => (
-                  <li
-                    key={`${c.yearGroup}-${c.section}`}
-                    className="flex items-baseline gap-3 border-b border-nevo-near-black/[0.07] px-3.5 py-2.5 text-[14px] leading-[1.5] last:border-b-0"
+              {/*
+                * D05's "Subjects for each class · N classes": every composed
+                * class a row - its name, a compact picker (D27, three pills),
+                * and Copy down. A class that's already there is struck
+                * through with its note and offers neither: it is never sent.
+                */}
+              <span className={LABEL}>
+                Subjects for each class &middot; {toSend.length}{" "}
+                {toSend.length === 1 ? "class" : "classes"}
+              </span>
+              {subjectsFailed ? (
+                <ReadFailed
+                  className="mb-2.5"
+                  what="your school's subject list"
+                  onRetry={loadSubjects}
+                />
+              ) : null}
+              {copied ? (
+                <div
+                  role="status"
+                  className="mb-2.5 flex items-center gap-2.5 rounded-[10px] bg-nevo-violet/18 px-3.5 py-[11px]"
+                >
+                  <span className="flex size-[22px] flex-none items-center justify-center rounded-full bg-nevo-navy text-nevo-cream motion-safe:animate-nevo-pop">
+                    <CheckIcon size={12} />
+                  </span>
+                  <span className="min-w-0 flex-1 text-[13.5px] leading-[1.45] text-nevo-near-black">
+                    <strong className="font-semibold">
+                      {`${copied.from}’s ${copied.count} ${copied.count === 1 ? "subject" : "subjects"} copied to the rows below.`}
+                    </strong>
+                    {" Each row can still be changed on its own."}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={undoCopy}
+                    className="flex-none cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
                   >
-                    <span
-                      className={cn(
-                        "font-semibold",
-                        c.collision
-                          ? "text-nevo-near-black/45 line-through"
-                          : "text-nevo-near-black",
-                      )}
+                    Undo
+                  </button>
+                </div>
+              ) : null}
+              <ul className="m-0 list-none space-y-0 rounded-[10px] border border-nevo-near-black/10 p-0">
+                {composed.map((c) => {
+                  const key = keyOf(c);
+                  const index = c.collision ? -1 : toSend.findIndex((s) => keyOf(s) === key);
+                  return (
+                    <li
+                      key={key}
+                      data-bulk-row={c.name}
+                      className="grid grid-cols-[minmax(0,104px)_minmax(0,1fr)_36px] items-center gap-3 border-b border-nevo-near-black/[0.07] px-3.5 py-[9px] last:border-b-0"
                     >
-                      {c.name}
-                    </span>
-                    {c.collision ? (
-                      <span className="text-[13px] text-nevo-near-black/60">
-                        {c.collision}
+                      <span
+                        className={cn(
+                          "text-[14px] font-semibold",
+                          c.collision
+                            ? "text-nevo-near-black/45 line-through"
+                            : "text-nevo-near-black",
+                        )}
+                      >
+                        {c.name}
                       </span>
-                    ) : null}
-                  </li>
-                ))}
+                      {c.collision ? (
+                        <span className="col-span-2 text-[13px] leading-[1.45] text-nevo-near-black/60">
+                          {c.collision}
+                        </span>
+                      ) : (
+                        <>
+                          <div className="min-w-0">
+                            <SubjectPicker
+                              id={`bulk-subjects-${key}`}
+                              listLabel={`Subjects ${c.name} takes`}
+                              value={subjectsOf(key)}
+                              onChange={(next) => setSubjects(key, next)}
+                              subjects={schoolSubjects}
+                              size="sm"
+                              maxPills={3}
+                            />
+                          </div>
+                          <div className="flex justify-end">
+                            <CopyDown
+                              from={c.name}
+                              count={subjectsOf(key).length}
+                              below={targetsFrom(index, "below").length}
+                              sameYear={targetsFrom(index, "sameYear").length}
+                              quiet={index !== 0}
+                              copied={copied?.key === key}
+                              onCopy={(target) => copyDown(index, target)}
+                            />
+                          </div>
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
               <p className="mt-2 text-[13.5px] leading-[1.5] text-nevo-near-black/70">
                 {toSend.length > 0 ? (
