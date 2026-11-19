@@ -1,7 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
+import { legalHref, markLegalOpenedFrom } from "@/lib/legal/returns";
 import { useStillHere } from "@/hooks/useStillHere";
 import { CONFIRM_ONCE_MORE, ChildHeldLines, LINK_LIFETIME_LINE, isHeld } from "./childHeld";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
@@ -671,6 +673,16 @@ export function ParentConsent({
         <br />
         Your details are never sold or shared beyond the school.
       </p>
+      {/* Entry 2 of Privacy & Terms ("from parent consent"). D01b draws no
+          link, so it is the destination frame's own name, as quietly as the
+          lines above it. */}
+      <Link
+        href={legalHref("privacy", "consent")}
+        onClick={() => markLegalOpenedFrom("consent")}
+        className="mt-1.5 cursor-pointer self-center text-[12px] font-medium text-nevo-navy underline underline-offset-2"
+      >
+        Privacy &amp; Terms
+      </Link>
     </Shell>
   );
 }

@@ -8,6 +8,7 @@ import { ApiError } from "@/lib/api/client";
 import { authApi } from "@/lib/api/auth";
 import { parentApi, type ParentChild } from "@/lib/api/parent";
 import { usersApi, type CurrentUser } from "@/lib/api/users";
+import { legalHref } from "@/lib/legal/returns";
 import { FeedbackPanel } from "@/components/teacher/Shell/FeedbackPanel";
 
 /*
@@ -204,10 +205,17 @@ function Rows({
       <button
         type="button"
         onClick={onFeedback}
-        className="mt-6 cursor-pointer text-[14.5px] font-semibold text-nevo-navy hover:underline"
+        className="mt-6 block cursor-pointer text-[14.5px] font-semibold text-nevo-navy hover:underline"
       >
         Share feedback
       </button>
+      {/* Privacy & Terms' Entry 4 ("Back to settings"), beside it. */}
+      <Link
+        href={legalHref("privacy", "parent-settings")}
+        className="mt-3 block w-fit cursor-pointer text-[14.5px] font-semibold text-nevo-navy hover:underline"
+      >
+        Privacy &amp; Terms
+      </Link>
     </>
   );
 }

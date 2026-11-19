@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { legalHref, markLegalOpenedFrom } from "@/lib/legal/returns";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import {
   parentApi,
@@ -712,6 +713,17 @@ function Footer({ school }: { school: DataSubject | null }) {
         >
           ndpc.gov.ng
         </a>
+      </p>
+      {/* The portal's persistent Privacy & Terms link (backlog 116), on the
+          link page and the signed-in page alike. */}
+      <p className="m-0 mt-1.5">
+        <Link
+          href={legalHref("privacy", "parent-data")}
+          onClick={() => markLegalOpenedFrom("parent-data")}
+          className="font-medium text-nevo-navy underline underline-offset-2"
+        >
+          Privacy &amp; Terms
+        </Link>
       </p>
     </div>
   );

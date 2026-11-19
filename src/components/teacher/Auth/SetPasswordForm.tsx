@@ -17,6 +17,7 @@ import {
 } from "@/lib/auth/consoleDoor";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { AuthWordmark, ContactFooter } from "./AuthChrome";
+import { legalHref, markLegalOpenedFrom } from "@/lib/legal/returns";
 
 /**
  * Set Password (`Nevo Set Password`) - one component behind two flows:
@@ -639,16 +640,22 @@ export function SetPasswordForm({
           <span>
             {"I agree to Nevo's "}
             <Link
-              href="/legal/privacy"
-              onClick={(e) => e.stopPropagation()}
+              href={legalHref("privacy", "activation")}
+              onClick={(e) => {
+                e.stopPropagation();
+                markLegalOpenedFrom("activation");
+              }}
               className="cursor-pointer font-medium text-nevo-navy underline underline-offset-2"
             >
               Privacy Policy
             </Link>
             {" and "}
             <Link
-              href="/legal/terms"
-              onClick={(e) => e.stopPropagation()}
+              href={legalHref("terms", "activation")}
+              onClick={(e) => {
+                e.stopPropagation();
+                markLegalOpenedFrom("activation");
+              }}
               className="cursor-pointer font-medium text-nevo-navy underline underline-offset-2"
             >
               Terms of Service
