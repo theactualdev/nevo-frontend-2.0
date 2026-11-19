@@ -85,7 +85,9 @@ export function AdminSignOutModal({ onStay }: { onStay: () => void }) {
           Sign out of Nevo?
         </h2>
         <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/62">
-          You can sign back in anytime with your school email.
+          {/* The admin frame's words (Nevo Admin Settings): "with your
+              school email" is the teacher variant's line (backlog 91). */}
+          You can sign back in anytime with your admin account.
         </p>
         <button
           type="button"
