@@ -11,11 +11,11 @@ import { api } from "./client";
  * for two, which is the decay this codebase keeps finding in other people's
  * files. As of 25 Sep all six are called EXCEPT one, and that one on purpose:
  *
- *  - `PATCH /onboarding/classes` (class corrections) is typed and deliberately
- *    unused. D24 routes every correction back through the spreadsheet - the
- *    server names what is wrong with each row and the school fixes it in
- *    Excel and re-uploads - so an in-app rename/drop would be a second route
- *    the frame chose not to have. Raised with design, not built.
+ *  - ~~`PATCH /onboarding/classes` (class corrections) is typed and
+ *    deliberately unused~~ - USED SINCE 11 NOV. Lydia ruled that renaming and
+ *    dropping a class are allowed before anything in that import is
+ *    activated; the server takes them while the stage is "uploading", so the
+ *    importer's "Classes Nevo derived" offers Rename and Drop until Confirm.
  */
 
 /**
