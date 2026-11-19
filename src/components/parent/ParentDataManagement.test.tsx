@@ -353,19 +353,24 @@ describe("what the page tells a parent", () => {
   });
 
   /*
-   * THE FACTUAL HALF, CORRECTED (Lydia, 11 Nov; register row 11): where Nevo's
-   * own systems are today, the website "served from" Virginia in her words,
-   * with today's legal wording untouched and no location "to be confirmed".
+   * THE FACTUAL HALF, KEPT TRUE (Lydia, 11 Nov, item 6; register row 11):
+   * where Nevo's own systems are today, the website "served from" Virginia in
+   * her words, with today's legal wording untouched and no location "to be
+   * confirmed". Since 16 Nov the database is in Frankfurt; the lessons'
+   * service is on Heroku in a region not yet known, so it is left out.
    */
-  it("says where the database, the lessons and the website are, with today's legal wording unchanged", () => {
+  it("says where the database and the website are, with today's legal wording unchanged", () => {
     render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
     fireEvent.click(screen.getByRole("button", { name: /Where data is processed/i }));
     expect(
       screen.getByText(
-        "Some processing happens outside Nigeria. The database is in the United Kingdom (London), and the service that runs the lessons is in Germany (Frankfurt). The website is served from the United States (Virginia), which has no adequacy decision from the NDPC. Those transfers are made under Standard Contractual Clauses.",
+        "Some processing happens outside Nigeria. The database is in Germany (Frankfurt). The website is served from the United States (Virginia), which has no adequacy decision from the NDPC. Those transfers are made under Standard Contractual Clauses.",
       ),
     ).toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/to be confirmed|Ireland|Oregon/i);
+    // No old location, and no clause for a place nobody has confirmed.
+    expect(document.body.textContent).not.toMatch(
+      /to be confirmed|Ireland|Oregon|United Kingdom|London|service that runs the lessons/i,
+    );
   });
 
   it("states plainly that Nevo stores no label or diagnosis, in the child's name", () => {

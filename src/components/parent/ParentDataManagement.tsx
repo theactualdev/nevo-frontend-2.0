@@ -75,18 +75,25 @@ const SECTIONS: { heading: string; body: (child: string) => string }[] = [
   {
     heading: "Where data is processed",
     /*
-     * THE FACTUAL HALF, CORRECTED (Lydia, 11 Nov; register row 11). The
-     * database is in London and the service that runs the lessons in
-     * Frankfurt; the website is "served from" Virginia, her words, "because a
-     * parent should not have to think about servers". The LEGAL wording is
-     * today's, untouched: the US adequacy clause stays on the United States,
-     * and "Those transfers…" goes out as it stands - what it covers is
-     * counsel's. No files clause: nothing "to be confirmed" ships. The AI
-     * provider, narration, email, the delivery network and payments join the
-     * line once Teslim says where each runs.
+     * THE FACTUAL HALF, KEPT TRUE (Lydia, 11 Nov, item 6; register row 11):
+     * "corrected today rather than waiting for the rest of the line", and it
+     * "cannot ship with a location to be confirmed in it".
+     *
+     * 19 Nov: the database moved to Render Postgres in Frankfurt (Teslim, 16
+     * Nov; live /health `databaseHost` …frankfurt-postgres.render.com, read
+     * 19 Nov 12:16Z), so "the United Kingdom (London)" was untrue. The
+     * service that runs the lessons now runs on Heroku in a region not yet
+     * known, so its clause is LEFT OUT until Teslim names it - never a guess.
+     *
+     * The website is "served from" Virginia, her words, "because a parent
+     * should not have to think about servers". The LEGAL wording is today's,
+     * untouched: the US adequacy clause stays on the United States, and
+     * "Those transfers…" goes out as it stands - what it covers is counsel's.
+     * No files clause. The AI provider, narration, email, the delivery
+     * network and payments join the line once Teslim says where each runs.
      */
     body: () =>
-      "Some processing happens outside Nigeria. The database is in the United Kingdom (London), and the service that runs the lessons is in Germany (Frankfurt). The website is served from the United States (Virginia), which has no adequacy decision from the NDPC. Those transfers are made under Standard Contractual Clauses.",
+      "Some processing happens outside Nigeria. The database is in Germany (Frankfurt). The website is served from the United States (Virginia), which has no adequacy decision from the NDPC. Those transfers are made under Standard Contractual Clauses.",
   },
   {
     heading: "How long data is kept",
