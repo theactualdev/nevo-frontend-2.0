@@ -20,9 +20,11 @@ import { reviewSessionHref } from "@/lib/lessons/reviewHref";
  * - The pill names the CONCEPT the engine sent. 19b's pills name subjects,
  *   and `nextWork` carries no subject - only `conceptName`, which is what the
  *   chip this replaces named. Named, never a bare count.
- * - HELD: "A few things from last week are ready for a quick review. Going
- *   over them again is what makes them stick." `nextWork` is one concept with
- *   no date, so "a few things" and "from last week" would be untrue.
+ * - The line under the heading is Lydia's for one item (19 Nov, L9, settled):
+ *   "Something from last week is ready for a quick review." 19b's "A few
+ *   things ... Going over them again is what makes them stick." was held:
+ *   `nextWork` is one concept, so "a few things" was untrue. Her sentence
+ *   alone - the second one is not reworded for one item, so it is not drawn.
  *
  * Start a review opens the review session, whose entry screen still lets the
  * child say "Not now"; ending it comes back Home, where it was opened.
@@ -44,6 +46,9 @@ export function ReviewCard({ review }: { review: LearningWork }) {
       >
         A quick look back
       </h2>
+      <p className="mt-2 text-[14.5px] leading-[1.55] text-pretty text-nevo-near-black/70">
+        Something from last week is ready for a quick review.
+      </p>
       <ul className="mt-3 flex flex-wrap gap-2">
         <li className="inline-flex h-[30px] items-center rounded-full bg-nevo-navy/8 px-3 text-[13px] font-medium text-nevo-near-black">
           {name}
