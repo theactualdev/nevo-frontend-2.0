@@ -181,7 +181,9 @@ describe("the hand-over rows", () => {
       <RemoveAccessSheet teacher={TEACHER} held={HELD} onClose={() => {}} onRemoved={() => {}} />,
     );
     await waitFor(() => expect(visibleText(container)).toMatch(/JSS 2A/));
-    expect(visibleText(container)).not.toMatch(/students/);
+    // No "Year · N students" line - the notes line's "classes and students"
+    // is D06b's own sentence, not a class's meta.
+    expect(visibleText(container)).not.toMatch(/\d+ students?/);
   });
 });
 

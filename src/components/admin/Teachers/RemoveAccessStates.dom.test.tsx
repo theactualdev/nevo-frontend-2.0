@@ -238,8 +238,89 @@ describe("removing a teacher with no classes", () => {
     const { container } = render(
       <RemoveAccessSheet teacher={teacher} held={[]} onClose={() => {}} onRemoved={() => {}} />,
     );
-    await waitFor(() => expect(visibleText(container)).toMatch(/will no longer be able to open their Nevo console/));
-    expect(visibleText(container)).toMatch(/Their classes and notes stay with the school\./);
+    await waitFor(() => expect(visibleText(container)).toMatch(/no longer be able to open their Nevo console/));
     expect(visibleText(container)).toMatch(/you can restore their access whenever you need to/);
+  });
+
+  /*
+   * BACKLOG 86: D06b's title, its opener - there is nothing to hand over - and
+   * "Keep {name}'s access" for the stay-put choice. The frame's "his" is not
+   * ours to use: nothing records how a teacher is referred to, so the name
+   * stands in (Lydia, 14 Oct).
+   */
+  it("is D06b's calm confirm: its title, nothing to hand over, and Keep {name}'s access", async () => {
+    list.mockResolvedValue([other()]);
+    const { container } = render(
+      <RemoveAccessSheet teacher={teacher} held={[]} onClose={() => {}} onRemoved={() => {}} />,
+    );
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(
+        new RegExp(`Remove ${teacher.name}.s access`),
+      ),
+    );
+    expect(visibleText(container)).toMatch(
+      /isn.t teaching any classes yet, so there.s nothing to hand over\./,
+    );
+    expect(visibleText(container)).not.toMatch(/Their classes and notes stay/);
+    const buttons = Array.from(container.querySelectorAll("button")).map((b) => b.textContent ?? "");
+    expect(buttons.some((b) => /^Keep \S+.s access$/.test(b))).toBe(true);
+    expect(visibleText(container)).not.toMatch(/\b(his|her|he|she)\b/i);
+  });
+});
+
+/**
+ * BACKLOGS 84 AND 85: D06b's reassignment rows - a label for each role, "Just
+ * remove" apart from the select under a Co-teacher row, the notes line under
+ * the rows - and its ready line where our summary stood.
+ */
+describe("D06b's reassignment rows", () => {
+  const coRow = { ...held[0], assignmentId: "a9", classId: "c9", className: "JSS 3B", role: "co_teacher" } as AssignedClass;
+
+  it("asks each row's own question, and keeps the notes line under them", async () => {
+    list.mockResolvedValue([other()]);
+    const { container } = render(
+      <RemoveAccessSheet teacher={teacher} held={[held[0], coRow]} onClose={() => {}} onRemoved={() => {}} />,
+    );
+    await waitFor(() => expect(visibleText(container)).toMatch(/Bola Bello/));
+
+    const text = visibleText(container);
+    expect(text).toMatch(/Who takes this class as Primary\?/);
+    expect(text).toMatch(/Who else should have this class\?/);
+    expect(text).toMatch(/notes stay with these classes and students\. Whoever takes over sees everything .+ wrote, kept under .+.s name\./);
+    expect(text).not.toMatch(/Choose who takes this class/);
+  });
+
+  it("offers Just remove apart from the select, under a Co-teacher row only", async () => {
+    list.mockResolvedValue([other()]);
+    const { container } = render(
+      <RemoveAccessSheet teacher={teacher} held={[held[0], coRow]} onClose={() => {}} onRemoved={() => {}} />,
+    );
+    await waitFor(() => expect(visibleText(container)).toMatch(/Bola Bello/));
+
+    const removeLinks = Array.from(container.querySelectorAll("button")).filter((b) =>
+      /^Just remove .+ from this class$/.test(b.textContent ?? ""),
+    );
+    expect(removeLinks).toHaveLength(1);
+    for (const s of Array.from(container.querySelectorAll("select"))) {
+      expect(Array.from(s.options).map((o) => o.textContent).join("|")).not.toMatch(/Just remove/);
+    }
+
+    fireEvent.click(removeLinks[0]);
+
+    expect(visibleText(container)).toMatch(/No replacement, just remove/);
+  });
+
+  it("says D06b's ready line once every class has a teacher", async () => {
+    list.mockResolvedValue([other()]);
+    const { container } = render(
+      <RemoveAccessSheet teacher={teacher} held={held} onClose={() => {}} onRemoved={() => {}} />,
+    );
+    await waitFor(() => expect(visibleText(container)).toMatch(/Bola Bello/));
+    expect(visibleText(container)).not.toMatch(/Every class has a teacher/);
+
+    fireEvent.change(container.querySelector("select")!, { target: { value: "t2" } });
+
+    expect(visibleText(container)).toMatch(/Every class has a teacher\. Ready when you are\./);
+    expect(visibleText(container)).not.toMatch(/will be handed over first/);
   });
 });
