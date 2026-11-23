@@ -57,7 +57,8 @@ export interface ClassInsights {
   sparse?: boolean;
   summaryDesktop?: Segment[];
   summaryTablet?: string;
-  misconception?: { title: string; desktop: string; tablet: string; href: string };
+  /** No link: "View students" is dropped (Lydia, 19 Nov, L19). */
+  misconception?: { title: string; desktop: string; tablet: string };
   flags?: InsightFlag[];
   concepts?: ClassConcept[];
   recommendations?: Recommendation[];
@@ -91,7 +92,6 @@ const INSIGHTS: ClassInsights[] = [
         "Five students this week worked through it the same way: adding the numerators and denominators straight across, rather than finding a common denominator first. A shared misunderstanding, not five separate slips.",
       tablet:
         "Five students added the numerators and denominators straight across, rather than finding a common denominator first. A shared misunderstanding, not five separate slips.",
-      href: "/teacher/classes/jss-2a",
     },
     flags: [
       {
