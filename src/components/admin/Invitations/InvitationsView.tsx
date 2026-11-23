@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
-import { invitesApi, type Invitation } from "@/lib/api/invites";
+import { invitedClassIds, invitesApi, type Invitation } from "@/lib/api/invites";
 import { cn } from "@/lib/utils";
 import {
   CARD,
@@ -44,7 +44,8 @@ import { NoAccess, failureKind } from "../NoAccess";
  * `classId` and `createdAt` now, so each invite shows the class it was sent
  * for and the day it went, and the class filter works. An invite with no
  * class, or one sent before the field existed, shows a dash rather than a
- * guess.
+ * guess. Since T15 an invite carries `classes` instead, and shows every
+ * class on it (`invitedClassIds`).
  *
  * CHILDREN ARE NOT INVITED (design, 1 Oct; SCRUM-215 on the backend, where
  * `InvitableRole` is now `teacher` only). A child has no email and joins with
@@ -196,7 +197,7 @@ export function InvitationsView() {
     const needle = search.trim().toLowerCase();
     return teacherInvites.filter((i) => {
       if (!matchesStatus(i, status, now)) return false;
-      if (classFilter && i.classId !== classFilter) return false;
+      if (classFilter && !invitedClassIds(i).includes(classFilter)) return false;
       if (!needle) return true;
       return (
         (i.name ?? "").toLowerCase().includes(needle) ||
@@ -538,8 +539,21 @@ export function InvitationsView() {
               ) : (
                 rows.map((invite, i) => {
                   const s = normaliseStatus(invite.status, invite.expiresAt, now);
-                  /** The class it was sent for, by name; null when none or unknown. */
-                  const className = invite.classId ? (classNames.get(invite.classId) ?? null) : null;
+                  /**
+                   * The classes it was sent for, by name - the class's name
+                   * now, else the one the server resolved; null when none or
+                   * unknown.
+                   */
+                  const className =
+                    invitedClassIds(invite)
+                      .map(
+                        (id) =>
+                          classNames.get(id) ??
+                          invite.classes?.find((c) => c.classId === id)?.className ??
+                          null,
+                      )
+                      .filter(Boolean)
+                      .join(", ") || null;
                   const confirming = confirmRevoke === invite.id;
                   const working = busy === invite.id;
                   const joined = s === "joined";

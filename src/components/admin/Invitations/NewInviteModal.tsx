@@ -1,15 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { AdminClass } from "@/lib/api/classes";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import {
+  CLASS_NOT_FOUND,
   INVITATION_ALREADY_PENDING,
   INVITATION_REISSUE_AVAILABLE,
+  SUBJECT_NOT_FOUND,
   invitesApi,
   refusedInvitationId,
   type Invitation,
+  type InvitedClassDraft,
 } from "@/lib/api/invites";
+import { classTakes, subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
+import { ReadFailed } from "../ReadFailed";
 import { reissueRefusal, reissuedLine } from "./reissueCopy";
 import { cn } from "@/lib/utils";
 import { deliveryLine } from "./deliveryCopy";
@@ -52,6 +57,23 @@ const HINT = "mt-2 text-[12.5px] leading-[1.5] text-nevo-near-black/55";
 
 type Phase = "idle" | "sending" | "sent" | "failed" | "waiting" | "revoked";
 
+/** One row of D19's "Classes and subjects": a class, and the subjects ticked for it. */
+interface Assign {
+  key: number;
+  classId: string;
+  /** School subject ids, as T15 takes them. */
+  subjectIds: string[];
+}
+
+const blankAssign = (key: number): Assign => ({ key, classId: "", subjectIds: [] });
+
+/** The legacy single class is recorded and not applied since T15; never sent. */
+export function invitedClasses(assigns: readonly Assign[]): InvitedClassDraft[] {
+  return assigns.flatMap((a) =>
+    a.classId ? a.subjectIds.map((subjectId) => ({ classId: a.classId, subjectId })) : [],
+  );
+}
+
 export function NewInviteModal({
   classes,
   onClose,
@@ -64,7 +86,11 @@ export function NewInviteModal({
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [classId, setClassId] = useState("");
+  const [assigns, setAssigns] = useState<Assign[]>([blankAssign(0)]);
+  const [nextKey, setNextKey] = useState(1);
+  /** The school's subjects, to turn a class's subject names into ids. Null while unread. */
+  const [schoolSubjects, setSchoolSubjects] = useState<SchoolSubject[] | null>(null);
+  const [subjectsFailed, setSubjectsFailed] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [sent, setSent] = useState<Invitation | null>(null);
   const [copied, setCopied] = useState(false);
@@ -75,29 +101,59 @@ export function NewInviteModal({
   /** Whether `sent` came back from a reissue rather than a new invitation. */
   const [reissued, setReissued] = useState(false);
 
+  const fetchSubjects = useCallback(() => {
+    subjectsApi
+      .list()
+      .then((rows) => setSchoolSubjects(Array.isArray(rows) ? rows : []))
+      .catch(() => setSubjectsFailed(true));
+  }, []);
+  useEffect(() => {
+    fetchSubjects();
+  }, [fetchSubjects]);
+
   /*
-   * D19'S FORM, AS FAR AS THE CONTRACT GOES (backlog 16): a first and a last
-   * name as two fields - the request has both, and a single "Name" split on
-   * the device guessed wrong for every name that isn't two words - and an
-   * email, required, as the frame requires it. Its "N things still to fill in"
-   * line counts what is left, and Send waits for none. No "(optional)"
-   * anywhere (SCRUM-207).
+   * D19'S FORM (backlog 16; T15, live 21 Nov; Lydia 19 Nov L25): a first and
+   * a last name as two fields, an email, and "Classes and subjects" - each
+   * class with the subjects the teacher takes to it, "Add another class", and
+   * "Remove this class". `POST /invites` carries them as `classes: [{classId,
+   * subjectId}]`, and the server attaches every one when the teacher accepts.
+   * The subject is required per class (SCRUM-194), so a class with none ticked
+   * is one of the "N things still to fill in", and Send waits for none. No
+   * "(optional)" anywhere (SCRUM-207).
    *
-   * BUILT REDUCED: D19's "Classes and subjects" - a class, the subjects ticked
-   * for it, Other, Add another class - is one class here. `POST /invites`
-   * takes one `classId` and no subjects, and an invitation creates no teacher
-   * account until it is accepted, so no assignment call can carry the rest
-   * either. Raised under rule 10.
+   * BUILT WITHOUT D19's "Other" ("{name} will be added to {class}"): the
+   * invitation names a SCHOOL subject id, so Other would first have to add a
+   * new subject to the class - a class write the admin hasn't confirmed, made
+   * before the invite is even sent. Raised to Lydia.
    */
+  const openRows = assigns.filter((a) => !a.classId || a.subjectIds.length === 0).length;
   const missing =
-    (firstName.trim() ? 0 : 1) + (lastName.trim() ? 0 : 1) + (validEmail(email) ? 0 : 1);
+    (firstName.trim() ? 0 : 1) +
+    (lastName.trim() ? 0 : 1) +
+    (validEmail(email) ? 0 : 1) +
+    openRows;
   const ready = missing === 0;
+
+  const liveClasses = classes.filter((c) => !c.archivedAt);
+  /** The school subjects a class offers, matched by any spelling of their name. */
+  const offeredBy = (classId: string): SchoolSubject[] => {
+    const klass = liveClasses.find((c) => c.id === classId);
+    if (!klass || !schoolSubjects) return [];
+    return schoolSubjects.filter((s) => classTakes(klass.subjects, s));
+  };
+  const setAssign = (key: number, change: Partial<Assign>) =>
+    setAssigns((rows) => rows.map((a) => (a.key === key ? { ...a, ...change } : a)));
+  const addAssign = () => {
+    setAssigns((rows) => [...rows, blankAssign(nextKey)]);
+    setNextKey((k) => k + 1);
+  };
 
   const reset = () => {
     setFirstName("");
     setLastName("");
     setEmail("");
-    setClassId("");
+    setAssigns([blankAssign(nextKey)]);
+    setNextKey((k) => k + 1);
     setSent(null);
     setCopied(false);
     setRevokedId(null);
@@ -115,7 +171,7 @@ export function NewInviteModal({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email: email.trim(),
-        classId: classId || null,
+        classes: invitedClasses(assigns),
       })
       .then((invite) => {
         setSent(invite);
@@ -129,6 +185,33 @@ export function NewInviteModal({
         const code =
           err instanceof ApiError && err.status === 409 ? apiErrorCode(err.detail) : null;
         const pointedAt = refusedInvitationId(err);
+        /*
+         * A class or subject that has gone since the form was filled (T15's
+         * 404s, each naming its id). Trying again would be refused the same
+         * way, so the choice that went is taken out of the form, the subjects
+         * are read again, and the admin is back on the form with it counted
+         * as still to fill in. The server's message is never shown.
+         */
+        const gone =
+          err instanceof ApiError && err.status === 404 ? apiErrorCode(err.detail) : null;
+        const goneId =
+          err instanceof ApiError && err.detail && typeof err.detail === "object"
+            ? ((err.detail as { detail?: Record<string, unknown> }).detail ??
+                (err.detail as Record<string, unknown>))
+            : null;
+        if (gone === CLASS_NOT_FOUND && typeof goneId?.classId === "string") {
+          const id = goneId.classId;
+          setAssigns((rows) => rows.map((a) => (a.classId === id ? { ...a, classId: "", subjectIds: [] } : a)));
+          setPhase("idle");
+          return;
+        }
+        if (gone === SUBJECT_NOT_FOUND && typeof goneId?.subjectId === "string") {
+          const id = goneId.subjectId;
+          setAssigns((rows) => rows.map((a) => ({ ...a, subjectIds: a.subjectIds.filter((s) => s !== id) })));
+          fetchSubjects();
+          setPhase("idle");
+          return;
+        }
         if (code === INVITATION_ALREADY_PENDING) {
           setPhase("waiting");
         } else if (code === INVITATION_REISSUE_AVAILABLE && pointedAt) {
@@ -421,27 +504,6 @@ export function NewInviteModal({
         </div>
 
         <div>
-          <label htmlFor="invite-class" className={LABEL}>
-            Class
-          </label>
-          <select
-            id="invite-class"
-            value={classId}
-            onChange={(e) => setClassId(e.target.value)}
-            className={cn(FIELD, "cursor-pointer")}
-          >
-            <option value="">No class yet</option>
-            {classes
-              .filter((c) => !c.archivedAt)
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-          </select>
-        </div>
-
-        <div>
           <label htmlFor="invite-email" className={LABEL}>
             Email
           </label>
@@ -455,6 +517,117 @@ export function NewInviteModal({
             className={FIELD}
           />
         </div>
+
+        {/* D19's "Classes and subjects" (T15). */}
+        <fieldset className="m-0 min-w-0 border-0 p-0">
+          <legend className={LABEL}>Classes and subjects</legend>
+          {subjectsFailed ? (
+            <ReadFailed
+              className="mb-3"
+              what="your school's subject list"
+              onRetry={() => {
+                setSubjectsFailed(false);
+                fetchSubjects();
+              }}
+            />
+          ) : null}
+          <div className="flex flex-col gap-3">
+            {assigns.map((a) => {
+              const klass = liveClasses.find((c) => c.id === a.classId) ?? null;
+              const usedElsewhere = new Set(
+                assigns.filter((o) => o.key !== a.key).map((o) => o.classId).filter(Boolean),
+              );
+              const offered = a.classId ? offeredBy(a.classId) : [];
+              return (
+                <div
+                  key={a.key}
+                  data-assign
+                  className="rounded-[10px] border border-nevo-near-black/12 px-3.5 py-3"
+                >
+                  <label htmlFor={`invite-class-${a.key}`} className="sr-only">
+                    Class
+                  </label>
+                  <select
+                    id={`invite-class-${a.key}`}
+                    value={a.classId}
+                    onChange={(e) => setAssign(a.key, { classId: e.target.value, subjectIds: [] })}
+                    className={cn(FIELD, "h-[44px] cursor-pointer")}
+                  >
+                    <option value="">Select a class</option>
+                    {liveClasses
+                      .filter((c) => c.id === a.classId || !usedElsewhere.has(c.id))
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </select>
+                  {klass ? (
+                    <div role="group" aria-label={`Subjects ${klass.name} offers`} className="mt-2.5">
+                      <p className="m-0 text-[12px] text-nevo-near-black/60">
+                        {`Subjects ${klass.name} offers. Tick the ones they take.`}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {offered.map((s) => {
+                          const on = a.subjectIds.includes(s.id);
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              role="checkbox"
+                              aria-checked={on}
+                              onClick={() =>
+                                setAssign(a.key, {
+                                  subjectIds: on
+                                    ? a.subjectIds.filter((id) => id !== s.id)
+                                    : [...a.subjectIds, s.id],
+                                })
+                              }
+                              className={cn(
+                                "inline-flex cursor-pointer items-center gap-2 rounded-[9px] border-[1.5px] px-3 py-[7px] text-[13.5px] font-medium transition-colors",
+                                on
+                                  ? "border-nevo-navy bg-nevo-navy/[0.06] text-nevo-navy"
+                                  : "border-nevo-near-black/16 text-nevo-near-black hover:bg-nevo-near-black/[0.03]",
+                              )}
+                            >
+                              <span
+                                aria-hidden
+                                className={cn(
+                                  "flex size-[18px] flex-none items-center justify-center rounded-[5px]",
+                                  on ? "bg-nevo-navy text-nevo-cream" : "border-[1.5px] border-nevo-near-black/28",
+                                )}
+                              >
+                                {on ? <CheckIcon size={11} /> : null}
+                              </span>
+                              {s.displayName}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                  {assigns.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setAssigns((rows) => rows.filter((o) => o.key !== a.key))}
+                      className="mt-2.5 cursor-pointer text-[12.5px] font-semibold text-nevo-navy hover:underline"
+                    >
+                      Remove this class
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={addAssign}
+            className="mt-3 inline-flex cursor-pointer items-center gap-1.5 text-[13.5px] font-semibold text-nevo-navy hover:underline"
+          >
+            <span aria-hidden>+</span>
+            Add another class
+          </button>
+        </fieldset>
 
         {/*
          * D24b's "Cost" for a teacher, which an admin asks about before

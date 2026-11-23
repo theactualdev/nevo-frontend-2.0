@@ -24,11 +24,28 @@ vi.mock("@/lib/api/invites", async (importOriginal) => {
   };
 });
 
-const send = () => {
-  render(<NewInviteModal classes={[]} onClose={vi.fn()} onSent={vi.fn()} />);
+// D19 (T15): a class with a subject ticked is part of a complete invite.
+vi.mock("@/lib/api/subjects", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/subjects")>();
+  return {
+    ...actual,
+    subjectsApi: {
+      ...actual.subjectsApi,
+      list: async () => [
+        { id: "s-maths", name: "Mathematics", displayName: "Mathematics", origin: "canonical", reviewState: "approved" },
+      ],
+    },
+  };
+});
+const CLASSES = [{ id: "c1", name: "JSS 2A", subjects: ["Mathematics"], archivedAt: null } as never];
+
+const send = async () => {
+  render(<NewInviteModal classes={CLASSES} onClose={vi.fn()} onSent={vi.fn()} />);
   fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Folake" } });
   fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Adeyemi" } });
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: "f@school.edu.ng" } });
+  fireEvent.change(screen.getByLabelText("Class"), { target: { value: "c1" } });
+  fireEvent.click(await screen.findByRole("checkbox", { name: "Mathematics" }));
   fireEvent.click(screen.getByRole("button", { name: "Send invite" }));
 };
 
@@ -39,7 +56,7 @@ describe("a teacher who already has an invitation waiting", () => {
         detail: { code: "invitation_already_pending", invitationId: "inv-1" },
       }),
     );
-    send();
+    await send();
     expect(await screen.findByText("This person already has an invitation waiting.")).toBeInTheDocument();
     expect(screen.getByText("Resend it instead.")).toBeInTheDocument();
     expect(screen.queryByText(/Something went wrong/)).toBeNull();
@@ -48,7 +65,7 @@ describe("a teacher who already has an invitation waiting", () => {
 
   it("still says something went wrong when it did", async () => {
     create.mockRejectedValueOnce(new ApiError(500, "down"));
-    send();
+    await send();
     expect(await screen.findByText(/Something went wrong/)).toBeInTheDocument();
   });
 });
@@ -72,7 +89,7 @@ describe("a teacher whose invitation was revoked (Lydia, 2 Nov)", () => {
       deliveryStatus: "sent",
       consentStatus: null,
     });
-    send();
+    await send();
     expect(await screen.findByText("This teacher’s invitation was revoked.")).toBeInTheDocument();
     expect(screen.getByText("Reissue it instead.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reissue invitation" }));
@@ -85,7 +102,7 @@ describe("a teacher whose invitation was revoked (Lydia, 2 Nov)", () => {
     reissue.mockRejectedValueOnce(
       new ApiError(409, "conflict", { detail: { code: "teacher_email_in_use" } }),
     );
-    send();
+    await send();
     fireEvent.click(await screen.findByRole("button", { name: "Reissue invitation" }));
     expect(
       await screen.findByText(
@@ -99,7 +116,7 @@ describe("a teacher whose invitation was revoked (Lydia, 2 Nov)", () => {
     create.mockRejectedValueOnce(
       new ApiError(409, "conflict", { detail: { code: "invitation_reissue_available" } }),
     );
-    send();
+    await send();
     expect(await screen.findByText(/Something went wrong/)).toBeInTheDocument();
   });
 
