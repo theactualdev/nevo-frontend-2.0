@@ -1,3 +1,4 @@
+import { chooseOption } from "@/test/nevoSelect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
@@ -104,7 +105,7 @@ async function fillValid() {
   await screen.findByRole("heading", { name: "Record written consent" });
   await screen.findAllByRole("radio");
   set(/Parent.s full name/, "Mrs. Ngozi Okafor");
-  set("Relationship to child", "Mother");
+  await chooseOption(screen.getByLabelText("Relationship to child"), "Mother");
   set("Date signed", "2026-10-01");
 }
 
@@ -147,7 +148,7 @@ describe("Record written consent", () => {
     const saveBtn = screen.getByRole("button", { name: "Save consent record" });
     expect(saveBtn).toBeDisabled();
     set(/Parent.s full name/, "Mrs. Ngozi Okafor");
-    set("Relationship to child", "Mother");
+    await chooseOption(screen.getByLabelText("Relationship to child"), "Mother");
     expect(saveBtn).toBeDisabled();
     set("Date signed", "2999-01-01");
     // A form cannot have been signed in the future.
@@ -159,7 +160,7 @@ describe("Record written consent", () => {
   it("takes the relationship as the form writes it when it is someone else", async () => {
     render(<WrittenConsentView studentId="s-1" />);
     await fillValid();
-    set("Relationship to child", "Someone else");
+    await chooseOption(screen.getByLabelText("Relationship to child"), "Someone else");
     set(/Their relationship, as on the form/, "Aunt");
     fireEvent.click(screen.getByRole("button", { name: "Save consent record" }));
     await waitFor(() =>
@@ -286,7 +287,7 @@ describe("who gave this consent (SCRUM-306)", () => {
       ),
     );
     set(/Parent.s full name/, "Mrs. Ngozi Okafor");
-    set("Relationship to child", "Mother");
+    await chooseOption(screen.getByLabelText("Relationship to child"), "Mother");
     set("Date signed", "2026-10-01");
     expect(screen.getByRole("button", { name: "Save consent record" })).toBeDisabled();
   });

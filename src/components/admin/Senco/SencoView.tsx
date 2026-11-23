@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -685,42 +686,32 @@ export function SencoView() {
                   className="min-w-0 flex-1 border-none bg-transparent outline-none"
                 />
               </label>
-              <label className={FILTER_PILL}>
-                <span className="sr-only">Filter by class</span>
-                <select
-                  value={classId}
-                  onChange={(e) => setClassId(e.target.value)}
-                  className="cursor-pointer appearance-none bg-transparent outline-none"
-                >
-                  <option value="">All classes</option>
-                  {classes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <NevoSelect
+                aria-label="Filter by class"
+                value={classId}
+                onValueChange={setClassId}
+                options={[
+                  { value: "", label: "All classes" },
+                  ...classes.map((c) => ({ value: c.id, label: c.name })),
+                ]}
+                triggerClassName={FILTER_PILL}
+              />
               {/* A YEAR GROUP IS HOW A SENCo THINKS ABOUT THIS LIST, and the
                   screen offered only search and class. The options are the
                   year groups this school's own classes actually use, in the
                   enum's order - never the full canonical seventeen, which
                   would offer a SENCo levels their school does not run. */}
               {years.length > 1 ? (
-                <label className={FILTER_PILL}>
-                  <span className="sr-only">Filter by year group</span>
-                  <select
-                    value={year}
-                    onChange={(e) => setYear(e.target.value)}
-                    className="cursor-pointer appearance-none bg-transparent outline-none"
-                  >
-                    <option value="">All year groups</option>
-                    {years.map((y) => (
-                      <option key={y} value={y}>
-                        {yearGroupLabel(y) ?? y}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <NevoSelect
+                  aria-label="Filter by year group"
+                  value={year}
+                  onValueChange={setYear}
+                  options={[
+                    { value: "", label: "All year groups" },
+                    ...years.map((y) => ({ value: y, label: yearGroupLabel(y) ?? y })),
+                  ]}
+                  triggerClassName={FILTER_PILL}
+                />
               ) : null}
             </div>
 

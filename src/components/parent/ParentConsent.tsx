@@ -898,7 +898,9 @@ function AccountSetup({
         disabled={busy}
         onClick={() => void send(true)}
       >
-        Resend code
+        {/* Lydia, 19 Nov (L34): "Send it again", on both screens - the word
+            code is already on screen, and ParentSignIn says the same. */}
+        Send it again
       </button>
 
       {(error || resent) && (

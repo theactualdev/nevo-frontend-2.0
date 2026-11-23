@@ -1,6 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MAX_SAVED_LESSONS,
+  canOpenOffline,
+  noteServerTime,
   refreshSavedLesson,
   removeSavedLesson,
   saveLesson,
@@ -8,6 +10,7 @@ import {
   savedLessons,
 } from "./savedLessons";
 import type { LessonDetailResponse } from "@/lib/api/lessons";
+import { FRESH_DOWNLOAD } from "./testDownload";
 
 /**
  * The offline shelf. What matters: one child's shelf is never another's on a
@@ -30,7 +33,8 @@ describe("the offline shelf", () => {
   });
 
   it("says it is full rather than dropping a lesson the child chose to keep", () => {
-    for (let i = 0; i < MAX_SAVED_LESSONS; i++) saveLesson("ada", detail(`l${i}`));
+    for (let i = 0; i < MAX_SAVED_LESSONS; i++)
+      saveLesson("ada", detail(`l${i}`), FRESH_DOWNLOAD);
 
     expect(saveLesson("ada", detail("one-more"))).toBe("full");
     expect(savedLessons("ada")).toHaveLength(MAX_SAVED_LESSONS);
@@ -151,5 +155,98 @@ describe("what the child chose, and was recommended", () => {
     expect(seg).not.toHaveProperty("deliveryPreference");
     expect(seg).not.toHaveProperty("primaryModality");
     expect(seg).not.toHaveProperty("recommendedFormat");
+  });
+});
+
+/**
+ * SAFETY V2 (Teslim 9f4d763, 18 Nov): a copy opens offline only while it came
+ * from a download the server can check, nothing holds it, and it is inside
+ * its fourteen days - by a clock that a device wound back cannot fool once it
+ * has seen a later time.
+ */
+describe("whether a copy can open offline", () => {
+  afterEach(() => vi.useRealTimers());
+
+  const kept = (pkg: object) => {
+    saveLesson("ada", detail("l1"), pkg);
+    return savedLesson("ada", "l1")!;
+  };
+
+  it("can, from a download the server issued and inside its expiry", () => {
+    expect(canOpenOffline(kept(FRESH_DOWNLOAD))).toBe(true);
+  });
+
+  it("cannot, when it was kept before safety v2", () => {
+    expect(canOpenOffline(kept({}))).toBe(false);
+    expect(canOpenOffline(kept({ downloadId: "d1" }))).toBe(false);
+  });
+
+  it("cannot, past its expiry", () => {
+    expect(
+      canOpenOffline(kept({ ...FRESH_DOWNLOAD, expiresAt: "2020-01-01T00:00:00Z" })),
+    ).toBe(false);
+  });
+
+  it("cannot, while something holds it", () => {
+    expect(canOpenOffline({ ...kept(FRESH_DOWNLOAD), hold: "stale" })).toBe(false);
+    expect(canOpenOffline({ ...kept(FRESH_DOWNLOAD), hold: "unchecked" })).toBe(
+      false,
+    );
+  });
+
+  it("cannot be reopened by winding the clock back past a time the device has seen", () => {
+    vi.useFakeTimers();
+    const copy = kept({ ...FRESH_DOWNLOAD, expiresAt: "2026-12-03T00:00:00Z" });
+    vi.setSystemTime(new Date("2026-12-04T00:00:00Z"));
+    expect(canOpenOffline(copy)).toBe(false);
+
+    vi.setSystemTime(new Date("2026-11-20T00:00:00Z"));
+
+    expect(canOpenOffline(copy)).toBe(false);
+  });
+
+  it("takes the server's clock over a device clock set ahead", () => {
+    vi.useFakeTimers();
+    const copy = kept({ ...FRESH_DOWNLOAD, expiresAt: "2026-12-03T00:00:00Z" });
+    vi.setSystemTime(new Date("2027-06-01T00:00:00Z"));
+    expect(canOpenOffline(copy)).toBe(false);
+
+    vi.setSystemTime(new Date("2026-11-20T00:00:00Z"));
+    noteServerTime("2026-11-20T00:00:00Z");
+
+    expect(canOpenOffline(copy)).toBe(true);
+  });
+
+  /*
+   * THE LIMITATION, RECORDED (acceptance step 4): a clock wound back before
+   * the device has seen a later time is not caught. Pinned, so a change that
+   * claims to catch it has to say how.
+   */
+  it("cannot catch a clock wound back before the device has seen a later time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-20T00:00:00Z"));
+    const copy = kept({ ...FRESH_DOWNLOAD, expiresAt: "2026-11-25T00:00:00Z" });
+
+    expect(canOpenOffline(copy)).toBe(true);
+  });
+});
+
+describe("a full shelf and copies that can no longer open", () => {
+  it("makes room by dropping the oldest copy that cannot open", () => {
+    saveLesson("ada", detail("dead"), {});
+    for (let i = 1; i < MAX_SAVED_LESSONS; i++)
+      saveLesson("ada", detail(`l${i}`), FRESH_DOWNLOAD);
+
+    expect(saveLesson("ada", detail("one-more"), FRESH_DOWNLOAD)).toBe("saved");
+
+    expect(savedLesson("ada", "dead")).toBeNull();
+    expect(savedLesson("ada", "l1")).not.toBeNull();
+    expect(savedLessons("ada")).toHaveLength(MAX_SAVED_LESSONS);
+  });
+
+  it("keeps the download and its expiry with the copy", () => {
+    saveLesson("ada", detail("l1"), FRESH_DOWNLOAD);
+
+    expect(savedLesson("ada", "l1")).toMatchObject(FRESH_DOWNLOAD);
   });
 });

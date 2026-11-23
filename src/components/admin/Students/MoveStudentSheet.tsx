@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useState } from "react";
 import type { AdminClass } from "@/lib/api/classes";
 import { studentsApi } from "@/lib/api/students";
@@ -149,19 +150,14 @@ export function MoveStudentSheet({
         >
           Move to
         </label>
-        <select
+        <NevoSelect
           id="move-dest"
           value={destination}
-          onChange={(e) => setDestination(e.target.value)}
-          className="h-[50px] w-full cursor-pointer rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-[15px] text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
-        >
-          <option value="">Choose a class</option>
-          {options.map((c) => (
-            <option key={c.id} value={c.id}>
-              {describe(c)}
-            </option>
-          ))}
-        </select>
+          onValueChange={setDestination}
+          placeholder="Choose a class"
+          options={options.map((c) => ({ value: c.id, label: describe(c) }))}
+          triggerClassName="h-[50px] w-full rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-[15px] text-[15px] text-nevo-near-black transition-colors focus:border-nevo-navy"
+        />
       </div>
 
       {dest ? (

@@ -119,9 +119,11 @@ export function PrimaryConflictNotice({
 }) {
   return (
     <p className="m-0 rounded-[10px] bg-nevo-violet/24 px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-navy">
-      {primaryName} is the primary teacher for {className}. Making{" "}
-      {teacherName ?? "this teacher"} primary moves {primaryName} to
-      co-teacher; they keep the class and their notes.
+      {/* SCRUM-40's fixed copy (backlog 81), with the name and "they" where it
+          says "her" and "she": nothing records how a teacher is referred to. */}
+      {primaryName} is Primary for {className} right now. Making{" "}
+      {teacherName ?? "this teacher"} Primary moves {primaryName} to
+      Co-teacher; they keep the class and their notes.
     </p>
   );
 }

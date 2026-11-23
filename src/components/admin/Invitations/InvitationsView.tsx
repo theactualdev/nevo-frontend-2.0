@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
@@ -459,39 +460,27 @@ export function InvitationsView() {
                   className="min-w-0 flex-1 border-none bg-transparent outline-none"
                 />
               </label>
-              <label className={FILTER_PILL}>
-                <span className="sr-only">Filter by status</span>
-                <select
-                  value={status}
-                  onChange={(e) => filterBy(e.target.value)}
-                  className="cursor-pointer appearance-none bg-transparent outline-none"
-                >
-                  {STATUS_FILTERS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <NevoSelect
+                aria-label="Filter by status"
+                value={status}
+                onValueChange={filterBy}
+                options={STATUS_FILTERS}
+                triggerClassName={FILTER_PILL}
+              />
               {classes.length > 0 ? (
-                <label className={FILTER_PILL}>
-                  <span className="sr-only">Filter by class</span>
-                  <select
-                    value={classFilter}
-                    onChange={(e) => {
-                      setClassFilter(e.target.value);
-                      setPage(1);
-                    }}
-                    className="cursor-pointer appearance-none bg-transparent outline-none"
-                  >
-                    <option value="">All classes</option>
-                    {classes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <NevoSelect
+                  aria-label="Filter by class"
+                  value={classFilter}
+                  onValueChange={(v) => {
+                    setClassFilter(v);
+                    setPage(1);
+                  }}
+                  options={[
+                    { value: "", label: "All classes" },
+                    ...classes.map((c) => ({ value: c.id, label: c.name })),
+                  ]}
+                  triggerClassName={FILTER_PILL}
+                />
               ) : null}
             </div>
 

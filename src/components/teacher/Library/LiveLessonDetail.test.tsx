@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import type { LessonDetailResponse, LessonSegment } from "@/lib/api/lessons";
 
 vi.mock("@/components/shared/IllustrationWrapper", () => ({
@@ -157,7 +157,9 @@ describe("where this lesson went", () => {
     // 0 children is a class the lesson reached nobody in; absent is not knowing.
     show({ classes: [{ id: "c-1", name: "JSS 2A" }] });
 
-    expect(screen.getByText("JSS 2A")).toBeInTheDocument();
+    // The list's own row - C06b's "Assigned to" card names the class too.
+    const list = screen.getByText(/Where this lesson went/i).nextElementSibling as HTMLElement;
+    expect(within(list).getByText("JSS 2A")).toBeInTheDocument();
     expect(screen.queryByText(/students?$/)).not.toBeInTheDocument();
   });
 

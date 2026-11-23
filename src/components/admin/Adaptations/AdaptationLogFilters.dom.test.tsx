@@ -1,5 +1,6 @@
+import { chooseOption } from "@/test/nevoSelect";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import type { AdminClass } from "@/lib/api/classes";
 import { AdaptationLogView } from "./AdaptationLogView";
@@ -77,13 +78,10 @@ const row = (id: string) => ({
 
 const lastCall = () => logSpy.mock.calls[logSpy.mock.calls.length - 1][0];
 
-async function selectClass(container: HTMLElement, value: string) {
-  const select = await waitFor(() => {
-    const el = container.querySelector("select");
-    if (!el) throw new Error("no select yet");
-    return el;
-  });
-  fireEvent.change(select, { target: { value } });
+/** The class chip is a Nevo dropdown: choose the class by its name. */
+const CLASS_NAME: Record<string, string> = { c1: "JSS 2A", c2: "JSS 3B", "": "All classes" };
+async function selectClass(value: string) {
+  await chooseOption(await screen.findByRole("combobox", { name: "Filter by class" }), CLASS_NAME[value]);
 }
 
 beforeEach(() => {
@@ -95,13 +93,13 @@ beforeEach(() => {
 
 describe("filtering the adaptation log by class", () => {
   it("omits classId entirely until a class is chosen, then sends the id", async () => {
-    const { container } = render(<AdaptationLogView />);
+    render(<AdaptationLogView />);
 
     await waitFor(() => expect(logSpy).toHaveBeenCalled());
     // Not "", which the contract rejects as a malformed uuid.
     expect(lastCall().classId).toBeUndefined();
 
-    await selectClass(container, "c1");
+    await selectClass("c1");
     await waitFor(() => expect(lastCall().classId).toBe("c1"));
   });
 
@@ -119,7 +117,7 @@ describe("filtering the adaptation log by class", () => {
     // The next page by OFFSET, at the same page size - the limit never grows.
     await waitFor(() => expect(lastCall()).toMatchObject({ limit: 5, offset: 1 }));
 
-    await selectClass(container, "c1");
+    await selectClass("c1");
     // A new filter starts again from the first page.
     await waitFor(() =>
       expect(lastCall()).toMatchObject({ classId: "c1", limit: 5, offset: 0 }),
@@ -182,7 +180,7 @@ describe("filtering the adaptation log by class", () => {
       expect((Date.now() - Date.parse(lastCall().dateFrom)) / 864e5).toBeGreaterThan(20),
     );
 
-    await selectClass(container, "c1");
+    await selectClass("c1");
     await waitFor(() => expect(lastCall().classId).toBe("c1"));
 
     const days = (Date.now() - Date.parse(lastCall().dateFrom)) / 864e5;
@@ -203,7 +201,7 @@ describe("filtering the adaptation log by class", () => {
       expect(visibleText(container)).toMatch(/12 adaptations in the last 7 days/),
     );
 
-    await selectClass(container, "c1");
+    await selectClass("c1");
     await waitFor(() =>
       expect(visibleText(container)).toMatch(
         /12 adaptations in JSS 2A in the last 7 days/,
@@ -228,7 +226,7 @@ describe("filtering the adaptation log by class", () => {
     const { container } = render(<AdaptationLogView />);
     await waitFor(() => expect(logSpy).toHaveBeenCalled());
 
-    await selectClass(container, "c1");
+    await selectClass("c1");
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/Nothing to show for this class and range/),
     );
