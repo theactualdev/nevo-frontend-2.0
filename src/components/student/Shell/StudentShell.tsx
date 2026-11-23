@@ -92,7 +92,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
    *
    * Here rather than only in the player, because a child who gave up on a
    * lesson while offline may never open that lesson again - and their position
-   * still belongs in Home's "Pick up where you left off" list. Any student
+   * still belongs in Home's in-progress card. Any student
    * screen is enough.
    */
   useEffect(() => {

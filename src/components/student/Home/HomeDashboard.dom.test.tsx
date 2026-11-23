@@ -131,12 +131,14 @@ describe("HomeDashboard sample marking", () => {
       expect(container.querySelector(`[${SAMPLE_ATTR}]`)).not.toBeNull(),
     );
     const pickup = screen.getByRole("region", {
-      name: /Pick up where you left off/,
+      name: /Here when you.re ready/,
     });
     expect(pickup.textContent).not.toMatch(
       /almost there|halfway|getting started|nearly/i,
     );
-    expect(pickup.querySelectorAll("[data-pickup-ring]")).toHaveLength(3);
+    // One card, the frame's (L1): no longer the three-card list.
+    expect(pickup.querySelectorAll("[data-pickup-ring]")).toHaveLength(1);
+    expect(within(pickup).getByText("Adding Fractions")).toBeInTheDocument();
   });
 
   it("marks the signed-out walkthrough, which is a fictional child's week", async () => {
@@ -159,8 +161,8 @@ describe("HomeDashboard sample marking", () => {
   it("shows no note in the walkthrough while its lessons are part-way", async () => {
     /*
      * Design D98, 6 Oct: Home draws no note while work is outstanding. The
-     * walkthrough is what a real child's Home looks like, so its three
-     * part-way lessons leave the note out, as a real child's would.
+     * walkthrough is what a real child's Home looks like, so its part-way
+     * lesson leaves the note out, as a real child's would.
      */
     dashboard.useStudentDashboard.mockReturnValue({
       data: null,
@@ -174,7 +176,7 @@ describe("HomeDashboard sample marking", () => {
       expect(container.querySelector(`[${SAMPLE_ATTR}]`)).not.toBeNull(),
     );
     expect(
-      screen.getByRole("region", { name: /Pick up where you left off/ }),
+      screen.getByRole("region", { name: /Here when you.re ready/ }),
     ).toBeInTheDocument();
     const text = document.body.textContent ?? "";
     expect(text).not.toMatch(/showing up this week/);
@@ -254,7 +256,7 @@ describe("Home does not offer work a teacher called off", () => {
     expect(queryByText("Ordinary Fractions")).not.toBeNull();
   });
 
-  it("does not promote a cancelled lesson onto Pick up where you left off", async () => {
+  it("does not promote a cancelled lesson onto the in-progress card", async () => {
     /*
      * THE ONE THAT CATCHES A HALF-FIX. The child had started this lesson before
      * the teacher cancelled it, so it has a progress row — which is exactly
@@ -398,9 +400,11 @@ describe("the daily warm-up card", () => {
 });
 
 /**
- * SCRUM-146: Today's lessons carries only work not yet started; unfinished
- * lessons move to "Pick up where you left off" (up to five, lesson + subject +
- * how far in, never a date); finished ones leave Home altogether.
+ * SCRUM-146: Today's lessons carries only work not yet started; an unfinished
+ * lesson moves to the frame's in-progress card, "Here when you're ready" -
+ * the most recently worked on, lesson + subject + how far in, never a date
+ * (Lydia, 19 Nov, L1, in place of the five-card "Pick up where you left off");
+ * finished ones leave Home altogether.
  *
  * The screen it replaced drew one "Pick back up" card ABOVE Today, kept
  * finished lessons in Today and counted them in "N ready" (it believed
@@ -482,7 +486,7 @@ describe("Home's two lists", () => {
     expect(screen.getByText("1 ready")).toBeInTheDocument();
   });
 
-  it("moves a started lesson from Today to Pick up where you left off", async () => {
+  it("moves a started lesson from Today to the in-progress card", async () => {
     signIn();
     live(
       [
@@ -496,7 +500,7 @@ describe("Home's two lists", () => {
     await settled(container);
 
     const today = section(/Today's lessons/);
-    const pickup = section(/Pick up where you left off/);
+    const pickup = section(/Here when you.re ready/);
     expect(within(today).queryByText("Halfway Fractions")).toBeNull();
     expect(within(pickup).getByText("Halfway Fractions")).toBeInTheDocument();
     // Lesson and subject, as the frame draws it.
@@ -513,7 +517,7 @@ describe("Home's two lists", () => {
     await settled(container);
 
     expect(
-      within(section(/Pick up where you left off/)).getByText("Left Fractions"),
+      within(section(/Here when you.re ready/)).getByText("Left Fractions"),
     ).toBeInTheDocument();
   });
 
@@ -523,7 +527,7 @@ describe("Home's two lists", () => {
    * here as unfinished work to pick up (RUN21 finding 3). It leaves the list,
    * and nothing more: where finished work goes is SCRUM-146's.
    */
-  it("leaves a finished lesson off Pick up where you left off, though its row says in progress", async () => {
+  it("leaves a finished lesson off the in-progress card, though its row says in progress", async () => {
     signIn();
     live(
       [
@@ -539,7 +543,7 @@ describe("Home's two lists", () => {
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    const pickup = section(/Pick up where you left off/);
+    const pickup = section(/Here when you.re ready/);
     expect(within(pickup).getByText("Halfway Fractions")).toBeInTheDocument();
     expect(screen.queryByText("Finished Fractions")).toBeNull();
   });
@@ -574,7 +578,7 @@ describe("Home's two lists", () => {
     await settled(container);
 
     expect(
-      within(section(/Pick up where you left off/)).getByText(
+      within(section(/Here when you.re ready/)).getByText(
         "Halfway Fractions",
       ),
     ).toBeInTheDocument();
@@ -585,7 +589,7 @@ describe("Home's two lists", () => {
    * production run, Chidi on Photosynthesis). The shell flushes as Home first
    * reads, so that first answer can be older than the server already is.
    */
-  it("reads again once held progress lands, so a lesson finished by it leaves Pick up", async () => {
+  it("reads again once held progress lands, so a lesson finished by it leaves the card", async () => {
     signIn();
     const before = {
       assignments: [assignment("photo", "Photosynthesis")],
@@ -617,7 +621,7 @@ describe("Home's two lists", () => {
     const { container } = render(<HomeDashboard />);
     await settled(container);
     expect(
-      within(section(/Pick up where you left off/)).getByText("Photosynthesis"),
+      within(section(/Here when you.re ready/)).getByText("Photosynthesis"),
     ).toBeInTheDocument();
 
     await act(() => flushPendingProgress());
@@ -642,24 +646,51 @@ describe("Home's two lists", () => {
     expect(screen.queryByText(/your first lesson/)).toBeNull();
   });
 
-  it("shows at most five, the most recently touched first", async () => {
+  /*
+   * L1 (Lydia, 19 Nov): "the most recently worked on. A child's mental model
+   * is the thing they were just doing, not the oldest and not the nearest to
+   * finishing."
+   */
+  it("shows one lesson, the most recently worked on, whichever is nearest done", async () => {
     signIn();
     const ids = ["a", "b", "c", "d", "e", "f"];
     live(
       ids.map((id) => assignment(id, `Lesson ${id.toUpperCase()}`)),
-      // "a" is the oldest, "f" the newest.
-      ids.map((id, i) => row(id, "in_progress", 60 - i)),
+      // "a" is the oldest and the furthest in; "f" the newest.
+      ids.map((id, i) =>
+        row(id, "in_progress", 60 - i, id === "a" ? 3 : 0, { segmentCount: 4 }),
+      ),
     );
 
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    const titles = within(section(/Pick up where you left off/))
+    const titles = within(section(/Here when you.re ready/))
       .getAllByRole("link")
       .map((a) => a.textContent ?? "");
-    expect(titles).toHaveLength(5);
+    expect(titles).toHaveLength(1);
     expect(titles[0]).toMatch(/Lesson F/);
-    expect(titles.join(" ")).not.toMatch(/Lesson A/);
+  });
+
+  it("is the frame's card: its heading and line, before Today's lessons", async () => {
+    signIn();
+    live(
+      [assignment("mid", "Halfway Fractions"), assignment("new", "New Decimals")],
+      [row("mid", "in_progress")],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    const card = section(/Here when you.re ready/);
+    expect(
+      within(card).getByText("It\u2019s right where you left it. There\u2019s no rush."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Pick up where you left off/)).toBeNull();
+    const today = section(/Today's lessons/);
+    expect(
+      card.compareDocumentPosition(today) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("goes straight back in, with the assignment riding the link", async () => {
@@ -670,7 +701,7 @@ describe("Home's two lists", () => {
     await settled(container);
 
     expect(
-      within(section(/Pick up where you left off/))
+      within(section(/Here when you.re ready/))
         .getByRole("link")
         .getAttribute("href"),
     ).toBe("/student/lessons/mid?assignment=as-mid");
@@ -692,7 +723,7 @@ describe("Home's two lists", () => {
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    const pickup = section(/Pick up where you left off/);
+    const pickup = section(/Here when you.re ready/);
     expect(within(pickup).getByRole("link").getAttribute("href")).toBe(
       "/student/lessons/chk?assignment=as-chk",
     );
@@ -715,7 +746,7 @@ describe("Home's two lists", () => {
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    const text = section(/Pick up where you left off/).textContent ?? "";
+    const text = section(/Here when you.re ready/).textContent ?? "";
     expect(text).toMatch(/Adding Fractions/);
     expect(text).not.toMatch(/almost there|halfway|getting started|nearly/i);
     expect(text).not.toMatch(/\d/);
@@ -737,7 +768,7 @@ describe("Home's two lists", () => {
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    const pickup = section(/Pick up where you left off/);
+    const pickup = section(/Here when you.re ready/);
     const ring = within(pickup).getByRole("img", { name: "Part 3 of 10" });
     const arc = ring.querySelectorAll("circle")[1];
     const length = 2 * Math.PI * 24;
@@ -748,7 +779,7 @@ describe("Home's two lists", () => {
     expect(pickup.textContent).not.toMatch(/%|\d/);
   });
 
-  it("draws two lessons at two places as two different rings", async () => {
+  it("draws the ring at the shown lesson's own place, not another's", async () => {
     signIn();
     live(
       [assignment("early", "Early Fractions"), assignment("late", "Late Fractions")],
@@ -761,9 +792,10 @@ describe("Home's two lists", () => {
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    const pickup = section(/Pick up where you left off/);
+    const pickup = section(/Here when you.re ready/);
+    expect(within(pickup).getByText("Early Fractions")).toBeInTheDocument();
     expect(within(pickup).getByRole("img", { name: "Part 2 of 4" })).toBeInTheDocument();
-    expect(within(pickup).getByRole("img", { name: "Part 4 of 4" })).toBeInTheDocument();
+    expect(within(pickup).queryByRole("img", { name: "Part 4 of 4" })).toBeNull();
   });
 
   it("never subtracts the segments flagged for review from the count", async () => {
@@ -779,7 +811,7 @@ describe("Home's two lists", () => {
     await settled(container);
 
     expect(
-      within(section(/Pick up where you left off/)).getByRole("img", {
+      within(section(/Here when you.re ready/)).getByRole("img", {
         name: "Part 3 of 10",
       }),
     ).toBeInTheDocument();
@@ -803,10 +835,9 @@ describe("Home's two lists", () => {
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    const pickup = section(/Pick up where you left off/);
+    const pickup = section(/Here when you.re ready/);
     const marks = [...pickup.querySelectorAll("[data-pickup-mark]")];
-    expect(marks).toHaveLength(2);
-    expect(marks[0].outerHTML).toBe(marks[1].outerHTML);
+    expect(marks).toHaveLength(1);
     expect(pickup.innerHTML).not.toMatch(/stroke-dashoffset|conic-gradient/);
   });
 
@@ -820,7 +851,7 @@ describe("Home's two lists", () => {
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    const pickup = section(/Pick up where you left off/);
+    const pickup = section(/Here when you.re ready/);
     expect(pickup.querySelector("[data-pickup-ring]")).toBeNull();
     expect(pickup.querySelector("[data-pickup-mark]")).not.toBeNull();
   });
@@ -848,18 +879,34 @@ describe("Home's two lists", () => {
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    const pickup = section(/Pick up where you left off/);
+    const pickup = section(/Here when you.re ready/);
     const links = within(pickup).getAllByRole("link");
-    // Newest first, whichever door it came in by.
+    // The most recent, whichever door it came in by.
+    expect(links).toHaveLength(1);
     expect(links[0].textContent).toMatch(/Volcanoes/);
     expect(links[0].getAttribute("href")).toBe("/student/lessons/lib");
     expect(within(pickup).getByText("Geography")).toBeInTheDocument();
     expect(
       within(pickup).getByRole("img", { name: "Part 2 of 5" }),
     ).toBeInTheDocument();
-    expect(links[1].getAttribute("href")).toBe(
-      "/student/lessons/set?assignment=as-set",
+  });
+
+  it("shows a set lesson over a library one worked on before it", async () => {
+    signIn();
+    live(
+      [assignment("set", "Set Fractions")],
+      [
+        row("set", "in_progress", 2),
+        row("lib", "in_progress", 10, 1, { title: "Volcanoes", segmentCount: 5 }),
+      ],
     );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    const link = within(section(/Here when you.re ready/)).getByRole("link");
+    expect(link.textContent).toMatch(/Set Fractions/);
+    expect(link.getAttribute("href")).toBe("/student/lessons/set?assignment=as-set");
   });
 
   it("leaves off a library lesson the row gives no title", async () => {
@@ -869,7 +916,7 @@ describe("Home's two lists", () => {
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    expect(screen.queryByText("Pick up where you left off")).toBeNull();
+    expect(screen.queryByText(/Here when you.re ready/)).toBeNull();
   });
 
   it("does not bring a cancelled lesson back in as a library one", async () => {
@@ -914,7 +961,7 @@ describe("Home's two lists", () => {
     expect(screen.queryByText(/Today's lessons/)).toBeNull();
     expect(screen.queryByText("When your teacher sets your first lesson, you'll find it right here.")).toBeNull();
     expect(screen.queryByText(/your first lesson/)).toBeNull();
-    const pickUp = section(/Pick up where you left off/);
+    const pickUp = section(/Here when you.re ready/);
     expect(within(pickUp).getByText("Halfway Fractions")).toBeInTheDocument();
     expect(screen.queryByText(/caught up/)).toBeNull();
   });
@@ -964,7 +1011,7 @@ describe("Home's two lists", () => {
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
-    expect(screen.queryByText("Pick up where you left off")).toBeNull();
+    expect(screen.queryByText(/Here when you.re ready/)).toBeNull();
   });
 
   it("dates nothing on Today's cards and says the time instead", async () => {
@@ -1108,7 +1155,7 @@ describe("what Home says when there is nothing, or nothing left", () => {
     const noLessonArea = () => {
       expect(screen.queryByText(/your first lesson/)).toBeNull();
       expect(screen.queryByText(/Today's lessons/)).toBeNull();
-      expect(screen.queryByText("Pick up where you left off")).toBeNull();
+      expect(screen.queryByText(/Here when you.re ready/)).toBeNull();
       expect(screen.queryByText("Osmosis")).toBeNull();
     };
 
@@ -1186,7 +1233,7 @@ describe("what Home says when there is nothing, or nothing left", () => {
     expect(
       screen.getByRole("region", { name: /Today's lessons/ }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Pick up where you left off")).toBeNull();
+    expect(screen.queryByText(/Here when you.re ready/)).toBeNull();
     expect(screen.queryByText(/caught up/)).toBeNull();
   });
 
@@ -1223,7 +1270,7 @@ describe("what Home says when there is nothing, or nothing left", () => {
     await settled(container);
 
     expect(screen.queryByText(/Today's lessons/)).toBeNull();
-    expect(screen.queryByText("Pick up where you left off")).toBeNull();
+    expect(screen.queryByText(/Here when you.re ready/)).toBeNull();
     expect(screen.queryByText(/caught up/)).toBeNull();
   });
 
