@@ -84,6 +84,13 @@ export interface SnapshotInput {
    * about invitations rather than implying there are none.
    */
   pendingTeacherInvites?: number | null;
+  /**
+   * Teachers who have set up their account (`active` on the teachers list).
+   * Null or absent when that list could not be read. The headcount above is
+   * the server's every teacher not deactivated - INVITED ONES INCLUDED - so
+   * this is what decides whether "with a Nevo account" is true.
+   */
+  teachersSetUp?: number | null;
 }
 
 /**
@@ -110,13 +117,61 @@ export function pendingTeacherInvites(invites: readonly Invitation[], now: numbe
   ).length;
 }
 
-export function snapshotTiles({
+/**
+ * D04'S EARLY TILES, IN ITS ORDER AND WORDS (backlog 88): "Teachers invited",
+ * "Students enrolled", "Classes created", then "Adaptations made" - and no
+ * "Students learning", which the early frame does not draw. A zero says what
+ * to do next ("import or add your roster", "create your first class"). The
+ * teachers line is #1107's, unchanged. Where D04's line needs a figure we do
+ * not hold - "11 still to set up" counts against a class total, and Lydia
+ * ruled denominators out (7 Oct) - the tile says nothing rather than guess.
+ */
+function earlyTiles(
+  tiles: SnapshotTile[],
+  counts: SchoolRosterCounts | null,
+): SnapshotTile[] {
+  const byKey = new Map(tiles.map((t) => [t.key, t]));
+  const out: SnapshotTile[] = [];
+  const teachers = byKey.get("teachers");
+  if (teachers) out.push({ ...teachers, label: "Teachers invited" });
+  const enrolled = byKey.get("enrolled");
+  if (enrolled) {
+    out.push({
+      ...enrolled,
+      desc:
+        enrolled.value === 0
+          ? "import or add your roster"
+          : typeof counts?.invitedStudents === "number" && counts.invitedStudents > 0
+            ? enrolled.desc
+            : "keep going, or import the rest",
+    });
+  }
+  const classes = byKey.get("classes");
+  if (classes) {
+    out.push({
+      ...classes,
+      label: "Classes created",
+      desc: classes.value === 0 ? "create your first class" : "",
+    });
+  }
+  const adaptations = byKey.get("adaptations");
+  if (adaptations) out.push(adaptations);
+  return out;
+}
+
+export function snapshotTiles(input: SnapshotInput): SnapshotTile[] {
+  const tiles = allTiles(input);
+  return input.early ? earlyTiles(tiles, input.counts) : tiles;
+}
+
+function allTiles({
   studentsProfiled,
   adaptations,
   adaptationPeriod = null,
   counts,
   early,
   pendingTeacherInvites: pendingTeachers = null,
+  teachersSetUp = null,
 }: SnapshotInput): SnapshotTile[] {
   const tiles: SnapshotTile[] = [];
   const mute = (n: number) => early && n === 0;
@@ -165,11 +220,22 @@ export function snapshotTiles({
        * An invited teacher may already be a user in the headcount above, so
        * "more" could count one person twice. This says only that invitations
        * are open, which the invitations themselves establish.
+       *
+       * "WITH A NEVO ACCOUNT" ONLY WHEN EVERY ONE OF THEM HAS ONE (12 Nov dry
+       * run: "4 Teachers with a Nevo account" counted a teacher whose only
+       * invitation had expired). The server's figure is every teacher not
+       * deactivated, invited ones included. When some haven't set up, D04's
+       * own line says how many have: "4 have set up so far". When the list
+       * can't be read, nothing is claimed either way.
        */
       desc:
         typeof pendingTeachers === "number" && pendingTeachers > 0
           ? `${pendingTeachers} ${pendingTeachers === 1 ? "invitation" : "invitations"} pending`
-          : "with a Nevo account",
+          : typeof teachersSetUp !== "number"
+            ? ""
+            : teachersSetUp >= counts.teachers
+              ? "with a Nevo account"
+              : `${teachersSetUp} ${teachersSetUp === 1 ? "has" : "have"} set up so far`,
       muted: mute(counts.teachers),
     });
   }
@@ -200,7 +266,8 @@ export function snapshotTiles({
  * are written out and picked between.
  *
  * `xl`, not `lg`: 1280 is this console's own desktop boundary (the sidebar
- * rail's `(min-width: 1280px)`), so 1024x768 keeps the 2 x 2 the spec asks for.
+ * rail's `(min-width: 80rem)`, the query `xl:` compiles to), so 1024x768 keeps
+ * the 2 x 2 the spec asks for.
  */
 export function snapshotColumns(count: number): string {
   if (count >= 5) return "xl:grid-cols-5";

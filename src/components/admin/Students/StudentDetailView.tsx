@@ -43,6 +43,7 @@ import { ConsentFormDownload } from "./ConsentFormDownload";
 import { EraseRecordModal } from "./EraseRecordModal";
 import { MoveStudentSheet } from "./MoveStudentSheet";
 import { NoAccess, failureKind } from "../NoAccess";
+import { RecordGone, isRecordGone } from "../RecordGone";
 import { BackLink } from "../BackLink";
 import { withBack, type Back } from "../back";
 import { WriteFailed } from "../WriteFailed";
@@ -73,7 +74,8 @@ import { ChildAvatar, useChildLook } from "../Roster/ChildAvatar";
  * per-guardian relationship, "Primary contact" flag and last-active line.
  */
 
-type Phase = "loading" | "ready" | "failed" | "denied";
+/** `gone`: the student's own read answered 404 - D28, never a retry. */
+type Phase = "loading" | "ready" | "failed" | "denied" | "gone";
 
 /**
  * A restore the server REFUSED for good, in its own words: the learner's
@@ -116,6 +118,12 @@ export function StudentDetailView({
   const [classes, setClasses] = useState<AdminClass[]>([]);
   const [guardians, setGuardians] = useState<ParentLink[]>([]);
   const [guardiansFailed, setGuardiansFailed] = useState(false);
+  /**
+   * The guardian read has ANSWERED, once. Until then the card says nothing:
+   * an empty list before the read returns is not "No guardian on the record"
+   * (SCRUM-327, 12 Nov dry run - a cold server takes seconds to answer).
+   */
+  const [guardiansAnswered, setGuardiansAnswered] = useState(false);
   const { stateFor: consentStateFor, send: sendConsent } = useConsentRequests();
   /** Requests, and so adding a guardian, need roster or SENCo access - see `consentRole`. */
   const maySend = useMaySendConsent();
@@ -230,7 +238,13 @@ export function StudentDetailView({
   }, [studentId]);
 
   const load = useCallback(() => {
-    Promise.all([studentsApi.get(studentId), classesApi.list(true)])
+    // Only the student's own 404 says the record is gone (D28).
+    let gone = false;
+    const record = studentsApi.get(studentId).catch((err: unknown) => {
+      gone = isRecordGone(err);
+      throw err;
+    });
+    Promise.all([record, classesApi.list(true)])
       .then(([s, cls]) => {
         setStudent(s);
         setClasses(cls);
@@ -246,13 +260,15 @@ export function StudentDetailView({
           .then((links) => {
             setGuardians(links);
             setGuardiansFailed(false);
+            setGuardiansAnswered(true);
           })
           .catch(() => {
             setGuardians([]);
             setGuardiansFailed(true);
+            setGuardiansAnswered(true);
           });
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
+      .catch((err: unknown) => setPhase(gone ? "gone" : failureKind(err)));
   }, [studentId]);
 
   useEffect(() => {
@@ -271,6 +287,14 @@ export function StudentDetailView({
     return (
       <Wrapper>
         <NoAccess what="this student" />
+      </Wrapper>
+    );
+  }
+
+  if (phase === "gone") {
+    return (
+      <Wrapper>
+        <RecordGone what="student" back={back} />
       </Wrapper>
     );
   }
@@ -336,7 +360,7 @@ export function StudentDetailView({
         <ChildAvatar look={look} size={56} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h2 className="m-0 text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black max-lg:text-[22px]">
+            <h2 className="m-0 text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black max-xl:text-[22px]">
               {name}
             </h2>
             {deactivated ? (
@@ -360,7 +384,7 @@ export function StudentDetailView({
 
       <SectionLabel>Enrolment</SectionLabel>
       <div className={cn(CARD, "mt-2.5 px-6 py-[22px]")}>
-        <dl className="m-0 grid grid-cols-2 gap-x-10 gap-y-[22px] max-lg:grid-cols-1">
+        <dl className="m-0 grid grid-cols-2 gap-x-10 gap-y-[22px] max-xl:grid-cols-1">
           <Field
             label="Class"
             value={
@@ -476,10 +500,10 @@ export function StudentDetailView({
         <div className="mt-[22px] border-t border-nevo-near-black/8 pt-4">
           <p className="m-0 flex items-start gap-2 text-[13px] leading-[1.55] text-nevo-near-black/60">
             <LockGlyph />
+            {/* One string: the page always had the spaces, but a reader that
+                trims each text node made "How Chidi isgetting on" (12 Nov). */}
             <span>
-              How {firstName} {wasHere(student.status) ? "was" : "is"} getting on
-              isn&rsquo;t shown here. That belongs to their teachers, and to
-              Learning Support where a teacher has shared it.
+              {`How ${firstName} ${wasHere(student.status) ? "was" : "is"} getting on isn’t shown here. That belongs to their teachers, and to Learning Support where a teacher has shared it.`}
             </span>
           </p>
         </div>
@@ -621,6 +645,12 @@ export function StudentDetailView({
             what={`${firstName}’s guardians`}
             onRetry={load}
           />
+        ) : !guardiansAnswered ? (
+          // Still asking. Nothing is claimed either way until it answers.
+          <div className="px-6 py-[22px]" aria-busy="true">
+            <div className="h-4 w-52 animate-pulse rounded bg-nevo-near-black/[0.07]" />
+            <div className="mt-2.5 h-3.5 w-72 max-w-full animate-pulse rounded bg-nevo-near-black/[0.05]" />
+          </div>
         ) : guardians.length === 0 ? (
           /*
            * WAS A DEAD END: "No guardian on the record. A parent account is
@@ -632,9 +662,20 @@ export function StudentDetailView({
             <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
               No guardian on the record
             </p>
+            {/*
+              * "CAN'T START" ONLY WHERE IT IS TRUE (12 Nov dry run): it sat
+              * beside "Consent is recorded… Confirmed" on a child who learned
+              * all morning. A guardian row and a consent record are separate
+              * things on the server, so a confirmed child can have no row
+              * here. Said only while consent is outstanding (pending or not
+              * sent); a withdrawal has its own words on the consent card, and
+              * an unread consent claims nothing. One string, so text readers
+              * keep the space after the name.
+              */}
             <p className="m-0 mt-1.5 max-w-[56ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-              {firstName} can&rsquo;t start until a parent or guardian gives
-              permission.{" "}
+              {mayRequestConsent(student.consent)
+                ? `${firstName} can’t start until a parent or guardian gives permission. `
+                : null}
               {maySend ? "Add one and we’ll send them the request." : CANNOT_SEND_LINE}
             </p>
             {/* No other route writes a guardian onto an existing student: the

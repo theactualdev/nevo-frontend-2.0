@@ -6,7 +6,8 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useStillHere } from "@/hooks/useStillHere";
 import { useAuth } from "@/hooks";
-import { authApi } from "@/lib/api";
+import { authApi, permissionsApi, schoolApi } from "@/lib/api";
+import { adminHomeForScopes, homeName } from "../Shell/adminNav";
 import {
   DOOR_HREF,
   DOOR_LABEL,
@@ -38,8 +39,15 @@ import { SupportEmailLink } from "../SupportEmail";
  *   at `SIGN_IN_FAILED` told a locked-out proprietor to "reset your password"
  *   and gave them nothing to press.
  *
- * The success line loses the school name for the same reason: "Taking you to
- * your Overview" rather than the school's.
+ * THE SUCCESS LINE NAMES THE SCHOOL AND THE PLACE, ONCE THEY ARE KNOWN (backlog
+ * 96). D02 draws "Taking you to Brightgate Academy's Overview." Pre-auth there
+ * is no school to name, but once signed in `GET /api/v1/school` says which,
+ * and `permissions/me` says where `/admin` sends this persona - the Overview,
+ * Systems overview, or Billing's Finance home. It said "Taking you to your
+ * Overview." to every admin, which IT and finance admins never reach. The
+ * home is the rail's own name for it (`homeName`); without the school's name
+ * it is "your" home; and with no answer about the home, or a deep link going
+ * somewhere else, no destination is named at all.
  *
  * TODO(api): a pre-auth lookup keyed on the school's URL SLUG that returns the
  * school's name and its SSO PROVIDER. `POST /api/v1/auth/school-code/verify`
@@ -206,6 +214,8 @@ export function AdminSignIn() {
   const [pw, setPw] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
+  /** Where the success line says they are going, once that is known. */
+  const [goingTo, setGoingTo] = useState<string | null>(null);
   const [failure, setFailure] = useState<LoginFailure | null>(null);
   /**
    * Where they actually belong, when we can tell. Null means a role no door
@@ -276,6 +286,20 @@ export function AdminSignIn() {
         // the cleanup that clears them, so none is set.
         if (!hereRef.current) return;
         setPhase("success");
+        // The school and the persona's home, now that there is a session to
+        // ask with - see the docblock. The move home does not wait for them.
+        if (destination === "/admin") {
+          void Promise.allSettled([schoolApi.get(), permissionsApi.me()]).then(
+            ([school, perms]) => {
+              if (!hereRef.current || perms.status !== "fulfilled") return;
+              const home = homeName(adminHomeForScopes(perms.value.scopes));
+              if (!home) return;
+              const name =
+                school.status === "fulfilled" ? school.value.name?.trim() : "";
+              setGoingTo(name ? `${name}'s ${home}` : `your ${home}`);
+            },
+          );
+        }
         timers.current.push(
           setTimeout(() => {
             if (hereRef.current) router.push(destination);
@@ -301,9 +325,13 @@ export function AdminSignIn() {
         <h2 className="mt-[26px] text-[30px] font-semibold tracking-[-0.02em] text-nevo-near-black">
           You&rsquo;re in
         </h2>
-        <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
-          {/* The school name is not ours to say - see the docblock. */}
-          Taking you to your Overview.
+        {/* Polite, and there from the start: the line arrives with its
+            answers (see the docblock). */}
+        <p
+          aria-live="polite"
+          className="mt-3 min-h-[1.55em] text-[16px] leading-[1.55] text-nevo-near-black/70"
+        >
+          {goingTo && <>Taking you to {goingTo}.</>}
         </p>
         <span className="mt-[26px] flex items-center gap-2.5 text-[13.5px] text-nevo-near-black/55">
           <Spinner />

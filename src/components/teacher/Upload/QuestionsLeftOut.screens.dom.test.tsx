@@ -199,26 +199,30 @@ describe("a refused picture", () => {
   ];
 
   /*
-   * NOT SAID YET, on any screen (Hub, 11 Nov): the server's sentence invites a
-   * report there is nowhere to make, and Lydia's words for the note have not
-   * arrived. `QuestionsLeftOut.dom` pins how it is said once they do.
+   * In Lydia's words (11 Nov, item 7) under the segment's name, as each screen
+   * names it - never the server's sentence, which invited a report with no route.
    */
-  it("is not said on a single lesson's sections", () => {
+  const LINE =
+    "A safety check held back the picture for this section. Its teaching text is unchanged. If that looks wrong, use Share feedback in the sidebar and we will look at the check rather than at your material.";
+
+  it("is said under its segment on a single lesson's sections, named as the rows are", () => {
     const { container } = render(
       <LiveModuleReview uploadId="u-1" structure={TWO} segments={ROWS as never} onBack={vi.fn()} onConfirmed={vi.fn()} />,
     );
 
+    expect(screen.getByText(LINE)).toBeInTheDocument();
+    expect(screen.getAllByText("Segment 2").length).toBeGreaterThan(0);
     expect(screen.queryByText(PICTURE)).not.toBeInTheDocument();
     expect(container.textContent).not.toMatch(/tell us|violence|3\.1/);
   });
 
-  it("is not said on a unit's tree", () => {
+  it("is said on a unit's tree", () => {
     render(<LiveStructureTree uploadId="u-1" structure={TWO} segments={ROWS as never} blockName="Physics" />);
 
-    expect(screen.queryByText(PICTURE)).not.toBeInTheDocument();
+    expect(screen.getByText(LINE)).toBeInTheDocument();
   });
 
-  it("is not said on the finish screen", () => {
+  it("is said on the finish screen, under the lesson's own name for the segment", () => {
     const lesson = {
       ...LESSON,
       segmentCount: 2,
@@ -229,6 +233,8 @@ describe("a refused picture", () => {
     } as unknown as LessonDetailResponse;
     render(<UploadResult lesson={lesson} fileName="heat.pdf" onUploadAnother={vi.fn()} reviewNotes={REFUSED} />);
 
+    expect(screen.getByText(LINE)).toBeInTheDocument();
+    expect(screen.getAllByText("Wood and plastic").length).toBeGreaterThan(0);
     expect(screen.queryByText(PICTURE)).not.toBeInTheDocument();
   });
 });

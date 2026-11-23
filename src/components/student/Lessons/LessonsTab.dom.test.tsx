@@ -115,14 +115,14 @@ describe("what a live lesson row says", () => {
     lessons.value = [
       lesson({
         status: "in_progress",
-        place: { fraction: 0.2, words: "Section 3 of 10" },
+        place: { fraction: 0.2, words: "Part 3 of 10" },
       }),
     ];
 
     const { container } = render(<LessonsTab />);
 
     const mark = screen.getByRole("img", {
-      name: "In progress. Section 3 of 10",
+      name: "In progress. Part 3 of 10",
     });
     expect(mark).toHaveAttribute("data-segment-fill");
     expect(container.innerHTML).not.toMatch(/55%|20%/);
@@ -132,14 +132,14 @@ describe("what a live lesson row says", () => {
     lessons.value = [
       lesson({
         status: "completed",
-        place: { fraction: 0.2, words: "Section 3 of 10" },
+        place: { fraction: 0.2, words: "Part 3 of 10" },
       }),
     ];
 
     render(<LessonsTab />);
 
     expect(screen.getByRole("img", { name: "Completed" })).toBeInTheDocument();
-    expect(screen.queryByRole("img", { name: /Segment/ })).toBeNull();
+    expect(screen.queryByRole("img", { name: /Part/ })).toBeNull();
   });
 });
 

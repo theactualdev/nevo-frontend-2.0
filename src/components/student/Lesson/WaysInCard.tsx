@@ -36,12 +36,12 @@ export function WaysInCard({
   if (ways.length === 0) return null;
   return (
     <section
-      aria-label="Other ways into this section"
+      aria-label="Other ways into this part"
       className="mb-[22px] rounded-[12px] bg-nevo-cream-elevated px-[18px] pt-[18px] pb-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
     >
       <p
         className={cn(
-          "text-base font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[18px] lg:text-[19px]",
+          "text-base font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[18px] xl:text-[19px]",
           reading && READING_BODY,
         )}
       >
@@ -63,7 +63,7 @@ export function WaysInCard({
           >
             <span
               className={cn(
-                "text-base font-medium text-nevo-near-black sm:text-[18px] lg:text-[19px]",
+                "text-base font-medium text-nevo-near-black sm:text-[18px] xl:text-[19px]",
                 reading && READING_BODY,
               )}
             >

@@ -7,7 +7,7 @@ import { uploadsApi, type BatchResult, type UploadReasonCode } from "@/lib/api/u
 import { getToken } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
-import { SAFETY_HELD_LINE } from "./ParseFallback";
+import { IncidentLine, SAFETY_HELD_LINE, SAFETY_UNAVAILABLE_LINE } from "./ParseFallback";
 
 /**
  * C07h Bulk Curriculum Ingestion: a whole term's scheme of work at once.
@@ -960,22 +960,24 @@ export function BulkIngestion() {
                                           driver exception shown nowhere. */}
                                       {/* A safety stop is Lydia's line (9
                                           Nov, item 6), never the server's. */}
+                                      {/* The check could not run: Lydia's
+                                          line (11 Nov, item 7). */}
                                       {died
                                         ? died.reasonCode === "safety_held"
                                           ? SAFETY_HELD_LINE
+                                          : died.reasonCode === "safety_check_unavailable"
+                                            ? SAFETY_UNAVAILABLE_LINE
                                           : (died.failureReason ??
                                             "We took this one, and the reading stopped partway. That is ours to sort out.")
                                         : (u.error ?? "Nevo couldn\u2019t read this one.")}
                                     </p>
-                                    {died?.incidentId && died.reasonCode !== "safety_held" && (
-                                      <div className="mt-[3px] text-[12px] text-nevo-near-black/50">
-                                        {"If you tell us about this, quote "}
-                                        <span className="font-mono text-nevo-near-black/70">
-                                          {died.incidentId}
-                                        </span>
-                                        {"."}
-                                      </div>
-                                    )}
+                                    {/* "Reference {code}" and nothing
+                                        around it (Lydia, 11 Nov), under a
+                                        stopped lesson too. */}
+                                    <IncidentLine
+                                      id={died?.incidentId}
+                                      className="mt-[3px] text-[12px] text-nevo-near-black/50"
+                                    />
                                   </div>
                                   {/* The one action each has. Refused at the
                                       door: a different file is the remedy

@@ -99,7 +99,7 @@ export function ProgressTab() {
     <div className={TAB_PAGE}>
       <h1 className={TAB_TITLE}>Progress</h1>
 
-      <p className="mt-5 max-w-[300px] text-base leading-[1.55] text-nevo-near-black/72 sm:mt-6 sm:max-w-[560px] sm:text-[18px] lg:mt-7 lg:max-w-[640px] lg:text-[19px]">
+      <p className="mt-5 max-w-[300px] text-base leading-[1.55] text-nevo-near-black/72 sm:mt-6 sm:max-w-[560px] sm:text-[18px] xl:mt-7 xl:max-w-[640px] xl:text-[19px]">
         {GROWTH_SUMMARY}
       </p>
 
@@ -147,9 +147,9 @@ function LiveProgress({
       {summary && (
         <p
           className={cn(
-            "mt-5 text-base leading-[1.55] text-nevo-near-black/72 sm:mt-6 sm:text-[18px] lg:mt-7 lg:text-[19px]",
+            "mt-5 text-base leading-[1.55] text-nevo-near-black/72 sm:mt-6 sm:text-[18px] xl:mt-7 xl:text-[19px]",
             subjects.length > 0 &&
-              "max-w-[300px] sm:max-w-[560px] lg:max-w-[640px]",
+              "max-w-[300px] sm:max-w-[560px] xl:max-w-[640px]",
           )}
         >
           {summary}
@@ -270,7 +270,7 @@ function NothingYet() {
         art={
           <EmptyArt
             src="/illustrations/empty-progress.png"
-            className="h-[200px] md:h-[240px] lg:h-[250px]"
+            className="h-[200px] md:h-[240px] xl:h-[250px]"
           />
         }
         line="Your progress will show here as you complete lessons"
@@ -308,7 +308,7 @@ function topicsLine(topics: SubjectTopics, working: boolean): string {
  * the swipe reads as a gesture the page did not ask for.
  */
 const SUBJECT_GRID =
-  "mt-8 grid max-w-[900px] grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-3";
+  "mt-8 grid grid-cols-1 gap-[18px] sm:grid-cols-2 xl:grid-cols-3";
 
 /**
  * One subject (Nevo Student Subject Card, 33a): its texture, name and line,

@@ -147,7 +147,7 @@ export function LessonsTab() {
   // their own assignments.
   if (!hydrated || (signedIn && loading)) {
     return shell(
-      <div className="mt-6 grid grid-cols-2 gap-3.5 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-2 gap-3.5 xl:grid-cols-3">
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
@@ -189,7 +189,7 @@ export function LessonsTab() {
         art={
           <EmptyArt
             src="/illustrations/empty-lessons.png"
-            className="h-[200px] md:h-[240px] lg:h-[250px]"
+            className="h-[200px] md:h-[240px] xl:h-[250px]"
           />
         }
         line="When your teacher sets your first lesson, you'll find it right here."
@@ -270,7 +270,7 @@ export function LessonsTab() {
           art={
             <EmptyArt
               src="/illustrations/empty-lessons.png"
-              className="h-[210px] md:h-[240px] lg:h-[250px]"
+              className="h-[210px] md:h-[240px] xl:h-[250px]"
             />
           }
           line={FILTERED_EMPTY[filter]}
@@ -318,7 +318,7 @@ export function LessonsTab() {
                   {subject}
                 </h2>
               )}
-              <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-3">
                 {lessons.map((lesson) => (
                   <LessonCard
                     key={lesson.id}
@@ -394,7 +394,7 @@ function LessonCard({
  * as how far they are - the same for everyone, so it was the rising curve
  * again. D21 allowed the fill back only once the real fraction was on the
  * wire, and B51 put it there: the frame's conic fill now runs to this child's
- * `segmentPosition / segmentCount`, and says "Section 3 of 10" rather than a
+ * `segmentPosition / segmentCount`, and says "Part 3 of 10" rather than a
  * number. A row that does not say keeps the plain mark.
  *
  * THE PLAIN MARK IS THE FRAME'S RING AND NOTHING IN IT. Nevo Lessons Frame,

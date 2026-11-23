@@ -15,6 +15,7 @@ import { WrittenConsentView } from "./WrittenConsentView";
 const record = vi.fn<(id: string, d: WrittenConsentDraft) => Promise<WrittenConsentRecord>>();
 let student: AdminStudentDetail;
 const parentLinks = vi.fn<(id: string) => Promise<ParentLink[]>>();
+const studentGet = vi.fn<() => Promise<AdminStudentDetail>>();
 
 vi.mock("@/lib/api/consents", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/consents")>();
@@ -33,7 +34,7 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
     ...actual,
     studentsApi: {
       ...actual.studentsApi,
-      get: async () => student,
+      get: () => studentGet(),
       parentLinks: (id: string) => parentLinks(id),
     },
   };
@@ -80,6 +81,7 @@ const link = (over: Partial<ParentLink> = {}): ParentLink => ({
 beforeEach(() => {
   record.mockReset().mockResolvedValue(saved());
   parentLinks.mockReset().mockResolvedValue([link()]);
+  studentGet.mockReset().mockImplementation(async () => student);
   student = {
     id: "s-1",
     firstName: "Amara",
@@ -317,5 +319,34 @@ describe("who gave this consent (SCRUM-306)", () => {
     );
     await waitFor(() => expect(screen.getAllByRole("radio")).toHaveLength(1));
     expect(screen.queryByRole("radio", { name: /Chinedu Okafor/ })).toBeNull();
+  });
+});
+
+// The line says "Try again in a moment"; now there is something to press
+// (backlog 104), and each Try again names its own line.
+describe("when the student can't be read", () => {
+  it("offers Try again beside Back to students, and reads the student again", async () => {
+    studentGet.mockRejectedValueOnce(new ApiError(500, "boom", {}));
+    render(<WrittenConsentView studentId="s-1" />);
+
+    const line = await screen.findByText("Nothing has been recorded. Try again in a moment.");
+    const again = screen.getByRole("button", { name: "Try again" });
+    expect(again).toHaveAttribute("aria-describedby", line.id);
+    expect(screen.getByRole("link", { name: "Back to students" })).toHaveAttribute("href", "/admin/students");
+
+    fireEvent.click(again);
+    expect(await screen.findByRole("radio", { name: /Ngozi Okafor/ })).toBeInTheDocument();
+    expect(studentGet).toHaveBeenCalledTimes(2);
+  });
+
+  it("ties the adults' Try again to its own line", async () => {
+    parentLinks.mockRejectedValueOnce(new Error("offline"));
+    render(<WrittenConsentView studentId="s-1" />);
+
+    const line = await screen.findByText(/We couldn.t load the adults linked to Amara/);
+    expect(screen.getByRole("button", { name: "Try again" })).toHaveAttribute(
+      "aria-describedby",
+      line.id,
+    );
   });
 });

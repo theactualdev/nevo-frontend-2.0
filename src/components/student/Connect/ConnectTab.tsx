@@ -266,7 +266,7 @@ export function ConnectTab({
   if (hydrated && live && !loading && !failed && !active) {
     return (
       <div className="flex h-full min-h-0 flex-col">
-        <h1 className="mx-5 mt-2 text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:mx-11 sm:mt-11 sm:text-[30px] lg:mx-[52px] lg:mt-[52px] lg:text-[32px]">
+        <h1 className="mx-5 mt-2 text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:mx-11 sm:mt-11 sm:text-[30px] xl:mx-[52px] xl:mt-[52px] xl:text-[32px]">
           Connect
         </h1>
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-10 text-center sm:px-12">
@@ -279,12 +279,12 @@ export function ConnectTab({
             // The state's largest paint (`preload`, which Next 16 has in
             // place of the deprecated `priority`).
             preload
-            className="h-auto w-[220px] shrink-0 sm:w-[280px] lg:w-[300px]"
+            className="h-auto w-[220px] shrink-0 sm:w-[280px] xl:w-[300px]"
           />
-          <h2 className="mt-[26px] max-w-[290px] text-[19px] font-medium leading-[1.35] text-nevo-near-black sm:mt-[30px] sm:max-w-[400px] sm:text-[22px] lg:mt-8 lg:max-w-[440px] lg:text-2xl">
+          <h2 className="mt-[26px] max-w-[290px] text-[19px] font-medium leading-[1.35] text-nevo-near-black sm:mt-[30px] sm:max-w-[400px] sm:text-[22px] xl:mt-8 xl:max-w-[440px] xl:text-2xl">
             This is where you and your teacher talk
           </h2>
-          <p className="mt-3 max-w-[290px] text-[15px] leading-[1.5] text-nevo-near-black/60 sm:mt-3.5 sm:max-w-[400px] sm:text-base lg:max-w-[440px]">
+          <p className="mt-3 max-w-[290px] text-[15px] leading-[1.5] text-nevo-near-black/60 sm:mt-3.5 sm:max-w-[400px] sm:text-base xl:max-w-[440px]">
             Say hello, ask about a lesson, or tell them how it went. Write the
             first message whenever you&apos;re ready.
           </p>
@@ -300,7 +300,7 @@ export function ConnectTab({
             ))}
           </div>
         )}
-        <div className="flex shrink-0 items-center gap-2.5 border-t border-nevo-near-black/8 px-4 py-3 sm:gap-3 sm:border-t-0 sm:px-11 sm:pt-4 sm:pb-7 lg:w-full lg:max-w-[760px] lg:self-center lg:px-[52px]">
+        <div className="flex shrink-0 items-center gap-2.5 border-t border-nevo-near-black/8 px-4 py-3 sm:gap-3 sm:border-t-0 sm:px-11 sm:pt-4 sm:pb-7 xl:w-full xl:max-w-[760px] xl:self-center xl:px-[52px]">
           <input
             value={draft}
             onChange={(e) =>

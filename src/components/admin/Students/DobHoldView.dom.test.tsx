@@ -3,8 +3,9 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { ApiError } from "@/lib/api/client";
 import type { AgeCheck } from "@/lib/api/ageChecks";
 
-const { held, schoolRecheck, resendParentNotice, getStudent, listClasses } = vi.hoisted(() => ({
+const { held, schoolRecheck, resendParentNotice, history, getStudent, listClasses } = vi.hoisted(() => ({
   held: vi.fn(),
+  history: vi.fn(),
   schoolRecheck: vi.fn(),
   resendParentNotice: vi.fn(),
   getStudent: vi.fn(),
@@ -13,7 +14,7 @@ const { held, schoolRecheck, resendParentNotice, getStudent, listClasses } = vi.
 
 vi.mock("@/lib/api/ageChecks", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/ageChecks")>();
-  return { ...actual, ageChecksApi: { held, schoolRecheck, resendParentNotice } };
+  return { ...actual, ageChecksApi: { held, schoolRecheck, resendParentNotice, history } };
 });
 vi.mock("@/lib/api/students", () => ({ studentsApi: { get: getStudent } }));
 vi.mock("@/lib/api/classes", () => ({ classesApi: { list: listClasses } }));
@@ -52,6 +53,7 @@ const check = (over: Partial<AgeCheck> = {}): AgeCheck => ({
 beforeEach(() => {
   vi.clearAllMocks();
   held.mockResolvedValue([check()]);
+  history.mockResolvedValue([]);
   getStudent.mockResolvedValue({ id: "s-tunde", firstName: "Tunde", lastName: "Adeyemi", classIds: ["c-2a"] });
   listClasses.mockResolvedValue([{ id: "c-2a", name: "JSS 2A" }]);
 });
@@ -417,5 +419,67 @@ describe("a roster gap on Date of birth checks (item 17)", () => {
     fireEvent.click(within(group).getByRole("button", { name: "Resend the request" }));
     expect(await within(group).findByText("Request resent")).toBeInTheDocument();
     expect(resendParentNotice).toHaveBeenCalledWith("ac-gap");
+  });
+});
+
+/*
+ * BACKLOG 13: after a reload, what the school did comes from the check's own
+ * history, not page state. A correction kept reading "You've confirmed…" and
+ * lost "Your record now reads {date}". Until the history answers - and if it
+ * can't - no heading claims either.
+ */
+describe("waiting on the parent, after a reload", () => {
+  const waiting = () =>
+    check({ schoolRecheckedAt: "2026-10-21T09:00:00Z", parentNotifiedAt: "2026-10-21T09:00:01Z" });
+  const edit = (prev: string | null, next: string | null, over: Record<string, unknown> = {}) => ({
+    previousSchoolDateOfBirth: prev,
+    newSchoolDateOfBirth: next,
+    actorUserId: "u1",
+    actorName: "Mrs Adebayo",
+    changedAt: "2026-10-21T09:00:00Z",
+    source: "school_recheck",
+    ...over,
+  });
+
+  it("a correction still reads as one, with the school's new date", async () => {
+    held.mockResolvedValue([waiting()]);
+    history.mockResolvedValue([edit("2013-03-14", "2013-05-02")]);
+    render(<DobHoldView />);
+    const c = await card();
+    expect(await within(c).findByRole("heading", { name: "You’ve updated Tunde’s date of birth" })).toBeInTheDocument();
+    expect(c).toHaveTextContent("Your record now reads 2 May 2013.");
+  });
+
+  it("a confirmation reads as one", async () => {
+    held.mockResolvedValue([waiting()]);
+    history.mockResolvedValue([edit("2013-03-14", "2013-03-14")]);
+    render(<DobHoldView />);
+    const c = await card();
+    expect(await within(c).findByRole("heading", { name: "You’ve confirmed Tunde’s date of birth" })).toBeInTheDocument();
+    expect(c).not.toHaveTextContent("Your record now reads");
+  });
+
+  it("reads the school's latest re-check, and never a parent's confirmation", async () => {
+    held.mockResolvedValue([waiting()]);
+    history.mockResolvedValue([
+      edit("2013-03-14", "2013-03-14", { changedAt: "2026-10-20T09:00:00Z" }),
+      edit("2013-03-14", "2013-05-02", { changedAt: "2026-10-21T09:00:00Z" }),
+      edit("2013-05-02", null, { changedAt: "2026-10-22T09:00:00Z", source: "parent_confirmation", dateInForce: "2013-06-30" }),
+    ]);
+    render(<DobHoldView />);
+    const c = await card();
+    expect(await within(c).findByRole("heading", { name: "You’ve updated Tunde’s date of birth" })).toBeInTheDocument();
+    expect(c).toHaveTextContent("Your record now reads 2 May 2013.");
+    expect(c).not.toHaveTextContent("30 June 2013");
+  });
+
+  it("claims neither when the history can't be read", async () => {
+    held.mockResolvedValue([waiting()]);
+    history.mockRejectedValue(new Error("500"));
+    render(<DobHoldView />);
+    const c = await card();
+    await waitFor(() => expect(history).toHaveBeenCalled());
+    expect(within(c).queryByRole("heading", { name: /You’ve (updated|confirmed)/ })).toBeNull();
+    expect(c).toHaveTextContent("Not active yet - waiting on the parent.");
   });
 });

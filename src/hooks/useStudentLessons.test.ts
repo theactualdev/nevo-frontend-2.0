@@ -165,16 +165,16 @@ describe("what the live row carries onto the card", () => {
      * drawn as "0 min".
      */
     withLesson({ estimatedMinutes: 0 });
-    expect(first().timeEstimate).toBe("4 sections");
+    expect(first().timeEstimate).toBe("4 parts");
 
     withLesson({});
-    expect(first().timeEstimate).toBe("4 sections");
+    expect(first().timeEstimate).toBe("4 parts");
   });
 
   it("counts one section as a section", () => {
     withLesson({ segmentCount: 1 });
 
-    expect(first().timeEstimate).toBe("1 section");
+    expect(first().timeEstimate).toBe("1 part");
   });
 
   const partWay = (status: string, over: Record<string, unknown> = {}) =>
@@ -206,13 +206,13 @@ describe("what the live row carries onto the card", () => {
     partWay("in_progress", { segmentCount: 10 });
 
     expect(card().status).toBe("in_progress");
-    expect(card().place).toEqual({ fraction: 0.2, words: "Section 3 of 10" });
+    expect(card().place).toEqual({ fraction: 0.2, words: "Part 3 of 10" });
   });
 
   it("reads a lesson the child left part-way the same way", () => {
     partWay("exited", { segmentCount: 4 });
 
-    expect(card().place?.words).toBe("Section 3 of 4");
+    expect(card().place?.words).toBe("Part 3 of 4");
   });
 
   it("carries no place when the row gives no count", () => {

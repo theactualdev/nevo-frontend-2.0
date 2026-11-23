@@ -52,6 +52,15 @@ export const SAFETY_HELD_LINE =
 export const SAFETY_HELD_REREAD_LINE =
   "Nevo stopped partway through this re-reading because of a safety check, so what you see below is still the earlier reading.";
 
+/**
+ * A RE-READ THE SAFETY CHECK COULD NOT RUN ON (`reasonCode:
+ * "safety_check_unavailable"`; Lydia, 16 Nov), above the earlier reading as
+ * the held re-read's line is. "Try again shortly" is true: "Try that again"
+ * stays, and the same lesson goes through once the check is back.
+ */
+export const SAFETY_UNAVAILABLE_REREAD_LINE =
+  "Nevo could not run its safety check on this re-reading, so what you see below is still the earlier reading. Try again shortly.";
+
 export const FALLBACK_HEADINGS: Record<FallbackKind, string> = {
   noBoundary: "One continuous lesson",
   partial: "Read most of your block",
@@ -108,24 +117,29 @@ const ghostBtnSm =
   "inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] border-[1.5px] border-nevo-navy/30 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6";
 
 /**
- * The backend's reference for this failure, offered quietly.
- *
- * NOT AN ERROR CODE SHOUTED AT A TEACHER. It appears only where the screen has
- * already admitted the fault is ours and has nothing else to tell them - and
- * it is phrased as something to quote if they choose to, never as an
- * instruction. Absent for every failure that is not an unhandled one, which is
- * most of them: a file we could not read has a reason, and a reason is better
- * than a reference.
+ * The backend's reference for this failure: "Reference {code}", and nothing
+ * around it (Lydia, 11 Nov, item 7, for a stopped lesson; the same form on
+ * every incident line, Hub 11 Nov, approved in her addendum). It said "If you
+ * tell us about this, quote {code}." - an invitation with no route, which her
+ * 10 Nov rule forbids. With no reference, no line.
  */
-export function IncidentLine({ id }: { id?: string | null }) {
+export function IncidentLine({ id, className }: { id?: string | null; className?: string }) {
   if (!id) return null;
   return (
-    <p className="mt-4 text-[12.5px] leading-[1.5] text-nevo-near-black/50">
-      If you tell us about this, quote{" "}
-      <span className="font-mono text-nevo-near-black/70">{id}</span>.
+    <p className={className ?? "mt-4 text-[12.5px] leading-[1.5] text-nevo-near-black/50"}>
+      Reference <span className="font-mono text-nevo-near-black/70">{id}</span>
     </p>
   );
 }
+
+/**
+ * WHEN THE SAFETY CHECK COULD NOT RUN (`reasonCode: "safety_check_unavailable"`,
+ * Lydia, 11 Nov, item 7), in place of the server's sentence on the upload
+ * screens. "Try again shortly" is true here: the same file goes through once
+ * the check is back.
+ */
+export const SAFETY_UNAVAILABLE_LINE =
+  "Nevo could not run its safety check on this lesson, so it has not proposed sections. Nothing has reached your class. Try again shortly.";
 
 export function ParseFallback({
   kind,
@@ -394,13 +408,13 @@ export function ParseFallback({
 
         {kind === "safetyHeld" && (
           /*
-            HER LINE, AND NOTHING BEYOND IT. Not the server's own sentence
-            (`failureReason`), which Lydia's words replace; not the
-            reference, which is a way to report the check and Lydia's to add
-            if wanted. No "Try this file again": a refusal refuses again (backend
-            86f8e10). And no "Try another file", which would teach a teacher to
-            distrust a lesson that may be fine - the outcome Lydia called the
-            worst possible one.
+            HER LINE, AND THE REFERENCE BENEATH IT (Lydia, 11 Nov, item 7: "one
+            line beneath the stop sentence reading 'Reference {code}' and
+            nothing around it"). Not the server's own sentence (`failureReason`),
+            which her words replace. No "Try this file again": a refusal refuses
+            again (backend 86f8e10). And no "Try another file", which would
+            teach a teacher to distrust a lesson that may be fine - the outcome
+            Lydia called the worst possible one.
           */
           <div className="mx-auto flex max-w-[560px] flex-col items-center pt-6 text-center xl:pt-10">
             <span className="flex size-14 shrink-0 items-center justify-center rounded-[16px] bg-nevo-violet/18 text-nevo-navy">
@@ -414,6 +428,7 @@ export function ParseFallback({
             <p className="mt-[18px] max-w-[460px] text-[16px] leading-[1.6] text-nevo-near-black">
               {SAFETY_HELD_LINE}
             </p>
+            <IncidentLine id={incident} />
             <div className="mt-[22px] flex flex-wrap items-center justify-center gap-3">
               <BackToLibrary />
             </div>

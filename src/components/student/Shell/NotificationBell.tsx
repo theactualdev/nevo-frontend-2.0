@@ -146,7 +146,7 @@ export function NotificationBell({ className }: { className?: string }) {
         <div
           role="dialog"
           aria-label="Notifications"
-          className="absolute inset-x-4 top-full z-40 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_4px_16px_rgba(0,0,0,0.10)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1 motion-safe:duration-150 md:inset-x-auto md:top-12 md:right-0 md:w-[340px] md:shadow-[0_8px_32px_rgba(0,0,0,0.16)] lg:w-[360px]"
+          className="absolute inset-x-4 top-full z-40 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_4px_16px_rgba(0,0,0,0.10)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1 motion-safe:duration-150 md:inset-x-auto md:top-12 md:right-0 md:w-[340px] md:shadow-[0_8px_32px_rgba(0,0,0,0.16)] xl:w-[360px]"
         >
           {/* The phone's card for an empty feed is the tile and its line
               alone - board 28 draws it with no title. */}

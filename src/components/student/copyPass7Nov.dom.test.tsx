@@ -57,7 +57,7 @@ describe("several checks in one section, without a count", () => {
       "Still going.",
     ]);
     expect(severalChecksLine({ at: 5, of: 5 })).toBe(
-      "Last quick check for this section.",
+      "Last quick check for this part.",
     );
     expect(Object.values(SEVERAL_CHECKS_LINES).join(" ")).not.toMatch(/\d/);
   });

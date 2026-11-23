@@ -10,6 +10,7 @@ import {
   ageChecksApi,
   holdStage,
   type AgeCheck,
+  type AgeCheckEdit,
 } from "@/lib/api/ageChecks";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { studentsApi, type AdminStudentDetail } from "@/lib/api/students";
@@ -100,6 +101,28 @@ interface Person {
 type Done = { kind: "confirmed" } | { kind: "corrected"; to: string };
 
 /**
+ * WHAT THE SCHOOL DID, FROM THE CHECK'S OWN HISTORY (backlog 13). What the
+ * admin just pressed is page state, so after a reload a correction read
+ * "You've confirmed…" and lost "Your record now reads {date}". The history
+ * (`GET /age-checks/{id}/history`) keeps it: the school's latest re-check is
+ * a correction when its dates differ, and a confirmation when they don't (a
+ * confirm writes the same date either side). A parent's confirmation is never
+ * the school's act, and its date is never read here. Null when the history
+ * holds no school re-check - then nothing is claimed.
+ */
+export function outcomeFromHistory(rows: readonly AgeCheckEdit[]): Done | null {
+  const school = rows
+    .filter((r) => (r.source ?? "school_recheck") !== "parent_confirmation")
+    .sort((a, b) => Date.parse(b.changedAt) - Date.parse(a.changedAt));
+  const last = school[0];
+  if (!last) return null;
+  if (last.newSchoolDateOfBirth && last.previousSchoolDateOfBirth !== last.newSchoolDateOfBirth) {
+    return { kind: "corrected", to: last.newSchoolDateOfBirth };
+  }
+  return { kind: "confirmed" };
+}
+
+/**
  * A hold for a missing year group (item 17): the dates agree, and no single
  * year group is recorded. Lydia's label for it (SCRUM-321), which says nothing
  * about dates.
@@ -188,7 +211,7 @@ export function DobHoldView({ back = null }: { back?: Back | null }) {
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[820px]">
         <BackLink back={back} fallback={{ href: "/admin/students", label: "All students" }} />
-        <h2 className="m-0 mt-3 text-[28px] font-semibold tracking-[-0.018em] text-nevo-near-black max-lg:text-[24px]">
+        <h2 className="m-0 mt-3 text-[28px] font-semibold tracking-[-0.018em] text-nevo-near-black max-xl:text-[24px]">
           Date of birth checks
         </h2>
 
@@ -372,8 +395,8 @@ function RecheckCard({
   };
 
   return (
-    <li className="rounded-xl border-l-4 border-nevo-navy bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] max-lg:px-5 max-lg:py-[18px]">
-      <div className="flex items-start justify-between gap-4 max-lg:flex-col max-lg:gap-2.5">
+    <li className="rounded-xl border-l-4 border-nevo-navy bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] max-xl:px-5 max-xl:py-[18px]">
+      <div className="flex items-start justify-between gap-4 max-xl:flex-col max-xl:gap-2.5">
         <div className="min-w-0">
           <span className="block text-[18px] font-semibold tracking-[-0.01em] text-nevo-near-black">
             {person.name}
@@ -541,6 +564,29 @@ function WaitingCard({
   const [resent, setResent] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
 
+  /*
+   * After a reload there is no `done`, so the check's history says which it
+   * was (backlog 13). Until it answers - and if it can't - the heading is left
+   * out: "You've confirmed" over a correction is the untrue state this fixes.
+   */
+  const [fromHistory, setFromHistory] = useState<Done | null>(null);
+  useEffect(() => {
+    if (done) return;
+    let alive = true;
+    // Through a promise, so even a read that throws as it starts is only a
+    // read that failed - the card stands either way.
+    Promise.resolve()
+      .then(() => ageChecksApi.history(check.id))
+      .then((rows) => {
+        if (alive) setFromHistory(outcomeFromHistory(Array.isArray(rows) ? rows : []));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [check.id, done]);
+  const outcome = done ?? fromHistory;
+
   const resend = () => {
     if (busy) return;
     setBusy(true);
@@ -570,16 +616,18 @@ function WaitingCard({
       .finally(() => setBusy(false));
   };
   return (
-    <li className="rounded-xl bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-lg:px-5 max-lg:py-[18px]">
+    <li className="rounded-xl bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-xl:px-5 max-xl:py-[18px]">
       <span className="block text-[13.5px] font-semibold text-nevo-near-black/58">{person.name}</span>
-      <h3 className="m-0 mt-1.5 text-[17px] font-semibold text-nevo-near-black">
-        {done?.kind === "corrected"
-          ? `You’ve updated ${person.first}’s date of birth`
-          : `You’ve confirmed ${person.first}’s date of birth`}
-      </h3>
+      {outcome ? (
+        <h3 className="m-0 mt-1.5 text-[17px] font-semibold text-nevo-near-black">
+          {outcome.kind === "corrected"
+            ? `You’ve updated ${person.first}’s date of birth`
+            : `You’ve confirmed ${person.first}’s date of birth`}
+        </h3>
+      ) : null}
       <p className="m-0 mt-2 text-[14px] leading-[1.6] text-nevo-near-black/70">
-        {done?.kind === "corrected" && longDate(done.to)
-          ? `Your record now reads ${longDate(done.to)}. `
+        {outcome?.kind === "corrected" && longDate(outcome.to)
+          ? `Your record now reads ${longDate(outcome.to)}. `
           : ""}
         {/*
           * LYDIA'S WORDS, SCRUM-321 (7 Nov). "This notice went to everyone
@@ -660,8 +708,8 @@ function BothCheckedCard({ check, person }: { check: AgeCheck; person: Person })
     `Agreed date of birth for ${person.first}`,
   )}`;
   return (
-    <li className="rounded-xl bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-lg:px-5 max-lg:py-[18px]">
-      <div className="flex items-start justify-between gap-4 max-lg:flex-col max-lg:gap-2.5">
+    <li className="rounded-xl bg-nevo-cream-elevated px-6 py-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.05)] max-xl:px-5 max-xl:py-[18px]">
+      <div className="flex items-start justify-between gap-4 max-xl:flex-col max-xl:gap-2.5">
         <div className="min-w-0">
           <span className="block text-[18px] font-semibold tracking-[-0.01em] text-nevo-near-black">
             {person.name}

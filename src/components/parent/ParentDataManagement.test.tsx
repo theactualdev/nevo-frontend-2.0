@@ -72,9 +72,8 @@ describe("what the page names", () => {
     render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
 
     expect(screen.getByText(/Amara[’']s data on Nevo/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/Brightgate Academy enrolled Amara/i),
-    ).toBeInTheDocument();
+    // D01c's own line under the title (backlog 112).
+    expect(screen.getByText("Enrolled by Brightgate Academy")).toBeInTheDocument();
   });
 });
 
@@ -139,7 +138,9 @@ describe("a student the school never named", () => {
   it("leaves it lowercase mid-sentence, where capitals would be wrong", () => {
     render(<ParentDataManagement token={TOKEN} invitation={NAMELESS} />);
 
-    expect(screen.getByText(/enrolled your child on Nevo/)).toBeInTheDocument();
+    // The header no longer writes a sentence around the name (D01c draws
+    // "Enrolled by {school}"); the request's own control still does.
+    expect(screen.getByRole("button", { name: /^Request your child[’']s data$/ })).toBeInTheDocument();
   });
 
   it("does not mangle a real name", () => {
@@ -192,25 +193,66 @@ describe("when the withdrawal happened", () => {
   });
 });
 
-describe("who the link is for", () => {
-  it("names the parent the school recorded, because a link can be forwarded", () => {
+// D01c draws no "This link was sent to {parent}." (backlog 112).
+describe("the page's header", () => {
+  it("says only what D01c draws, with the Nevo wordmark above it", () => {
     render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
-    expect(screen.getByText(/This link was sent to Ngozi Okafor\./)).toBeInTheDocument();
+
+    expect(screen.queryByText(/This link was sent to/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/This page explains what that means/)).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Nevo" })).toBeInTheDocument();
+  });
+
+  it("keeps the wordmark on a suspended account too", () => {
+    render(<ParentDataManagement token={TOKEN} invitation={inv({ status: "withdrawn" })} />);
+
+    expect(screen.getByRole("img", { name: "Nevo" })).toBeInTheDocument();
   });
 });
 
+/** D01c's objection card opens on a tap (backlog 114). */
+const openObjection = () =>
+  fireEvent.click(screen.getByRole("button", { name: "Object to Processing" }));
+
 describe("objecting", () => {
-  it("offers a box for the concern, now that something receives it", () => {
+  it("opens the box for the concern on a tap, as D01c draws it", () => {
     // The textarea was deliberately withheld while `reason` was accepted and
     // dropped; it returns now that the contract persists it and confirms with
-    // `reasonRecorded`.
+    // `reasonRecorded`. It waits, closed, until the parent chooses to object.
     render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
-    expect(screen.getByRole("textbox")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Object to Processing" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+
+    openObjection();
+
+    expect(screen.getByRole("textbox")).toHaveFocus();
+    // The words inside are counsel's, and unchanged.
+    expect(screen.getByLabelText(/Describe your concern/)).toBeInTheDocument();
+    expect(screen.getByText("Tell us your concern. We will review it within 48 hours.")).toBeInTheDocument();
+  });
+
+  // A screen reader hears a name, not its capitals: "Object to Processing"
+  // and "Object to processing" are the same button to it.
+  it("never offers two buttons by the same name", () => {
+    render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
+    expect(screen.getAllByRole("button", { name: /^object to processing$/i })).toHaveLength(1);
+
+    openObjection();
+
+    const named = screen.getAllByRole("button", { name: /^object to processing$/i });
+    expect(named).toHaveLength(1);
+    expect(named[0]).toHaveTextContent("Object to processing");
+    expect(named[0]).not.toHaveAttribute("aria-expanded");
+    expect(screen.getByRole("heading", { name: "Object to Processing" })).toBeInTheDocument();
   });
 
   it("sends the parent's words with the objection", async () => {
     exerciseRight.mockResolvedValue(receipt({ reasonRecorded: true }));
     render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
+    openObjection();
 
     fireEvent.change(screen.getByRole("textbox"), {
       target: { value: "  I did not agree to profiling.  " },
@@ -231,6 +273,7 @@ describe("objecting", () => {
     // textarea was withheld for in the first place.
     exerciseRight.mockResolvedValue(receipt({ reasonRecorded: false }));
     render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
+    openObjection();
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "a concern" } });
     fireEvent.click(screen.getByRole("button", { name: /Object to processing/i }));
@@ -241,6 +284,7 @@ describe("objecting", () => {
   it("does not claim a note failed when none was written", async () => {
     exerciseRight.mockResolvedValue(receipt({ reasonRecorded: false }));
     render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
+    openObjection();
 
     fireEvent.click(screen.getByRole("button", { name: /Object to processing/i }));
 
@@ -278,6 +322,7 @@ describe("when the request does not land", () => {
     // objection was received when nothing left the browser.
     exerciseRight.mockRejectedValueOnce(new Error("network"));
     render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
+    openObjection();
 
     fireEvent.click(screen.getByRole("button", { name: /Object to processing/i }));
 
@@ -288,6 +333,7 @@ describe("when the request does not land", () => {
   it("says nothing has changed, because nothing has", async () => {
     exerciseRight.mockRejectedValueOnce(new Error("network"));
     render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
+    openObjection();
 
     fireEvent.click(screen.getByRole("button", { name: /Object to processing/i }));
 
@@ -353,19 +399,24 @@ describe("what the page tells a parent", () => {
   });
 
   /*
-   * THE FACTUAL HALF, CORRECTED (Lydia, 11 Nov; register row 11): where Nevo's
-   * own systems are today, the website "served from" Virginia in her words,
-   * with today's legal wording untouched and no location "to be confirmed".
+   * THE FACTUAL HALF, KEPT TRUE (Lydia, 11 Nov, item 6; register row 11):
+   * where Nevo's own systems are today, the website "served from" Virginia in
+   * her words, with today's legal wording untouched and no location "to be
+   * confirmed". Since 16 Nov the database is in Frankfurt; the lessons'
+   * service is on Heroku in a region not yet known, so it is left out.
    */
-  it("says where the database, the lessons and the website are, with today's legal wording unchanged", () => {
+  it("says where the database and the website are, with today's legal wording unchanged", () => {
     render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
     fireEvent.click(screen.getByRole("button", { name: /Where data is processed/i }));
     expect(
       screen.getByText(
-        "Some processing happens outside Nigeria. The database is in the United Kingdom (London), and the service that runs the lessons is in Germany (Frankfurt). The website is served from the United States (Virginia), which has no adequacy decision from the NDPC. Those transfers are made under Standard Contractual Clauses.",
+        "Some processing happens outside Nigeria. The database is in Germany (Frankfurt). The website is served from the United States (Virginia), which has no adequacy decision from the NDPC. Those transfers are made under Standard Contractual Clauses.",
       ),
     ).toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/to be confirmed|Ireland|Oregon/i);
+    // No old location, and no clause for a place nobody has confirmed.
+    expect(document.body.textContent).not.toMatch(
+      /to be confirmed|Ireland|Oregon|United Kingdom|London|service that runs the lessons/i,
+    );
   });
 
   it("states plainly that Nevo stores no label or diagnosis, in the child's name", () => {
@@ -438,5 +489,21 @@ describe("how long data is kept", () => {
     fireEvent.click(screen.getByRole("button", { name: /How long data is kept/ }));
     expect(screen.getByText(LINE)).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/school decides|data agreement|For as long as/);
+  });
+});
+
+// The portal's persistent Privacy & Terms link (backlog 116).
+describe("Privacy & Terms from the data page", () => {
+  it("links to it, without the link's token", () => {
+    render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
+
+    const link = screen.getByRole("link", { name: "Privacy & Terms" });
+    expect(link).toHaveAttribute("href", "/legal/privacy?from=parent-data");
+  });
+
+  it("keeps it on a suspended account too", () => {
+    render(<ParentDataManagement token={TOKEN} invitation={inv({ status: "withdrawn" })} />);
+
+    expect(screen.getByRole("link", { name: "Privacy & Terms" })).toBeInTheDocument();
   });
 });

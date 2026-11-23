@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { useStillHere } from "@/hooks/useStillHere";
 import { ApiError } from "@/lib/api/client";
@@ -143,7 +144,16 @@ export function ParentSignIn() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center bg-nevo-cream px-6 py-10 text-nevo-near-black">
       <div className="w-full max-w-[340px]">
-        <p className="text-[13px] text-nevo-near-black/55">Learning, made fluid.</p>
+        {/* D03 draws the wordmark above the line (backlog 110). */}
+        <Image
+          src="/brand/nevo-wordmark.png"
+          alt="Nevo"
+          width={344}
+          height={116}
+          priority
+          className="h-7 w-auto"
+        />
+        <p className="mt-2.5 text-[13px] text-nevo-near-black/55">Learning, made fluid.</p>
 
         {sent === null ? (
           <>
@@ -162,6 +172,7 @@ export function ParentSignIn() {
               type="email"
               inputMode="email"
               autoComplete="email"
+              placeholder="you@example.com"
               value={contact}
               onChange={(e) => {
                 setContact(e.target.value);

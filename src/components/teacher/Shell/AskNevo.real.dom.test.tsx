@@ -463,3 +463,58 @@ describe("the drawer naming the record the page has open", () => {
     expect(screen.getByText("You're viewing: Photosynthesis")).toBeInTheDocument();
   });
 });
+
+/**
+ * A QUESTION THE SAFETY CHECK HELD BACK (Lydia, 11 Nov, item 3). It said "We
+ * couldn't reach Nevo just now" - untrue twice. Her two lines, by the server's
+ * `detail.reason`; never the server's own `message`. In the 12 Nov 1 pm check
+ * three name-free questions came back `names_person` (Teslim's SCRUM-345): the
+ * app says what the server says it blocked.
+ */
+describe("a question the safety check held back", () => {
+  const NAME =
+    "Nevo did not send this message because it names someone. Ask again without the name and it will go through.";
+  const OTHER = "Nevo did not send this message because it did not pass a safety check. Try rewording it.";
+  const SERVER = "The safety review held this question back.";
+  const blockedWith = async (detail: Record<string, unknown>, status = 403) => {
+    const { ApiError } = await import("@/lib/api/client");
+    ask.mockRejectedValue(new ApiError(status, "Refused", { detail }));
+    openOn("/teacher/dashboard");
+    askQuestion("What needs my attention today?");
+  };
+
+  it("says Lydia's name line for a block over a name", async () => {
+    await blockedWith({ code: "content_safety_blocked", message: SERVER, reason: "names_person" });
+
+    expect(await screen.findByText(NAME, {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByText(SERVER)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t reach Nevo/)).not.toBeInTheDocument();
+  });
+
+  it("says her general line for any other block", async () => {
+    await blockedWith({ code: "content_safety_blocked", message: SERVER, reason: "other" });
+
+    expect(await screen.findByText(OTHER, {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByText(SERVER)).not.toBeInTheDocument();
+  });
+
+  it("says her general line for a block that came with no reason", async () => {
+    await blockedWith({ code: "content_safety_blocked", message: SERVER });
+
+    expect(await screen.findByText(OTHER, {}, { timeout: 3000 })).toBeInTheDocument();
+  });
+
+  it("keeps today's line when the check could not run (503)", async () => {
+    await blockedWith({ code: "safety_check_unavailable", message: "The safety check is unavailable." }, 503);
+
+    expect(await screen.findByText(/couldn.t reach Nevo just now/, {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByText(OTHER)).not.toBeInTheDocument();
+  });
+
+  it("keeps today's line for a 403 that is not a safety stop", async () => {
+    await blockedWith({ code: "ask_role_forbidden", message: "You cannot ask Nevo in that role." });
+
+    expect(await screen.findByText(/couldn.t reach Nevo just now/, {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByText(OTHER)).not.toBeInTheDocument();
+  });
+});

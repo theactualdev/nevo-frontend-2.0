@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * range, is read aloud as "40 percent" - a number on a child's progress, which
  * rule 9 forbids on screen and is no better in a child's ear. `aria-valuetext`
  * is what a screen reader speaks instead of the number, so the bar says the
- * position it is drawn from ("Segment 3 of 8", "Step 2 of 5"). That is the
+ * position it is drawn from ("Part 3 of 8", "Step 2 of 5"). That is the
  * label every caller already passes, so it is the default.
  *
  * With no words to speak, the value is left off entirely rather than falling

@@ -136,6 +136,7 @@ export function ErrorScreen({
   mark = true,
   className,
   onBack,
+  retrying = false,
 }: {
   retry: () => void;
   /** What the boundary caught. Reported, never rendered. */
@@ -153,6 +154,13 @@ export function ErrorScreen({
    * at a sign-in door goes back to the door, never into the app (D69).
    */
   onBack?: () => void;
+  /**
+   * A retry on its way (backlog 27). Try again shows it in the button's own
+   * loading state and takes no second press until the answer is in - a
+   * button that changed nothing looked inert (Lydia, 31 Oct). No words: the
+   * frame has none for it.
+   */
+  retrying?: boolean;
 }) {
   const home = useHome();
   const historyBack = useGoBack(home);
@@ -188,6 +196,8 @@ export function ErrorScreen({
       </p>
       <Button
         className="mt-7 w-full max-w-[290px] text-base sm:mt-8 sm:max-w-[340px]"
+        loading={retrying}
+        aria-busy={retrying || undefined}
         onClick={retry}
       >
         Try again

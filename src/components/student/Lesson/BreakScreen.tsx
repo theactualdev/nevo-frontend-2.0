@@ -175,7 +175,7 @@ export function BreakScreen({
             {...BREAK_PICTURES.movement}
             alt="A figure stretching arms overhead"
             priority
-            className="h-[250px] w-auto sm:h-[300px]"
+            className="h-[250px] w-auto sm:h-[300px] md:h-[320px] xl:h-[280px]"
           />
           <p className="mt-7 max-w-[280px] text-base leading-[1.5] sm:mt-9 sm:max-w-[360px] sm:text-[17px]">
             Stand up and stretch your arms up high, then reach for your toes.
@@ -201,7 +201,7 @@ export function BreakScreen({
             {...BREAK_PICTURES.consolidation}
             alt="A figure thinking, hand resting on chin"
             priority
-            className="mb-6 h-[150px] w-auto sm:mb-7 sm:h-[190px]"
+            className="mb-6 h-[150px] w-auto sm:mb-7 sm:h-[190px] md:h-[200px] xl:h-[170px]"
           />
           <h2 className="max-w-[300px] text-xl leading-[1.4] font-medium sm:max-w-[440px] sm:text-2xl">
             How are you feeling right now?
@@ -249,7 +249,7 @@ export function BreakScreen({
             {...BREAK_PICTURES.full}
             alt="A figure lying down resting"
             priority
-            className="w-[280px] sm:w-[340px]"
+            className="w-[280px] sm:w-[340px] md:w-[360px] xl:w-[330px]"
           />
           <p className="mt-8 max-w-[280px] text-base leading-[1.55] sm:mt-9 sm:max-w-[380px] sm:text-[17px]">
             Go and take a proper rest. Have a drink of water. We&apos;ll be

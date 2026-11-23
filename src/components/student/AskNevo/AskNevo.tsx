@@ -392,7 +392,7 @@ export function AskNevo() {
         style={full.style}
         {...full.handlers}
         className={cn(
-          "fixed right-6 bottom-6 z-30 hidden h-11 cursor-pointer items-center gap-2 rounded-full bg-nevo-navy px-[18px] text-sm font-medium text-nevo-cream shadow-[0_6px_20px_rgba(43,43,47,0.22)] transition-[filter,transform] hover:brightness-108 md:flex",
+          "fixed right-6 bottom-6 z-30 hidden h-11 cursor-pointer xl:right-8 xl:bottom-8 xl:h-[52px] items-center gap-2 rounded-full bg-nevo-navy px-[18px] text-sm font-medium text-nevo-cream shadow-[0_6px_20px_rgba(43,43,47,0.22)] transition-[filter,transform] hover:brightness-108 md:flex",
           full.dragging ? "cursor-grabbing" : "active:scale-[0.98]",
         )}
       >
@@ -411,7 +411,7 @@ export function AskNevo() {
           // phone the sheet was as tall as its content rather than the
           // frame's 88%. `sm:h-full!` is emitted after it, so wider screens
           // still get the full-height side panel.
-          className="flex h-[88%]! flex-col gap-0 rounded-t-[16px] border-0! bg-nevo-cream p-0 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-0! sm:right-0! sm:left-auto! sm:h-full! sm:w-[412px] sm:rounded-none! sm:shadow-[-8px_0_32px_rgba(0,0,0,0.16)] lg:w-[460px]"
+          className="flex h-[88%]! flex-col gap-0 rounded-t-[16px] border-0! bg-nevo-cream p-0 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-0! sm:right-0! sm:left-auto! sm:h-full! sm:w-[412px] sm:rounded-none! sm:shadow-[-8px_0_32px_rgba(0,0,0,0.16)] xl:w-[460px]"
         >
           {/* Header */}
           {/*

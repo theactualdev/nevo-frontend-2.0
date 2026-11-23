@@ -6,14 +6,12 @@ import { isOpenToStudent, unavailableReason } from "@/lib/lessons/availability";
 import { isFinishedRow } from "@/lib/lessons/finishedRow";
 import { onHeldProgressLanded } from "@/lib/lessons/pendingProgress";
 import { lessonHref } from "@/lib/lessons/lessonHref";
-import { reviewSessionHref } from "@/lib/lessons/reviewHref";
 import { segmentPlace, type SegmentPlace } from "@/lib/lessons/segmentPlace";
 import { BookOpen, ChevronRight, Clock, Play, Shapes } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useHydrated } from "@/hooks/useHydrated";
 import type { DashboardProgressRow, LearningWork } from "@/lib/api/students";
-import { DUE_CHIP_LINK } from "@/components/student/Progress/dueChip";
 import { useDisplayName } from "@/components/student/Shell/useDisplayName";
 import { TAB_FILL } from "@/components/student/Shell/TabPage";
 import { cn } from "@/lib/utils";
@@ -21,6 +19,7 @@ import { useHasSession } from "@/hooks/useHasSession";
 import { useStudentAssignments } from "@/hooks/useStudentAssignments";
 import { useStudentDashboard } from "@/hooks/useStudentDashboard";
 import { TodaysWarmUpCard } from "@/components/student/Profiling/WarmUpCard";
+import { ReviewCard } from "./ReviewCard";
 import { LessonPreviewSheet } from "@/components/student/Lessons/LessonPreviewSheet";
 import type { LessonSummary } from "@/components/student/Lessons/lessonCatalog";
 
@@ -129,8 +128,10 @@ const PICKUP_MAX = 5;
  * tablet the greeting sat at (114, 24) where the frame puts it at (108, 44).
  * Between a phone and a tablet (640-767, no frame) the old 32/24 stands.
  */
-const HOME_PAGE = "px-5 pt-2 pb-6 sm:px-8 sm:py-6 md:p-11 lg:p-[52px]";
-const HOME_COLUMN = "mx-auto w-full max-w-[720px] lg:max-w-[860px]";
+const HOME_PAGE = "px-5 pt-2 pb-6 sm:px-8 sm:py-6 md:p-11 xl:p-[52px]";
+// Design's 820 column, centred (Lydia, 16 Nov) - the system value every
+// tab now shares, in place of the frame's own 720 and 860.
+const HOME_COLUMN = "mx-auto w-full max-w-[820px]";
 
 /**
  * The greeting, the same over every state of the page, and the first thing
@@ -158,7 +159,7 @@ function timeEstimate(lesson: {
   const minutes = lesson.estimatedMinutes;
   if (minutes && minutes > 0) return `About ${minutes} min`;
   const count = lesson.segmentCount;
-  return `${count} ${count === 1 ? "section" : "sections"}`;
+  return `${count} ${count === 1 ? "part" : "parts"}`;
 }
 
 /**
@@ -476,37 +477,11 @@ export function HomeDashboard() {
       ) : (
         <>
           {/*
-            THE DUE REVIEW, FIRST (SCRUM-75) - see `dueReview`. Frame 22's own
-            heading and chip, as Subject Detail draws them: no Home frame
-            draws a review yet. The chip opens the review session, whose entry
-            screen still lets the child say "Not now"; ending it comes back
-            Home, where it was opened.
+            THE DUE REVIEW, FIRST (SCRUM-75) - see `dueReview`. 19b's card
+            (Lydia, 31 Oct Q1 and 2 Nov Q7), in place of frame 22's chip: a
+            thing a child starts, not a label. See `ReviewCard`.
           */}
-          {dueReview && (
-            <section
-              aria-labelledby="home-review"
-              className="mt-7 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:140ms]"
-            >
-              <h2
-                id="home-review"
-                className="text-[17px] font-semibold tracking-[-0.01em] text-nevo-near-black"
-              >
-                Ready for another look
-              </h2>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Link
-                  href={reviewSessionHref(
-                    dueReview.lessonId,
-                    dueReview.conceptId,
-                  )}
-                  aria-label={`Take another look at ${dueReview.conceptName.trim()}`}
-                  className={DUE_CHIP_LINK}
-                >
-                  {dueReview.conceptName.trim()}
-                </Link>
-              </div>
-            </section>
-          )}
+          {dueReview && <ReviewCard review={dueReview} />}
 
           {/*
             NOTHING NEW TODAY, AND THE ONLY LESSON IS PART-WAY (design D99,

@@ -59,7 +59,7 @@ describe("SchoolCodeCard", () => {
       "text-nevo-navy",
       "tracking-[0.12em]",
       "text-[19px]",
-      "lg:text-[22px]",
+      "xl:text-[22px]",
     ]) {
       expect(cls).toContain(token);
     }

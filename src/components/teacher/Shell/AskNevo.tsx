@@ -12,7 +12,12 @@ import {
   type ThreadTranscript,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth/session";
-import { allowanceSpent, type AnswerBlock } from "@/lib/api/askNevo";
+import {
+  allowanceSpent,
+  teacherSafetyBlock,
+  type AnswerBlock,
+  type SafetyBlockReason,
+} from "@/lib/api/askNevo";
 import { answerBlocksFor } from "@/lib/answerMarkdown";
 import { AnswerBlocks } from "@/components/shared/AnswerBlocks";
 import {
@@ -108,8 +113,17 @@ type Turn =
   | { kind: "cannothelp"; text?: string }
   /** A signed-in question that got no answer. Not a sample - nothing at all. */
   | { kind: "failed" }
+  /** The safety check held the question back, and the server said why. */
+  | { kind: "blocked"; reason: SafetyBlockReason }
   /** The day's allowance is spent. Not a failure, and never shown as one. */
   | { kind: "spent" };
+
+/** Lydia, 11 Nov (item 3): a question held back for a name. */
+export const BLOCKED_FOR_A_NAME =
+  "Nevo did not send this message because it names someone. Ask again without the name and it will go through.";
+/** Lydia, 11 Nov (item 3): held back for anything else, or for no reason given. */
+export const BLOCKED_BY_SAFETY_CHECK =
+  "Nevo did not send this message because it did not pass a safety check. Try rewording it.";
 
 const SPARKLE = (size: number) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -315,6 +329,7 @@ export function AskNevo() {
      */
     /** The day's allowance ran out: said as that, not as a failure. */
     let spent = false;
+    let blocked: SafetyBlockReason | null = null;
     const live = askNevoApi
       .ask({
         role: "teacher",
@@ -333,6 +348,7 @@ export function AskNevo() {
       })
       .catch((cause) => {
         spent = allowanceSpent(cause);
+        blocked = teacherSafetyBlock(cause);
         return null;
       });
 
@@ -387,6 +403,8 @@ export function AskNevo() {
              */
             spent
             ? { kind: "spent" as const }
+            : blocked
+              ? { kind: "blocked" as const, reason: blocked }
             : getToken()
               ? { kind: "failed" as const }
               : cannedFor(question),
@@ -649,6 +667,22 @@ export function AskNevo() {
                             </div>
                           )}
                         </div>
+                      </div>
+                    ) : t.kind === "blocked" ? (
+                      /*
+                        THE SAFETY CHECK HELD IT BACK (Lydia, 11 Nov, item 3).
+                        This said "We couldn't reach Nevo just now. Try asking
+                        again in a moment." - untrue twice: Nevo was reached,
+                        and asking again is refused the same way. Her two
+                        lines, by the server's `reason`. Never the server's
+                        `message`, which was written for a lesson. A 503
+                        (the check could not run) and a network failure keep
+                        the line below, where it is true.
+                      */
+                      <div key={i} className="mt-3.5 flex justify-start">
+                        <p className="max-w-[88%] text-[14px] leading-[1.55] text-nevo-near-black/68">
+                          {t.reason === "names_person" ? BLOCKED_FOR_A_NAME : BLOCKED_BY_SAFETY_CHECK}
+                        </p>
                       </div>
                     ) : t.kind === "failed" ? (
                       <div key={i} className="mt-3.5 flex justify-start">

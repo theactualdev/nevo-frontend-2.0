@@ -148,7 +148,7 @@ export function useStudentLessons(): StudentLessons {
         const timeEstimate =
           minutes && minutes > 0
             ? `About ${minutes} min`
-            : `${count} ${count === 1 ? "section" : "sections"}`;
+            : `${count} ${count === 1 ? "part" : "parts"}`;
         // Free text from the staged upload routes, so it is shown as written
         // or not at all - blank is not a subject.
         const subject = a.lesson.subject?.trim();
@@ -201,7 +201,7 @@ export function useStudentLessons(): StudentLessons {
                 title,
                 timeEstimate:
                   count > 0
-                    ? `${count} ${count === 1 ? "section" : "sections"}`
+                    ? `${count} ${count === 1 ? "part" : "parts"}`
                     : "",
                 ...(subject ? { subject } : {}),
                 status: "completed" as const,

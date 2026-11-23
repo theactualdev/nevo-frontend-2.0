@@ -44,6 +44,36 @@ export const reviewHrefFor = (lessonId: string) =>
 export const REVIEW_TO_ASSIGN = "Review this lesson to assign it.";
 
 /**
+ * THE REASONLESS REFUSAL (Lydia, 11 Nov, item 7): a 409 `lesson_not_approved`
+ * that carries no sentence of the server's. It said "This lesson still has
+ * sections waiting for you, so it cannot go to students yet." - but what waits
+ * is review steps, not sections (raised 9 Nov).
+ */
+export const REVIEW_STEPS_LEFT =
+  "This lesson still has review steps to finish, so it cannot go to your class yet.";
+
+/**
+ * THE SAME REFUSAL OVER SEVERAL LESSONS (Lydia, 16 Nov): "{n} of these lessons
+ * still have review steps to finish, so they cannot go to your class yet." The
+ * count is the server's - the 409 lists each lesson it held back (`lessons`,
+ * `product_common.py`). One of several reads in the singular of her sentence.
+ */
+export function reviewStepsLeftOf(n: number): string {
+  return (
+    new Map([[1, "1 of these lessons still has review steps to finish, so it cannot go to your class yet."]]).get(n) ??
+    `${n} of these lessons still have review steps to finish, so they cannot go to your class yet.`
+  );
+}
+
+/**
+ * Several lessons, where the 409 did not list them (an older deployment): no
+ * count to give, so no number is made up. Ours, built from her singular; a
+ * refusal means at least one is held, so "one of these" is true.
+ */
+export const REVIEW_STEPS_LEFT_SEVERAL =
+  "One of these lessons still has review steps to finish, so it cannot go to your class yet. Open it from your Library and check it.";
+
+/**
  * SCRUM-319: a refused Assign names the step that holds it, and goes back to
  * it. The words are the server's own (`REVIEW_STEP_NAMES`, backend b74b5e8),
  * so the console and the 409's message call each step the same thing; the

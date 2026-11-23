@@ -101,6 +101,40 @@ describe("consentDetailLine", () => {
   it("still says a withdrawal happened when the actor is unknown", () => {
     expect(consentDetailLine(at("withdrawn"))).toMatch(/withdrawn/i);
   });
+
+  /*
+   * 12 Nov dry run: "by test_fixture" and "by digital" on a child's record.
+   * Only the channels a frame has words for are said; the rest say nothing.
+   */
+  describe("says how in a school's words, never the server's", () => {
+    const confirmed = (channel: string) =>
+      consentDetailLine(
+        at("confirmed", { actorName: "Olu Ayo", timestamp: "2026-10-10T09:00:00Z", channel }),
+      );
+
+    it("a parent's own confirmation through the link is 'by email', as D07b draws it", () => {
+      expect(confirmed("digital")).toBe("Olu Ayo confirmed on 10 October 2026 by email.");
+      expect(confirmed("email")).toBe("Olu Ayo confirmed on 10 October 2026 by email.");
+    });
+
+    it("a written consent is D25's signed paper form", () => {
+      expect(confirmed("written")).toBe(
+        "Olu Ayo confirmed on 10 October 2026 on a signed paper form.",
+      );
+    });
+
+    it("says nothing about how for a channel no frame names", () => {
+      for (const raw of ["test_fixture", "school_office", "parent_portal", "verbal", "sms"]) {
+        expect(confirmed(raw)).toBe("Olu Ayo confirmed on 10 October 2026.");
+      }
+    });
+
+    it("a request sent by email says so", () => {
+      expect(
+        consentDetailLine(at("pending", { timestamp: "2026-07-05T09:00:00Z", channel: "email" })),
+      ).toBe("Requested on 5 July 2026 by email.");
+    });
+  });
 });
 
 /**

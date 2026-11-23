@@ -1,0 +1,60 @@
+import Link from "next/link";
+import { RotateCcw } from "lucide-react";
+import type { LearningWork } from "@/lib/api/students";
+import { reviewSessionHref } from "@/lib/lessons/reviewHref";
+
+/**
+ * THE REVIEW CARD ON HOME (design 19b, 5 Nov; Lydia, 31 Oct Q1 and 2 Nov Q7).
+ *
+ * "A card, not a chip. A chip is a label and this is a thing a child starts."
+ * One review at a time, as the engine names one (`nextWork`), "since a stack
+ * of overdue items is a pile of guilt rather than a prompt". And only when
+ * there is one: "The card appears when there is a review, otherwise the list
+ * is the page" - so 19b's empty state ("Nothing to look back on just yet ...
+ * Nothing to do for now") is not drawn either. "Nothing to do" is also a
+ * caught-up claim, which only the server may make (SCRUM-146).
+ *
+ * 19b'S WORDS, LESS WHAT THE CONTRACT CANNOT MAKE TRUE (rule 10, raised):
+ * - Drawn: the "Review" eyebrow and its mark, "A quick look back", the named
+ *   pill and "Start a review".
+ * - The pill names the CONCEPT the engine sent. 19b's pills name subjects,
+ *   and `nextWork` carries no subject - only `conceptName`, which is what the
+ *   chip this replaces named. Named, never a bare count.
+ * - HELD: "A few things from last week are ready for a quick review. Going
+ *   over them again is what makes them stick." `nextWork` is one concept with
+ *   no date, so "a few things" and "from last week" would be untrue.
+ *
+ * Start a review opens the review session, whose entry screen still lets the
+ * child say "Not now"; ending it comes back Home, where it was opened.
+ */
+export function ReviewCard({ review }: { review: LearningWork }) {
+  const name = review.conceptName.trim();
+  return (
+    <section
+      aria-labelledby="home-review"
+      className="mt-7 rounded-[14px] bg-nevo-cream p-[22px] shadow-[0_2px_10px_rgba(0,0,0,0.06)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:140ms]"
+    >
+      <span className="inline-flex items-center gap-[7px] text-xs font-semibold tracking-[0.04em] text-nevo-violet uppercase">
+        <RotateCcw className="size-[15px]" strokeWidth={2} aria-hidden />
+        Review
+      </span>
+      <h2
+        id="home-review"
+        className="mt-2.5 text-[19px] font-semibold text-nevo-near-black"
+      >
+        A quick look back
+      </h2>
+      <ul className="mt-3 flex flex-wrap gap-2">
+        <li className="inline-flex h-[30px] items-center rounded-full bg-nevo-navy/8 px-3 text-[13px] font-medium text-nevo-near-black">
+          {name}
+        </li>
+      </ul>
+      <Link
+        href={reviewSessionHref(review.lessonId, review.conceptId)}
+        className="mt-[18px] flex h-[50px] cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy text-[15px] font-semibold text-nevo-cream transition-colors hover:bg-nevo-navy/90 active:scale-[0.99]"
+      >
+        Start a review
+      </Link>
+    </section>
+  );
+}

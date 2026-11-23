@@ -50,6 +50,26 @@ describe("the library's stat cards", () => {
     expect(screen.getByText("In review")).toBeInTheDocument();
   });
 
+  /*
+   * C06 at each width (SCRUM-347, item 5): desktop caps the row at 640 with 16
+   * between; a tablet runs it the full width at 12, with its smaller card.
+   */
+  it("sits the row as the frame does at each width", () => {
+    h.useLibraryTotals.mockReturnValue({ lessonsUploaded: 214, liveToClasses: 37, inReview: 5 });
+    render(<LessonLibrary />);
+
+    const card = screen.getByText("Lessons uploaded").parentElement!;
+    const row = card.parentElement!.className.split(" ");
+    expect(row).toEqual(expect.arrayContaining(["grid-cols-3", "gap-3", "xl:max-w-[640px]", "xl:gap-4"]));
+    expect(row.some((c) => c.startsWith("max-w-"))).toBe(false);
+    expect(card.className.split(" ")).toEqual(
+      expect.arrayContaining(["p-4", "gap-[5px]", "xl:px-[22px]", "xl:py-5", "xl:gap-1.5"]),
+    );
+    expect(screen.getByText("214").className.split(" ")).toEqual(
+      expect.arrayContaining(["text-[28px]", "xl:text-[34px]"]),
+    );
+  });
+
   it("draws no cards over totals that did not come back", () => {
     h.useLibraryTotals.mockReturnValue(null);
     render(<LessonLibrary />);

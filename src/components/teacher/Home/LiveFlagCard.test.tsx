@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { LiveFlagCard } from "./LiveFlagCard";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { LiveFlagCard, SEEN_FAILED } from "./LiveFlagCard";
 import type { TeacherFlag } from "@/hooks/useTeacherFlags";
 
 // `vi.mock` is hoisted above ordinary consts, so the spy has to be hoisted
@@ -70,16 +70,15 @@ describe("LiveFlagCard", () => {
     ).toBeInTheDocument();
   });
 
-  it("opens the profile and does not acknowledge the flag", () => {
-    // Learning support's acknowledgement is its own act. A teacher's tap
-    // recording it would put "learning support saw this" on a flag nobody
-    // from learning support has seen.
+  it("opens the profile and neither acknowledges the flag nor marks it seen", () => {
+    // Learning support's acknowledgement is its own act. And opening the
+    // profile to look is not the teacher's read either (Lydia, 11 Nov
+    // addendum): only an explicit acknowledgement marks a flag seen.
     render(<LiveFlagCard flag={flag()} />);
     fireEvent.click(screen.getByRole("link", { name: /Open Amara Kalu/ }));
 
     expect(acknowledgeFlag).not.toHaveBeenCalled();
-    // It is the teacher's own read instead (SCRUM-252).
-    expect(markFlagSeen).toHaveBeenCalledWith("flag-1");
+    expect(markFlagSeen).not.toHaveBeenCalled();
     expect(
       screen.getByRole("link", { name: /Open Amara Kalu/ }),
     ).toHaveAttribute("href", "/teacher/students/student-9");
@@ -115,13 +114,18 @@ describe("LiveFlagCard", () => {
     expect(when).not.toContain("·");
   });
 
-  it("keeps 'Send them a message' a separate action from opening the profile", () => {
+  it("keeps 'Message {first}' a separate action from opening the profile", () => {
     // The card is one big stretched link, so this second action has to sit
     // above it - otherwise a teacher aiming for the message opens the profile.
+    // Lydia, 11 Nov: "Send them a message" did not say who.
     render(<LiveFlagCard flag={flag()} />);
-    expect(
-      screen.getByRole("link", { name: /Send them a message/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Message Amara/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Send them a message/)).not.toBeInTheDocument();
+  });
+
+  it("offers no message where the directory could not name the child", () => {
+    render(<LiveFlagCard flag={flag({ name: null })} />);
+    expect(screen.queryByRole("link", { name: /^Message/ })).not.toBeInTheDocument();
   });
 
   it("names the child in the link", () => {
@@ -134,7 +138,7 @@ describe("LiveFlagCard", () => {
      */
     render(<LiveFlagCard flag={flag()} />);
     expect(
-      screen.getByRole("link", { name: /Send them a message/ }),
+      screen.getByRole("link", { name: /Message Amara/ }),
     ).toHaveAttribute("href", "/teacher/connect?student=student-9");
   });
 
@@ -142,12 +146,14 @@ describe("LiveFlagCard", () => {
     const { container: sudden } = render(
       <LiveFlagCard flag={flag({ isSudden: true })} />,
     );
-    expect(sudden.querySelectorAll("svg").length).toBeGreaterThan(0);
+    // The drop glyph; the check on "Mark as seen" is in every card.
+    const GLYPH = ":not(button) > svg";
+    expect(sudden.querySelectorAll(GLYPH).length).toBeGreaterThan(0);
 
     const { container: pattern } = render(
       <LiveFlagCard flag={flag({ isSudden: false })} />,
     );
-    expect(pattern.querySelectorAll("svg")).toHaveLength(0);
+    expect(pattern.querySelectorAll(GLYPH)).toHaveLength(0);
   });
 });
 
@@ -184,24 +190,85 @@ describe("LiveFlagCard - when it was noticed", () => {
 });
 
 /**
- * SCRUM-252: the tap is this teacher's read. It clears the card from their own
- * Home (`POST …/seen`), and from nobody else's.
+ * NOT THE TEACHER'S READ (Lydia, 11 Nov addendum; SCRUM-346). It was
+ * (SCRUM-252, #894): both links `POST …/seen`. Starting a message is not
+ * acknowledging the flag either; only an explicit acknowledgement is.
  */
 describe("LiveFlagCard - the teacher's own read", () => {
-  it("records the read when they open a message from it", () => {
+  it("does not mark the flag seen when they start a message from it", () => {
     render(<LiveFlagCard flag={flag()} />);
-    fireEvent.click(screen.getByRole("link", { name: /Send them a message/ }));
+    fireEvent.click(screen.getByRole("link", { name: /Message Amara/ }));
 
-    expect(markFlagSeen).toHaveBeenCalledWith("flag-1");
+    expect(markFlagSeen).not.toHaveBeenCalled();
     expect(acknowledgeFlag).not.toHaveBeenCalled();
   });
+});
 
-  it("holds nothing up when the read does not land", () => {
-    markFlagSeen.mockRejectedValueOnce(new Error("offline"));
+/**
+ * "MARK AS SEEN" (Lydia, 16 Nov): "It marks seen, not resolved, and the flag
+ * stays until it resolves." The explicit read the 11 Nov addendum asked for.
+ */
+describe("LiveFlagCard - Mark as seen", () => {
+  const settle = () => act(async () => {});
+
+  it("records this teacher's read, and only that", async () => {
+    const onSeen = vi.fn();
+    render(<LiveFlagCard flag={flag()} onSeen={onSeen} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark as seen" }));
+    await settle();
+
+    expect(markFlagSeen).toHaveBeenCalledTimes(1);
+    expect(markFlagSeen).toHaveBeenCalledWith("flag-1");
+    // Learning support's acknowledgement is theirs, never this button's.
+    expect(acknowledgeFlag).not.toHaveBeenCalled();
+    expect(onSeen).toHaveBeenCalledWith("flag-1");
+  });
+
+  it("says whose flag it is, since every card has one", () => {
     render(<LiveFlagCard flag={flag()} />);
 
-    expect(() =>
-      fireEvent.click(screen.getByRole("link", { name: /Open Amara Kalu/ })),
-    ).not.toThrow();
+    expect(screen.getByRole("button", { name: "Mark as seen" })).toHaveAccessibleDescription(
+      "Amara Kalu",
+    );
+  });
+
+  it("is there when the directory could not name the child", () => {
+    render(<LiveFlagCard flag={flag({ name: null })} />);
+
+    expect(screen.getByRole("button", { name: "Mark as seen" })).toBeInTheDocument();
+  });
+
+  it("takes one press at a time", async () => {
+    let land: (v: object) => void = () => {};
+    markFlagSeen.mockImplementationOnce(() => new Promise<object>((r) => (land = r)));
+    render(<LiveFlagCard flag={flag()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark as seen" }));
+    const pending = screen.getByRole("button", { name: "Marking…" });
+    expect(pending).toBeDisabled();
+    fireEvent.click(pending);
+    expect(markFlagSeen).toHaveBeenCalledTimes(1);
+
+    land({});
+    await settle();
+  });
+
+  it("says a read that did not land, keeps the card, and lets them press again", async () => {
+    markFlagSeen.mockRejectedValueOnce(new Error("503"));
+    const onSeen = vi.fn();
+    render(<LiveFlagCard flag={flag()} onSeen={onSeen} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark as seen" }));
+    await settle();
+
+    expect(screen.getByRole("status")).toHaveTextContent(SEEN_FAILED);
+    expect(onSeen).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark as seen" }));
+    expect(screen.queryByRole("status")).toBeNull();
+    await settle();
+    expect(markFlagSeen).toHaveBeenCalledTimes(2);
+    expect(onSeen).toHaveBeenCalledWith("flag-1");
   });
 });

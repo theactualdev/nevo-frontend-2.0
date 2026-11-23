@@ -30,6 +30,7 @@ import { RemoveAccessSheet } from "./RemoveAccessSheet";
 import { TeacherSubjects } from "./TeacherSubjects";
 import { StatusPill, isInvited } from "./status";
 import { NoAccess, failureKind } from "../NoAccess";
+import { RecordGone, isRecordGone } from "../RecordGone";
 import { BackLink } from "../BackLink";
 import { withBack, type Back } from "../back";
 import { activeLine, lastActiveCard } from "../Team/teamLines";
@@ -88,7 +89,8 @@ import {
  * `student_headcount`, naming a field that was never the one in play.)
  */
 
-type Phase = "loading" | "ready" | "failed" | "denied";
+/** `gone`: the teacher's own read answered 404 - D28, never a retry. */
+type Phase = "loading" | "ready" | "failed" | "denied" | "gone";
 
 /** "1 class", "3 classes" - grammar for a count of rows, nothing measured. */
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -147,8 +149,14 @@ export function TeacherDetailView({
     !ls.holders.some((h) => h.userId !== teacherId);
 
   const load = useCallback(() => {
+    // Only the teacher's own 404 says the record is gone (D28).
+    let gone = false;
+    const record = teachersApi.get(teacherId).catch((err: unknown) => {
+      gone = isRecordGone(err);
+      throw err;
+    });
     Promise.all([
-      teachersApi.get(teacherId),
+      record,
       classesApi.teacherClasses(teacherId),
       /*
        * INCLUDING ARCHIVED. `list()` excludes them by default, so a teacher
@@ -165,7 +173,7 @@ export function TeacherDetailView({
         setAllClasses(all);
         setPhase("ready");
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
+      .catch((err: unknown) => setPhase(gone ? "gone" : failureKind(err)));
   }, [teacherId]);
 
   useEffect(() => {
@@ -184,6 +192,14 @@ export function TeacherDetailView({
     return (
       <Wrapper>
         <NoAccess what="this teacher" />
+      </Wrapper>
+    );
+  }
+
+  if (phase === "gone") {
+    return (
+      <Wrapper>
+        <RecordGone what="teacher" back={back} />
       </Wrapper>
     );
   }
@@ -296,7 +312,7 @@ export function TeacherDetailView({
 
       {/* D06's three cards. Last active joined on 8 Oct; with no timestamp
           it is left off rather than drawn empty. */}
-      <div className="mt-7 flex gap-3.5 max-lg:flex-col">
+      <div className="mt-7 flex gap-3.5 max-xl:flex-col">
         <StatCard
           value={String(activeHeld.length)}
           label="Classes"
@@ -472,7 +488,7 @@ export function TeacherDetailView({
           </div>
           <div className={cn(CARD, "mt-3.5")}>
             <LearningSupportLine
-              className="px-5 py-4 max-lg:px-[18px] max-lg:py-3.5"
+              className="px-5 py-4 max-xl:px-[18px] max-xl:py-3.5"
               person={{ userId: teacher.id, name: teacher.name }}
               holders={ls}
               you={teacher.id === me}

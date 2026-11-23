@@ -112,6 +112,42 @@ describe("archiving from the panel", () => {
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/Notification 1/),
     );
+    // And says so (backlog 73): the page's own words for the same act.
+    expect(visibleText(container)).toMatch(
+      /We couldn't archive that just now, so nothing has changed. Try again in a moment./,
+    );
+  });
+
+  it("clears the line when the next archive goes through", async () => {
+    feed.mockResolvedValue(ok([row(1), row(2)]));
+    archive.mockRejectedValueOnce(new Error("500")).mockResolvedValue(undefined);
+    const { container } = render(
+      <NotificationsPanel onClose={() => {}} onReadStateChanged={() => {}} />,
+    );
+    await waitFor(() => expect(visibleText(container)).toMatch(/Notification 1/));
+
+    fireEvent.click(archiveButtons(container)[0]);
+    await waitFor(() => expect(visibleText(container)).toMatch(/couldn't archive that/));
+    fireEvent.click(archiveButtons(container)[1]);
+
+    await waitFor(() => expect(visibleText(container)).not.toMatch(/Notification 2/));
+    expect(visibleText(container)).not.toMatch(/couldn't archive that/);
+  });
+
+  // SCRUM-100: "a quiet action on hover (in the row on tablet)" (backlog 73).
+  it("keeps Archive in the row below 1280, and hover-only only where a pointer hovers", async () => {
+    feed.mockResolvedValue(ok([row(1)]));
+    const { container } = render(
+      <NotificationsPanel onClose={() => {}} onReadStateChanged={() => {}} />,
+    );
+    await waitFor(() => expect(visibleText(container)).toMatch(/Notification 1/));
+
+    const cls = archiveButtons(container)[0].className.split(/\s+/);
+    // Never hidden outright: every hiding class is behind xl and a hover pointer.
+    expect(cls).not.toContain("opacity-0");
+    const hiding = cls.filter((c) => c.endsWith("opacity-0"));
+    expect(hiding.length).toBeGreaterThan(0);
+    for (const c of hiding) expect(c.startsWith("xl:[@media(hover:hover)_and_(pointer:fine)]:")).toBe(true);
   });
 
   it("does not offer it on a row that is only an empty state", async () => {

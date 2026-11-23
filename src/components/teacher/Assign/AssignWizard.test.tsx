@@ -767,9 +767,49 @@ describe("a 409 that names the lessons", () => {
 
     sendOne();
 
+    // Lydia, 11 Nov (item 7): review steps, not sections.
     expect(
-      await screen.findByText(/This lesson still has sections waiting for you/),
+      await screen.findByText("This lesson still has review steps to finish, so it cannot go to your class yet."),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/sections waiting/)).not.toBeInTheDocument();
+  });
+
+  // Lydia, 16 Nov: the plural names how many, from the lessons the 409 lists.
+  const refuseListing = (ids: string[]) =>
+    new ApiError(409, "Conflict", {
+      detail: {
+        code: "lesson_not_approved",
+        lessons: ids.map((lessonId) => ({ lessonId, outstandingReviewSteps: ["checks"] })),
+      },
+    });
+
+  it("says how many of several still have review steps, in Lydia's words", async () => {
+    create.mockRejectedValue(refuseListing(["l-1", "l-2"]));
+
+    sendTwoLessons();
+
+    expect(
+      await screen.findByText("2 of these lessons still have review steps to finish, so they cannot go to your class yet."),
+    ).toBeInTheDocument();
+  });
+
+  it("says one of several in the singular", async () => {
+    create.mockRejectedValue(refuseListing(["l-2"]));
+
+    sendTwoLessons();
+
+    expect(
+      await screen.findByText("1 of these lessons still has review steps to finish, so it cannot go to your class yet."),
+    ).toBeInTheDocument();
+  });
+
+  it("makes up no count when the 409 lists no lessons", async () => {
+    create.mockRejectedValue(refuse());
+
+    sendTwoLessons();
+
+    expect(await screen.findByText(/One of these lessons still has review steps to finish/)).toBeInTheDocument();
+    expect(screen.queryByText(/d of these lessons/)).not.toBeInTheDocument();
   });
 
   it("says nothing of the sort for a refusal that is not this one", async () => {

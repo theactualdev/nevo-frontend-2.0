@@ -551,7 +551,7 @@ export function IepExporterView({
                     </select>
                   </div>
 
-                  <div className="flex gap-4 max-lg:flex-col">
+                  <div className="flex gap-4 max-xl:flex-col">
                     <div className="flex-1">
                       <label htmlFor="iep-from" className={LABEL}>
                         Reporting period from

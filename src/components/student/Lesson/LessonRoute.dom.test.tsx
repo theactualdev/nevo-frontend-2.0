@@ -292,7 +292,7 @@ describe("the loading skeleton", () => {
 
     // The frame's 620px and 680px column, with its padding outside it.
     expect(classes(column)).toEqual(
-      expect.arrayContaining(["sm:max-w-[684px]", "lg:max-w-[760px]"]),
+      expect.arrayContaining(["sm:max-w-[684px]", "xl:max-w-[760px]"]),
     );
     expect(classes(track)).toContain("bg-nevo-near-black/10");
     expect(classes(track)).not.toContain("rounded-full");

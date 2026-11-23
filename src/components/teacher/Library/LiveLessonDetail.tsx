@@ -681,7 +681,11 @@ export function LiveLessonDetail({
           /* Without "Nothing is wrong with the lesson": the review is how we
              would know, and it is the read that failed. */
           <p className="mt-4 max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
-            We couldn&rsquo;t load the review just now. Try again in a moment.
+            We couldn&rsquo;t load the review just now. Try again in a moment.{" "}
+            {/* Backlog item 34, its other half: the line said to try again
+                and gave nothing to press. The same reload as the line about
+                who has the lesson. */}
+            <TryAgain />
           </p>
         )}
 

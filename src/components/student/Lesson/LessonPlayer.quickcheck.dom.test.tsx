@@ -113,7 +113,7 @@ describe("tapping out of the check (Olayinka, 23 Oct)", () => {
 
     expect(check()).toBeNull();
     expect(screen.getByText("Inside a leaf")).toBeInTheDocument();
-    expect(screen.getByText("Segment 1 of 2")).toBeInTheDocument();
+    expect(screen.getByText("Part 1 of 2")).toBeInTheDocument();
   });
 
   it("sends one navigation_fragmentation for the move out, as Back does", async () => {
@@ -137,7 +137,7 @@ describe("tapping out of the check (Olayinka, 23 Oct)", () => {
 
     expect(check()).toBeInTheDocument();
     expect(screen.getByText("What do plants take in?")).toBeInTheDocument();
-    expect(screen.getByText("Segment 1 of 2")).toBeInTheDocument();
+    expect(screen.getByText("Part 1 of 2")).toBeInTheDocument();
     expect(fragmentation()).toHaveLength(1);
   });
 

@@ -134,6 +134,13 @@ export function StudentsView() {
   const [confirmingBulk, setConfirmingBulk] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [bulkResult, setBulkResult] = useState<BulkConsentTally | null>(null);
+  /**
+   * The last bulk send's students, and whether the roster is narrowed to the
+   * ones it could not reach for want of a parent email (D07's
+   * `filterNoEmail`, backlog 62). Each row's own request state says which.
+   */
+  const [lastBulk, setLastBulk] = useState<string[]>([]);
+  const [missingEmailOnly, setMissingEmailOnly] = useState(false);
 
   const load = useCallback((cid: string, inactive: boolean) => {
     Promise.all([
@@ -234,9 +241,20 @@ export function StudentsView() {
     [classes],
   );
 
+  // The last bulk send's students it could not reach: no parent email.
+  const missingEmail = new Set(
+    lastBulk.filter((id) => {
+      const kind = consentStateFor(id).kind;
+      return kind === "noContact" || kind === "needsEmail";
+    }),
+  );
+  const missingEmailKey = [...missingEmail].join(",");
+
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
+    const onlyIds = missingEmailOnly ? new Set(missingEmailKey.split(",")) : null;
     return students
+      .filter((s) => !onlyIds || onlyIds.has(s.id))
       .filter((s) => {
         if (!consent) return true;
         /*
@@ -258,7 +276,7 @@ export function StudentsView() {
             (s.admissionNumber ?? "").toLowerCase().includes(needle)
           : true,
       );
-  }, [students, search, consent]);
+  }, [students, search, consent, missingEmailOnly, missingEmailKey]);
 
   /**
    * A row that can be ticked: the same rule as its own "Send request", and
@@ -289,6 +307,8 @@ export function StudentsView() {
     const ids = chosen.map((s) => s.id);
     setConfirmingBulk(false);
     setBulkResult(null);
+    setLastBulk(ids);
+    setMissingEmailOnly(false);
     setBulkProgress({ done: 0, total: ids.length });
     sendConsentMany(ids, (done) => setBulkProgress({ done, total: ids.length })).then((tally) => {
       setBulkProgress(null);
@@ -298,7 +318,7 @@ export function StudentsView() {
   };
 
   const filtering = Boolean(
-    search.trim() || classId || includeInactive || consent,
+    search.trim() || classId || includeInactive || consent || missingEmailOnly,
   );
 
   return (
@@ -509,6 +529,16 @@ export function StudentsView() {
                     {line}
                   </p>
                 ))}
+                {/* D07's way to the ones without an email (backlog 62). */}
+                {bulkResult.noEmail > 0 && missingEmail.size > 0 && !missingEmailOnly ? (
+                  <button
+                    type="button"
+                    onClick={() => setMissingEmailOnly(true)}
+                    className="mt-1 cursor-pointer text-[13.5px] font-semibold text-nevo-navy underline-offset-2 hover:underline"
+                  >
+                    View students missing an email address
+                  </button>
+                ) : null}
               </div>
             ) : null}
 
@@ -565,6 +595,7 @@ export function StudentsView() {
                       setClassId("");
                       setConsent("");
                       setIncludeInactive(false);
+                      setMissingEmailOnly(false);
                     }}
                     className="mt-3 cursor-pointer text-sm font-semibold text-nevo-navy hover:opacity-75"
                   >
@@ -829,12 +860,20 @@ function EmptyState({ onEnrol, paused }: { onEnrol: () => void; paused: boolean 
           className="mx-auto mb-3 h-[200px] w-auto object-contain"
           priority
         />
+        {/*
+          D07'S WORDS (backlog 63): "No students enrolled yet" and its first
+          sentence. Its second - "Consent requests come after - nothing goes
+          out to families until you're ready." - is held: SCRUM-156 sends
+          parent consent requests at activation, and a parent is notified
+          either way, so "until you're ready" is not plainly the school's to
+          promise. Raised; never invented around.
+        */}
         <h3 className="m-0 text-xl font-semibold text-nevo-near-black">
-          No students yet
+          No students enrolled yet
         </h3>
         <p className="mt-2.5 text-[15px] leading-[1.6] text-nevo-near-black/64">
-          Enrol your students one at a time, or upload your roster and Nevo
-          adds them all. Each one gets their own way in.
+          Import a roster from your school system, or add students one at a
+          time.
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <button type="button" onClick={onEnrol} disabled={paused} className={PRIMARY_BTN}>

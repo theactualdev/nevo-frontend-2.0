@@ -595,19 +595,19 @@ describe("a calculation's signals", () => {
     const classes = (el: Element) => el.className.split(" ");
 
     // It spanned the screen less 14px a side, wider than the step above it.
-    // Now the reading column's widths and side padding - the frame's 620px
-    // and 680px column with its 32px and 40px padding outside it (d6b9fbc)...
-    const widths = ["max-w-full", "sm:max-w-[684px]", "lg:max-w-[760px]"];
+    // Now the calculation's column box - the Solver Frame's 680 and 880
+    // columns inside 44px and 48px padding (SCRUM-347)...
+    const widths = ["max-w-full", "md:max-w-[768px]", "xl:max-w-[976px]"];
     expect(classes(column)).toEqual(expect.arrayContaining(widths));
     expect(classes(row)).toEqual(expect.arrayContaining(widths));
     expect(classes(column)).toEqual(
-      expect.arrayContaining(["p-6", "sm:p-8", "lg:p-10"]),
+      expect.arrayContaining(["p-6", "md:px-11", "xl:px-12"]),
     );
     expect(classes(row)).toEqual(
-      expect.arrayContaining(["px-6", "sm:px-8", "lg:px-10"]),
+      expect.arrayContaining(["px-6", "md:px-11", "xl:px-12"]),
     );
-    // ...and then the solver's narrower one.
-    const narrower = ["sm:max-w-[560px]", "lg:max-w-[600px]"];
+    // ...and then the solver's own: 680 on a tablet, 880 on a desktop.
+    const narrower = ["sm:max-w-[560px]", "md:max-w-[680px]", "xl:max-w-[880px]"];
     expect(classes(solver)).toEqual(expect.arrayContaining(narrower));
     expect(classes(line)).toEqual(expect.arrayContaining(narrower));
   });

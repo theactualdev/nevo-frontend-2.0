@@ -332,7 +332,7 @@ describe("a re-read a safety check stopped", () => {
       <UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} onRegenerated={vi.fn()} />,
     );
 
-  it("says the re-read's line above the earlier reading, and nothing beyond it", async () => {
+  it("says the re-read's line above the earlier reading, with the reference beneath it", async () => {
     awaitParseRun.mockResolvedValue({
       status: "failed",
       finished: true,
@@ -350,7 +350,8 @@ describe("a re-read a safety check stopped", () => {
     expect(screen.queryByText(LINE)).not.toBeInTheDocument();
     expect(screen.queryByText(/reached your class/)).not.toBeInTheDocument();
     expect(screen.queryByText(SERVER)).not.toBeInTheDocument();
-    expect(screen.queryByText(/ca8435c98d08/)).not.toBeInTheDocument();
+    // Lydia, 11 Nov (item 7): "Reference {code}" and nothing around it.
+    expect(screen.getByText("ca8435c98d08").closest("p")).toHaveTextContent(/^Reference ca8435c98d08$/);
     expect(screen.queryByRole("button", { name: "Try that again" })).not.toBeInTheDocument();
   });
 
@@ -375,18 +376,82 @@ describe("a re-read a safety check stopped", () => {
     awaitParseRun.mockResolvedValue({
       status: "failed",
       finished: true,
-      failureReason: "Our safety check could not run, so the lesson has not been prepared.",
-      reasonCode: "safety_check_unavailable",
+      failureReason: "Preparing this lesson took longer than we allow.",
+      reasonCode: "preparation_timeout",
     });
     show();
 
     tryAgain();
 
-    expect(
-      await screen.findByText("Our safety check could not run, so the lesson has not been prepared."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Preparing this lesson took longer than we allow.")).toBeInTheDocument();
     expect(screen.queryByText(LINE)).not.toBeInTheDocument();
     expect(screen.queryByText(REREAD)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try that again" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * A RE-READ THE SAFETY CHECK COULD NOT RUN ON (`safety_check_unavailable`;
+ * Lydia, 16 Nov). Her line above the earlier reading, in place of the
+ * server's sentence, and - unlike a hold - the same lesson can go again.
+ */
+describe("a re-read the safety check could not run on", () => {
+  const UNCHECKED =
+    "Nevo could not run its safety check on this re-reading, so what you see below is still the earlier reading. Try again shortly.";
+  const NOTHING_TO_SHOW =
+    "Nevo could not run its safety check on this lesson, so it has not proposed sections. Nothing has reached your class. Try again shortly.";
+  const SERVER =
+    "Our safety check could not run, so the lesson has not been prepared. Nothing is wrong with your file - please try again shortly.";
+  const failed = {
+    status: "failed",
+    finished: true,
+    failureReason: SERVER,
+    incidentId: "ca8435c98d08",
+    reasonCode: "safety_check_unavailable",
+  };
+
+  it("says Lydia's line above the earlier reading, not the server's sentence", async () => {
+    awaitParseRun.mockResolvedValue(failed);
+    render(
+      <UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} onRegenerated={vi.fn()} />,
+    );
+
+    tryAgain();
+
+    const said = await screen.findByText(UNCHECKED);
+    expect(said.compareDocumentPosition(screen.getAllByText(/Fractions 3/)[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText(SERVER)).not.toBeInTheDocument();
+    expect(screen.getByText("ca8435c98d08").closest("p")).toHaveTextContent(/^Reference ca8435c98d08$/);
+  });
+
+  it("keeps Try that again, and sends the same lesson", async () => {
+    awaitParseRun.mockResolvedValue(failed);
+    render(
+      <UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} onRegenerated={vi.fn()} />,
+    );
+
+    tryAgain();
+    await screen.findByText(UNCHECKED);
+    awaitParseRun.mockClear();
+    tryAgain();
+
+    await waitFor(() => expect(awaitParseRun).toHaveBeenCalledTimes(1));
+  });
+
+  it("says the upload screens' line where the lesson has nothing to show", async () => {
+    awaitParseRun.mockResolvedValue(failed);
+    render(
+      <UploadResult
+        lesson={{ ...LESSON, segments: [], segmentCount: 0 } as LessonDetailResponse}
+        fileName="fractions.pdf"
+        onUploadAnother={vi.fn()}
+        onRegenerated={vi.fn()}
+      />,
+    );
+
+    tryAgain();
+
+    expect(await screen.findByText(NOTHING_TO_SHOW)).toBeInTheDocument();
+    expect(screen.queryByText(UNCHECKED)).not.toBeInTheDocument();
   });
 });

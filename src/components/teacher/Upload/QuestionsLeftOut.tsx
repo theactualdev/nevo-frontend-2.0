@@ -39,25 +39,32 @@ import { pageList } from "./pageList";
  */
 
 /**
- * LYDIA'S WORDS FOR TWO OF THE SERVER'S NOTES (10 Nov, items 1 and 3), said
- * in place of the note's `message`. Neither invites a teacher to report
- * anything: "No copy ships inviting a teacher to report anything until there
- * is somewhere to do it." The server's sentences both did.
+ * THE ONE ROUTE, WHERE A CHECK REFUSED SOMETHING (Lydia, 11 Nov, item 1: Share
+ * feedback "answers it", and the same sentence goes on every note that invited
+ * a teacher to tell us something, "so she learns one route rather than four").
+ * Her addendum: it "belongs only where a check actually refused something".
  */
-export const TEXT_HELD_BACK_LINE =
-  "A safety check held back the lesson Nevo wrote from this part of your file, so it came through as plain text with no questions. Your file passed its own check, so your material is not the problem.";
+export const CHECK_REFUSED_ROUTE =
+  "If that looks wrong, use Share feedback in the sidebar and we will look at the check rather than at your material.";
+
+/**
+ * LYDIA'S WORDS FOR TWO OF THE SERVER'S NOTES (10 Nov, items 1 and 3), said
+ * in place of the note's `message`. The held-back part's last sentence
+ * returns with its route (11 Nov): a safety check refused Nevo's own text.
+ */
+export const TEXT_HELD_BACK_LINE = `A safety check held back the lesson Nevo wrote from this part of your file, so it came through as plain text with no questions. Your file passed its own check, so your material is not the problem. ${CHECK_REFUSED_ROUTE}`;
 export const BACKUP_READER_LINE =
   "Nevo had to read this file with a plainer reader, and some pages gave up no text at all. Columns, tables and handwriting may have come through jumbled or be missing entirely. Check the sections against your original, and if the lesson looks thin, upload the text itself.";
 
 /**
- * THE REFUSED-PICTURE NOTE IS NOT SAID YET - the one switch (Hub, 11 Nov).
- * The server's sentence ends by inviting the teacher to "tell us the lesson
- * and this section", which Lydia's 10 Nov rule forbids until there is
- * somewhere to tell us, and her own words for the note are in an addendum not
- * yet received. It was never shown on main, so saying nothing keeps today's
- * state. Turn it back on here, with her words in place of the `message`.
+ * A REFUSED PICTURE, IN LYDIA'S WORDS (11 Nov, item 7), in place of the
+ * server's `message`, which invited a report with no route. It was switched
+ * off until her words arrived (Hub, 11 Nov); they have, so it is said.
  */
-export const SAY_REFUSED_PICTURES = false;
+export const REFUSED_PICTURE_LINE = `A safety check held back the picture for this section. Its teaching text is unchanged. ${CHECK_REFUSED_ROUTE}`;
+
+/** The switch the note waited behind. On since her words arrived. */
+export const SAY_REFUSED_PICTURES = true;
 
 /** Lydia's line (9 Nov) above a list whose note came with no sentence. */
 export const QUESTIONS_LEFT_OUT = "These questions were left out of the lesson.";
@@ -120,13 +127,11 @@ export function textHeldBack(notes: readonly unknown[] | null | undefined): Text
 export interface PictureRefused {
   /** The segment's key, as the note names it (`segment`). */
   segment: string;
-  /** The server's sentence, word for word. */
-  message: string;
 }
 
 /**
- * The refused-picture notes: which segment, and the server's sentence. Only
- * those two fields are read, so nothing else on the note can reach a screen.
+ * The refused-picture notes: which segment, once each. Only `segment` is read;
+ * the words are Lydia's, so nothing else on the note can reach a screen.
  */
 export function picturesRefused(notes: readonly unknown[] | null | undefined): PictureRefused[] {
   if (!Array.isArray(notes)) return [];
@@ -137,11 +142,9 @@ export function picturesRefused(notes: readonly unknown[] | null | undefined): P
     const n = note as Record<string, unknown>;
     if (n.code !== "visual_blocked_by_safety") continue;
     if (typeof n.segment !== "string" || !n.segment.trim()) continue;
-    if (typeof n.message !== "string" || !n.message.trim()) continue;
-    const key = `${n.segment}\u0000${n.message.trim()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ segment: n.segment, message: n.message.trim() });
+    if (seen.has(n.segment)) continue;
+    seen.add(n.segment);
+    out.push({ segment: n.segment });
   }
   return out;
 }
@@ -220,14 +223,14 @@ export function QuestionsLeftOut({
         const name = segmentName?.(p.segment) ?? null;
         return (
           <div
-            key={`${p.segment}:${p.message}`}
+            key={p.segment}
             className="w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4"
           >
             {name && (
               <span className="block text-[12.5px] font-semibold text-nevo-near-black/60">{name}</span>
             )}
             <p className={cn("text-[14.5px] leading-[1.55] text-nevo-near-black/82", name && "mt-1")}>
-              {p.message}
+              {REFUSED_PICTURE_LINE}
             </p>
           </div>
         );

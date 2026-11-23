@@ -90,6 +90,10 @@ const LESSON = {
   assessment: { questions: [question(1), question(2)] },
 } as unknown as Lesson;
 
+/** Lydia's sentence for nothing landed (11 Nov addendum), as the server writes it. */
+const NOTHING_SENTENCE =
+  "Today you worked on halves. We will come back to all of them.";
+
 /** The completion write's answer. */
 const completed = (over: Record<string, unknown> = {}) => ({
   lessonId: "lesson-1",
@@ -246,10 +250,15 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     );
     await finishCheck();
 
-    land(rerender, completed({ resultState: "nothing_landed" }));
+    land(
+      rerender,
+      completed({ resultState: "nothing_landed", resultNote: NOTHING_SENTENCE }),
+    );
 
     expect(screen.queryByText(HEADING)).toBeNull();
-    expect(screen.getByText(/didn.t land yet/)).toBeTruthy();
+    // The server's sentence, in place of the app's own line (Lydia, 11 Nov).
+    expect(screen.getByText(NOTHING_SENTENCE)).toBeTruthy();
+    expect(screen.queryByText(/didn.t land yet/)).toBeNull();
     expect(screen.queryByRole("heading")).toBeNull();
   });
 
@@ -259,11 +268,16 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
       <LessonPlayer lesson={LESSON} plan={null} live onStartAgain={vi.fn()} />,
     );
     await finishCheck();
-    expect(screen.queryByText(/didn.t land yet/)).toBeNull();
+    expect(screen.queryByText(NOTHING_SENTENCE)).toBeNull();
 
-    land(rerender, completed({ resultState: "nothing_landed" }));
+    land(
+      rerender,
+      completed({ resultState: "nothing_landed", resultNote: NOTHING_SENTENCE }),
+    );
 
-    expect(screen.getByText(/didn.t land yet/)).toBeTruthy();
+    expect(screen.getByText(NOTHING_SENTENCE)).toBeTruthy();
+    // The revisit mark, not the success check: no heading.
+    expect(screen.queryByRole("heading")).toBeNull();
   });
 
   it("holds the result's mark and heading until the verdict comes back", async () => {
@@ -307,7 +321,7 @@ describe("a check result that can't be read (D183)", () => {
   const rerender_ = (rerender: (ui: React.ReactElement) => void) =>
     rerender(<LessonPlayer lesson={LESSON} plan={null} live />);
 
-  it("says so in Lydia's words, with Try again and Back to my lessons", async () => {
+  it("says so in Lydia's words, with Send again and Back to my lessons", async () => {
     const { rerender } = render(<LessonPlayer lesson={LESSON} plan={null} live />);
     await finishCheck();
 
@@ -317,7 +331,7 @@ describe("a check result that can't be read (D183)", () => {
 
     expect(screen.getByRole("heading", { name: UNREAD })).toBeTruthy();
     expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
-      "Try again",
+      "Send again",
       "Back to my lessons",
     ]);
     // No claim about what was or was not saved.
@@ -331,13 +345,13 @@ describe("a check result that can't be read (D183)", () => {
     expect(screen.queryByText(UNREAD)).toBeNull();
   });
 
-  it("reads the result again on Try again, and shows it once it lands", async () => {
+  it("reads the result again on Send again, and shows it once it lands", async () => {
     const { rerender } = render(<LessonPlayer lesson={LESSON} plan={null} live />);
     await finishCheck();
     progress.completionFailed = true;
     rerender_(rerender);
 
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send again" }));
     expect(progress.resend).toHaveBeenCalledTimes(1);
 
     // On its way: the screen holds, and does not flick back to a blank result.
@@ -361,7 +375,7 @@ describe("a check result that can't be read (D183)", () => {
     await finishCheck();
     progress.completionFailed = true;
     rerender_(rerender);
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send again" }));
     progress.completionFailed = false;
     rerender_(rerender);
 
@@ -370,7 +384,7 @@ describe("a check result that can't be read (D183)", () => {
 
     expect(screen.getByRole("heading", { name: UNREAD })).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Try again" }).hasAttribute("disabled"),
+      screen.getByRole("button", { name: "Send again" }).hasAttribute("disabled"),
     ).toBe(false);
   });
 

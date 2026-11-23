@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -9,6 +10,7 @@ import {
 import { LessonPlayer } from "./LessonPlayer";
 import { GIVES_WAY_AFTER_MS } from "./QuickCheckSheet";
 import { LESSON_STATUS } from "@/lib/api/lessons";
+import { SAVING_LESSON_LINE, SLOW_MARK_MS } from "@/lib/lessons/verdict";
 import { clearSession, setSession } from "@/lib/auth/session";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
 
@@ -156,12 +158,53 @@ describe("leaving part way", () => {
 
     expect(screen.queryByText(/progress is saved/i)).toBeNull();
     expect(screen.queryByText(/pick up where you left off/i)).toBeNull();
-    // What is true whatever has landed: the last point that did is where they
-    // come back to.
-    expect(screen.getByRole("heading", { name: LAST_SAVED })).toBeTruthy();
-    // And the two choices, exactly as they were.
-    expect(screen.getByRole("button", { name: "Keep learning" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Leave for now" })).toBeTruthy();
+    // Nor the frame's "right where you are" (7 Nov), which is the same claim.
+    expect(screen.queryByText(/right where you are/i)).toBeNull();
+    // The frame's heading, and what is true whatever has landed: the last
+    // point that did is where they come back to.
+    expect(
+      screen.getByRole("heading", { name: "Leaving for now?" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("dialog")).toHaveAccessibleDescription(
+      `${LAST_SAVED} Stepping away and coming back later is a good thing to do.`,
+    );
+    // And the frame's three choices, in its order (17d S7).
+    expect(
+      screen
+        .getAllByRole("button")
+        .filter((b) => b.closest("[role='dialog']"))
+        .map((b) => b.textContent),
+    ).toEqual(["Keep learning", "Take a break", "Leave for now"]);
+  });
+
+  it("takes the child's own break from the dialog, and comes back to the same part (17d S7)", async () => {
+    vi.useFakeTimers();
+    try {
+      render(<LessonPlayer lesson={LESSON} plan={null} live />);
+      next();
+      expect(screen.getByText("Body of Denominators.")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
+
+      fireEvent.click(screen.getByRole("button", { name: "Take a break" }));
+
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.getByText("Take a breath")).toBeTruthy();
+      expect(trackEvent).toHaveBeenCalledWith(
+        "break_start",
+        expect.objectContaining({ breakType: "micro", trigger: "student_request" }),
+      );
+      // Not a leave: nothing written as exited, nobody sent anywhere.
+      expect(push).not.toHaveBeenCalled();
+      expect(writes().map(([s]) => s)).not.toContain(LESSON_STATUS.EXITED);
+
+      await act(async () => {
+        vi.advanceTimersByTime(8_100);
+      });
+
+      expect(screen.getByText("Body of Denominators.")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([
@@ -175,8 +218,11 @@ describe("leaving part way", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
 
-    expect(screen.queryByText(LAST_SAVED)).toBeNull();
+    expect(screen.queryByText(new RegExp(LAST_SAVED))).toBeNull();
     expect(screen.queryByText(/saved/i)).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Leaving for now?" }),
+    ).toBeTruthy();
     expect(screen.getByRole("button", { name: "Leave for now" })).toBeTruthy();
   });
 });
@@ -209,6 +255,68 @@ describe("finishing", () => {
     finish();
 
     expect(screen.getByText("Your progress is saved.")).toBeTruthy();
+  });
+
+  /*
+   * LYDIA'S END-OF-LESSON WAIT (10 and 11 Nov): a live lesson whose
+   * completion write is still on its way says so past about two seconds -
+   * and a lesson that writes nothing never does.
+   */
+  describe("while the completion is on its way", () => {
+    afterEach(() => vi.useRealTimers());
+    const waitOut = () =>
+      act(() => {
+        vi.advanceTimersByTime(SLOW_MARK_MS);
+      });
+
+    it("says her line past two seconds, for a live lesson", () => {
+      vi.useFakeTimers();
+      render(<LessonPlayer lesson={LESSON} plan={null} live />);
+      next();
+      next();
+      next();
+      expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
+
+      waitOut();
+
+      expect(screen.getByText(SAVING_LESSON_LINE)).toBeTruthy();
+      expect(screen.queryByText(/progress is saved/i)).toBeNull();
+    });
+
+    it("never says it for the walkthrough, which writes nothing", () => {
+      vi.useFakeTimers();
+      finish();
+
+      waitOut();
+
+      expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
+    });
+
+    it("never says it for a partial copy, which writes no completion", () => {
+      vi.useFakeTimers();
+      render(<LessonPlayer lesson={LESSON} plan={null} live partial />);
+      next();
+      next();
+      next();
+
+      waitOut();
+
+      expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
+    });
+
+    it("says the save failed, not that it is saving, when the write did not reach Nevo", () => {
+      vi.useFakeTimers();
+      progress.completionFailed = true;
+      render(<LessonPlayer lesson={LESSON} plan={null} live />);
+      next();
+      next();
+      next();
+
+      waitOut();
+
+      expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
+      expect(screen.getByText(/We couldn.t save that just now/)).toBeTruthy();
+    });
   });
 });
 
@@ -403,7 +511,7 @@ describe("a module boundary", () => {
     render(<LessonPlayer lesson={MODULAR} plan={null} />);
     next();
     next();
-    expect(screen.getByText("Section complete")).toBeTruthy();
+    expect(screen.getByText("Stage 1 of 2 done")).toBeTruthy();
   };
 
   it("writes the place it opens onto, so leaving here resumes in the next module", () => {
@@ -427,7 +535,8 @@ describe("a module boundary", () => {
       "break_start",
       expect.anything(),
     );
-    expect(screen.getByRole("group", { name: /Module 2 of 2/ })).toBeTruthy();
+    // One count over the whole lesson (Lydia, 11 Nov addendum).
+    expect(screen.getByRole("group", { name: "Part 3 of 3" })).toBeTruthy();
     expect(screen.getByText("Equivalence")).toBeTruthy();
   });
 });

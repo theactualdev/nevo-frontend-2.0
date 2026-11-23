@@ -26,6 +26,16 @@ vi.mock("@/lib/api/classes", async (importOriginal) => {
   };
 });
 
+// The subjects read Add several makes (SubjectPicker, BulkClassSheet) answers,
+// so the only failure on screen is the one this test means: unanswered in
+// jsdom, it put a second "Try again" beside the save's, depending on timing.
+vi.mock("@/lib/api/subjects", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/subjects")>();
+  return {
+    ...actual,
+    subjectsApi: { ...actual.subjectsApi, list: async () => [], canonical: async () => [] },
+  };
+});
 const cls = (name: string, yearGroup: string, over: Partial<AdminClass> = {}): AdminClass =>
   ({
     id: name,

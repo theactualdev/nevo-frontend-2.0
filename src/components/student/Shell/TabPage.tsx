@@ -5,18 +5,26 @@ import { cn } from "@/lib/utils";
 /**
  * Where a tab's content sits: the frames' scroll padding, the same on Lessons,
  * Progress and Downloads (Nevo Lessons / Progress / Downloads Frame) - 8, 20
- * and 20 round a phone's, 44 on a tablet, 52 on a desktop - and LEFT-ALIGNED.
- * The tabs centred themselves in a max-width box with 32px of padding, so on
- * a tablet a title sat at (96, 24) where the frames put it at (108, 52), and
- * on a desktop it drifted to the middle of the screen.
+ * and 20 round a phone's, 44 on a tablet, 52 on a desktop.
  *
- * Between a phone and a tablet (640-767, no frame) the old 32/24 stands.
+ * AND IN DESIGN'S 820 COLUMN, CENTRED (Lydia, 16 Nov, SCRUM-347): "Student
+ * follows design's 820 CENTRED rule" - the design system's reading column,
+ * "flowing body content ... caps at 820px, centred" - not the frames' narrow
+ * columns left against the rail (900, 640, 600), which left 196-496px empty
+ * on the right of a desktop. The box is the column plus its padding (908 at
+ * 44, 924 at 52), centred in the space beside the rail. On a phone, and
+ * between a phone and a tablet (640-767, no frame), it is the screen.
+ *
+ * THE VIEWPORTS (Lydia, 16 Nov): a tablet is 768-1,023 and 1,024-1,279 is
+ * the wide tablet, both on the tablet's 44; the desktop starts at 1,280
+ * (`xl:`), on 52. Above 1,440 the shell holds and centres (`StudentShell`).
  */
-export const TAB_PAGE = "px-5 pt-2 pb-5 sm:px-8 sm:py-6 md:p-11 lg:p-[52px]";
+export const TAB_PAGE =
+  "mx-auto w-full px-5 pt-2 pb-5 sm:px-8 sm:py-6 md:max-w-[908px] md:p-11 xl:max-w-[924px] xl:p-[52px]";
 
 /** The frames' tab heading: 24 / 30 / 32, 8px under the top padding. */
 export const TAB_TITLE =
-  "mt-2 text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]";
+  "mt-2 text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] xl:text-[32px]";
 
 /**
  * What a tab's page box adds to fill the screen, for a state that centres in
@@ -67,7 +75,7 @@ export function TabEmpty({
       {art}
       <h2
         className={cn(
-          "mt-7 max-w-[280px] shrink-0 text-[19px] font-medium leading-[1.35] text-nevo-near-black md:mt-8 md:max-w-[360px] md:text-[22px] lg:max-w-[400px] lg:text-2xl",
+          "mt-7 max-w-[280px] shrink-0 text-[19px] font-medium leading-[1.35] text-nevo-near-black md:mt-8 md:max-w-[360px] md:text-[22px] xl:max-w-[400px] xl:text-2xl",
           lineClassName,
         )}
       >

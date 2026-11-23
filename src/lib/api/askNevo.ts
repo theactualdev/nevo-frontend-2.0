@@ -263,6 +263,26 @@ export function safetyStop(cause: unknown): SafetyStop | null {
   return { message: apiErrorMessage(cause.detail) };
 }
 
+/** What a teacher's safety stop was about, as the server says it. */
+export type SafetyBlockReason = "names_person" | "other";
+
+/**
+ * A TEACHER'S question the safety check held back, and why (backend 815f222,
+ * live in 62966f1: `detail.reason`, teacher audience only). "names_person" is
+ * a block for a name; anything else - "other", or no reason at all from an
+ * older deployment - is "other". Null for any refusal that is not a safety
+ * stop. The server's `message` is never read here: Lydia's lines replace it.
+ */
+export function teacherSafetyBlock(cause: unknown): SafetyBlockReason | null {
+  if (!safetyStop(cause)) return null;
+  const outer = (cause as ApiError).detail;
+  const inner =
+    outer && typeof outer === "object" ? (outer as { detail?: unknown }).detail : undefined;
+  const reason =
+    inner && typeof inner === "object" ? (inner as { reason?: unknown }).reason : undefined;
+  return reason === "names_person" ? "names_person" : "other";
+}
+
 /** `GET /api/v1/ask-nevo/allowance` (AskNevoAllowanceResponse). */
 export interface AskNevoAllowance {
   questionsLeft: number;

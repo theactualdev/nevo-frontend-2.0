@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { classesApi } from "@/lib/api/classes";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { consentsApi, type WrittenConsentRecord } from "@/lib/api/consents";
@@ -86,6 +86,10 @@ export function WrittenConsentView({
   back?: Back | null;
 }) {
   const [phase, setPhase] = useState<Phase>("loading");
+  /** Bumped by Try again on a failed read of the student (backlog 104). */
+  const [studentRead, setStudentRead] = useState(0);
+  const studentFailedId = useId();
+  const linksFailedId = useId();
   const [student, setStudent] = useState<AdminStudentDetail | null>(null);
   /** The child's look, from their class roster (`useChildLook`). */
   const look = useChildLook(studentId, student?.classIds);
@@ -146,7 +150,7 @@ export function WrittenConsentView({
     return () => {
       alive = false;
     };
-  }, [studentId]);
+  }, [studentId, studentRead]);
 
   useEffect(() => {
     let alive = true;
@@ -235,12 +239,31 @@ export function WrittenConsentView({
             <h3 className="m-0 text-[17px] font-semibold text-nevo-near-black">
               We couldn&rsquo;t load this student
             </h3>
-            <p className="m-0 mt-2 max-w-[52ch] text-sm leading-[1.55] text-nevo-near-black/62">
+            <p
+              id={studentFailedId}
+              className="m-0 mt-2 max-w-[52ch] text-sm leading-[1.55] text-nevo-near-black/62"
+            >
               Nothing has been recorded. Try again in a moment.
             </p>
-            <Link href="/admin/students" className={cn(GHOST_BTN, "mt-5")}>
-              Back to students
-            </Link>
+            {/* The line says try again; now there is something to press
+                (backlog 104), tied to its own line - the page has a second
+                Try again for the adults linked to the child. */}
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                type="button"
+                aria-describedby={studentFailedId}
+                onClick={() => {
+                  setPhase("loading");
+                  setStudentRead((n) => n + 1);
+                }}
+                className={PRIMARY_BTN}
+              >
+                Try again
+              </button>
+              <Link href="/admin/students" className={GHOST_BTN}>
+                Back to students
+              </Link>
+            </div>
           </div>
         ) : saved ? (
           <div className={cn(CARD, "px-[26px] py-7")} role="status">
@@ -272,7 +295,7 @@ export function WrittenConsentView({
             </Link>
           </div>
         ) : (
-          <div className="grid items-start gap-6 lg:grid-cols-2">
+          <div className="grid items-start gap-6 xl:grid-cols-2">
             <div>
               <span className="mb-2 inline-block text-[13.5px] text-nevo-near-black/55">
                 Students &middot; Consent
@@ -371,12 +394,13 @@ export function WrittenConsentView({
                     <div className="h-12 animate-pulse rounded-[10px] bg-nevo-near-black/5" aria-busy="true" />
                   ) : links === "failed" ? (
                     <div>
-                      <FailureLine>
+                      <FailureLine id={linksFailedId}>
                         We couldn&rsquo;t load the adults linked to {firstName}, so this can&rsquo;t
                         be saved yet.
                       </FailureLine>
                       <button
                         type="button"
+                        aria-describedby={linksFailedId}
                         onClick={readLinksAgain}
                         className="mt-2 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
                       >

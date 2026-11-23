@@ -686,7 +686,7 @@ describe("a picture that would not load", () => {
 // ── D25 ────────────────────────────────────────────────────────────────────
 
 describe("the engine's density level", () => {
-  const group = () => screen.getByRole("group", { name: /segment/i });
+  const group = () => screen.getByRole("group", { name: /^Part \d+ of \d+$/ });
   const spaced = (densityLevel: "low" | "high"): AdaptationPlan => ({
     lessonId: "l-1",
     segments: [

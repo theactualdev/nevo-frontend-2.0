@@ -120,3 +120,23 @@ describe("the rail and the viewport", () => {
     }
   });
 });
+
+/**
+ * SCRUM-347: the rail asks the question the `xl:` classes ask, in their unit
+ * (as the teacher rail does since fbececfc). Tailwind 4's `xl` is `80rem`;
+ * asked as `1280px`, a browser with larger text drew the wide rail beside a
+ * page still laid out for a tablet.
+ */
+describe("the width the rail widens at", () => {
+  it("is the xl breakpoint, in rem", () => {
+    const asked: string[] = [];
+    const base = window.matchMedia;
+    window.matchMedia = ((q: string) => {
+      asked.push(q);
+      return base(q);
+    }) as typeof window.matchMedia;
+    render(<AdminSidebar />);
+    expect(asked).toContain("(min-width: 80rem)");
+    expect(asked).not.toContain("(min-width: 1280px)");
+  });
+});

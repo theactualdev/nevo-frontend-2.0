@@ -225,7 +225,7 @@ export function AudioSegment({
       {content.heading && (
         <h2
           className={cn(
-            "text-[22px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black sm:text-[26px] lg:text-[28px]",
+            "text-[22px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black sm:text-[26px] xl:text-[28px]",
             reading && READING_HEADING,
           )}
         >
@@ -237,7 +237,7 @@ export function AudioSegment({
           className={cn(
             "mt-4",
             // Merged over the base, never instead of it: see READING_BODY.
-            "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+            "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] xl:text-[19px]",
             reading && [READING_BODY, READING_INK],
           )}
         >
@@ -383,7 +383,7 @@ export function AudioSegment({
             <p
               key={i}
               className={cn(
-                "text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+                "text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] xl:text-[19px]",
                 reading && [READING_BODY, READING_INK],
                 i > 0 && PARAGRAPH_GAP,
               )}

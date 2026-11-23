@@ -895,3 +895,15 @@ describe("the child's date of birth", () => {
     expect(visibleText(container)).not.toMatch(/can start learning/);
   });
 });
+
+// Privacy & Terms' Entry 2, "from parent consent" (backlog 56).
+describe("Privacy & Terms from the consent", () => {
+  it("links to it, saying where it was opened from", () => {
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+
+    const link = screen.getByRole("link", { name: "Privacy & Terms" });
+    expect(link).toHaveAttribute("href", "/legal/privacy?from=consent");
+    // The consent token stays in the consent's own address, never this one.
+    expect(link.getAttribute("href")).not.toContain(TOKEN);
+  });
+});

@@ -14,9 +14,11 @@ import {
   STEP_TEACHERS,
   STEP_WORKSPACE,
   consentRequestsSent,
+  doneStep,
   gettingStartedSteps,
   teachersOnRoster,
 } from "./overviewGettingStarted";
+import { withBack } from "../back";
 import { SetupPausedBanner } from "../SetupPausedBanner";
 import { SchoolCodeCard } from "./SchoolCodeCard";
 import { CardUnread } from "./CardUnread";
@@ -43,11 +45,15 @@ import {
 import { currentTerm, startOfDay } from "../Adaptations/logWindow";
 import { intelligenceApi, type AttentionFlag } from "@/lib/api/intelligence";
 import { invitesApi } from "@/lib/api/invites";
+import { teachersApi } from "@/lib/api/teachers";
+import { isActive } from "../Teachers/status";
 import { studentsApi, type AdminStudentRow } from "@/lib/api/students";
 import { ageChecksApi, type AgeCheck } from "@/lib/api/ageChecks";
 import { failureKind } from "../NoAccess";
 import { scopeName } from "../Team/adminScopes";
 import { useCanOpen } from "../Shell/useCanOpen";
+import { analyticsApi } from "@/lib/api/analytics";
+import { TransformationLine, type TransformationRead } from "./TransformationLine";
 
 /**
  * D04 Overview Dashboard - the first thing a general-oversight admin sees,
@@ -215,6 +221,12 @@ export function OverviewView() {
   } | null>(null);
   /** The school's own name, from its record - see `school` below. */
   const [schoolName, setSchoolName] = useState<string | null>(null);
+  /**
+   * D26's figures, for D04's quiet line into them (backlog 48). Its own read,
+   * which never holds the page or marks a card unread: a failed one keeps
+   * the way in and says nothing about the figures.
+   */
+  const [transformation, setTransformation] = useState<TransformationRead>({ kind: "loading" });
   /** When the school finished setting up - D04's early-life "Set up 3 days ago". */
   const [setUp, setSetUp] = useState<SetUpAgo | null>(null);
   const [narrative, setNarrative] = useState<SchoolNarrative | null>(null);
@@ -224,6 +236,8 @@ export function OverviewView() {
   const [classActivity, setClassActivity] = useState<ClassActivity[] | null>(null);
   /** Open teacher invitations, for the teachers tile. Null when unread. */
   const [pendingTeachers, setPendingTeachers] = useState<number | null>(null);
+  /** Teachers who have set up their account, for the same tile. Null when unread. */
+  const [teachersSetUp, setTeachersSetUp] = useState<number | null>(null);
   /*
    * The two roll-up rows that are this school's own. Both stay NULL until a
    * read completes, and a read that fails leaves them null - the row is then
@@ -274,6 +288,10 @@ export function OverviewView() {
       .then((sc) => {
         mark("school", false);
         setSchoolName(sc.name?.trim() || null);
+        analyticsApi
+          .getSchoolTransformation(sc.id)
+          .then((data) => setTransformation({ kind: "ready", data }))
+          .catch((err: unknown) => setTransformation({ kind: failureKind(err) }));
         setSetUp(setUpAgo(readOnboarding(sc).completedAt, Date.now()));
         const term = currentTerm(readAcademic(sc).terms ?? [], Date.now());
         const from = term ? startOfDay(term.from) : null;
@@ -406,6 +424,12 @@ export function OverviewView() {
       .list()
       .then((rows) => setPendingTeachers(pendingTeacherInvites(rows, Date.now())))
       .catch(() => setPendingTeachers(null));
+    // Whether "with a Nevo account" is true of the headcount: it includes
+    // invited teachers who never set up. Its own read and its own failure.
+    teachersApi
+      .list()
+      .then((rows) => setTeachersSetUp(rows.filter((t) => isActive(t.status)).length))
+      .catch(() => setTeachersSetUp(null));
 
     /*
      * THE ROLL-UP READS DO NOT GATE THE PAGE, and they used to.
@@ -583,7 +607,9 @@ export function OverviewView() {
             return mayOpen(g.href) ? (
               <Link
                 key={g.key}
-                href={g.href}
+                // Back returns here (the admin back-links rule; backlog 89:
+                // Back on D30 went to All students, not the Overview).
+                href={withBack(g.href, { href: "/admin/dashboard", label: "Overview" })}
                 className={cn(rowClass, "transition-[filter] hover:brightness-[0.985]")}
               >
                 {body}
@@ -628,6 +654,7 @@ export function OverviewView() {
     counts,
     early,
     pendingTeacherInvites: pendingTeachers,
+    teachersSetUp,
   });
 
   return (
@@ -788,41 +815,59 @@ export function OverviewView() {
                 both asserting that nothing of the kind is held, above a live
                 count that can come back non-zero. One source now, so they
                 cannot drift apart again. */}
-            <div className={cn(CARD, "mt-4 px-[26px] py-7")}>
+            <div
+              className={cn(
+                CARD,
+                audit
+                  ? "mt-4 px-[22px] py-5 xl:px-[30px] xl:py-[26px]"
+                  : "mt-4 px-[26px] py-7",
+              )}
+            >
               {audit ? (
-                <>
-                  <div className="flex items-baseline gap-3">
-                    {/* NAVY AT ZERO, ALWAYS. SCRUM-39 is explicit that the
-                        compliance zero is "the expected reading forever" and
-                        "must not look like missing data" - the muting the
-                        snapshot tiles do in the early state is deliberately
-                        wrong here, and this numeral is not built from
-                        `snapshotTiles.ts` for that reason. */}
-                    <span className="text-[38px] leading-none font-semibold text-nevo-navy">
-                      {audit.diagnosticLabelsStored}
-                    </span>
-                    <span className="text-[15px] font-semibold text-nevo-near-black">
+                /*
+                 * D04'S ROW (Lydia, 16 Nov, SCRUM-347: "Admin BUILDS the
+                 * drawn two-column layouts"). The numeral on the left, the
+                 * words beside it; "What we store" on the right from 1280,
+                 * under the words below it. One link, placed by the grid, so
+                 * it is never in the page twice. Desktop: numeral 40, gap 26,
+                 * padding 26/30. Tablet: numeral 32, gap 18, padding 20/22.
+                 */
+                <div
+                  data-compliance-row
+                  className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-[18px] xl:grid-cols-[auto_minmax(0,1fr)_auto] xl:gap-x-[26px]"
+                >
+                  {/* NAVY AT ZERO, ALWAYS. SCRUM-39 is explicit that the
+                      compliance zero is "the expected reading forever" and
+                      "must not look like missing data" - the muting the
+                      snapshot tiles do in the early state is deliberately
+                      wrong here, and this numeral is not built from
+                      `snapshotTiles.ts` for that reason. */}
+                  <span className="row-span-2 text-[32px] leading-none font-semibold tracking-[-0.02em] text-nevo-navy xl:row-span-1 xl:text-[40px]">
+                    {audit.diagnosticLabelsStored}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="m-0 text-[14px] font-semibold text-nevo-near-black xl:text-[15px]">
                       {labelHero(audit.diagnosticLabelsStored, "overview").unit}
-                    </span>
+                    </p>
+                    <p className="mt-[5px] max-w-[600px] text-[13px] leading-[1.55] text-nevo-near-black/66 xl:mt-1.5 xl:text-sm xl:leading-[1.6]">
+                      {labelHero(audit.diagnosticLabelsStored, "overview").body}
+                    </p>
+                    <p className="mt-3 text-[13px] text-nevo-near-black/50">
+                      {onDay(audit.generatedAt)
+                        ? `Checked ${onDay(audit.generatedAt)}`
+                        : "Checked"}
+                      {audit.findings.length > 0
+                        ? ` · ${audit.findings.length} finding${audit.findings.length === 1 ? "" : "s"} to review`
+                        : ""}
+                    </p>
                   </div>
-                  <p className="mt-3 max-w-[62ch] text-sm leading-[1.6] text-nevo-near-black/66">
-                    {labelHero(audit.diagnosticLabelsStored, "overview").body}
-                  </p>
-                  <p className="mt-3 text-[13px] text-nevo-near-black/50">
-                    {onDay(audit.generatedAt)
-                      ? `Checked ${onDay(audit.generatedAt)}`
-                      : "Checked"}
-                    {audit.findings.length > 0
-                      ? ` · ${audit.findings.length} finding${audit.findings.length === 1 ? "" : "s"} to review`
-                      : ""}
-                  </p>
                   <Link
                     href="/admin/compliance"
-                    className="mt-4 inline-block text-[13.5px] font-semibold text-nevo-navy hover:underline"
+                    className="col-start-2 mt-2.5 justify-self-start text-[13px] font-semibold whitespace-nowrap text-nevo-navy hover:underline xl:col-start-3 xl:row-start-1 xl:mt-0.5 xl:text-[13.5px]"
                   >
                     What we store &rarr;
                   </Link>
-                </>
+                </div>
               ) : auditPhase === "denied" ? (
                 /* Not a failure and not a finding: this admin's account does
                    not include the check. Said once, with who can change it -
@@ -864,6 +909,13 @@ export function OverviewView() {
                 />
               )}
             </div>
+
+            {/* D04's quiet line into School transformation, under the
+                compliance row as its desktop draws it (backlog 48). */}
+            <TransformationLine
+              read={transformation}
+              canOpen={mayOpen("/admin/reports/transformation")}
+            />
 
             <h3 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
               {early ? SNAPSHOT_HEADING_EARLY : SNAPSHOT_HEADING}
@@ -930,7 +982,7 @@ export function OverviewView() {
 
             {early && (
               <div className={cn(CARD, "mt-3 overflow-hidden")}>
-                {gettingStartedSteps(school).map((k, i) => {
+                {gettingStartedSteps(school).map((open, i) => {
                   // A tick is a claim about this school, so it is only ever set
                   // from a signal we hold. The rest carry no mark at all rather
                   // than an unticked box, which would assert the school has not
@@ -943,6 +995,14 @@ export function OverviewView() {
                     (i === STEP_STUDENTS && (audit?.studentsProfiled ?? 0) > 0) ||
                     (i === STEP_TEACHERS && teachersOnRoster(counts)) ||
                     (i === STEP_CONSENT && consentRequestsSent(roster));
+                  // A done step in D04's own words (backlog 89).
+                  const k = done
+                    ? doneStep(open, i, {
+                        teachersInvited: counts?.teachers ?? null,
+                        teachersSetUp,
+                        studentsEnrolled: counts?.activeStudents ?? null,
+                      })
+                    : open;
                   const row = (
                     <>
                       <span

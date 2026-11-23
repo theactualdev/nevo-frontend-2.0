@@ -176,7 +176,7 @@ describe("several checks, one after another in the same sheet", () => {
   it("asks each in turn, saying where the child is, and goes on only after the last", async () => {
     await toTheChecks();
 
-    expect(within(sheet()).getByText("A few quick checks on this section.")).toBeTruthy();
+    expect(within(sheet()).getByText("A few quick checks on this part.")).toBeTruthy();
     expect(within(sheet()).getByText("Question 1?")).toBeTruthy();
     await pick("Right 1");
     press("Next check");
@@ -188,7 +188,7 @@ describe("several checks, one after another in the same sheet", () => {
     await pick("Right 2");
     press("Next check");
 
-    expect(within(sheet()).getByText("Last quick check for this section.")).toBeTruthy();
+    expect(within(sheet()).getByText("Last quick check for this part.")).toBeTruthy();
     await pick("Right 3");
     expect(within(sheet()).queryByRole("button", { name: "Next check" })).toBeNull();
     press("Finish");
@@ -318,7 +318,7 @@ describe("the server's marks, read back as the sitting opens", () => {
     await reopened(["cp-2"]);
 
     await screen.findByRole("dialog");
-    expect(within(sheet()).getByText("A few quick checks on this section.")).toBeTruthy();
+    expect(within(sheet()).getByText("A few quick checks on this part.")).toBeTruthy();
   });
 
   it("asks none of a section whose every check is passed", async () => {

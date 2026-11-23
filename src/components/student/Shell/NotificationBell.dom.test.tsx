@@ -198,7 +198,7 @@ describe("the panel's place on the screen (board 28)", () => {
     const panel = screen.getByRole("dialog", { name: "Notifications" });
 
     expect(panel).toHaveClass("absolute", "inset-x-4", "top-full");
-    expect(panel).toHaveClass("md:right-0", "md:w-[340px]", "lg:w-[360px]");
+    expect(panel).toHaveClass("md:right-0", "md:w-[340px]", "xl:w-[360px]");
     // The bell is positioned only from tablet up, where the panel is its.
     const bell = screen.getByRole("button", { name: "Notifications" });
     expect(bell.parentElement).not.toHaveClass("relative");

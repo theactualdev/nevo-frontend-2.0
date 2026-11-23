@@ -58,6 +58,12 @@ export const RETEACH_COPY = {
   again: "Let's try it a different way",
   waysLine:
     "Here are some other ways to look at it. Take any of them, as many times as you like.",
+  /**
+   * A second miss with no way in to offer (Lydia, 16 Nov): exactly this, in
+   * place of "Let's try it a different way", and no invented help. A missing
+   * format is SCRUM-331's to fix, not this line's.
+   */
+  noWayIn: "Not quite. Have another look at this one.",
   shortBreak: "Take a short break",
   /** 17f's fourth way: the Socratic panel, offered at the third miss. */
   talk: "Talk it through",
@@ -162,12 +168,14 @@ function centredCard(): boolean {
  * SEVERAL CHECKS IN ONE SECTION: where the child is, WITHOUT A COUNT (Lydia,
  * 7 Nov, copy pass). The frame's middle line, "Still going - one more after
  * this", was untrue for a section of four or more, and "Check 2 of 3" was a
- * count in front of a child. Her words hold for any number.
+ * count in front of a child. Her words hold for any number - in a child's
+ * word for where they are, "part", since her 11 Nov addendum ("Section and
+ * segment are our words for a teacher").
  */
 export const SEVERAL_CHECKS_LINES = {
-  first: "A few quick checks on this section.",
+  first: "A few quick checks on this part.",
   middle: "Still going.",
-  last: "Last quick check for this section.",
+  last: "Last quick check for this part.",
 } as const;
 
 /** The line for where a check sits among its section's. */
@@ -307,7 +315,13 @@ export function QuickCheckSheet({
    * WHAT IT SAYS IS ALL THE SERVER'S. Which steps, which ways: its reply's.
    * Nothing here chooses by the check's level, or by anything else (rule 3).
    * Without a re-teaching for this check, a miss is held and gives way, as
-   * before.
+   * before - and so is a miss whose re-teaching has NO STEPS TO SHOW (rule
+   * 5). The box opened on it anyway, and drew "Let's work through it
+   * together" over nothing at all (12 Nov dry run, Heat Transfer's second
+   * check), while the section's own ways in, "One step at a time" among
+   * them, waited unseen behind the sheet. A heading promising a
+   * working-through is not drawn where there is none to work through; the
+   * sheet gives way to the ways the section has instead.
    */
   const [box, setBox] = useState<{
     held: string;
@@ -364,7 +378,7 @@ export function QuickCheckSheet({
 
   // A miss the server re-teaches opens the box, in place of giving way -
   // taken as the reply lands, during render, so no frame shows it giving way.
-  if (!box && missed && reteachHere && chosenId !== null) {
+  if (!box && missed && reteachHere && steps.length > 0 && chosenId !== null) {
     setBox({ held: chosenId, pick: null, after: "asking" });
   }
   // The retry is timed from the box opening (rule 4).
@@ -519,7 +533,7 @@ export function QuickCheckSheet({
         // and leave the panel pinned to the bottom-left while the centering
         // translate still applies. On the phone the sheet takes vertical
         // drags for its pull (`touch-pan-x`) and keeps pinch zoom.
-        className="gap-0 rounded-t-[16px] border-0! bg-nevo-cream px-6 pt-3 pb-7 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] max-sm:touch-pan-x max-sm:touch-pinch-zoom sm:inset-x-auto! sm:top-1/2 sm:bottom-auto! sm:left-1/2! sm:w-[560px] sm:max-w-[calc(100%-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[16px] sm:px-8 sm:py-7 sm:shadow-[0_8px_32px_rgba(0,0,0,0.16)] lg:w-[600px] lg:px-10"
+        className="gap-0 rounded-t-[16px] border-0! bg-nevo-cream px-6 pt-3 pb-7 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] max-sm:touch-pan-x max-sm:touch-pinch-zoom sm:inset-x-auto! sm:top-1/2 sm:bottom-auto! sm:left-1/2! sm:w-[560px] sm:max-w-[calc(100%-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[16px] sm:px-8 sm:py-7 sm:shadow-[0_8px_32px_rgba(0,0,0,0.16)] xl:w-[600px] xl:px-10"
       >
         {/* Drag handle — sheet form only */}
         <div className="mx-auto mb-[18px] h-1 w-8 rounded-full bg-nevo-near-black/30 sm:hidden" />
@@ -691,11 +705,15 @@ function ReteachBox({
 }) {
   const asking = box.after === "asking";
   const right = box.after === "right";
+  // A second miss with nothing to offer: "a different way" would be untrue.
+  const noWayIn = box.after === "again" && ways.length === 0 && !talk;
   const title = right
     ? RETEACH_COPY.done
     : asking
       ? RETEACH_COPY.title
-      : RETEACH_COPY.again;
+      : noWayIn
+        ? RETEACH_COPY.noWayIn
+        : RETEACH_COPY.again;
   const body = cn("text-[14px] leading-[1.5] text-nevo-near-black/82", reading && READING_BODY);
   return (
     <div data-reteach-box={box.after}>

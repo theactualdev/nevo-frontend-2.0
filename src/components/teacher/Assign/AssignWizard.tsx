@@ -21,7 +21,12 @@ import {
   UNREVIEWED_LEFT_OFF,
 } from "@/lib/lessons/signOff";
 import { TryAgain } from "@/components/teacher/shared/ReadFailed";
-import { assignRefusal } from "@/lib/lessons/signOff";
+import {
+  assignRefusal,
+  REVIEW_STEPS_LEFT,
+  REVIEW_STEPS_LEFT_SEVERAL,
+  reviewStepsLeftOf,
+} from "@/lib/lessons/signOff";
 
 /**
  * C07i Lesson Assignment: four steps, each a direct question - conversational
@@ -783,12 +788,16 @@ export function AssignWizard({
        * lesson's outstanding steps (SCRUM-307, `lessons[].outstandingReviewSteps`);
        * with none named, the lesson page, as before.
        */
-      const refusedSteps =
+      /* The lessons the 409 held back (SCRUM-307): the steps for one, and the
+         count for several (Lydia, 16 Nov). */
+      const refusedLessons =
         refusal && refusal.status === "rejected"
           ? (((refusal.reason as ApiError).detail as {
               detail?: { lessons?: { lessonId?: string; outstandingReviewSteps?: string[] }[] };
-            } | undefined)?.detail?.lessons?.find((l) => l.lessonId === single)?.outstandingReviewSteps ?? [])
-          : [];
+            } | undefined)?.detail?.lessons ?? null)
+          : null;
+      const refusedSteps =
+        refusedLessons?.find((l) => l.lessonId === single)?.outstandingReviewSteps ?? [];
       const back = single ? assignRefusal(single, refusedSteps) : null;
       const stepNamed = Boolean(back && refusedSteps.length > 0);
       setErrorHref(notApproved && single ? (stepNamed && back ? back.href : `/teacher/lessons/${single}`) : "");
@@ -805,8 +814,10 @@ export function AssignWizard({
               ? named
               : withNextStep(named)
             : single
-              ? "This lesson still has sections waiting for you, so it cannot go to students yet."
-              : "One of these lessons still has sections waiting for you, so it cannot go to students yet. Open it from your Library and check them."
+              ? REVIEW_STEPS_LEFT
+              : refusedLessons?.length
+                ? reviewStepsLeftOf(refusedLessons.length)
+                : REVIEW_STEPS_LEFT_SEVERAL
           : refusedEveryTime
             ? `${refusedLine} Nothing has been sent.`
             : "We couldn’t assign that just now. Nothing has been sent - try again.",

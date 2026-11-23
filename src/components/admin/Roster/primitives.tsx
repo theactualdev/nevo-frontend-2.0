@@ -522,9 +522,18 @@ export function Modal({
  * the failure rather than blaming the person. What they typed is still there,
  * which the copy says out loud so they do not retype it defensively.
  */
-export function FailureLine({ children }: { children: React.ReactNode }) {
+export function FailureLine({
+  children,
+  id,
+}: {
+  children: React.ReactNode;
+  /** So the retry beside it can name it with `aria-describedby`. */
+  id?: string;
+}) {
   return (
-    <p className="m-0 flex-1 text-[13.5px] leading-[1.5] text-nevo-navy">{children}</p>
+    <p id={id} className="m-0 flex-1 text-[13.5px] leading-[1.5] text-nevo-navy">
+      {children}
+    </p>
   );
 }
 
