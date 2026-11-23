@@ -415,9 +415,6 @@ export function ClassDetailView({
                   <div className="mt-3 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3">
                     <p className="m-0 text-[13.5px] leading-[1.5] text-nevo-navy">
                       {name} will no longer see {klass.name} in their console
-                      {teachers.length === 1
-                        ? ", and the class will have no teacher until you assign one"
-                        : ""}
                       {/* SCRUM-40: "His notes on these students stay with the
                           school." This read "Nothing about the students
                           changes", which is a different and weaker claim - it
@@ -427,6 +424,15 @@ export function ClassDetailView({
                           "removing a teacher does not remove or hide what they
                           wrote", so the fact exists and was simply not said. */}
                       . Their notes on these students stay with the school.
+                      {/* SCRUM-40's LAST TEACHER line, fixed copy - "do not
+                          paraphrase" (backlog 79). It was folded into the
+                          sentence above as our own clause. */}
+                      {teachers.length === 1 ? (
+                        <>
+                          {" "}This will leave {klass.name} without a teacher.
+                          You can assign someone whenever you&rsquo;re ready.
+                        </>
+                      ) : null}
                     </p>
                     <div className="mt-3 flex gap-2.5">
                       <button

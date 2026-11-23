@@ -255,10 +255,13 @@ describe("making somebody primary where the class has one", () => {
     const { container } = fromClass([ADEYEMI]);
     await choose();
     fireEvent.click(screen.getByRole("button", { name: /^Primary teacher/ }));
+    // BACKLOG 81: SCRUM-40's fixed line, the name and "they" for its "her"
+    // and "she", and the commit label the spec gives this state.
     expect(said(container)).toMatch(
-      /Folake Adeyemi is the primary teacher for JSS 2A\. Making Bisi Bello primary moves Folake Adeyemi to co-teacher; they keep the class and their notes\./,
+      /Folake Adeyemi is Primary for JSS 2A right now\. Making Bisi Bello Primary moves Folake Adeyemi to Co-teacher; they keep the class and their notes\./,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Assign Mathematics to 1 class" }));
+    expect(screen.queryByRole("button", { name: "Assign Mathematics to 1 class" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Assign and make Primary" }));
 
     await waitFor(() => expect(createAssignment).toHaveBeenCalled());
     // Her own assignment, back to her, as co-teacher: she keeps her subject.
@@ -279,7 +282,7 @@ describe("making somebody primary where the class has one", () => {
     fromClass([ADEYEMI]);
     await choose();
     fireEvent.click(screen.getByRole("button", { name: /^Primary teacher/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Assign Mathematics to 1 class" }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign and make Primary" }));
     await waitFor(() =>
       expect(said(row("JSS 2A"))).toMatch(
         /Folake Adeyemi is now co-teacher for JSS 2A, but making Bisi Bello primary didn't go through/,
