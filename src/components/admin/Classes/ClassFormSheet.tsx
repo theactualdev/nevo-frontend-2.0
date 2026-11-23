@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useEffect, useId, useMemo, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
@@ -303,19 +304,14 @@ export function ClassFormSheet({
         <label htmlFor="class-year" className={LABEL}>
           Year group
         </label>
-        <select
+        <NevoSelect
           id="class-year"
           value={year}
-          onChange={(e) => setYear(e.target.value)}
-          className={FIELD}
-        >
-          <option value="">Choose a year group</option>
-          {yearGroupOptions().map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          onValueChange={setYear}
+          placeholder="Choose a year group"
+          options={yearGroupOptions()}
+          triggerClassName={FIELD}
+        />
       </div>
 
       {/* CREATE ONLY. The update route doesn't store these, so on Edit they

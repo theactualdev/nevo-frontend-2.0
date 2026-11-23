@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useCallback, useEffect, useState } from "react";
 import { classesApi, type AdminClass, type AssignedClass } from "@/lib/api/classes";
 import { yearGroupLabel } from "@/lib/constants/yearGroups";
@@ -435,19 +436,23 @@ export function RemoveAccessSheet({
                 </span>
                 <RolePill role={h.role} />
               </div>
-              <label className="mt-3 block">
+              <div className="mt-3">
                 {/* D06b's two labels (backlog 84): a Primary row is handed
                     on as Primary; a Co-teacher row asks who else. */}
-                <span className="mb-1.5 block text-[13px] font-medium text-nevo-near-black/62">
+                <span
+                  id={`ra-label-${h.assignmentId}`}
+                  className="mb-1.5 block text-[13px] font-medium text-nevo-near-black/62"
+                >
                   {h.role === "primary"
                     ? "Who takes this class as Primary?"
                     : "Who else should have this class?"}
                 </span>
-                <select
+                <NevoSelect
+                  aria-labelledby={`ra-label-${h.assignmentId}`}
                   value={value}
                   disabled={read === "loading"}
-                  onChange={(e) => {
-                    const v = e.target.value;
+                  placeholder="Choose a teacher"
+                  onValueChange={(v) => {
                     setPlan((prev) => ({
                       ...prev,
                       [h.assignmentId]:
@@ -458,36 +463,29 @@ export function RemoveAccessSheet({
                             : { kind: "reassign", toTeacherId: v },
                     }));
                   }}
-                  className="h-[46px] w-full cursor-pointer rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-3.5 text-sm text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
-                >
-                  <option value="">Choose a teacher</option>
-                  {staff.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {/* D06b's value: "Mr. Bello · takes Primary". */}
-                      {h.role === "primary"
-                        ? `${t.name} · takes Primary`
-                        : `${t.name} · Co-teacher`}
-                    </option>
-                  ))}
-                  {/*
-                    * Offered where the class keeps its primary regardless -
-                    * AND on a Primary row when there is nobody else to hand
-                    * it to. The note above tells the admin "you can still
-                    * remove them from each class below", and a Primary row
-                    * with no remove option left the commit disabled behind
-                    * that instruction, with no way through.
-                    */}
-                  {h.role === "co_teacher" && value === "__remove" ? (
-                    <option value="__remove">
-                      No replacement, just remove {firstName}
-                    </option>
-                  ) : h.role === "primary" && read === "ready" && staff.length === 0 ? (
-                    <option value="__remove">
-                      Just remove {firstName} from this class
-                    </option>
-                  ) : null}
-                </select>
-              </label>
+                  triggerClassName="h-[46px] w-full rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-3.5 text-sm text-nevo-near-black transition-colors focus:border-nevo-navy"
+                  options={[
+                    ...staff.map((t) => ({
+                      value: t.id,
+                      // D06b's value: "Mr. Bello · takes Primary".
+                      label: h.role === "primary" ? `${t.name} · takes Primary` : `${t.name} · Co-teacher`,
+                    })),
+                    /*
+                     * Offered where the class keeps its primary regardless -
+                     * AND on a Primary row when there is nobody else to hand
+                     * it to. The note above tells the admin "you can still
+                     * remove them from each class below", and a Primary row
+                     * with no remove option left the commit disabled behind
+                     * that instruction, with no way through.
+                     */
+                    ...(h.role === "co_teacher" && value === "__remove"
+                      ? [{ value: "__remove", label: `No replacement, just remove ${firstName}` }]
+                      : h.role === "primary" && read === "ready" && staff.length === 0
+                        ? [{ value: "__remove", label: `Just remove ${firstName} from this class` }]
+                        : []),
+                  ]}
+                />
+              </div>
               {/* D06b draws this apart from the select, under a Co-teacher
                   row, where the class keeps its Primary (backlog 84). */}
               {h.role === "co_teacher" && value !== "__remove" ? (

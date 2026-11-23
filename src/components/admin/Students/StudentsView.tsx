@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import Image from "next/image";
 import Link from "next/link";
 import { withBack } from "../back";
@@ -473,43 +474,37 @@ export function StudentsView() {
                 />
               </label>
 
-              <label className={FILTER_PILL}>
-                <span className="sr-only">Filter by class</span>
-                <select
-                  value={classId}
-                  onChange={(e) => setClassId(e.target.value)}
-                  className="cursor-pointer appearance-none bg-transparent outline-none"
-                >
-                  <option value="">All classes</option>
-                  {classes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <NevoSelect
+                aria-label="Filter by class"
+                value={classId}
+                onValueChange={setClassId}
+                options={[
+                  { value: "", label: "All classes" },
+                  ...classes.map((c) => ({ value: c.id, label: c.name })),
+                ]}
+                triggerClassName={FILTER_PILL}
+              />
 
-              <label className={FILTER_PILL}>
-                <span className="sr-only">Filter by consent</span>
-                <select
-                  value={consent}
-                  onChange={(e) => setConsent(e.target.value)}
-                  className="cursor-pointer appearance-none bg-transparent outline-none"
-                >
-                  <option value="">Any consent</option>
-                  {/* D25's own word, and Lydia's 19 Nov route for chasing
-                      consent across the school (L24). */}
-                  <option value="outstanding">Outstanding</option>
-                  {/* The pills' own words, so a filter and the rows it narrows
-                      say the same thing - D07's options are "Confirmed",
-                      "Pending", "Not sent". These read "Recorded", "Asked, no
-                      reply yet", "Not asked yet" beside pills that did not. */}
-                  <option value="confirmed">Confirmed</option>
-                  <option value="pending">Pending</option>
-                  <option value="not_sent">Not sent</option>
-                  <option value="withdrawn">Withdrawn</option>
-                </select>
-              </label>
+              <NevoSelect
+                aria-label="Filter by consent"
+                value={consent}
+                onValueChange={setConsent}
+                options={[
+                  { value: "", label: "Any consent" },
+                  /* D25's own word, and Lydia's 19 Nov route for chasing
+                     consent across the school (L24). */
+                  { value: "outstanding", label: "Outstanding" },
+                  /* The pills' own words, so a filter and the rows it narrows
+                     say the same thing - D07's options are "Confirmed",
+                     "Pending", "Not sent". These read "Recorded", "Asked, no
+                     reply yet", "Not asked yet" beside pills that did not. */
+                  { value: "confirmed", label: "Confirmed" },
+                  { value: "pending", label: "Pending" },
+                  { value: "not_sent", label: "Not sent" },
+                  { value: "withdrawn", label: "Withdrawn" },
+                ]}
+                triggerClassName={FILTER_PILL}
+              />
 
               <button
                 type="button"

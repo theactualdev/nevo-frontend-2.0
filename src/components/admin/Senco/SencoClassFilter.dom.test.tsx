@@ -1,3 +1,4 @@
+import { chooseOption } from "@/test/nevoSelect";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
@@ -102,14 +103,9 @@ const klass = (id: string, name: string): AdminClass => ({
   archivedAt: null,
 });
 
-async function openProfilesAndFilter(container: HTMLElement, classId: string) {
+async function openProfilesAndFilter(container: HTMLElement, className: string) {
   fireEvent.click(await screen.findByRole("tab", { name: "Learner profiles" }));
-  const select = await waitFor(() => {
-    const el = container.querySelector("select") as HTMLSelectElement | null;
-    if (!el) throw new Error("no class filter yet");
-    return el;
-  });
-  fireEvent.change(select, { target: { value: classId } });
+  await chooseOption(await screen.findByRole("combobox", { name: "Filter by class" }), className);
 }
 
 describe("SencoView class filter", () => {
@@ -118,7 +114,7 @@ describe("SencoView class filter", () => {
     perClass.mockRejectedValue(new Error("500"));
 
     const { container } = render(<SencoView />);
-    await openProfilesAndFilter(container, "c1");
+    await openProfilesAndFilter(container, "JSS 2A");
 
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/couldn't read that class's roster/i),
@@ -134,7 +130,7 @@ describe("SencoView class filter", () => {
     perClass.mockResolvedValue([]);
 
     const { container } = render(<SencoView />);
-    await openProfilesAndFilter(container, "c1");
+    await openProfilesAndFilter(container, "JSS 2A");
 
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/No profiles match/i),
@@ -148,7 +144,7 @@ describe("SencoView class filter", () => {
     perClass.mockImplementation(() => new Promise(() => {}));
 
     const { container } = render(<SencoView />);
-    await openProfilesAndFilter(container, "c1");
+    await openProfilesAndFilter(container, "JSS 2A");
 
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/Still reading that class's roster/i),

@@ -1,5 +1,6 @@
+import { chooseOption, optionNames } from "@/test/nevoSelect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import type { Notification } from "@/lib/api/notifications";
 import { NotificationsView } from "./NotificationsView";
 
@@ -49,12 +50,8 @@ describe("the notifications page's view", () => {
     render(<NotificationsView />);
 
     const menu = await screen.findByRole("combobox", { name: "View" });
-    expect(Array.from((menu as HTMLSelectElement).options).map((o) => o.text)).toEqual([
-      "Everything",
-      "Unread only",
-      "Archived",
-    ]);
-    expect(menu).toHaveValue("everything");
+    expect(optionNames(menu)).toEqual(["Everything", "Unread only", "Archived"]);
+    expect(menu).toHaveTextContent("Everything");
     expect(screen.queryByRole("button", { name: /Show archived|Unread only/ })).not.toBeInTheDocument();
   });
 
@@ -62,7 +59,7 @@ describe("the notifications page's view", () => {
     render(<NotificationsView />);
     await screen.findByText("Notification n2");
 
-    fireEvent.change(screen.getByRole("combobox", { name: "View" }), { target: { value: "unread" } });
+    await chooseOption(screen.getByRole("combobox", { name: "View" }), "Unread only");
 
     await waitFor(() => expect(screen.queryByText("Notification n2")).not.toBeInTheDocument());
     expect(screen.getByText("Notification n1")).toBeInTheDocument();
@@ -72,11 +69,11 @@ describe("the notifications page's view", () => {
     render(<NotificationsView />);
     const menu = await screen.findByRole("combobox", { name: "View" });
 
-    fireEvent.change(menu, { target: { value: "archived" } });
+    await chooseOption(menu, "Archived");
     expect(await screen.findByText("Notification a1")).toBeInTheDocument();
     expect(list).toHaveBeenLastCalledWith(expect.objectContaining({ archived: true }));
 
-    fireEvent.change(menu, { target: { value: "everything" } });
+    await chooseOption(menu, "Everything");
     expect(await screen.findByText("Notification n2")).toBeInTheDocument();
     expect(list).toHaveBeenLastCalledWith(expect.objectContaining({ archived: false }));
   });

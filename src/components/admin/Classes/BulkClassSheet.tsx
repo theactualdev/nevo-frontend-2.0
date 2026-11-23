@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { sessionLabel } from "./groupByYear";
 import {
@@ -492,21 +493,14 @@ export function BulkClassSheet({
                 <label htmlFor="bulk-add-year" className="sr-only">
                   Add a year group
                 </label>
-                <select
+                <NevoSelect
                   id="bulk-add-year"
                   value=""
-                  onChange={(e) => addYear(e.target.value)}
-                  className={FIELD}
-                >
-                  <option value="">
-                    {rows.length === 0 ? "Choose a year group" : "Add another year group"}
-                  </option>
-                  {addable.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={addYear}
+                  placeholder={rows.length === 0 ? "Choose a year group" : "Add another year group"}
+                  options={addable}
+                  triggerClassName={FIELD}
+                />
               </div>
             ) : null}
           </div>

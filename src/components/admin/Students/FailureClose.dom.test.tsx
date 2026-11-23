@@ -1,3 +1,4 @@
+import { chooseOption } from "@/test/nevoSelect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
@@ -112,7 +113,7 @@ describe("a failed write can be closed, not only retried", () => {
   it("moving a student", async () => {
     moveToClass.mockRejectedValue(new Error("500"));
     const onClose = vi.fn();
-    const { container } = render(
+    render(
       <MoveStudentSheet
         studentId="s1"
         studentName="Amara Obi"
@@ -122,7 +123,7 @@ describe("a failed write can be closed, not only retried", () => {
         onMoved={() => {}}
       />,
     );
-    fireEvent.change(container.querySelector("#move-dest")!, { target: { value: "c2" } });
+    await chooseOption(screen.getByRole("combobox", { name: "Move to" }), /^JSS 1B/);
     fireEvent.click(screen.getByRole("button", { name: "Move Amara" }));
     await closeAfterFailure(onClose);
   });

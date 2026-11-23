@@ -1,3 +1,4 @@
+import { chooseOption } from "@/test/nevoSelect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
@@ -160,8 +161,7 @@ describe("Clear filters", () => {
 
     fireEvent.click(await button("This half-term"));
     fireEvent.click(await button("Suggested a break"));
-    const select = await screen.findByRole("combobox");
-    fireEvent.change(select, { target: { value: "c1" } });
+    await chooseOption(await screen.findByRole("combobox", { name: "Filter by class" }), "JSS 2A");
     await waitFor(() => expect(lastCall().classId).toBe("c1"));
     expect(lastCall().eventType).toHaveLength(1);
 

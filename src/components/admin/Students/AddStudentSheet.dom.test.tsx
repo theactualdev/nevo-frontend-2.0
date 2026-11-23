@@ -1,3 +1,4 @@
+import { chooseOption, optionNames } from "@/test/nevoSelect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
@@ -117,10 +118,7 @@ const fill = async (first = "Zainab") => {
   fireEvent.change(screen.getByLabelText("Student ID / Admission Number"), {
     target: { value: "BGA/2142" },
   });
-  await waitFor(() =>
-    expect(screen.getByRole("option", { name: "JSS 2A" })).toBeInTheDocument(),
-  );
-  fireEvent.change(screen.getByLabelText("Class"), { target: { value: "c1" } });
+  await chooseOption(screen.getByLabelText("Class"), "JSS 2A");
 };
 
 beforeEach(() => {
@@ -426,17 +424,17 @@ describe("when the classes can't be read", () => {
         /We couldn't read your school's classes just now, so there's nothing to show here yet/,
       ),
     );
-    expect(screen.queryByRole("option", { name: "JSS 2A" })).toBeNull();
+    expect(optionNames(screen.getByLabelText("Class"))).toEqual([]);
 
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByRole("option", { name: "JSS 2A" })).toBeInTheDocument();
+    await waitFor(() => expect(optionNames(screen.getByLabelText("Class"))).toContain("JSS 2A"));
     expect(visibleText(container)).not.toMatch(/couldn't read your school's classes/);
     expect(list).toHaveBeenCalledTimes(2);
   });
 
   it("says nothing when they were read", async () => {
     const { container } = mount();
-    await screen.findByRole("option", { name: "JSS 2A" });
+    await waitFor(() => expect(optionNames(screen.getByLabelText("Class"))).toContain("JSS 2A"));
     expect(visibleText(container)).not.toMatch(/couldn't read/);
   });
 });

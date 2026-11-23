@@ -1,3 +1,4 @@
+import { chooseOption } from "@/test/nevoSelect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
@@ -103,7 +104,7 @@ describe("Add several at once", () => {
   it("adds any other year group, and lets a row switch between sections and streams", async () => {
     const { container } = render(<BulkClassSheet onClose={() => {}} onCreated={() => {}} />);
     await row("JSS 1");
-    fireEvent.change(screen.getByLabelText("Add a year group"), { target: { value: "ss2" } });
+    await chooseOption(screen.getByLabelText("Add a year group"), "SS 2");
     const ss2 = await row("SS 2");
 
     fireEvent.click(within(ss2).getByRole("button", { name: /use sections/ }));
