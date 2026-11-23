@@ -54,6 +54,27 @@ export const SELECT_FIELD =
 const TRIGGER_BASE =
   "group inline-flex min-w-0 cursor-pointer items-center justify-between gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-nevo-navy/45 focus-visible:ring-offset-2 focus-visible:ring-offset-nevo-cream disabled:cursor-not-allowed disabled:opacity-60 data-[state=open]:border-nevo-navy data-[placeholder]:text-nevo-near-black/50";
 
+const SCROLL_ARROW =
+  "flex h-7 flex-none cursor-default items-center justify-center text-nevo-near-black/45";
+
+/** D13b's caret: a 15px chevron, in the ink of whatever it sits on. */
+function Caret({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
 export function NevoSelect({
   value,
   onValueChange,
@@ -109,18 +130,7 @@ export function NevoSelect({
           <Select.Value placeholder={placeholder} />
         </span>
         <Select.Icon asChild>
-          <svg
-            aria-hidden
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="size-[1.05em] flex-none opacity-55 transition-transform duration-150 group-data-[state=open]:rotate-180"
-          >
-            <path d="M6 9l6 6 6-6" />
-          </svg>
+          <Caret className="size-[1.05em] flex-none opacity-55 transition-transform duration-150 group-data-[state=open]:rotate-180" />
         </Select.Icon>
       </Select.Trigger>
       <Select.Portal>
@@ -136,6 +146,11 @@ export function NevoSelect({
             contentClassName,
           )}
         >
+          {/* A long list (every student in a school) scrolls inside the
+              panel; these arrows show there is more, and scroll on hover. */}
+          <Select.ScrollUpButton className={SCROLL_ARROW}>
+            <Caret className="size-[15px] rotate-180" />
+          </Select.ScrollUpButton>
           <Select.Viewport className="flex flex-col gap-0.5 p-1.5">
             {options.map((o) => (
               <Select.Item
@@ -148,6 +163,9 @@ export function NevoSelect({
               </Select.Item>
             ))}
           </Select.Viewport>
+          <Select.ScrollDownButton className={SCROLL_ARROW}>
+            <Caret className="size-[15px]" />
+          </Select.ScrollDownButton>
         </Select.Content>
       </Select.Portal>
     </Select.Root>
