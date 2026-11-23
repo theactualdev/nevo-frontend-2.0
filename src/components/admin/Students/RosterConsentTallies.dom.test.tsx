@@ -1,5 +1,6 @@
+import { chooseOption } from "@/test/nevoSelect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import type { AdminStudentRow } from "@/lib/api/students";
 import { StudentsView } from "./StudentsView";
@@ -94,7 +95,7 @@ describe("the outstanding list", () => {
     list.mockResolvedValue(ROSTER());
     const { container } = render(<StudentsView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Amara Obi/));
-    fireEvent.change(screen.getByLabelText("Filter by consent"), { target: { value: "outstanding" } });
+    await chooseOption(screen.getByLabelText("Filter by consent"), "Outstanding");
     const text = visibleText(container);
     for (const n of ["Efe Okon", "Femi Lade", "Gbemi Ola"]) expect(text).toMatch(n);
     for (const n of ["Amara Obi", "Bayo Ade", "Chidi Eze", "Dara Demo"]) expect(text).not.toMatch(n);

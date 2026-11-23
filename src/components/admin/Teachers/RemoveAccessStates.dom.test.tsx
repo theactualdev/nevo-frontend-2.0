@@ -275,7 +275,10 @@ describe("D06b's reassignment rows", () => {
     const { container } = render(
       <RemoveAccessSheet teacher={teacher} held={[held[0], coRow]} onClose={() => {}} onRemoved={() => {}} />,
     );
-    await waitFor(() => expect(visibleText(container)).toMatch(/Bola Bello/));
+    // The staff list lives in each row's menu: read until it is there.
+    await waitFor(() =>
+      expect(optionNames(screen.getAllByRole("combobox")[0]).join("|")).toMatch(/Bola Bello/),
+    );
 
     const text = visibleText(container);
     expect(text).toMatch(/Who takes this class as Primary\?/);
@@ -289,14 +292,17 @@ describe("D06b's reassignment rows", () => {
     const { container } = render(
       <RemoveAccessSheet teacher={teacher} held={[held[0], coRow]} onClose={() => {}} onRemoved={() => {}} />,
     );
-    await waitFor(() => expect(visibleText(container)).toMatch(/Bola Bello/));
+    // The staff list lives in each row's menu: read until it is there.
+    await waitFor(() =>
+      expect(optionNames(screen.getAllByRole("combobox")[0]).join("|")).toMatch(/Bola Bello/),
+    );
 
     const removeLinks = Array.from(container.querySelectorAll("button")).filter((b) =>
       /^Just remove .+ from this class$/.test(b.textContent ?? ""),
     );
     expect(removeLinks).toHaveLength(1);
-    for (const s of Array.from(container.querySelectorAll("select"))) {
-      expect(Array.from(s.options).map((o) => o.textContent).join("|")).not.toMatch(/Just remove/);
+    for (const s of screen.getAllByRole("combobox")) {
+      expect(optionNames(s).join("|")).not.toMatch(/Just remove/);
     }
 
     fireEvent.click(removeLinks[0]);
@@ -309,10 +315,13 @@ describe("D06b's reassignment rows", () => {
     const { container } = render(
       <RemoveAccessSheet teacher={teacher} held={held} onClose={() => {}} onRemoved={() => {}} />,
     );
-    await waitFor(() => expect(visibleText(container)).toMatch(/Bola Bello/));
+    // The staff list lives in each row's menu: read until it is there.
+    await waitFor(() =>
+      expect(optionNames(screen.getAllByRole("combobox")[0]).join("|")).toMatch(/Bola Bello/),
+    );
     expect(visibleText(container)).not.toMatch(/Every class has a teacher/);
 
-    fireEvent.change(container.querySelector("select")!, { target: { value: "t2" } });
+    await chooseOption(screen.getByRole("combobox", { name: /Who takes/ }), /^Bola Bello/);
 
     expect(visibleText(container)).toMatch(/Every class has a teacher\. Ready when you are\./);
     expect(visibleText(container)).not.toMatch(/will be handed over first/);
