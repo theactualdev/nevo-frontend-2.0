@@ -256,21 +256,19 @@ export function ClassesView() {
             * back. Introduced by the fix that narrowed `ssoSourced`.
             */}
           {phase === "ready" && activeClasses.length > 0 && !ssoSourced ? (
-            <>
-              {/*
-                * CL-04 sits BESIDE create, behind the same `!ssoSourced` guard.
-                * A school whose classes come from the directory must not be
-                * offered either door (SCRUM-97), and a bulk one would be the
-                * worse of the two to leave standing - it makes a dozen at once.
-                */}
-              <button
-                type="button"
-                onClick={() => setBulking(true)}
-                disabled={writesPaused}
-                className={GHOST_BTN}
-              >
-                Add several
-              </button>
+            /*
+             * CL-04 sits BESIDE create, behind the same `!ssoSourced` guard.
+             * A school whose classes come from the directory must not be
+             * offered either door (SCRUM-97), and a bulk one would be the
+             * worse of the two to leave standing - it makes a dozen at once.
+             *
+             * ONE GROUP, AS D05 DRAWS IT (Olayinka, 23 Nov: "a world of
+             * space" between them). The two buttons were the header's own
+             * flex children, so `justify-between` pushed "Add several" into
+             * the middle of the row. D05: "Add a class" then "Add several",
+             * 10 apart on desktop and 8 on the tablet frame.
+             */
+            <div data-class-actions className="flex flex-none items-center gap-2 xl:gap-2.5">
               <button
                 type="button"
                 onClick={() => setCreating(true)}
@@ -280,7 +278,15 @@ export function ClassesView() {
                 <PlusIcon />
                 Add a class
               </button>
-            </>
+              <button
+                type="button"
+                onClick={() => setBulking(true)}
+                disabled={writesPaused}
+                className={GHOST_BTN}
+              >
+                Add several
+              </button>
+            </div>
           ) : null}
         </div>
 

@@ -243,6 +243,12 @@ export function RolePill({ role }: { role: TeacherAssignmentRole }) {
  * D5's own text node said "Assign a teacher", and the ruling took the frame's.
  * The violet dot stays - it is still the thing worth a glance - and it now
  * opens the assign sheet for that class.
+ *
+ * THE DOT PULSES (Olayinka, 23 Nov): calm and slow, in its own violet, and
+ * only where pressing does something. `motion-safe:` leaves a plain dot under
+ * reduced motion, and a paused control (setup unfinished) holds still rather
+ * than beckoning toward a press it can't take. `NoTeacherYet` never pulses:
+ * nothing can be done from there.
  */
 export function AssignTeacherButton({
   onClick,
@@ -258,7 +264,14 @@ export function AssignTeacherButton({
       disabled={disabled}
       className="relative z-10 inline-flex cursor-pointer items-center gap-[6px] text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50"
     >
-      <span aria-hidden="true" className="size-[7px] flex-none rounded-full bg-nevo-violet" />
+      <span
+        aria-hidden="true"
+        data-assign-dot
+        className={cn(
+          "size-[7px] flex-none rounded-full bg-nevo-violet",
+          !disabled && "motion-safe:animate-nevo-dot-pulse",
+        )}
+      />
       Assign a teacher
     </button>
   );
