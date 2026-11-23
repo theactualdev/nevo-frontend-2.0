@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useCallback, useEffect, useState } from "react";
 import { analyticsApi, type CohortTransformation } from "@/lib/api/analytics";
 import { classesApi } from "@/lib/api/classes";
@@ -92,28 +93,16 @@ export function YearGroupFigures() {
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-3">
-            <label className="relative inline-flex">
-              <span className="sr-only">Year group</span>
-              <select
-                value={chosen ?? ""}
-                onChange={(e) => {
-                  setFigures({ kind: "loading" });
-                  setChosen(e.target.value);
-                }}
-                className="h-[42px] cursor-pointer appearance-none rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-4 pr-9 text-[15px] font-semibold text-nevo-near-black outline-none focus:border-nevo-navy"
-              >
-                {groups.data.map((g) => (
-                  <option key={g} value={g}>
-                    {yearGroupLabel(g) ?? g}
-                  </option>
-                ))}
-              </select>
-              <span aria-hidden className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2 text-nevo-near-black/45">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </span>
-            </label>
+            <NevoSelect
+              aria-label="Year group"
+              value={chosen ?? ""}
+              onValueChange={(v) => {
+                setFigures({ kind: "loading" });
+                setChosen(v);
+              }}
+              options={groups.data.map((g) => ({ value: g, label: yearGroupLabel(g) ?? g }))}
+              triggerClassName="h-[42px] rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-4 text-[15px] font-semibold text-nevo-near-black transition-colors focus:border-nevo-navy"
+            />
             {/* D20's subtitle, with the window these figures actually cover. */}
             {label ? (
               <p className="m-0 text-[14px] text-nevo-near-black/58">

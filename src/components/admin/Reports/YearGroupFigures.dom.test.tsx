@@ -1,3 +1,4 @@
+import { chooseOption, optionNames } from "@/test/nevoSelect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ApiError } from "@/lib/api/client";
@@ -53,9 +54,9 @@ beforeEach(() => {
 describe("the year-group row", () => {
   it("offers each year group on the school's classes, once, in order", async () => {
     render(<YearGroupFigures />);
-    const menu = (await screen.findByRole("combobox", { name: "Year group" })) as HTMLSelectElement;
+    const menu = await screen.findByRole("combobox", { name: "Year group" });
 
-    expect(Array.from(menu.options).map((o) => o.value)).toEqual(["jss1", "jss2"]);
+    expect(optionNames(menu)).toEqual(["JSS 1", "JSS 2"]);
     await waitFor(() => expect(h.figures).toHaveBeenCalledWith("jss1"));
   });
 
@@ -73,7 +74,7 @@ describe("the year-group row", () => {
     const menu = await screen.findByRole("combobox", { name: "Year group" });
     await waitFor(() => expect(h.figures).toHaveBeenCalledWith("jss1"));
 
-    fireEvent.change(menu, { target: { value: "jss2" } });
+    await chooseOption(menu, "JSS 2");
     await waitFor(() => expect(h.figures).toHaveBeenLastCalledWith("jss2"));
   });
 
