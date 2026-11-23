@@ -247,6 +247,17 @@ const REROUTED = {
   action: "Let's try it another way",
 } as const;
 
+/**
+ * A SAVED LESSON WITHDRAWN FOR SAFETY WHILE OPEN (Lydia, 19 Nov, L14): the
+ * child finishes the part they are in, and the lesson closes after it - "not
+ * mid-segment, and not run to the end". Her words, settled. School-route
+ * copy: it names the teacher, so it does not travel to a route with none.
+ */
+const WITHDRAWN_ENDING = {
+  heading: "That's the end of this one for now.",
+  note: "Your teacher is having another look at it.",
+} as const;
+
 /** Design's ending for a partial offline copy (D142, 8 Oct), verbatim. */
 const PARTIAL_ENDING = {
   heading: "That's as far as this one goes for now.",
@@ -391,6 +402,7 @@ export function LessonPlayer({
   live = false,
   finished: finishedOnOpen = false,
   partial = false,
+  withdrawn = false,
   assignmentId,
   startAt = 0,
   placeUnknown = false,
@@ -436,6 +448,12 @@ export function LessonPlayer({
    * `markComplete`. A package copy carrying all three is not partial.
    */
   partial?: boolean;
+  /**
+   * The saved copy this lesson is open from was withdrawn for safety since it
+   * opened (L14) - see `useWithdrawnForSafety`. The child finishes the part
+   * they are in; any move off it closes the lesson.
+   */
+  withdrawn?: boolean;
   /**
    * Segment to open on, from saved progress. Clamped by the caller; a review
    * session always opens at the top regardless.
@@ -2146,8 +2164,28 @@ export function LessonPlayer({
     // The system-owned wait closes with it (SCRUM-94.9).
     trackBusy(BUSY_REASON.MODALITY_SWITCH, BUSY_PHASE.END);
   };
+  /*
+   * L14: THE LESSON CLOSES AFTER THE PART THE CHILD IS IN. Its copy was
+   * withdrawn for safety while it was open, so no move reads another part -
+   * forward, back, into the after-lesson check, or past a break. Written as
+   * leaving is, at the part they finished: nothing about it was completed.
+   */
+  const [closedForSafety, setClosedForSafety] = useState(false);
+  const closeForSafety = () => {
+    if (!review && !finished) {
+      endFocusEvents();
+      reportProgress(LESSON_STATUS.EXITED, { segment: index });
+    }
+    setEnding({ completionStatus: "exited", exitPosition: segment.id });
+    setClosedForSafety(true);
+  };
+
   const go = (next: number) => {
     if (next < 0 || next >= total) return;
+    if (withdrawn && next !== index) {
+      closeForSafety();
+      return;
+    }
     // A switch still on its way stays with the segment it was made on: the
     // write goes on, and what it lands as is kept for a return visit.
     if (pendingSwitch.current !== null) endSwitchWait();
@@ -2208,6 +2246,10 @@ export function LessonPlayer({
 
   /** The forward move itself — next segment, then assessment, then done. */
   const continueAdvance = () => {
+    if (withdrawn) {
+      closeForSafety();
+      return;
+    }
     if (index < total - 1) {
       // Crossing into a later module lands on the boundary screen first
       // (SCRUM-101). Backward moves never re-show it.
@@ -2237,6 +2279,11 @@ export function LessonPlayer({
     if (hintOnScreen && !usedHints.current.has(hintKey)) {
       usedHints.current.add(hintKey);
       trackEvent(SIGNAL_EVENT_TYPES.HINT_USED, { segmentId: segment.id });
+    }
+    // L14: closed now, not after a break between parts it no longer has.
+    if (withdrawn) {
+      closeForSafety();
+      return;
     }
     const plannedBreak = livePlanFor(segment.id)?.breakAfter ?? null;
     if (plannedBreak && !breaksTaken.current.has(segment.id)) {
@@ -3465,6 +3512,17 @@ export function LessonPlayer({
    */
   if (progress.unavailable) {
     return <LessonNotOpened onBack={() => exitTo(LESSONS_HREF)} />;
+  }
+
+  // L14: the part is finished and the lesson closes - see `closeForSafety`.
+  if (closedForSafety) {
+    return (
+      <LessonComplete
+        onDone={() => exitTo(LESSONS_HREF)}
+        heading={WITHDRAWN_ENDING.heading}
+        note={WITHDRAWN_ENDING.note}
+      />
+    );
   }
 
   /*

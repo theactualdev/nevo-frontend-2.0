@@ -4,13 +4,14 @@ import { downloadLesson } from "./lessonPackage";
 import {
   canOpenOffline,
   confirmSavedLesson,
+  forgetWithdrawals,
   holdSavedLesson,
   isChecked,
   noteServerTime,
-  removeSavedLesson,
   saveLesson,
   savedLesson,
   savedLessons,
+  withdrawSavedLesson,
 } from "./savedLessons";
 
 /**
@@ -24,9 +25,10 @@ import {
  * (`checkSavedLesson`). Each copy is asked once per connection.
  *
  * WHAT EACH ANSWER DOES - his words, in order:
- * - `safety_revoked`: "delete the cached package before opening it". Deleted,
- *   and nothing else: saving it again fetches a package without the held
- *   section.
+ * - `safety_revoked`: "delete the cached package before opening it". Deleted:
+ *   saving it again fetches a package without the held section. A lesson
+ *   open from that copy right now closes after the part the child is in
+ *   (Lydia, 19 Nov, L14) - see `withdrawnForSafety` and the player.
  * - `expired`: "refresh it". Downloaded afresh, and held meanwhile.
  * - `current` (with `usable: true`): "normal use". The only answer that lets
  *   a copy be read.
@@ -96,6 +98,7 @@ export async function checkShelf(userId: string): Promise<void> {
 /** Test seam. */
 export function resetShelfCheck(): void {
   running.clear();
+  forgetWithdrawals();
 }
 
 async function run(userId: string, lessonId: string): Promise<ShelfVerdict> {
@@ -119,7 +122,7 @@ async function run(userId: string, lessonId: string): Promise<ShelfVerdict> {
 
   noteServerTime(status.checkedAt);
   if (status.reason === "safety_revoked") {
-    removeSavedLesson(userId, lessonId);
+    withdrawSavedLesson(userId, lessonId);
     changed();
     return "removed";
   }

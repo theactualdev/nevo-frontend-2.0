@@ -207,6 +207,32 @@ export function forgetChecks(): void {
   checked.clear();
 }
 
+/*
+ * COPIES WITHDRAWN FOR SAFETY WHILE THIS PAGE WAS OPEN (Lydia, 19 Nov, L14).
+ * A lesson open from its copy when the copy is withdrawn closes after the
+ * part the child is in - so the player has to know, after the copy itself is
+ * gone. Kept for this page only: a reload cannot open a deleted copy anyway.
+ * A new connection does not undo a withdrawal; saving the lesson again does,
+ * since that copy is fetched without the held section.
+ */
+const withdrawn = new Set<string>();
+
+/** Whether this child's copy of a lesson was withdrawn for safety. */
+export function withdrawnForSafety(userId: string, lessonId: string): boolean {
+  return withdrawn.has(checkKey(userId, lessonId));
+}
+
+/** Deleted because a section it holds is held for safety (`safety_revoked`). */
+export function withdrawSavedLesson(userId: string, lessonId: string): void {
+  removeSavedLesson(userId, lessonId);
+  withdrawn.add(checkKey(userId, lessonId));
+}
+
+/** Test seam. */
+export function forgetWithdrawals(): void {
+  withdrawn.clear();
+}
+
 const KEY_PREFIX = "nevo.offline.lessons";
 const keyFor = (userId: string) => `${KEY_PREFIX}.${userId}`;
 
@@ -272,6 +298,8 @@ export function saveLesson(
   detail: LessonDetailResponse,
   pkg?: SavedPackage,
 ): SaveResult {
+  // A fresh copy is fetched without the held section: no longer withdrawn.
+  withdrawn.delete(checkKey(userId, detail.id));
   const shelf = read(userId);
   if (!shelf[detail.id]) {
     const dead = Object.values(shelf)

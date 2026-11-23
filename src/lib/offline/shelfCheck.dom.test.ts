@@ -8,6 +8,7 @@ import {
   saveLesson,
   savedLesson,
   trustedNow,
+  withdrawnForSafety,
 } from "./savedLessons";
 import {
   SHELF_CHANGED,
@@ -97,6 +98,44 @@ describe("each answer the status check can give", () => {
 
     expect(savedLesson("ada", "l1")).toBeNull();
     expect(downloadLesson).not.toHaveBeenCalled();
+  });
+
+  /*
+   * L14 (Lydia, 19 Nov): a lesson open from that copy closes after the part
+   * the child is in, so the withdrawal is kept after the copy is gone - for
+   * this child and lesson only, and until the lesson is saved afresh.
+   */
+  it("safety_revoked: says the copy was withdrawn, until the lesson is saved again", async () => {
+    keep("l1");
+    keep("l2", { ...FRESH_DOWNLOAD, downloadId: "d2" });
+    offlineDownloadStatus.mockResolvedValue(status("safety_revoked"));
+    expect(withdrawnForSafety("ada", "l1")).toBe(false);
+
+    await checkSavedLesson("ada", "l1");
+
+    expect(withdrawnForSafety("ada", "l1")).toBe(true);
+    expect(withdrawnForSafety("ada", "l2")).toBe(false);
+    expect(withdrawnForSafety("bola", "l1")).toBe(false);
+
+    // A new connection does not undo it; a fresh copy does.
+    forgetChecks();
+    expect(withdrawnForSafety("ada", "l1")).toBe(true);
+    saveLesson("ada", detail("l1"), FRESH_DOWNLOAD);
+    expect(withdrawnForSafety("ada", "l1")).toBe(false);
+  });
+
+  it("never says a copy was withdrawn for any other answer", async () => {
+    keep("l1");
+    offlineDownloadStatus.mockResolvedValue(status("expired"));
+    downloadLesson.mockResolvedValue(fresh("l1"));
+    await checkSavedLesson("ada", "l1");
+
+    keep("l2", { ...FRESH_DOWNLOAD, downloadId: "d2" });
+    offlineDownloadStatus.mockRejectedValue(new ApiError(500, "x"));
+    await checkSavedLesson("ada", "l2");
+
+    expect(withdrawnForSafety("ada", "l1")).toBe(false);
+    expect(withdrawnForSafety("ada", "l2")).toBe(false);
   });
 
   it("expired: downloaded afresh, with its new download and expiry", async () => {
