@@ -2329,10 +2329,12 @@ export function LessonPlayer({
    * to accept or decline. Prompts with no id or no words are not drawn; a
    * hand-off with none left draws nothing (rule 5), and the check stays.
    *
-   * B128 (13 Oct): "advanceAfterHandoff is true whenever a Socratic handoff
-   * exists. False means there is no handoff." So a reply without it is no
-   * hand-off at all, whatever else it carries: no panel, and the check stays
-   * the way on. There is no panel that ends nowhere.
+   * `advanceAfterHandoff` IS NOT READ (T9, live since ~20 Nov; Lydia, 19 Nov,
+   * L13). B128 once said it was true whenever there was a hand-off, and this
+   * opened no panel without it. It is now "Always false. Panel completion
+   * never unlocks the section; retry the original check." - so the gate
+   * would have opened no hand-off at all. The hand-off is `handoffTo` with
+   * prompts, and the panel ends back at the check (`backToCheckAfterHandoff`).
    *
    * AND NONE ON A CALCULATION (Lydia, 26 Oct #1), whatever the server sends:
    * Teslim's 4c5706a stopped the three-miss hand-off there, and one still
@@ -2340,7 +2342,6 @@ export function LessonPlayer({
    */
   const openHandoff = (segmentId: string, stored: LessonQuestionAttempt) => {
     if (stored.handoffTo !== "socratic_panel") return;
-    if (stored.advanceAfterHandoff !== true) return;
     const on = lesson.segments.find((s) => s.id === segmentId);
     if (on && isCalculation(asEntered(on))) return;
     if (answeredRight.current.has(stored.questionId ?? segmentId)) return;
@@ -2483,11 +2484,14 @@ export function LessonPlayer({
    * front of the child. The way on is a right answer, as on every check; the
    * way out is the break, or Exit lesson.
    *
-   * This replaces 38a's "forward, never back to the question" and the server's
-   * `advanceAfterHandoff` read as an instruction (B128 says it is true whenever
-   * there is a hand-off, so it says nothing about moving on). The misses still
-   * stand for the review, and the panel already made a right answer after it
-   * `after_hint` - nothing records it as known first time.
+   * This replaces 38a's "forward, never back to the question". Lydia, 19 Nov
+   * (L13): "Back, not forward ... Sending them back lets the child demonstrate
+   * the step, which both confirms the hand-off worked and corrects the
+   * estimate." And the server agrees (T9): `advanceAfterHandoff` is always
+   * false - "retry the original check" - and with its comprehension gate off
+   * nothing on the server holds the child there, so this does. The misses
+   * still stand for the review, and the panel already made a right answer
+   * after it `after_hint` - nothing records it as known first time.
    */
   const backToCheckAfterHandoff = () => {
     setHandoff(null);

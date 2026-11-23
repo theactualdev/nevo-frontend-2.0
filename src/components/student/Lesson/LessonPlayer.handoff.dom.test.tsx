@@ -21,9 +21,9 @@ import type { Lesson } from "@/lib/types";
  * B94 / SCRUM-241, frame 38a: the quick check gives way to the Socratic
  * panel when the SERVER says so, on its reply to a miss - "the front end
  * never counts attempts and never decides for itself". The panel arrives
- * open, with the server's prompts and nothing to accept or decline. B128,
- * 13 Oct: `advanceAfterHandoff` "is true whenever a Socratic handoff exists.
- * False means there is no handoff." What the child did is reported as it was:
+ * open, with the server's prompts and nothing to accept or decline. T9 (live
+ * ~20 Nov): `advanceAfterHandoff` is "Always false ... retry the original
+ * check", so it is never read. What the child did is reported as it was:
  * "a concept reached this way is never recorded as mastered first time".
  *
  * AND IT NEVER MOVES THE CHILD PAST THE CHECK (Lydia's gate, 23 Oct: no
@@ -157,10 +157,11 @@ const reply = (over: Record<string, unknown> = {}) => ({
   resultState: "nothing_landed",
   ...over,
 });
+// As the live server sends it since T9: `advanceAfterHandoff` always false.
 const HANDOFF = {
   handoffTo: "socratic_panel",
   guidedPrompts: [{ id: "p-1", prompt: PROMPT }],
-  advanceAfterHandoff: true,
+  advanceAfterHandoff: false,
 };
 
 /**
@@ -356,29 +357,45 @@ describe("the server hands a child off from the quick check (B94)", () => {
     );
   });
 
+  /*
+   * T9 (live ~20 Nov): `advanceAfterHandoff` is always false. Read as B128
+   * had it - no hand-off without it - every hand-off since went unoffered.
+   */
   it.each([
-    ["false", { advanceAfterHandoff: false }],
-    [
-      "absent, the contract's default false",
-      { advanceAfterHandoff: undefined },
-    ],
+    ["false, as the live server always sends it", { advanceAfterHandoff: false }],
+    ["true, as an older server sent it", { advanceAfterHandoff: true }],
+    ["absent", { advanceAfterHandoff: undefined }],
   ])(
-    "opens no panel when advanceAfterHandoff is %s: there is no hand-off (B128)",
+    "offers Talk it through whatever advanceAfterHandoff says (%s)",
     async (_, over) => {
       saveAttempt.mockResolvedValue(reply({ ...HANDOFF, ...over }));
       render(<LessonPlayer lesson={LESSON} plan={null} live />);
       next();
 
       await miss();
-      await new Promise((r) => setTimeout(r, 0));
 
-      // No panel that ends nowhere: the check stays, and is still the way on.
-      expect(screen.queryByText(PROMPT)).toBeNull();
-      expect(screen.queryByText(/think it through/i)).toBeNull();
-      expect(checkOnScreen()).toBeTruthy();
-      expect(applied.ref?.current.count).toBe(0);
+      expect(
+        await screen.findByRole("button", { name: /talk it through/i }),
+      ).toBeInTheDocument();
     },
   );
+
+  it("opens no panel without the server's handoffTo, whatever else the reply says", async () => {
+    saveAttempt.mockResolvedValue(
+      reply({ ...HANDOFF, handoffTo: null, advanceAfterHandoff: false }),
+    );
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+
+    await miss();
+    await new Promise((r) => setTimeout(r, 0));
+
+    // No panel that ends nowhere: the check stays, and is still the way on.
+    expect(screen.queryByText(PROMPT)).toBeNull();
+    expect(screen.queryByRole("button", { name: /talk it through/i })).toBeNull();
+    expect(checkOnScreen()).toBeTruthy();
+    expect(applied.ref?.current.count).toBe(0);
+  });
 
   it("counts no misses of its own: without the server's word nothing hands off", async () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);

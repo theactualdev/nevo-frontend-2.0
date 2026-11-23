@@ -144,7 +144,7 @@ const reply = (over: Record<string, unknown> = {}) => ({
 const HANDOFF = {
   handoffTo: "socratic_panel",
   guidedPrompts: [{ id: "p-1", prompt: PROMPT }],
-  advanceAfterHandoff: true,
+  advanceAfterHandoff: false, // T9: always false live
 };
 
 const next = () =>

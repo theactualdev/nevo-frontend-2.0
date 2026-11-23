@@ -169,7 +169,8 @@ const rowFor = (a: Attempt) => {
     guidedPrompts: handing
       ? [{ id: `${a.questionId}-guided-1`, prompt: PROMPT[a.questionId] }]
       : [],
-    advanceAfterHandoff: handing,
+    // T9: always false live, a hand-off or not.
+    advanceAfterHandoff: false,
     handoffAvailableAt: deadline === null ? null : iso(deadline),
   };
 };
