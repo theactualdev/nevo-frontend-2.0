@@ -18,6 +18,15 @@ import { BulkImportModal } from "./BulkImportModal";
 
 const bulk = vi.fn();
 
+// A file with no subjects asks nothing to resolve; the school's list is read.
+vi.mock("@/lib/api/subjects", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/subjects")>();
+  return {
+    ...actual,
+    subjectsApi: { ...actual.subjectsApi, list: async () => [], resolve: async () => [] },
+  };
+});
+
 vi.mock("@/lib/api/invites", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/invites")>();
   return {
@@ -56,7 +65,7 @@ async function importFile(container: HTMLElement) {
   Object.defineProperty(input, "files", { value: [file] });
   fireEvent.change(input);
 
-  const send = await screen.findByRole("button", { name: /^Send 2 invites$/ });
+  const send = await screen.findByRole("button", { name: /^Save 2 teachers$/ });
   fireEvent.click(send);
 }
 
@@ -87,7 +96,7 @@ describe("BulkImportModal delivery", () => {
       expect(visibleText(container)).toMatch(/2 invitations created/),
     );
     // The word that was false.
-    expect(visibleText(container)).not.toMatch(/2 invites sent/);
+    expect(visibleText(container)).not.toMatch(/2 teachers invited/);
     expect(visibleText(container)).toMatch(/No email went out/i);
   });
 
@@ -122,7 +131,7 @@ describe("BulkImportModal delivery", () => {
     const { container } = open();
     await importFile(container);
 
-    await waitFor(() => expect(visibleText(container)).toMatch(/2 invites sent/));
+    await waitFor(() => expect(visibleText(container)).toMatch(/2 teachers invited/));
     expect(visibleText(container)).not.toMatch(/No email went out/i);
     expect(visibleText(container)).not.toMatch(/\/join\//);
   });
@@ -172,7 +181,7 @@ describe("BulkImportModal delivery", () => {
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/2 invitations created/),
     );
-    expect(visibleText(container)).not.toMatch(/2 invites sent/);
+    expect(visibleText(container)).not.toMatch(/2 teachers invited/);
     expect(visibleText(container)).toMatch(/couldn't confirm an email/i);
     // The links are handed over for these too - not knowing is reason enough.
     expect(visibleText(container)).toMatch(/\/join\/tok1/);

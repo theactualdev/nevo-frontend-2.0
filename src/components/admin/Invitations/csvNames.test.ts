@@ -18,12 +18,12 @@ describe("the teacher import's name columns", () => {
     );
     expect(fatal).toBeNull();
     expect(rows[0]).toMatchObject({ name: "Mary Ann Okafor-Bello", error: null, classId: "c1" });
+    // T15: classes travel with their subjects, never as the legacy classId.
     expect(toDraft(rows[0])).toEqual({
       role: "teacher",
       firstName: "Mary Ann",
       lastName: "Okafor-Bello",
       email: "m@school.edu.ng",
-      classId: "c1",
     });
   });
 
@@ -48,8 +48,8 @@ describe("the teacher import's name columns", () => {
     );
   });
 
-  it("offers the two-column template", () => {
-    expect(TEMPLATE.split("\n")[0]).toBe("first_name,last_name,email,class");
+  it("offers D19's template: first_name, last_name, email, subject, class", () => {
+    expect(TEMPLATE.split("\n")[0]).toBe("first_name,last_name,email,subject,class");
     expect(parseInviteCsv(TEMPLATE, classes).fatal).toBeNull();
   });
 });

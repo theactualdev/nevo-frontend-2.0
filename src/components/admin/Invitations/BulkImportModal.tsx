@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { AdminClass } from "@/lib/api/classes";
 import { invitesApi, type BulkInviteResult } from "@/lib/api/invites";
+import { subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
 import { cn } from "@/lib/utils";
 import {
   CheckIcon,
@@ -11,13 +12,32 @@ import {
   PRIMARY_BTN,
   Spinner,
 } from "../Roster/primitives";
+import { ReadFailed } from "../ReadFailed";
+import { SubjectPicker } from "../Classes/SubjectPicker";
 import {
   MAX_ROWS,
+  NO_EMAIL,
   TEMPLATE,
+  TEMPLATE_ROWS,
+  groupTeachers,
   parseInviteCsv,
   toDraft,
+  type ImportTeacher,
   type ParsedRow,
+  type Teaching,
 } from "./csv";
+import {
+  alsoLine,
+  andList,
+  answersFrom,
+  classesFor,
+  fold,
+  namesToAdd,
+  sameWords,
+  subjectFor,
+  toSettle,
+  type SubjectAnswer,
+} from "./staffImport";
 import { confirmedSent, needsManualDelivery } from "./deliveryCopy";
 import { LinkHandout } from "./LinkHandout";
 import { RejectedRows } from "./RejectedRows";
@@ -30,46 +50,59 @@ import { RejectedRows } from "./RejectedRows";
  * column and its consent lines - went with the student invite rather than
  * staying behind unreachable. A school adds its children on Students.
  *
+ * D19'S STAFF IMPORT, IN FULL (backlog 19; T15, live 21 Nov). One row is one
+ * subject in one class; "Rows join into one teacher by email, never by name";
+ * a subject Nevo doesn't recognise is settled in its row with the subject
+ * picker before anything is saved; a row with no email is left out in the
+ * frame's words; and "Save N teachers" waits until nothing is left to settle.
+ * Each teacher's invitation carries every class with its subject
+ * (`classes: [{classId, subjectId}]`), attached when they accept.
+ *
+ * BUILT WITHOUT step 1's "This file is also how Nevo learns which subjects
+ * each class offers." Nothing in the contract does that: an invitation names
+ * a class and a subject, and acceptance assigns the teacher without adding the
+ * subject to the class's list. Raised (rule 10).
+ *
  * PARTIAL SEND IS CORRECT HERE, and it is worth being explicit because the
  * other spec in this area says the opposite. SCRUM-40 claims CSV import is
  * all-or-nothing, "matching SCRUM-79" - but D19 IS the SCRUM-79 surface, and
- * it draws "3 valid, 3 with issues", "You can send invites for the valid rows
- * now. Fix the CSV and re-upload to catch the rest", and a confirmation
- * reading "3 invites sent · 3 rows skipped due to errors". The API agrees:
- * `POST /api/v1/invites/bulk` returns `{created, rejected}`. Frame and backend
- * against a secondhand summary in a different ticket, so partial send ships.
- *
- * The preview is the point of step 2. Every row is checked against the
- * school's own classes BEFORE anything is sent, and each problem row carries a
- * plain reason in violet - never red, per D19's own note on tone.
+ * the API agrees: `POST /api/v1/invites/bulk` returns `{created, rejected}`.
  *
  * The confirmation counts come from the RESPONSE, not from our tally: the
  * backend rejects rows we cannot anticipate (a duplicate against people
  * already invited, say), and reporting our own optimistic number would tell a
  * school it invited people it did not.
  *
- * AND THE CONFIRMATION READS `deliveryStatus`, WHICH IT DID NOT.
- * The title said "N invites sent" over a navy tick for every created row. A
- * comment below this one used to assert that the bulk response "carries no
- * delivery state at all"; it is wrong, and it justified the claim for a week.
- * `created` is an array of full `InvitationResponse`, each carrying
- * `deliveryStatus` AND `token`.
- *
- * That matters because `email_not_configured` is a live condition here - the
- * spec defines it as "the invitation exists and its link is valid, but nobody
- * was emailed, so the caller has to deliver it another way". A school with no
- * mail set up imports 200 staff on day one, every invite is created, none is
- * emailed, and the console says "200 invites sent". The tokens to recover with
- * were in hand on that very response and were dropped when this modal
- * unmounted, and no other screen in the console builds a join link. The
- * school's entire staff never gets in.
+ * AND THE CONFIRMATION READS `deliveryStatus`. `email_not_configured` means
+ * the invitation exists and nobody was emailed, so the links are handed over
+ * here (`LinkHandout`) rather than the console saying "sent".
  */
 
 type Phase = "upload" | "reading" | "preview" | "sending" | "done" | "failed";
 
-const CELL = "px-3 py-2.5 text-[13px] text-nevo-near-black/75";
-
 const TITLE = "Import teachers";
+
+/** D19's import row: Row, Teacher, Teaches, Status. */
+const COLS =
+  "grid grid-cols-[44px_minmax(0,1.1fr)_minmax(0,1.5fr)_170px] items-start gap-3.5";
+
+/** The server takes up to 50 names a call. */
+function chunks<T>(xs: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < xs.length; i += size) out.push(xs.slice(i, i + size));
+  return out;
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+function Status({ dot, children }: { dot: string; children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-nevo-navy">
+      <span aria-hidden className={cn("size-[7px] flex-none rounded-full", dot)} />
+      {children}
+    </span>
+  );
+}
 
 export function BulkImportModal({
   classes,
@@ -83,12 +116,51 @@ export function BulkImportModal({
   const [phase, setPhase] = useState<Phase>("upload");
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [fatal, setFatal] = useState<string | null>(null);
+  const [answers, setAnswers] = useState<Map<string, SubjectAnswer | null>>(new Map());
+  const [school, setSchool] = useState<SchoolSubject[] | null>(null);
+  const [checkFailed, setCheckFailed] = useState(false);
+  /** The admin's own pick for a row, by file line. */
+  const [settled, setSettled] = useState<Record<number, string>>({});
+  /** The row whose subject is being settled. */
+  const [settling, setSettling] = useState<number | null>(null);
+  const [alsoOthers, setAlsoOthers] = useState(true);
   const [result, setResult] = useState<BulkInviteResult | null>(null);
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
-  const valid = rows.filter((r) => !r.error);
-  const broken = rows.filter((r) => r.error);
+  const teachers = useMemo(() => groupTeachers(rows), [rows]);
+  const leftOut = rows.filter((r) => r.error);
+  const open = toSettle(teachers, answers, settled);
+  const merged = teachers.filter((t) => t.lines.length > 1);
+
+  /**
+   * What the file's subjects are, asked of the server before the preview -
+   * never guessed here. The school's own list comes too, for the picker and
+   * for the ids Save needs.
+   */
+  const check = (parsed: ParsedRow[]) => {
+    setPhase("reading");
+    setCheckFailed(false);
+    const typed = [
+      ...new Map(
+        parsed
+          .filter((r) => !r.error && r.classId && r.subject)
+          .map((r) => [fold(r.subject), r.subject] as const),
+      ).values(),
+    ];
+    Promise.all([
+      Promise.all(chunks(typed, 50).map((c) => subjectsApi.resolve(c))).then((r) => r.flat()),
+      subjectsApi.list().catch(() => null),
+    ])
+      .then(([resolved, list]) => {
+        setAnswers(answersFrom(resolved));
+        setSchool(list);
+        setSettled({});
+        setSettling(null);
+        setPhase("preview");
+      })
+      .catch(() => setCheckFailed(true));
+  };
 
   const readFile = (file: File) => {
     setPhase("reading");
@@ -104,7 +176,7 @@ export function BulkImportModal({
           return;
         }
         setRows(outcome.rows);
-        setPhase("preview");
+        check(outcome.rows);
       })
       .catch(() => {
         setFatal("We couldn't read that file. Is it a .csv?");
@@ -112,16 +184,40 @@ export function BulkImportModal({
       });
   };
 
-  const send = () => {
+  /** A pick in one row, and - unless untold - in every row that typed the same words. */
+  const settle = (t: Teaching, name: string | null) => {
+    setSettled((prev) => {
+      const next = { ...prev };
+      const lines = [t.line, ...(alsoOthers ? sameWords(t, open).map((o) => o.line) : [])];
+      for (const line of lines) {
+        if (name) next[line] = name;
+        else delete next[line];
+      }
+      return next;
+    });
+    if (name) setSettling(null);
+  };
+
+  const send = async () => {
+    if (open.length > 0 || teachers.length === 0) return;
     setPhase("sending");
-    invitesApi
-      .bulk(valid.map((r) => toDraft(r)))
-      .then((res) => {
-        setResult(res);
-        setPhase("done");
-        onSent();
-      })
-      .catch(() => setPhase("failed"));
+    try {
+      const list = school ?? [];
+      // A subject an invitation names must be on the school's list first.
+      const added = new Map<string, string>();
+      for (const name of namesToAdd(teachers, answers, settled, list)) {
+        const s = await subjectsApi.add(name);
+        for (const n of [name, s.name, s.displayName]) added.set(fold(n), s.id);
+      }
+      const res = await invitesApi.bulk(
+        teachers.map((t) => toDraft(t.row, classesFor(t, answers, settled, list, added))),
+      );
+      setResult(res);
+      setPhase("done");
+      onSent();
+    } catch {
+      setPhase("failed");
+    }
   };
 
   const downloadTemplate = () => {
@@ -134,54 +230,57 @@ export function BulkImportModal({
     URL.revokeObjectURL(url);
   };
 
+  /** What the server's `row` counts into: one entry per teacher sent. */
+  const submitted = (list: ImportTeacher[]): ParsedRow[] =>
+    list.map((t) => ({
+      ...t.row,
+      line: t.lines[0],
+      className: andList([...new Set(t.teaches.map((x) => x.className))]),
+    }));
+
   // ------------------------------------------------------------ READING ---
   if (phase === "reading") {
     return (
       <Modal title={TITLE} onClose={onClose} footer={<span />}>
-        <div className="flex flex-col items-center gap-3 py-10 text-center">
-          <Spinner />
-          <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
-            Reading your file
-          </p>
-          <p className="m-0 text-sm text-nevo-near-black/62">
-            Checking each row against your classes. This takes a moment.
-          </p>
-        </div>
+        {checkFailed ? (
+          <ReadFailed
+            className="py-4"
+            what="which subjects in your file Nevo already knows"
+            onRetry={() => check(rows)}
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <Spinner />
+            <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
+              Reading your file
+            </p>
+            <p className="m-0 text-sm text-nevo-near-black/62">
+              Checking each row against your classes. This takes a moment.
+            </p>
+          </div>
+        )}
       </Modal>
     );
   }
 
   // --------------------------------------------------------------- DONE ---
   if (phase === "done" && result) {
-    const skipped = result.rejected.length + broken.length;
-    /*
-     * Which of the created invitations definitely reached nobody. "Sent" is a
-     * claim about an email; "created" is a claim about a record, and only the
-     * second one is safe when the backend says it emailed no one.
-     */
-    /*
-     * TWO REASONS A LINK IS NEEDED, and they are told apart because one is a
-     * certainty and one is an absence. `email_not_configured` means nobody was
-     * emailed; a NULL status means the read carried no answer, which the
-     * earlier fix let fall into the confident "sent" arm.
-     */
-    const notEmailed = result.created.filter((i) =>
-      needsManualDelivery(i.deliveryStatus),
-    );
+    const skipped = result.rejected.length + leftOut.length;
+    const notEmailed = result.created.filter((i) => needsManualDelivery(i.deliveryStatus));
     const unconfirmed = result.created.filter(
-      (i) =>
-        !confirmedSent(i.deliveryStatus) &&
-        !needsManualDelivery(i.deliveryStatus),
+      (i) => !confirmedSent(i.deliveryStatus) && !needsManualDelivery(i.deliveryStatus),
     );
     const undelivered = [...notEmailed, ...unconfirmed];
     const allDelivered = undelivered.length === 0;
     const n = result.created.length;
+    const noEmail = leftOut.filter((r) => r.noEmail).length;
+    const pairs = merged.every((t) => t.lines.length === 2);
     return (
       <Modal
         title={
           allDelivered
-            ? `${n} ${n === 1 ? "invite" : "invites"} sent`
-            : `${n} ${n === 1 ? "invitation" : "invitations"} created`
+            ? plural(n, "teacher invited", "teachers invited")
+            : plural(n, "invitation created", "invitations created")
         }
         onClose={onClose}
         footer={
@@ -199,26 +298,32 @@ export function BulkImportModal({
             <CheckIcon size={22} />
           </span>
         </div>
-        {/*
-          * CL-06. This was ONE SENTENCE - "N rows were skipped due to
-          * errors" - over data that already carried every row number and
-          * every reason. `BulkInvitationResponse.rejected` is
-          * `{row, reason}` with both required, and our own parser produces
-          * `{line, error}`; the screen added the two lengths together and
-          * threw the rest away one step from the render. An admin
-          * importing thirty classes was handed a count and left to find
-          * the four themselves.
-          */}
+        {/* D19 step 3's two lines. */}
+        {merged.length > 0 || noEmail > 0 ? (
+          <div data-import-summary className="mt-4 text-center text-[14px] leading-[1.6] text-nevo-near-black/72">
+            {merged.length > 0 ? (
+              <p className="m-0">
+                {pairs
+                  ? `${plural(merged.length, "pair", "pairs")} of rows joined by email.`
+                  : `Rows for ${plural(merged.length, "teacher", "teachers")} joined by email.`}
+              </p>
+            ) : null}
+            {noEmail > 0 ? (
+              <p className="m-0">
+                {`${plural(noEmail, "row", "rows")} left out because ${noEmail === 1 ? "it has" : "they have"} no email.`}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {skipped > 0 ? (
           <RejectedRows
-            broken={broken}
+            broken={leftOut}
             rejected={result.rejected}
-            submitted={valid}
+            submitted={submitted(teachers)}
             rowNumberBase={result.rowNumberBase}
             filename="nevo-teachers-not-imported.csv"
           />
         ) : null}
-
         {undelivered.length > 0 ? (
           <LinkHandout
             className="mt-4"
@@ -234,14 +339,6 @@ export function BulkImportModal({
             }
           />
         ) : null}
-
-        {/*
-          * A SECOND LIST OF THE SAME ROWS USED TO SIT HERE, as
-          * `Row {r.row + 2}` - the very guess `RejectedRows` above refuses to
-          * make, since the contract documents no base for `row`. So every
-          * server-rejected row appeared twice, two numbers apart, and at least
-          * one of the two pointed the admin at the wrong line.
-          */}
       </Modal>
     );
   }
@@ -281,29 +378,51 @@ export function BulkImportModal({
 
   // ------------------------------------------------------------ PREVIEW ---
   if (phase === "preview" || phase === "sending") {
+    const items = [
+      ...teachers.map((t) => ({ at: t.lines[0], teacher: t, row: null as ParsedRow | null })),
+      ...leftOut.map((r) => ({ at: r.line, teacher: null as ImportTeacher | null, row: r })),
+    ].sort((a, b) => a.at - b.at);
+    const twice = merged.every((t) => t.lines.length === 2);
+    const n = teachers.length;
+
     return (
       <Modal
         busy={phase === "sending"}
         title={TITLE}
         onClose={onClose}
-        widthClass="max-w-[720px]"
+        widthClass="max-w-[880px]"
         footer={
           phase === "sending" ? (
             <div className="flex flex-1 items-center justify-center gap-2.5 py-3">
               <Spinner />
               <span className="text-sm text-nevo-near-black/60">
-                Sending {valid.length}{" "}
-                {valid.length === 1 ? "invite" : "invites"}…
+                Saving {plural(n, "teacher", "teachers")}…
               </span>
             </div>
           ) : (
             <>
-              <p className="m-0 flex-1 text-[13px] leading-[1.5] text-nevo-near-black/60">
-                {valid.length} valid, {broken.length} with issues.
-                {broken.length > 0
-                  ? " You can send the valid rows now, then fix the CSV and re-upload to catch the rest."
-                  : ""}
-              </p>
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-nevo-near-black/60">
+                {open.length > 0 ? (
+                  <>
+                    <span>{`${plural(open.length, "subject", "subjects")} to settle before saving:`}</span>
+                    {open.map((t) => (
+                      <button
+                        key={t.line}
+                        type="button"
+                        onClick={() => {
+                          setSettling(t.line);
+                          document
+                            .getElementById(`import-row-${t.line}`)
+                            ?.scrollIntoView?.({ block: "nearest" });
+                        }}
+                        className="cursor-pointer font-semibold text-nevo-navy hover:underline"
+                      >
+                        Row {t.line}
+                      </button>
+                    ))}
+                  </>
+                ) : null}
+              </div>
               <button
                 type="button"
                 onClick={() => {
@@ -317,63 +436,157 @@ export function BulkImportModal({
               <button
                 type="button"
                 onClick={send}
-                disabled={valid.length === 0}
+                disabled={open.length > 0 || n === 0}
                 className={PRIMARY_BTN}
               >
-                Send {valid.length} {valid.length === 1 ? "invite" : "invites"}
+                Save {plural(n, "teacher", "teachers")}
               </button>
             </>
           )
         }
       >
-        <p className="m-0 text-[14.5px] leading-[1.6] text-nevo-near-black/72">
-          Found {rows.length} {rows.length === 1 ? "teacher" : "teachers"} in
-          your file.
-          {broken.length > 0 ? (
-            <>
-              {" "}
-              <span className="font-semibold text-nevo-navy">
-                {broken.length} {broken.length === 1 ? "row has" : "rows have"}{" "}
-                issues.
-              </span>
-            </>
+        {/* D19 step 2's summary: rows to teachers, joins, and what's to settle. */}
+        <p data-import-lead className="m-0 text-[14.5px] leading-[1.6] text-nevo-near-black/72">
+          {`${plural(rows.length, "row", "rows")} became ${plural(n, "teacher", "teachers")}.`}
+          {merged.length > 0
+            ? ` ${merged.length} ${merged.length === 1 ? "teacher appears" : "teachers appear"} ${twice ? "twice" : "more than once"} with one email, so ${merged.length === 1 ? "their rows are" : "each is"} joined into one.`
+            : ""}
+          {open.length > 0 ? (
+            <span className="font-semibold text-nevo-navy">
+              {` ${plural(open.length, "subject", "subjects")} to settle in their rows.`}
+            </span>
           ) : null}
         </p>
 
-        <div className="mt-4 max-h-[46vh] overflow-auto rounded-xl border border-nevo-near-black/10">
-          <table className="w-full border-collapse text-left">
-            <thead className="sticky top-0 bg-nevo-cream-elevated">
-              <tr className="text-[11.5px] font-semibold uppercase tracking-[0.05em] text-nevo-near-black/50">
-                <th className="px-3 py-2.5">Name</th>
-                <th className="px-3 py-2.5">Class</th>
-                <th className="px-3 py-2.5">Email</th>
-                <th className="px-3 py-2.5">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr
-                  key={r.line}
-                  className="border-t border-nevo-near-black/[0.07]"
+        <div className="mt-4 overflow-hidden rounded-xl border border-nevo-near-black/10">
+          <div
+            className={cn(
+              COLS,
+              "bg-nevo-cream-elevated px-[18px] py-2.5 text-[11px] font-semibold tracking-[0.06em] text-nevo-near-black/60 uppercase",
+            )}
+          >
+            <span>Row</span>
+            <span>Teacher</span>
+            <span>Teaches</span>
+            <span>Status</span>
+          </div>
+          <div className="max-h-[50vh] overflow-auto">
+            {items.map(({ at, teacher, row }, i) => {
+              const top = i > 0 ? "border-t border-nevo-near-black/[0.06]" : "";
+              if (row) {
+                // A row our own parser refused: D19's "Left out".
+                return (
+                  <div key={`out-${at}`} data-import-row={at} className={cn("px-[18px] py-[13px]", top)}>
+                    <div className={COLS}>
+                      <span className="text-[13px] tabular-nums text-nevo-near-black/55">{row.line}</span>
+                      <div className="min-w-0">
+                        <div className="truncate text-[14.5px] font-semibold text-nevo-near-black/60">
+                          {row.name || "—"}
+                        </div>
+                        <div className="truncate text-[12.5px] text-nevo-near-black/55">
+                          {row.noEmail ? "No email in the file" : row.email}
+                        </div>
+                      </div>
+                      <span className="min-w-0 text-[13px] text-nevo-near-black/55">
+                        {[row.subject, row.className].filter(Boolean).join(" · ")}
+                      </span>
+                      <Status dot="bg-nevo-near-black/35">Left out</Status>
+                    </div>
+                    <p className="m-0 mt-2 pl-[58px] text-[13px] leading-[1.55] text-nevo-near-black/66">
+                      {row.noEmail
+                        ? `${NO_EMAIL} The rest of the file isn’t affected. Add the email to your file and import this row again, or add ${row.name} by hand.`
+                        : row.error}
+                    </p>
+                  </div>
+                );
+              }
+              const t = teacher!;
+              const mine = open.filter((o) => t.teaches.some((x) => x.line === o.line));
+              const being = t.teaches.find((x) => x.line === settling) ?? null;
+              const others = being ? sameWords(being, open) : [];
+              return (
+                <div
+                  key={t.key}
+                  data-import-row={at}
+                  className={cn("px-[18px] py-[13px]", top, being && "bg-nevo-navy/[0.04]")}
                 >
-                  <td className={CELL}>{r.name || "—"}</td>
-                  <td className={CELL}>{r.className || "—"}</td>
-                  <td className={CELL}>{r.email || "—"}</td>
-                  <td className="px-3 py-2.5">
-                    {r.error ? (
-                      <span className="text-[13px] font-semibold text-nevo-navy">
-                        {r.error}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center rounded-full bg-nevo-navy/12 px-2.5 py-0.5 text-[12px] font-semibold text-nevo-navy">
-                        Ready
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  <div className={COLS}>
+                    <span className="text-[13px] tabular-nums text-nevo-near-black/55">{t.lines.join(", ")}</span>
+                    <div className="min-w-0">
+                      <div className="truncate text-[14.5px] font-semibold text-nevo-near-black">{t.row.name}</div>
+                      <div className="truncate text-[12.5px] text-nevo-near-black/55">{t.row.email}</div>
+                    </div>
+                    <div className="flex min-w-0 flex-wrap gap-1.5">
+                      {t.teaches.map((x) => {
+                        const name = subjectFor(x, answers, settled);
+                        return name ? (
+                          <span
+                            key={x.line}
+                            id={`import-row-${x.line}`}
+                            className="inline-flex rounded-full bg-nevo-navy/[0.08] px-2.5 py-[3px] text-[12.5px] font-semibold text-nevo-navy"
+                          >
+                            {`${name} · ${x.className}`}
+                          </span>
+                        ) : (
+                          <button
+                            key={x.line}
+                            id={`import-row-${x.line}`}
+                            type="button"
+                            onClick={() => setSettling(settling === x.line ? null : x.line)}
+                            aria-expanded={settling === x.line}
+                            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-nevo-violet/24 px-2.5 py-[3px] text-[12.5px] text-nevo-navy hover:brightness-[0.97]"
+                          >
+                            <span className="text-nevo-near-black/60">From file:</span>{" "}
+                            <span className="font-semibold">
+                              {[x.subject, x.className].filter(Boolean).join(" · ")}
+                            </span>{" "}
+                            <span className="font-semibold underline">Settle</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div>
+                      {mine.length > 0 ? (
+                        <Status dot="bg-nevo-violet">Subject to settle</Status>
+                      ) : t.lines.length > 1 ? (
+                        <>
+                          <span className="text-[13px] font-semibold text-nevo-navy">
+                            {`Merged · rows ${andList(t.lines)}`}
+                          </span>
+                          <div className="text-[12px] text-nevo-near-black/55">Same email, so one teacher</div>
+                        </>
+                      ) : (
+                        <Status dot="bg-nevo-navy">Ready</Status>
+                      )}
+                    </div>
+                  </div>
+                  {being ? (
+                    <div className="mt-3 pl-[58px]">
+                      <SubjectPicker
+                        id={`settle-${being.line}`}
+                        listLabel={`Subject for row ${being.line}`}
+                        size="sm"
+                        value={settled[being.line] ? [settled[being.line]] : []}
+                        onChange={(next) => settle(being, next[next.length - 1] ?? null)}
+                        subjects={school ?? []}
+                      />
+                      {others.length > 0 ? (
+                        <label className="mt-2 flex cursor-pointer items-center gap-2 text-[13px] text-nevo-near-black/72">
+                          <input
+                            type="checkbox"
+                            checked={alsoOthers}
+                            onChange={(e) => setAlsoOthers(e.target.checked)}
+                            className="size-4 cursor-pointer accent-nevo-navy"
+                          />
+                          {alsoLine(others, being.subject)}
+                        </label>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </Modal>
     );
@@ -442,18 +655,44 @@ export function BulkImportModal({
         </p>
       ) : null}
 
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={downloadTemplate}
-          className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:opacity-75"
-        >
-          Download CSV template
-        </button>
-        <span className="text-[12.5px] text-nevo-near-black/55">
-          Columns: name, email, class
-        </span>
+      <button
+        type="button"
+        onClick={downloadTemplate}
+        className="mt-4 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:opacity-75"
+      >
+        Download CSV template
+      </button>
+
+      {/* D19 step 1: the template's own rows, and how they're read. */}
+      <div className="mt-3 overflow-x-auto rounded-[10px] border border-nevo-near-black/10">
+        <table data-template-example className="w-full border-collapse text-left text-[12.5px]">
+          <thead className="bg-nevo-cream-elevated text-nevo-near-black/60">
+            <tr>
+              {TEMPLATE_ROWS[0].map((h) => (
+                <th key={h} className="px-2.5 py-1.5 font-semibold">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {TEMPLATE_ROWS.slice(1).map((r, i) => (
+              <tr key={i} className="border-t border-nevo-near-black/[0.07] text-nevo-near-black/75">
+                {r.map((c, j) => (
+                  <td key={j} className="px-2.5 py-1.5 whitespace-nowrap">
+                    {c}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
+      <p className="mt-3 text-[13px] leading-[1.55] text-nevo-near-black/62">
+        One row for each subject a teacher takes in each class, so a teacher
+        with three appears three times. Rows join into one teacher by email,
+        never by name.
+      </p>
     </Modal>
   );
 }

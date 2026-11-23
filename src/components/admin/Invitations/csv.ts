@@ -32,8 +32,15 @@ export interface ParsedRow {
   lastName?: string;
   email: string;
   className: string;
+  /**
+   * The file's subject, as typed (D19: "One row for each subject a teacher
+   * takes in each class"). Empty when the row has none.
+   */
+  subject: string;
   /** Null when the row is fine. */
   error: string | null;
+  /** D19's drawn "Left out" row: no email, so no way to know the teacher. */
+  noEmail?: boolean;
   /** Resolved from `className`; null when unmatched or absent. */
   classId: string | null;
   /**
@@ -44,14 +51,24 @@ export interface ParsedRow {
 }
 
 /**
- * The downloadable template.
+ * The downloadable template: D19 step 1's own columns and example rows.
  *
  * There was a student template too, with a parent contact column (SCRUM-162).
  * It went with the student invite itself (L2, 14 Oct): a school adds its
  * children on Students, which has its own roster import.
  */
-export const TEMPLATE =
-  "first_name,last_name,email,class\nFolake,Adeyemi,adeyemi.f@school.edu.ng,JSS 2A\n";
+export const TEMPLATE_ROWS = [
+  ["first_name", "last_name", "email", "subject", "class"],
+  ["Kunle", "Bello", "k.bello@school.edu.ng", "Mathematics", "JSS 2A"],
+  ["Kunle", "Bello", "k.bello@school.edu.ng", "Further Mathematics", "SSS 1 Sciences"],
+  ["Nnamdi", "Obi", "n.obi@school.edu.ng", "Biology", "SSS 1 Sciences"],
+] as const;
+
+export const TEMPLATE = `${TEMPLATE_ROWS.map((r) => r.join(",")).join("\n")}\n`;
+
+/** D19's sentence for a row with no email, which it draws as "Left out". */
+export const NO_EMAIL =
+  "This row has no email address, and email is how Nevo knows each teacher, so it can't be imported.";
 
 /**
  * A small RFC-4180 reader: quoted fields, escaped quotes, and CRLF.
@@ -159,6 +176,7 @@ export function parseInviteCsv(
   const iName = headerIndex(header, "name", "fullname");
   const iEmail = headerIndex(header, "email");
   const iClass = headerIndex(header, "class", "classname");
+  const iSubject = headerIndex(header, "subject", "subjectname");
   const split = iFirst !== -1;
 
   if (!split && iName === -1) {
@@ -170,10 +188,11 @@ export function parseInviteCsv(
   }
 
   // Class names are the school's own free text, matched case-insensitively so
-  // "jss 2a" finds "JSS 2A".
-  const byName = new Map(classes.map((c) => [c.name.trim().toLowerCase(), c]));
-
-  const seen = new Set<string>();
+  // "jss 2a" finds "JSS 2A". Never an archived class: an invitation can't
+  // carry one (T15's `class_not_found`).
+  const byName = new Map(
+    classes.filter((c) => !c.archivedAt).map((c) => [c.name.trim().toLowerCase(), c]),
+  );
 
   const rows = body.map((cells, i): ParsedRow => {
     const at = (idx: number) => (idx === -1 ? "" : (cells[idx] ?? "").trim());
@@ -182,30 +201,37 @@ export function parseInviteCsv(
     const name = split ? [first, last].filter(Boolean).join(" ") : at(iName);
     const email = at(iEmail);
     const className = at(iClass);
+    const subject = at(iSubject);
 
     const matched = className ? byName.get(className.toLowerCase()) : undefined;
 
+    /*
+     * A REPEATED EMAIL IS NO LONGER AN ERROR (backlog 19, D19 step 2). One
+     * row is one subject in one class, so a teacher with three appears three
+     * times, and "Rows join into one teacher by email, never by name" -
+     * `groupTeachers` joins them. The old rule refused every row after the
+     * first, which refused the frame's own file.
+     */
     let error: string | null = null;
     let unknownClass = false;
+    let noEmail = false;
     if (!name) {
       error = "No name in this row.";
-    } else if (email && !EMAIL.test(email)) {
+    } else if (!email) {
+      error = NO_EMAIL;
+      noEmail = true;
+    } else if (!EMAIL.test(email)) {
       error = "That email doesn't look right.";
     } else if (className && !matched) {
       // CL-07 (SCRUM-149): say what to do, not only what is wrong. The row
       // number sits beside this in the list, so the sentence doesn't repeat it.
       error = `Names ${className}, which is not a class in this school. Create your classes first, then import your staff.`;
       unknownClass = true;
-    } else if (!email) {
-      error = "A teacher needs an email to be invited.";
-    } else {
-      // A file that invites the same person twice would send them two links.
-      const key = email.toLowerCase();
-      if (seen.has(key)) {
-        error = "This row repeats one above it.";
-      } else {
-        seen.add(key);
-      }
+    } else if (subject && !className) {
+      // A subject is taught TO a class (T15 pairs them), so alone it says
+      // nothing an invitation can carry - and dropping it quietly would be
+      // the row half-imported.
+      error = "This row names a subject but no class.";
     }
 
     return {
@@ -214,9 +240,11 @@ export function parseInviteCsv(
       ...(split ? { firstName: first, lastName: last } : {}),
       email,
       className,
+      subject,
       classId: matched?.id ?? null,
       error,
       ...(unknownClass ? { unknownClass } : {}),
+      ...(noEmail ? { noEmail } : {}),
     };
   });
 
@@ -230,17 +258,68 @@ export function splitName(name: string): { firstName: string; lastName: string |
   return { firstName: parts.slice(0, -1).join(" "), lastName: parts[parts.length - 1] };
 }
 
-export function toDraft(row: ParsedRow): InviteDraft {
+/** One thing a teacher teaches, from one row: a class, and the file's subject. */
+export interface Teaching {
+  line: number;
+  classId: string;
+  className: string;
+  /** As the file typed it. Empty when the row named a class and no subject. */
+  subject: string;
+}
+
+/** The rows that share an email, joined into the one teacher they describe. */
+export interface ImportTeacher {
+  /** The folded email: how rows join (never the name). */
+  key: string;
+  /** Every file line that went into this teacher, in file order. */
+  lines: number[];
+  /** The first row's - the file's own spelling, never re-split. */
+  row: ParsedRow;
+  teaches: Teaching[];
+}
+
+/**
+ * D19 step 2: "Rows join into one teacher by email, never by name." Two
+ * teachers both called Mrs Bello with two addresses stay two (the frame draws
+ * exactly that), and one address on two rows is one teacher holding both.
+ * Rows our own parser refused are not joined: they are left out.
+ */
+export function groupTeachers(rows: ParsedRow[]): ImportTeacher[] {
+  const byEmail = new Map<string, ImportTeacher>();
+  for (const r of rows) {
+    if (r.error) continue;
+    const key = r.email.trim().toLowerCase();
+    let t = byEmail.get(key);
+    if (!t) {
+      t = { key, lines: [], row: r, teaches: [] };
+      byEmail.set(key, t);
+    }
+    t.lines.push(r.line);
+    if (r.classId) {
+      t.teaches.push({ line: r.line, classId: r.classId, className: r.className, subject: r.subject });
+    }
+  }
+  return [...byEmail.values()];
+}
+
+export function toDraft(
+  row: ParsedRow,
+  classes?: InviteDraft["classes"],
+): InviteDraft {
   // The file's own columns when it has them; a one-column name is split.
   const { firstName, lastName } =
     row.firstName !== undefined
       ? { firstName: row.firstName, lastName: row.lastName || null }
       : splitName(row.name);
+  /*
+   * T15: the classes and subjects, never the legacy single classId - which
+   * since T15 is recorded and, for a teacher, not applied.
+   */
   return {
     role: "teacher",
     firstName,
     lastName,
     email: row.email || null,
-    classId: row.classId,
+    ...(classes && classes.length > 0 ? { classes } : {}),
   };
 }
