@@ -52,6 +52,12 @@ export interface LessonSummary {
    */
   assignmentCount?: number;
   /**
+   * The classes this lesson is assigned to now (Teslim T11, live 21 Nov). It
+   * leaves out cancelled assignments, so it agrees with `assignmentCount`.
+   * Absent on an older deployment.
+   */
+  classNames?: string[];
+  /**
    * The lesson-wide sign-off, as the review itself says it (Teslim 294584b,
    * 27 Oct): key points, checks, guiding questions and rewrites all current.
    * Assign waits for it (Lydia, 25 Oct). Absent on an older deployment, and

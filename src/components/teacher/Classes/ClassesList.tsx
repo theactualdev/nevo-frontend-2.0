@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { classesApi } from "@/lib/api/classes";
 import { useClassSummaries } from "@/hooks/useClassSummaries";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
@@ -66,6 +68,30 @@ export function ClassesList() {
    * from the pulse keeps the old line rather than showing a wrong number.
    */
   const { pulse } = useTeacherHome();
+  /*
+   * THE TERM ON THE SCHOOL LINE (backlog item 6; Teslim T11, 21 Nov): C05's
+   * "Brightgate Academy · Second term". It is the school's, carried on every
+   * class's own read, so one of this teacher's classes answers it. Null - no
+   * term dates set - and a failed read both leave the line as the school
+   * alone: no term guessed at.
+   */
+  const firstClassId = byClass[0]?.classId ?? null;
+  const [term, setTerm] = useState<string | null>(null);
+  useEffect(() => {
+    if (!firstClassId) return;
+    let alive = true;
+    classesApi
+      .get(firstClassId)
+      .then((c) => {
+        if (alive) setTerm(c.term?.trim() || null);
+      })
+      .catch(() => {
+        if (alive) setTerm(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [firstClassId]);
   const headcounts = new Map(pulse.map((p) => [p.classId, p.studentCount]));
   const identity = useCurrentUser();
 
@@ -110,7 +136,11 @@ export function ClassesList() {
             consumer still reading `live` alone. */}
         {(identity?.school ?? (!live && !loading && !sample && SCHOOL_LINE)) && (
           <p className="mt-[7px] text-sm text-nevo-near-black/60 xl:mt-2 xl:text-[15px]">
-            {identity?.school ?? SCHOOL_LINE}
+            {identity?.school
+              ? term
+                ? `${identity.school} · ${term}`
+                : identity.school
+              : SCHOOL_LINE}
           </p>
         )}
 
