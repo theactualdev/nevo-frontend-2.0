@@ -523,7 +523,8 @@ describe("setting up a parent account", () => {
   it("says a resent code retires the one before it", async () => {
     // A parent looking at two messages has to know which one still works.
     await reachCodeStep();
-    fireEvent.click(screen.getByRole("button", { name: /Resend code/i }));
+    // Lydia, 19 Nov (L34): "Send it again", as on ParentSignIn.
+    fireEvent.click(screen.getByRole("button", { name: "Send it again" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /no longer works/i,
