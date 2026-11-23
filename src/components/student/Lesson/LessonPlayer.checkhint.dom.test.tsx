@@ -263,7 +263,7 @@ describe("the engine's hint while a check is open (SCRUM-275 #2)", () => {
         attemptNumber: 3,
         handoffTo: "socratic_panel",
         guidedPrompts: [{ id: "p-1", prompt: "What does the top count?" }],
-        advanceAfterHandoff: true,
+        advanceAfterHandoff: false, // T9: always false live
       }),
     );
     await askAgain();

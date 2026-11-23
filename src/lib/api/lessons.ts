@@ -1135,8 +1135,11 @@ export interface LessonQuestionAttempt {
   handoffTo?: "socratic_panel" | null;
   guidedPrompts?: SocraticHandoffPrompt[];
   /**
-   * Default false on the contract. True whenever there is a hand-off; false
-   * means there is none (B128), so the player opens no panel without it.
+   * "Always false. Panel completion never unlocks the section; retry the
+   * original check." (T9, live since ~20 Nov.) It was true whenever there was
+   * a hand-off (B128), and the player opened no panel without it. NOT READ:
+   * the hand-off is `handoffTo`, and the player sends the child back to the
+   * check itself (Lydia, 19 Nov, L13).
    */
   advanceAfterHandoff?: boolean;
   /**

@@ -268,7 +268,7 @@ describe("each check gates on its own", () => {
           : {
               handoffTo: "socratic_panel",
               guidedPrompts: [{ id: "p-1", prompt: "What does a leaf need?" }],
-              advanceAfterHandoff: true,
+              advanceAfterHandoff: false, // T9: always false live
             }),
       }),
     );
