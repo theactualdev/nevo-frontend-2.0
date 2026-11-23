@@ -371,6 +371,29 @@ describe("saving a lesson through its package", () => {
     expect(saved.includesMedia).toBe(false);
   });
 
+  /*
+   * Safety v2 (Teslim 9f4d763, 18 Nov): the download's id is kept for its
+   * status check, and the manifest's expiry for the fourteen-day rule.
+   */
+  it("keeps the download's id and the manifest's expiry", async () => {
+    download.mockResolvedValue(
+      manifest({ expiresAt: "2026-10-15T10:00:00Z" }),
+    );
+    offlinePackage.mockResolvedValue(new Blob([pkg(JSON.stringify(lesson()))]));
+
+    const saved = await downloadLesson(ID);
+
+    expect(saved.downloadId).toBe("download-1");
+    expect(saved.expiresAt).toBe("2026-10-15T10:00:00Z");
+  });
+
+  it("has no expiry from a manifest that gave none", async () => {
+    download.mockResolvedValue(manifest());
+    offlinePackage.mockResolvedValue(new Blob([pkg(JSON.stringify(lesson()))]));
+
+    expect((await downloadLesson(ID)).expiresAt).toBeNull();
+  });
+
   it("shows no size the manifest did not give", async () => {
     download.mockResolvedValue(manifest({ sizeBytes: 0, includesMedia: undefined }));
     offlinePackage.mockResolvedValue(new Blob([pkg(JSON.stringify(lesson()))]));

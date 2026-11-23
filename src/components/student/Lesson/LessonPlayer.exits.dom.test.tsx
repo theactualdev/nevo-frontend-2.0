@@ -651,3 +651,81 @@ describe("a review session's outcome", () => {
     );
   });
 });
+
+/**
+ * L14 (Lydia, 19 Nov): A SAVED LESSON WITHDRAWN FOR SAFETY WHILE OPEN. The
+ * child finishes the part they are in, and the lesson closes after it - "not
+ * mid-segment, and not run to the end". The 12 Nov rule (held content is
+ * revoked before any further content is read) never reached the download
+ * path; this is it reaching it.
+ */
+describe("a saved lesson withdrawn for safety while open", () => {
+  const ENDING = "That's the end of this one for now.";
+  const NOTE = "Your teacher is having another look at it.";
+
+  /** On the second part when the connection's check withdraws the copy. */
+  const withdrawnOnSecond = () => {
+    const view = render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    view.rerender(<LessonPlayer lesson={LESSON} plan={null} live withdrawn />);
+    return view;
+  };
+
+  it("leaves the child in the part they are in", () => {
+    withdrawnOnSecond();
+
+    expect(screen.getByRole("heading", { name: "Denominators" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: ENDING })).toBeNull();
+  });
+
+  it("closes after it, in Lydia's words, reading no further part", () => {
+    withdrawnOnSecond();
+    next();
+
+    expect(screen.getByRole("heading", { name: ENDING })).toBeTruthy();
+    expect(screen.getByText(NOTE)).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Equivalence" })).toBeNull();
+    expect(screen.queryByText(/lesson done/i)).toBeNull();
+  });
+
+  it("is written as left at the part finished, never completed", () => {
+    withdrawnOnSecond();
+    next();
+
+    expect(writes().map(([status]) => status)).not.toContain(
+      LESSON_STATUS.COMPLETED,
+    );
+    expect(writes().at(-1)).toEqual([LESSON_STATUS.EXITED, { segment: 1 }]);
+    expect(signals.ending).toEqual({
+      completionStatus: "exited",
+      exitPosition: "seg-2",
+    });
+  });
+
+  it("closes on a move back as well: no other part is read", () => {
+    withdrawnOnSecond();
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+
+    expect(screen.getByRole("heading", { name: ENDING })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Numerators" })).toBeNull();
+  });
+
+  it("closes from the last part instead of opening the after-lesson check", () => {
+    const view = render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    next();
+    view.rerender(<LessonPlayer lesson={LESSON} plan={null} live withdrawn />);
+    next();
+
+    expect(screen.getByRole("heading", { name: ENDING })).toBeTruthy();
+    expect(writes().at(-1)).toEqual([LESSON_STATUS.EXITED, { segment: 2 }]);
+  });
+
+  it("goes back to Lessons from its one button", () => {
+    withdrawnOnSecond();
+    next();
+    fireEvent.click(screen.getByRole("button", { name: "Back to lessons" }));
+
+    expect(push).toHaveBeenCalledWith("/student/lessons");
+  });
+});

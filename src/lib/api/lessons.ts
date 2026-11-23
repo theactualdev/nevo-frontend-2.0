@@ -934,6 +934,15 @@ export interface OfflineManifest {
   version: number;
   segmentCount: number;
   generatedAt: string;
+  /**
+   * When this download stops opening offline: issued plus fourteen days
+   * (safety v2, Teslim 9f4d763, 18 Nov). Absent from a backend before it, and
+   * a copy kept without one never opens offline - see `canOpenOffline`.
+   */
+  expiresAt?: string | null;
+  // NOT `includedSegmentIds`. The server keeps it on its own download record
+  // to check a held section against, but `OfflineManifestResponse` does not
+  // declare it, so it never reaches the client (9f4d763).
   packageUrl: string;
   /** Measured from the real archive, by the server. */
   sizeBytes?: number;
@@ -947,8 +956,27 @@ export interface OfflineManifest {
 
 /** `OfflineDownloadResponse`, from `POST /api/v1/lessons/{id}/download`. */
 export interface OfflineDownload {
+  /** The download, kept with the copy for its status check (safety v2). */
   id: string;
   manifest: OfflineManifest;
+}
+
+/**
+ * `OfflineDownloadStatus`, from `GET /api/v1/offline-downloads/{id}/status`
+ * (safety v2, Teslim 9f4d763, 18 Nov). Student only.
+ *
+ * `safety_revoked`: a section the package holds is now held for safety, and
+ * the copy is deleted before anything reads it. `expired`: past its fourteen
+ * days, and downloaded afresh. `current` - with `usable: true` - is the only
+ * answer that lets a copy be read. See `lib/offline/shelfCheck`.
+ */
+export interface OfflineDownloadStatus {
+  id: string;
+  usable: boolean;
+  reason: "current" | "expired" | "safety_revoked";
+  /** The server's clock when it answered. */
+  checkedAt: string;
+  expiresAt: string;
 }
 
 /** `LessonCompletionStatus` - the values progress rows come back with. */
@@ -1263,6 +1291,17 @@ export const lessonsApi = {
    */
   offlinePackage: (lessonId: string) =>
     api.blob(`/api/v1/lessons/${lessonId}/offline-package`),
+
+  /**
+   * Whether a kept download may still be read (safety v2, Teslim 9f4d763).
+   * GET /api/v1/offline-downloads/{downloadId}/status - asked on a connection
+   * BEFORE any cached copy is read. A 404 is a download the server cannot
+   * vouch for, never a safe one. See `lib/offline/shelfCheck`.
+   */
+  offlineDownloadStatus: (downloadId: string) =>
+    api.get<OfflineDownloadStatus>(
+      `/api/v1/offline-downloads/${downloadId}/status`,
+    ),
 
   /**
    * Approve one segment for students. Per SEGMENT, matching how the screen
