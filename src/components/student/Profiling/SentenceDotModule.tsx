@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { dotPairs, type AgeBand, type DotPair } from "@/lib/profiling/bands";
 import { wordsShown, type BaselineCapture } from "@/lib/profiling/capture";
@@ -299,8 +298,10 @@ let speaking: SpeechSynthesisUtterance | null = null;
  * fire the CANCELLED utterance's `end` too, so the new one claims the slot
  * first and a stale `end` is ignored rather than opening the wrong trial.
  *
- * NOTE: no voice is chosen, so what the child hears is whichever voice the
- * device has. Which voice (or a recorded asset per sentence) is with design.
+ * GENERATED, AS LESSON NARRATION IS (Olayinka, 23 Nov, on Lydia's L4 of
+ * 19 Nov: "can it be generated the way lesson narration is? If it can be
+ * generated, nothing here is blocked"). No voice is chosen, so what the child
+ * hears is whichever voice the device has; no recording is waited on.
  *
  * Shared with the daily warm-up's heard round (D81), so both say it alike.
  */
@@ -335,10 +336,14 @@ export function hasSpeech(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
+/** The frame's speaker mark (`Nevo Sentence Verify Frame` :35). */
+const SPEAKER = "M4 9v6h4l5 4V5L8 9z";
+
 /**
- * The heard activity's controls: the play button, the three pictures, and the
- * frame's "I don't know". Shared by this module and the daily warm-up's P1-3
- * reading round (D81), so a child meets the same activity in both.
+ * The heard activity's controls: the frame's speaker mark and "Listen
+ * carefully", the three pictures, and the frame's "I don't know". Shared by
+ * this module and the daily warm-up's P1-3 reading round (D81), so a child
+ * meets the same activity in both.
  *
  * `onPick` gets the control's index (the pictures, then "I don't know" after
  * them) and what the pick means: right or not against the heard sentence's
@@ -361,15 +366,53 @@ export function HeardPictures({
   ) => void;
 }) {
   return (
-    <div className="flex w-full max-w-[560px] flex-col items-center gap-8">
-      <button
-        type="button"
-        aria-label="Play the sentence again"
-        onClick={onReplay}
-        className="flex size-[64px] cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.96]"
-      >
-        <Play className="ml-1 size-6" fill="currentColor" strokeWidth={0} />
-      </button>
+    <div className="flex w-full max-w-[560px] flex-col items-center gap-9">
+      {/*
+        THE FRAME'S LISTENING HEAD, IN PLACE OF THE PLAY BUTTON (Nevo Sentence
+        Verify Frame :31-37; Lydia, 19 Nov, L4): the speaker mark in its two
+        widening rings, and "Listen carefully". The mark is still the way to
+        hear it again, as the button was - the frame draws no other, and a
+        child who missed it must not be left guessing. The rings hold still
+        under reduced motion, as the frame's.
+
+        NOT THE FRAME'S CAPTION (:38), the sentence in writing under the mark.
+        P1-3 is audio-led with nothing to read (D81; the architecture: "a text
+        sentence there is a defect against the architecture rather than a gap
+        in design"), and a sentence on screen would let a child who reads
+        answer from the page. Raised, not drawn.
+      */}
+      <div className="flex flex-col items-center gap-2.5">
+        <button
+          type="button"
+          aria-label="Play the sentence again"
+          onClick={onReplay}
+          className="relative flex size-14 cursor-pointer items-center justify-center rounded-full transition-transform active:scale-[0.96]"
+        >
+          <span
+            aria-hidden
+            className="absolute size-14 rounded-full border-2 border-nevo-violet motion-safe:animate-nevo-wave motion-reduce:opacity-40"
+          />
+          <span
+            aria-hidden
+            className="absolute size-14 rounded-full border-2 border-nevo-violet motion-safe:animate-nevo-wave motion-safe:[animation-delay:0.9s] motion-reduce:opacity-40"
+          />
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+            className="relative size-[34px] text-nevo-navy"
+          >
+            <path d={SPEAKER} />
+          </svg>
+        </button>
+        <span className="text-base font-medium text-nevo-near-black">
+          Listen carefully
+        </span>
+      </div>
       {/* From `sm` up each picture is a 160px square, or the square of a
           third of the row where that is narrower (the warm-up's column is
           440px on a tablet and 480px on a desktop, three 160s and their gaps
