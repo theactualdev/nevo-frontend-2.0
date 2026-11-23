@@ -130,7 +130,12 @@ export function AdminTeamView() {
   /** D03 names the school - "can administer Brightgate Academy". */
   const [school, setSchool] = useState<string | null>(null);
   /** Who holds Learning Support; null asserts nothing about anyone. */
-  const { holders: ls, setHolders: setLs } = useLearningSupport();
+  const {
+    holders: ls,
+    setHolders: setLs,
+    failed: lsFailed,
+    retry: retryLs,
+  } = useLearningSupport();
   const [me] = useState(() => getSession()?.userId ?? null);
 
   useEffect(() => {
@@ -240,6 +245,8 @@ export function AdminTeamView() {
           member={editing}
           name={displayName(editing)}
           ls={ls}
+          lsFailed={lsFailed}
+          onLsRetry={retryLs}
           // The viewer's own level, from the same team read - the server's
           // word, and the server refuses anyone else (403) regardless.
           viewerSenior={team.some((m) => m.userId === me && m.accessLevel === "senior")}
