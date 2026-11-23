@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -362,21 +363,13 @@ export function ClassesView() {
                 />
               </label>
 
-              <label className={cn(FILTER_PILL, "relative")}>
-                <span className="sr-only">Filter by year group</span>
-                <select
-                  value={year}
-                  onChange={(e) => setYear(e.target.value)}
-                  className="cursor-pointer appearance-none bg-transparent pr-1 outline-none"
-                >
-                  <option value="">All years</option>
-                  {yearGroupOptions().map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <NevoSelect
+                aria-label="Filter by year group"
+                value={year}
+                onValueChange={setYear}
+                options={[{ value: "", label: "All years" }, ...yearGroupOptions()]}
+                triggerClassName={FILTER_PILL}
+              />
 
               <button
                 type="button"

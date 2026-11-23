@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   classesApi,
@@ -457,25 +458,25 @@ export function AssignTeachingSheet({
           <p className="m-0 text-[15px] font-semibold text-nevo-near-black">{door.teacher.name}</p>
         ) : (
           <>
-            <select
+            <NevoSelect
               aria-label="Teacher"
               value={teacherId}
-              onChange={(e) => chooseTeacher(e.target.value)}
+              onValueChange={chooseTeacher}
               disabled={phase !== "idle"}
-              className={ASSIGN_SELECT}
-            >
-              <option value="">Choose a teacher</option>
-              {teachers.state === "ready"
-                ? teachers.value
-                    // A removed teacher has no console to teach in.
-                    .filter((t) => t.status !== "deactivated")
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.status === "invited" ? `${t.name} (invited)` : t.name}
-                      </option>
-                    ))
-                : null}
-            </select>
+              placeholder="Choose a teacher"
+              options={
+                teachers.state === "ready"
+                  ? teachers.value
+                      // A removed teacher has no console to teach in.
+                      .filter((t) => t.status !== "deactivated")
+                      .map((t) => ({
+                        value: t.id,
+                        label: t.status === "invited" ? `${t.name} (invited)` : t.name,
+                      }))
+                  : []
+              }
+              triggerClassName={ASSIGN_SELECT}
+            />
             {teachers.state === "loading" ? (
               <p className="mt-2 text-[12.5px] leading-[1.5] text-nevo-near-black/45">
                 Looking up your staff&hellip;
@@ -530,25 +531,22 @@ export function AssignTeachingSheet({
             })}
           </div>
         ) : (
-          <select
+          <NevoSelect
             id="assign-subject"
             value={subjectId}
-            onChange={(e) => {
-              setSubjectId(e.target.value);
+            onValueChange={(v) => {
+              setSubjectId(v);
               setTeacherAdd(null);
             }}
             disabled={phase !== "idle" || subjects.state !== "ready"}
-            className={ASSIGN_SELECT}
-          >
-            <option value="">Choose a subject</option>
-            {subjects.state === "ready"
-              ? subjects.value.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.displayName}
-                  </option>
-                ))
-              : null}
-          </select>
+            placeholder="Choose a subject"
+            options={
+              subjects.state === "ready"
+                ? subjects.value.map((s) => ({ value: s.id, label: s.displayName }))
+                : []
+            }
+            triggerClassName={ASSIGN_SELECT}
+          />
         )}
         {subjects.state === "failed" ? (
           <ReadFailed className="mt-2" what="your school's subject list" onRetry={loadSubjects} />

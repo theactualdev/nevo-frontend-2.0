@@ -1,5 +1,6 @@
+import { chooseOption, optionNames } from "@/test/nevoSelect";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import type { AssignedClass } from "@/lib/api/classes";
 import type { TeacherDetail, TeacherSummary } from "@/lib/api/teachers";
@@ -131,7 +132,7 @@ describe("the staff read", () => {
       other({ id: "t3", name: "Gone Person", status: "deactivated" }),
       other({ id: "t4", name: "Not Yet", status: "invited" }),
     ]);
-    const { container } = render(
+    render(
       <RemoveAccessSheet
         teacher={teacher}
         held={held}
@@ -139,10 +140,9 @@ describe("the staff read", () => {
         onRemoved={() => {}}
       />,
     );
-    await waitFor(() => expect(visibleText(container)).toMatch(/Bola Bello/));
-    const options = Array.from(container.querySelectorAll("option")).map(
-      (o) => o.textContent ?? "",
-    );
+    const select = screen.getByRole("combobox", { name: /Who takes/ });
+    await waitFor(() => expect(optionNames(select).join(" ")).toMatch(/Bola Bello/));
+    const options = optionNames(select);
     expect(options.join(" ")).not.toMatch(/Gone Person|Not Yet/);
   });
 });
@@ -159,11 +159,7 @@ describe("a completed removal", () => {
         onRemoved={onRemoved}
       />,
     );
-    await waitFor(() => expect(visibleText(container)).toMatch(/Bola Bello/));
-
-    fireEvent.change(container.querySelector("select")!, {
-      target: { value: "t2" },
-    });
+    await chooseOption(screen.getByRole("combobox", { name: /Who takes/ }), /^Bola Bello/);
     fireEvent.click(
       Array.from(container.querySelectorAll("button")).find(
         (b) => b.textContent === "Reassign and remove access",
@@ -194,8 +190,7 @@ describe("RemoveAccessSheet with nobody else to hand to", () => {
     );
     await waitFor(() => expect(visibleText(container)).toMatch(/no one else active/i));
 
-    const select = container.querySelector("select") as HTMLSelectElement;
-    const options = Array.from(select.options).map((o) => o.textContent);
+    const options = optionNames(screen.getByRole("combobox", { name: /Who takes/ }));
     expect(options.join("|")).toMatch(/Just remove Adeyemi from this class/);
   });
 });
@@ -213,10 +208,9 @@ describe("RemoveAccessSheet after a partial hand-over", () => {
     const { container } = render(
       <RemoveAccessSheet teacher={teacher} held={two} onClose={onClose} onRemoved={() => {}} />,
     );
-    await waitFor(() => expect(container.querySelectorAll("select").length).toBe(2));
-    for (const s of Array.from(container.querySelectorAll("select"))) {
-      await waitFor(() => expect((s as HTMLSelectElement).options.length).toBeGreaterThan(1));
-      fireEvent.change(s, { target: { value: "t2" } });
+    await waitFor(() => expect(screen.getAllByRole("combobox", { name: /Who takes/ })).toHaveLength(2));
+    for (const s of screen.getAllByRole("combobox", { name: /Who takes/ })) {
+      await chooseOption(s, /^Bola Bello/);
     }
     const commit = Array.from(container.querySelectorAll("button")).find((b) =>
       /Reassign and remove access/.test(b.textContent ?? ""),

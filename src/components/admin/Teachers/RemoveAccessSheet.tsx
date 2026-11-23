@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useCallback, useEffect, useState } from "react";
 import { classesApi, type AdminClass, type AssignedClass } from "@/lib/api/classes";
 import { yearGroupLabel } from "@/lib/constants/yearGroups";
@@ -426,13 +427,13 @@ export function RemoveAccessSheet({
                 </span>
                 <RolePill role={h.role} />
               </div>
-              <label className="mt-3 block">
-                <span className="sr-only">Who takes {h.className}?</span>
-                <select
+              <div className="mt-3">
+                <NevoSelect
+                  aria-label={`Who takes ${h.className}?`}
                   value={value}
                   disabled={read === "loading"}
-                  onChange={(e) => {
-                    const v = e.target.value;
+                  placeholder="Choose who takes this class"
+                  onValueChange={(v) => {
                     setPlan((prev) => ({
                       ...prev,
                       [h.assignmentId]:
@@ -443,29 +444,26 @@ export function RemoveAccessSheet({
                             : { kind: "reassign", toTeacherId: v },
                     }));
                   }}
-                  className="h-[46px] w-full cursor-pointer rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-3.5 text-sm text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
-                >
-                  <option value="">Choose who takes this class</option>
-                  {staff.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {h.role === "primary" ? `${t.name} — as Primary` : t.name}
-                    </option>
-                  ))}
-                  {/*
+                  triggerClassName="h-[46px] w-full rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-3.5 text-sm text-nevo-near-black transition-colors focus:border-nevo-navy"
+                  options={[
+                    ...staff.map((t) => ({
+                      value: t.id,
+                      label: h.role === "primary" ? `${t.name} — as Primary` : t.name,
+                    })),
+                  /*
                     * Offered where the class keeps its primary regardless -
                     * AND on a Primary row when there is nobody else to hand
                     * it to. The note above tells the admin "you can still
                     * remove them from each class below", and a Primary row
                     * with no remove option left the commit disabled behind
                     * that instruction, with no way through.
-                    */}
-                  {h.role === "co_teacher" || (read === "ready" && staff.length === 0) ? (
-                    <option value="__remove">
-                      Just remove {firstName} from this class
-                    </option>
-                  ) : null}
-                </select>
-              </label>
+                    */
+                    ...(h.role === "co_teacher" || (read === "ready" && staff.length === 0)
+                      ? [{ value: "__remove", label: `Just remove ${firstName} from this class` }]
+                      : []),
+                  ]}
+                />
+              </div>
             </div>
           );
         })}

@@ -150,7 +150,9 @@ test("the roster shows four consent states and can be narrowed by them", async (
   expect(/Showing \d+ of \d+/.test(before)).toBeTruthy();
 
   // The tenant seeds withdrawn children; the filter must actually find them.
-  await page.getByLabel(/Filter by consent/i).selectOption("withdrawn");
+  // A Nevo dropdown, not a native select: open it, then choose the row.
+  await page.getByRole("combobox", { name: /Filter by consent/i }).click();
+  await page.getByRole("option", { name: "Withdrawn" }).click();
   await expect(page.getByText(/Showing \d+ of \d+/)).toBeVisible(LIVE);
 });
 

@@ -1,3 +1,4 @@
+import { optionNames } from "@/test/nevoSelect";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
@@ -71,9 +72,8 @@ describe("IepExporterView student picker", () => {
     const retry = await screen.findByRole("button", { name: "Try again" });
     retry.click();
 
-    await waitFor(() =>
-      expect(visibleText(container)).toMatch(/Amara Okafor 1/),
-    );
+    const picker = screen.getByRole("combobox", { name: "Student" });
+    await waitFor(() => expect(optionNames(picker)).toContain("Amara Okafor 1"));
     expect(visibleText(container)).not.toMatch(/couldn't read your student list/i);
   });
 
@@ -81,7 +81,8 @@ describe("IepExporterView student picker", () => {
     list.mockResolvedValue([student(1)]);
 
     const { container } = render(<IepExporterView />);
-    await waitFor(() => expect(visibleText(container)).toMatch(/Amara Okafor 1/));
+    const picker = screen.getByRole("combobox", { name: "Student" });
+    await waitFor(() => expect(optionNames(picker)).toContain("Amara Okafor 1"));
     expect(visibleText(container)).not.toMatch(/couldn't read/i);
     expect(visibleText(container)).not.toMatch(/nobody to choose from/i);
   });
@@ -91,16 +92,16 @@ describe("opening the exporter on a child", () => {
   it("preselects the child the learner profile sent", async () => {
     list.mockResolvedValue([student(1), student(2)]);
     render(<IepExporterView initialStudentId="s2" />);
-    const picker = (await screen.findByRole("combobox")) as HTMLSelectElement;
-    await waitFor(() => expect(picker.value).toBe("s2"));
+    const picker = await screen.findByRole("combobox", { name: "Student" });
+    await waitFor(() => expect(picker).toHaveTextContent("Amara Okafor 2"));
   });
 
   it("starts empty when the id is not on this school's roster", async () => {
     list.mockResolvedValue([student(1)]);
     render(<IepExporterView initialStudentId="someone-else" />);
-    const picker = (await screen.findByRole("combobox")) as HTMLSelectElement;
-    await waitFor(() => expect(screen.getByText("Amara Okafor 1")).toBeInTheDocument());
-    expect(picker.value).toBe("");
+    const picker = await screen.findByRole("combobox", { name: "Student" });
+    await waitFor(() => expect(optionNames(picker)).toEqual(["Amara Okafor 1"]));
+    expect(picker).toHaveTextContent("Choose a student");
     // The harm the picker cannot show: a draft for a child not on the roster.
     await new Promise((r) => setTimeout(r, 10));
     expect(screen.getByRole("button", { name: "Generate draft" })).toBeDisabled();

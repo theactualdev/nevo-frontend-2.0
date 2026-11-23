@@ -1,3 +1,4 @@
+import { chooseOption } from "@/test/nevoSelect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
@@ -56,7 +57,7 @@ describe("Unread only", () => {
   it("says up to date only when every page is loaded", async () => {
     list.mockResolvedValue({ notifications: [note("n1")], unreadCount: 0, total: 1, hasMore: false });
     const { container } = render(<NotificationsView />);
-    fireEvent.change(await screen.findByRole("combobox", { name: "View" }), { target: { value: "unread" } });
+    await chooseOption(await screen.findByRole("combobox", { name: "View" }), "Unread only");
     await waitFor(() => expect(visibleText(container)).toMatch(/You're up to date\./));
     expect(visibleText(container)).toMatch(/Everything here has been read\./);
   });
@@ -64,7 +65,7 @@ describe("Unread only", () => {
   it("does not claim it while older notifications are unfetched", async () => {
     list.mockResolvedValue({ notifications: [note("n1")], unreadCount: 3, total: 40, hasMore: true });
     const { container } = render(<NotificationsView />);
-    fireEvent.change(await screen.findByRole("combobox", { name: "View" }), { target: { value: "unread" } });
+    await chooseOption(await screen.findByRole("combobox", { name: "View" }), "Unread only");
     await waitFor(() => expect(visibleText(container)).toMatch(/Nothing unread among the latest/));
     expect(visibleText(container)).not.toMatch(/up to date/);
     expect(screen.getAllByRole("button", { name: "Show older" }).length).toBeGreaterThan(0);
@@ -73,7 +74,7 @@ describe("Unread only", () => {
 
 describe("Archived", () => {
   const openArchived = async () => {
-    fireEvent.change(await screen.findByRole("combobox", { name: "View" }), { target: { value: "archived" } });
+    await chooseOption(await screen.findByRole("combobox", { name: "View" }), "Archived");
   };
 
   it("counts what is archived from the feed's own total", async () => {

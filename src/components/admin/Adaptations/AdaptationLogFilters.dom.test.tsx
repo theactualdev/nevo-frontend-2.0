@@ -1,5 +1,6 @@
+import { chooseOption } from "@/test/nevoSelect";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import type { AdminClass } from "@/lib/api/classes";
 import { AdaptationLogView } from "./AdaptationLogView";
@@ -77,13 +78,10 @@ const row = (id: string) => ({
 
 const lastCall = () => logSpy.mock.calls[logSpy.mock.calls.length - 1][0];
 
-async function selectClass(container: HTMLElement, value: string) {
-  const select = await waitFor(() => {
-    const el = container.querySelector("select");
-    if (!el) throw new Error("no select yet");
-    return el;
-  });
-  fireEvent.change(select, { target: { value } });
+/** The class chip is a Nevo dropdown: choose the class by its name. */
+const CLASS_NAME: Record<string, string> = { c1: "JSS 2A", c2: "JSS 3B", "": "All classes" };
+async function selectClass(_container: HTMLElement, value: string) {
+  await chooseOption(await screen.findByRole("combobox", { name: "Filter by class" }), CLASS_NAME[value]);
 }
 
 beforeEach(() => {

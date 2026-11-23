@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePermissions } from "@/hooks";
 import { notificationsApi, type Notification } from "@/lib/api/notifications";
@@ -306,28 +307,23 @@ export function NotificationsView() {
               {/* D13b's ONE view menu (backlog 74): Everything, Unread
                   only, Archived. It was two pills that could be read as two
                   filters at once, "Show archived" and "Unread only". */}
-              <label
-                className={cn(
+              <NevoSelect
+                aria-label="View"
+                value={archived ? "archived" : unreadOnly ? "unread" : "everything"}
+                onValueChange={(v) => {
+                  setView(v === "archived" ? "archived" : "inbox");
+                  setUnreadOnly(v === "unread");
+                }}
+                options={[
+                  { value: "everything", label: "Everything" },
+                  { value: "unread", label: "Unread only" },
+                  { value: "archived", label: "Archived" },
+                ]}
+                triggerClassName={cn(
                   FILTER_PILL,
-                  "relative",
                   (archived || unreadOnly) && "border-nevo-navy bg-nevo-navy/[0.06] text-nevo-navy",
                 )}
-              >
-                <span className="sr-only">View</span>
-                <select
-                  value={archived ? "archived" : unreadOnly ? "unread" : "everything"}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setView(v === "archived" ? "archived" : "inbox");
-                    setUnreadOnly(v === "unread");
-                  }}
-                  className="cursor-pointer appearance-none bg-transparent pr-1 outline-none"
-                >
-                  <option value="everything">Everything</option>
-                  <option value="unread">Unread only</option>
-                  <option value="archived">Archived</option>
-                </select>
-              </label>
+              />
 
               {!archived ? (
                 <button

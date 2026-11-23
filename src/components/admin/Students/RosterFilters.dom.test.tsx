@@ -1,5 +1,6 @@
+import { chooseOption, optionNames } from "@/test/nevoSelect";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import type {
   AdminStudentRow,
@@ -63,20 +64,14 @@ beforeEach(() => {
   ]);
 });
 
-function select(container: HTMLElement, label: string) {
-  return Array.from(container.querySelectorAll("select")).find((s) =>
-    Array.from(s.options).some((o) => o.textContent === label),
-  )!;
-}
+const consentFilter = () => screen.getByRole("combobox", { name: "Filter by consent" });
 
 describe("the consent filter", () => {
   it("narrows to withdrawn families", async () => {
     const { container } = render(<StudentsView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Amara Okafor/));
 
-    fireEvent.change(select(container, "Any consent"), {
-      target: { value: "withdrawn" },
-    });
+    await chooseOption(consentFilter(), "Withdrawn");
     await waitFor(() =>
       expect(visibleText(container)).not.toMatch(/Amara Okafor/),
     );
@@ -90,26 +85,25 @@ describe("the consent filter", () => {
     const { container } = render(<StudentsView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Tunde Alao/));
 
-    fireEvent.change(select(container, "Any consent"), {
-      target: { value: "not_sent" },
-    });
+    await chooseOption(consentFilter(), "Not sent");
     await waitFor(() =>
       expect(visibleText(container)).not.toMatch(/Ngozi Bello/),
     );
     expect(visibleText(container)).toMatch(/Tunde Alao/);
   });
 
-  it("offers no option that can never match a row", () => {
+  it("offers no option that can never match a row", async () => {
     // A "no record at all" option shipped for a day and could not match
-    // anything, which reads as a school with nothing in that state.
-    const { container } = render(<StudentsView />);
-    return waitFor(() => {
-      const options = Array.from(container.querySelectorAll("option")).map(
-        (o) => o.value,
-      );
-      expect(options).toContain("not_sent");
-      expect(options).not.toContain("none");
-    });
+    // anything, which reads as a school with nothing in that state. The
+    // menu is exactly the pills' four states and "Any".
+    render(<StudentsView />);
+    expect(optionNames(await screen.findByRole("combobox", { name: "Filter by consent" }))).toEqual([
+      "Any consent",
+      "Confirmed",
+      "Pending",
+      "Not sent",
+      "Withdrawn",
+    ]);
   });
 });
 
@@ -127,9 +121,7 @@ describe("the footer line", () => {
     const { container } = render(<StudentsView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Showing 4 of 4/));
 
-    fireEvent.change(select(container, "Any consent"), {
-      target: { value: "withdrawn" },
-    });
+    await chooseOption(consentFilter(), "Withdrawn");
     await waitFor(() => expect(visibleText(container)).toMatch(/Showing 1 of 4/));
   });
 });

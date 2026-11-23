@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { classesApi } from "@/lib/api/classes";
@@ -338,21 +339,18 @@ export function WrittenConsentView({
                     <label htmlFor="wc-relationship" className={LABEL}>
                       Relationship to child
                     </label>
-                    <select
+                    <NevoSelect
                       id="wc-relationship"
                       value={relationship}
-                      onChange={(e) => setRelationship(e.target.value)}
+                      onValueChange={setRelationship}
                       disabled={save === "saving"}
-                      className={cn(FIELD, "cursor-pointer")}
-                    >
-                      <option value="">Choose</option>
-                      {RELATIONSHIPS.map((r) => (
-                        <option key={r} value={r}>
-                          {r}
-                        </option>
-                      ))}
-                      <option value={OTHER}>{OTHER}</option>
-                    </select>
+                      placeholder="Choose"
+                      options={[
+                        ...RELATIONSHIPS.map((r) => ({ value: r, label: r })),
+                        { value: OTHER, label: OTHER },
+                      ]}
+                      triggerClassName={FIELD}
+                    />
                   </div>
                   <div className="flex-1">
                     <label htmlFor="wc-signed" className={LABEL}>

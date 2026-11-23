@@ -1,3 +1,4 @@
+import { optionNames } from "@/test/nevoSelect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
@@ -292,8 +293,8 @@ describe("D07's consent column", () => {
   it("filters by the pills' own words", async () => {
     list.mockResolvedValue([student()]);
     render(<StudentsView />);
-    const filter = (await screen.findByLabelText("Filter by consent")) as HTMLSelectElement;
-    expect(Array.from(filter.options).map((o) => o.textContent)).toEqual([
+    const filter = await screen.findByLabelText("Filter by consent");
+    expect(optionNames(filter)).toEqual([
       "Any consent",
       "Confirmed",
       "Pending",

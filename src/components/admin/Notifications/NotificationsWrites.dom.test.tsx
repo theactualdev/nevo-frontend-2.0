@@ -1,3 +1,4 @@
+import { chooseOption } from "@/test/nevoSelect";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
@@ -89,7 +90,7 @@ describe("NotificationsView mark all read", () => {
      * unread rows. Before, the rows stayed painted read and this said
      * "You're up to date."
      */
-    fireEvent.change(screen.getByRole("combobox", { name: "View" }), { target: { value: "unread" } });
+    await chooseOption(screen.getByRole("combobox", { name: "View" }), "Unread only");
     await waitFor(() => expect(visibleText(container)).toMatch(/Notice 1/));
     expect(visibleText(container)).toMatch(/Notice 2/);
     expect(visibleText(container)).not.toMatch(/up to date/i);
@@ -107,7 +108,7 @@ describe("NotificationsView mark all read", () => {
     );
     expect(visibleText(container)).not.toMatch(/couldn't mark/i);
 
-    fireEvent.change(screen.getByRole("combobox", { name: "View" }), { target: { value: "unread" } });
+    await chooseOption(screen.getByRole("combobox", { name: "View" }), "Unread only");
     await waitFor(() => expect(visibleText(container)).toMatch(/up to date/i));
   });
   it("does not throw away a page that landed while the write was in flight", async () => {
@@ -147,7 +148,7 @@ describe("NotificationsView mark all read", () => {
     // The page that arrived meanwhile is still here...
     expect(visibleText(container)).toMatch(/Notice 3/);
     // ...and the unread state it rolled back is the read flags, not the list.
-    fireEvent.change(screen.getByRole("combobox", { name: "View" }), { target: { value: "unread" } });
+    await chooseOption(screen.getByRole("combobox", { name: "View" }), "Unread only");
     await waitFor(() => expect(visibleText(container)).toMatch(/Notice 1/));
   });
 });
