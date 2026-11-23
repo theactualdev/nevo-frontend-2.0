@@ -98,7 +98,24 @@ export function ClassDetailView({
   const [assigning, setAssigning] = useState(false);
   const [editing, setEditing] = useState(false);
   /** D24 / D01b: every change to a class pauses while setup is unfinished. */
-  const { writesPaused } = useSetupGate();
+  const { writesPaused, pause } = useSetupGate();
+  /*
+   * EXCEPT EDIT CLASS, WHILE A SCHOOL WAITS TO BE ACTIVE (N8; Lydia, 11 Nov:
+   * "What has to exist instead is renaming a class in the roster itself
+   * after Confirm. A typo found later is an ordinary administrative
+   * correction"). A class only exists before activation because Confirm made
+   * it, so this is exactly the after-Confirm window.
+   *
+   * HELD UNTIL T18 (Teslim 2e55663, live 20 Nov). Activation used to find a
+   * class by its name, so a rename here split it: a new class under the old
+   * spelling took the students. Each roster row now holds its class by id,
+   * and activation never writes the file's name back. PATCH /classes has no
+   * activation gate of its own.
+   *
+   * An unconfirmed address still pauses it (D01b AC-05): that pause is about
+   * who is making the change, not about the class.
+   */
+  const editPaused = writesPaused && pause !== "not_active";
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   /*
@@ -282,7 +299,7 @@ export function ClassDetailView({
           <button
             type="button"
             onClick={() => setEditing(true)}
-            disabled={writesPaused}
+            disabled={editPaused}
             className={GHOST_BTN}
           >
             Edit class
