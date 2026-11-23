@@ -95,10 +95,12 @@ describe("the consent filter", () => {
   it("offers no option that can never match a row", async () => {
     // A "no record at all" option shipped for a day and could not match
     // anything, which reads as a school with nothing in that state. The
-    // menu is exactly the pills' four states and "Any".
+    // menu is exactly "Any", D25's school-wide "Outstanding" (Lydia 19 Nov,
+    // L24) and the pills' four states.
     render(<StudentsView />);
     expect(optionNames(await screen.findByRole("combobox", { name: "Filter by consent" }))).toEqual([
       "Any consent",
+      "Outstanding",
       "Confirmed",
       "Pending",
       "Not sent",
