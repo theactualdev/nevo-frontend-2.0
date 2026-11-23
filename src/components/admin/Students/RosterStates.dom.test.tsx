@@ -95,6 +95,9 @@ describe("the header figures", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Show deactivated" }));
     await waitFor(() => expect(visibleText(container)).toMatch(/Bayo Ade/));
-    expect(visibleText(container)).toMatch(/1 enrolled · 1 without recorded consent/);
+    expect(visibleText(container)).toMatch(/1 enrolled/);
+    // The consent count lives in D25's tallies now (L24), over the enrolled only.
+    const tallies = container.querySelector("[data-consent-tallies]") as HTMLElement;
+    expect(visibleText(tallies)).toMatch(/0 cleared 1 outstanding/);
   });
 });

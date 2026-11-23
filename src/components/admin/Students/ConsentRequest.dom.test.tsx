@@ -295,6 +295,8 @@ describe("D07's consent column", () => {
     const filter = (await screen.findByLabelText("Filter by consent")) as HTMLSelectElement;
     expect(Array.from(filter.options).map((o) => o.textContent)).toEqual([
       "Any consent",
+      // D25's word: the school-wide outstanding list (Lydia 19 Nov, L24).
+      "Outstanding",
       "Confirmed",
       "Pending",
       "Not sent",
