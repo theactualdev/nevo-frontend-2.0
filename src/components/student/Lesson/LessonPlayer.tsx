@@ -133,7 +133,7 @@ import { openBusyWindow } from "@/lib/signals/busy";
 import { useAttentionReports } from "@/hooks/useAttentionReports";
 import { useLessonProgress } from "@/hooks/useLessonProgress";
 import { AudioSegment } from "./AudioSegment";
-import { BreakOfferPill } from "./BreakOfferPill";
+import { BreakOfferCard } from "./BreakOfferCard";
 import { BreakScreen } from "./BreakScreen";
 import {
   CalculationBreakCard,
@@ -4557,11 +4557,10 @@ export function LessonPlayer({
         }}
       />
 
-      {/* The break offer (B.7), at the foot of the lesson and above the
-          chevrons (frame 38 §3): a row of its own, below the column that
-          scrolls, so a long segment still shows it. */}
+      {/* The break offer (B.7), 17d S5's card along the foot of the lesson
+          (Lydia, 25 Oct and 19 Nov, L2) - see `BreakOfferCard`. */}
       {showBreakOffer && (
-        <BreakOfferPill
+        <BreakOfferCard
           key={`break-offer-${segment.id}`}
           kind={breakOffered}
           onShown={() =>
