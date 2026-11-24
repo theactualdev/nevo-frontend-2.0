@@ -61,15 +61,15 @@ const RESPONSE = {
   studentId: "s1",
   changes: [
     {
-      accommodation: "attention",
-      action: "removed",
+      accommodation: "attention" as const,
+      action: "removed" as const,
       promptedBy: "pattern_no_longer_seen",
       observedOverLessons: 4,
       occurredAt: "2026-09-18T10:00:00Z",
     },
     {
-      accommodation: "reading",
-      action: "added",
+      accommodation: "reading" as const,
+      action: "added" as const,
       promptedBy: "reading_accommodation_active",
       observedOverLessons: 3,
       occurredAt: "2026-09-04T10:00:00Z",
