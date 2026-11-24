@@ -21,6 +21,7 @@ import {
   mayRequestConsent,
 } from "./ConsentPill";
 import {
+  consentReminderLine,
   consentRequestLine,
   useConsentRequests,
 } from "./useConsentRequests";
@@ -125,6 +126,13 @@ export function StudentDetailView({
    */
   const [guardiansAnswered, setGuardiansAnswered] = useState(false);
   const { stateFor: consentStateFor, send: sendConsent } = useConsentRequests();
+  /**
+   * Whether the last press was a REMINDER - a request already awaiting an
+   * answer - kept from the moment of the press: the record can be read again
+   * meanwhile, and a first request that has just gone out reads as pending
+   * too, which would turn its outcome into a reminder's.
+   */
+  const [reminding, setReminding] = useState(false);
   /** Requests, and so adding a guardian, need roster or SENCo access - see `consentRole`. */
   const maySend = useMaySendConsent();
   const [moving, setMoving] = useState(false);
@@ -336,7 +344,9 @@ export function StudentDetailView({
     "This student";
   const firstName = student.firstName ?? name.split(" ")[0];
   const consentState = consentStateFor(studentId);
-  const consentLine = consentRequestLine(consentState, firstName);
+  const consentLine = reminding
+    ? consentReminderLine(consentState, firstName)
+    : consentRequestLine(consentState, firstName);
   /*
    * THREE states, not two. `UserStatus` is `active | invited | deactivated`,
    * and this read `!== "active"` - so an INVITED child, who has never signed
@@ -372,7 +382,7 @@ export function StudentDetailView({
                 readable only by scrolling to the card further down - on the
                 record whose header is the one thing an admin reads before
                 deciding anything about this child. */}
-            {student.consent ? <ConsentPill consent={student.consent} /> : null}
+            {student.consent ? <ConsentPill consent={student.consent} place="record" /> : null}
           </div>
           <div className="mt-[3px] truncate text-[14.5px] text-nevo-near-black/62">
             {currentClass
@@ -526,7 +536,10 @@ export function StudentDetailView({
                 ? `Consent is recorded for ${firstName}`
                 : student.consent?.status === "withdrawn"
                   ? `A parent has withdrawn consent for ${firstName}`
-                  : `No consent is recorded for ${firstName} yet`}
+                  : student.consent?.status === "pending"
+                    ? // D07b's card title for a request out and unanswered.
+                      "Awaiting parent consent"
+                    : `No consent is recorded for ${firstName} yet`}
             </p>
             {student.consent?.status === "withdrawn" ? (
               /*
@@ -566,7 +579,7 @@ export function StudentDetailView({
               })()
             ) : null}
           </div>
-          <ConsentPill consent={student.consent} />
+          <ConsentPill consent={student.consent} place="record" />
         </div>
 
         {/*
@@ -588,12 +601,25 @@ export function StudentDetailView({
           <div className="mt-4 border-t border-nevo-near-black/8 pt-4">
             <button
               type="button"
-              onClick={() => sendConsent(student.id)}
+              onClick={() => {
+                setReminding(student.consent?.status === "pending");
+                sendConsent(student.id);
+              }}
               disabled={consentState.kind === "sending"}
               className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:cursor-wait disabled:opacity-55"
             >
+              {/*
+                * ONE ACTION, NOT D07b'S TWO. The frame also draws "Resend
+                * request" beside the reminder, but the server has one route
+                * for both: every send issues a new link and revokes the one
+                * before it (backend consent/repositories.py). Two buttons
+                * would offer a choice that does not exist (raised, rule 10,
+                * 24 Nov).
+                */}
               {consentState.kind === "sending"
-                ? "Sending…"
+                ? reminding
+                  ? "Sending reminder…"
+                  : "Sending…"
                 : student.consent?.status === "pending"
                   ? "Send a gentle reminder"
                   : "Send the consent request"}
@@ -710,11 +736,22 @@ export function StudentDetailView({
             )}
           </div>
         ) : (
-          guardians.map((g, i) => (
+          guardians.map((g, i) => {
+            /*
+              * D07b's line under a guardian with no account yet, while the
+              * request is still out: the account is made when they consent,
+              * so there is nothing for the school to do on this row. Never
+              * where consent is recorded or withdrawn - there it would be
+              * untrue - and never once the account exists.
+              */
+            const accountComing = !g.accountCreated && mayRequestConsent(student.consent);
+            const who = g.parentName.trim();
+            return (
             <div
               key={g.id}
               className={cn(
-                "flex items-center gap-3.5 px-6 py-[18px]",
+                "flex gap-3.5 px-6 py-[18px]",
+                accountComing ? "items-start" : "items-center",
                 i < guardians.length - 1 && ROW_DIVIDER,
               )}
             >
@@ -734,6 +771,11 @@ export function StudentDetailView({
                     ? g.parentContact
                     : "They’ll give their own name when they answer the request"}
                 </div>
+                {accountComing ? (
+                  <p className="m-0 mt-1 max-w-[60ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+                    {`A parent account${who ? ` for ${who}` : ""} is created automatically the moment consent is confirmed. Nothing to do here in the meantime – ${firstName}’s progress is safe.`}
+                  </p>
+                ) : null}
               </div>
               <span
                 className={cn(
@@ -749,7 +791,8 @@ export function StudentDetailView({
                 {g.accountCreated ? "Account active" : "No account yet"}
               </span>
             </div>
-          ))
+            );
+          })
         )}
       </div>
 
