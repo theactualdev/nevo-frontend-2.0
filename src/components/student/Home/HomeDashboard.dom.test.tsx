@@ -1369,13 +1369,21 @@ describe("a due review on Home (SCRUM-75)", () => {
     expect(screen.queryByText("Ready for another look")).toBeNull();
   });
 
-  it("holds 19b's sentence, which claims more than the one dated-nowhere concept sent", async () => {
+  /*
+   * L9 (Lydia, 19 Nov, settled): 19b's sentence reworded for the one item the
+   * engine sends. Its plural first sentence and its second stay out.
+   */
+  it("says Lydia's line for one item, and not 19b's plural one", async () => {
     signIn();
     live(work());
 
     const { container } = render(<HomeDashboard />);
     await settled(container);
 
+    const due = screen.getByRole("region", { name: "A quick look back" });
+    expect(
+      within(due).getByText("Something from last week is ready for a quick review."),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/A few things from last week/)).toBeNull();
     expect(screen.queryByText(/what makes them stick/)).toBeNull();
   });
