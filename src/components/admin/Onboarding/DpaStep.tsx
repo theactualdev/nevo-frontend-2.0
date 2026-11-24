@@ -126,9 +126,11 @@ export function DpaStep({
 
   return (
     <>
+      {/* D01's step 3 heading and line (backlog 93, 94), in place of
+          SCRUM-39's. The clauses below are counsel's, untouched. */}
       <StepHeading
-        title="How we handle your students' data"
-        sub="The full agreement, in plain sections. Read it through; the box below unlocks at the end."
+        title="Data processing agreement"
+        sub="Please read this through - the checkbox unlocks once you reach the end."
       />
 
       <p className="mt-4 inline-block rounded-full bg-nevo-violet/24 px-3 py-1 text-[11.5px] font-semibold text-nevo-navy">
@@ -212,8 +214,11 @@ export function DpaStep({
               : "text-nevo-near-black/40",
           )}
         >
-          I&rsquo;ve read this and I agree on behalf of{" "}
-          {schoolName.trim() || "my school"}.
+          {/* D01's checkbox line; without a school name, its own short
+              form. */}
+          {schoolName.trim()
+            ? `I have read and agree to the Data Processing Agreement on behalf of ${schoolName.trim()}.`
+            : "I have read and agree to the Data Processing Agreement."}
         </label>
       </div>
 
