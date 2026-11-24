@@ -146,9 +146,14 @@ export function childBirthDate(day: string, month: string, year: string): string
   return `${y}-${pad(m)}-${pad(d)}`;
 }
 
-/** D01b's date boxes: DD / MM / YYYY. */
+/**
+ * D01b's date boxes: DD / MM / YYYY. `w-full min-w-0` so each takes its grid
+ * track: an input keeps a browser width of about twenty characters, and the
+ * three of them pushed the row past the card - and the screen, on a tablet -
+ * at every width (24 Nov QA).
+ */
 const DOB_BOX =
-  "h-[52px] rounded-[10px] border-[1.5px] border-nevo-near-black/18 bg-nevo-cream-elevated px-3 text-center text-[16px] text-nevo-near-black outline-none focus:border-nevo-navy";
+  "h-[52px] w-full min-w-0 rounded-[10px] border-[1.5px] border-nevo-near-black/18 bg-nevo-cream-elevated px-3 text-center text-[16px] text-nevo-near-black outline-none focus:border-nevo-navy";
 
 export function ParentConsent({
   token,
