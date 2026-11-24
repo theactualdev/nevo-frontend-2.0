@@ -294,7 +294,7 @@ export function ParentDataManagement({
   // which is real in the data. A `??` fallback does not help: the field is
   // always present, so the literal flows straight into whatever sentence it
   // lands in. Mid-sentence that reads correctly; at the head of a heading it
-  // renders "your child's data on Nevo" with a lowercase y.
+  // renders "your child's Data on Nevo" with a lowercase y.
   const child = invitation.studentFirstName;
   const childLead = sentenceCase(child);
   // Suspended on ARRIVAL as well as after the act. A parent who withdrew last
@@ -441,7 +441,9 @@ export function ParentDataManagement({
       ) : null}
       <div className={CARD}>
         <h1 className="text-[21px] font-semibold tracking-[-0.015em] text-nevo-near-black">
-          {childLead}&rsquo;s data on Nevo
+          {/* D01c: "Amara's Data on Nevo", title case like every card
+              title under it. */}
+          {childLead}&rsquo;s Data on Nevo
         </h1>
         {/* D01c's line under the title (backlog 112), where this page
             used to write its own two sentences and an undrawn "This link was
@@ -604,21 +606,37 @@ export function ParentDataManagement({
           {notTheirs}
         </p>
       ) : (
-      <div className={`${CARD} mt-3.5`}>
-        <h3 className={H3}>Withdraw Consent</h3>
-        {!confirming ? (
-          <>
-            <p className={BODY}>
-              This will immediately suspend {child}&rsquo;s access to Nevo.
-            </p>
+      <div className={`${CARD} relative mt-3.5`}>
+        {/*
+          * D01c DRAWS THIS AS A ROW, like Object to Processing: the title and
+          * a chevron, the whole card opening on a tap. It carried a button of
+          * its own as well, which the frame never drew. Same disclosure as the
+          * objection card above - closed, the title is the button; open, it
+          * is a heading again and "Withdraw consent" is only the one that acts.
+          */}
+        {confirming ? (
+          <h3 className={H3}>Withdraw Consent</h3>
+        ) : (
+          <h3 className={`${H3} flex items-center justify-between gap-3`}>
             <button
               type="button"
-              className={QUIET}
+              aria-expanded={false}
               onClick={() => setConfirming(true)}
+              className="cursor-pointer text-left after:absolute after:inset-0 after:rounded-[14px] after:content-['']"
             >
-              Withdraw consent
+              Withdraw Consent
             </button>
-          </>
+            <span aria-hidden className="text-nevo-violet">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </span>
+          </h3>
+        )}
+        {!confirming ? (
+          <p className={BODY}>
+            This will immediately suspend {child}&rsquo;s access to Nevo.
+          </p>
         ) : (
           <>
             {/* Lydia's line for before withdrawing (copy pass, 7 Nov). */}
