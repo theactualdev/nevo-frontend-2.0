@@ -200,7 +200,6 @@ export function AccountSettings() {
    */
   const live = sessions.filter((s) => s.active);
   const others = live.filter((s) => !s.current);
-  const here = live.find((s) => s.current) ?? live[0] ?? null;
 
   const nameChanged =
     firstName.trim() !== (me?.firstName ?? "") ||
@@ -532,11 +531,15 @@ export function AccountSettings() {
            * else signed in as them. This is the reassuring reading of this
            * section and it looked like an unfinished table.
            */
-          <p className="m-0 max-w-[58ch] text-sm leading-[1.6] text-nevo-near-black/70">
-            This is the only device signed in as you
-            {here ? `, last active ${when(here.lastSeenAt)}` : ""}.
-            If you sign in somewhere else, it will appear here.
-          </p>
+          /* D12c's own two lines (backlog 71), in place of our paraphrase. */
+          <div>
+            <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
+              You&rsquo;re only signed in on this device.
+            </p>
+            <p className="m-0 mt-1 text-[13.5px] leading-[1.55] text-nevo-near-black/60">
+              Anything else you sign in on will appear here.
+            </p>
+          </div>
         ) : (
           <div className="flex flex-col gap-3">
             {live.map((s) => (
