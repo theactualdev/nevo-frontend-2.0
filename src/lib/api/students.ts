@@ -760,9 +760,11 @@ export interface ConversationEvidence {
 }
 
 export const conversationEvidenceApi = {
-  forStudent: (studentId: string) =>
+  /** `days` is the period counted (the server's default is 30). */
+  forStudent: (studentId: string, days?: number) =>
     api.get<ConversationEvidence>(
       `/api/conversation-evidence/student/${studentId}`,
+      days ? { params: { days } } : undefined,
     ),
 };
 

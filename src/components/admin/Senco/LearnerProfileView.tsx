@@ -12,12 +12,15 @@ import {
   observationCount,
 } from "@/lib/constants/observations";
 import {
+  conversationEvidenceApi,
   studentsApi,
   type Accommodations,
   type AdminStudentDetail,
   type ConceptMasteryRow,
+  type ConversationEvidence,
   type StudentAdaptation,
 } from "@/lib/api/students";
+import { helpSeekingLine } from "@/hooks/useStudentProfile";
 import { yearGroupLabel } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
 import { accommodationCopy } from "@/lib/constants/accommodations";
@@ -213,6 +216,12 @@ export function LearnerProfileView({
   /** The adaptation history was refused for want of Learning Support. */
   const [roleRefused, setRoleRefused] = useState(false);
   /*
+   * D08b's HELP-SEEKING (backlog 41), aggregate only - the 30 Aug ruling:
+   * how often, never what, and nothing below the server's own minimum.
+   */
+  const [help, setHelp] = useState<ConversationEvidence | null>(null);
+  const [helpPhase, setHelpPhase] = useState<"loading" | "ready" | "failed" | "denied">("loading");
+  /*
    * SCRUM-247: without Learning Support, the adaptation history and the
    * progress report exporter show as UNAVAILABLE - present, switched off, and
    * saying why - rather than missing. Known before either is opened.
@@ -259,6 +268,15 @@ export function LearnerProfileView({
           .adaptations(studentId)
           .then(setAdaptations)
           .catch(fail("adaptations"));
+        // A fortnight: D08b's period, and the ratified line's.
+        setHelpPhase("loading");
+        conversationEvidenceApi
+          .forStudent(studentId, 14)
+          .then((ev) => {
+            setHelp(ev);
+            setHelpPhase("ready");
+          })
+          .catch((err: unknown) => setHelpPhase(failureKind(err) === "denied" ? "denied" : "failed"));
       })
       .catch((err: unknown) => setPhase(failureKind(err)));
   }, [studentId]);
@@ -439,6 +457,52 @@ export function LearnerProfileView({
           accommodation record for the IEP, not a learning-style label.
         </p>
       </div>
+
+      {/*
+        * HELP-SEEKING (D08b SC-01, backlog 41). The line is C08's, ratified
+        * 30 Aug with design's words of 31 Aug - "Asked Nevo for help 14 times
+        * this fortnight, mostly about …" - with the frame's name in front.
+        * Aggregate only: never what was asked, never a question, never a time.
+        *
+        * WITHHELD MEANS ABSENT. Below the server's minimum it says
+        * `withheld_below_minimum`, and the section is not drawn at all - not
+        * "not enough yet", which would itself say something.
+        *
+        * BUILT WITHOUT D08b's ranked topic list and its "A topic appears only
+        * once {name} has asked about it enough times to be worth showing."
+        * The server floors the whole fortnight at 3 but sends every category,
+        * so a topic asked about once would be listed under a sentence saying
+        * it couldn't be. A floor of our own would be a threshold computed on
+        * the device. Raised (rule 10): a per-topic floor on the server.
+        */}
+      {helpPhase === "failed" || helpPhase === "denied" ? (
+        <>
+          <SectionLabel>Help-seeking</SectionLabel>
+          <div data-help-seeking className={cn(CARD, "mt-2.5 px-6 py-[22px]")}>
+            <ReadFailed
+              firstName={firstName}
+              what="help-seeking"
+              onRetry={load}
+              denied={helpPhase === "denied"}
+            />
+          </div>
+        </>
+      ) : helpPhase === "ready" && helpSeekingLine(help) ? (
+        <>
+          <SectionLabel>Help-seeking</SectionLabel>
+          <div data-help-seeking className={cn(CARD, "mt-2.5 px-6 py-[22px]")}>
+            <p className="m-0 text-[15px] leading-[1.55] text-nevo-near-black">
+              {(() => {
+                const line = helpSeekingLine(help);
+                return `${firstName} ${line.charAt(0).toLowerCase()}${line.slice(1)}`;
+              })()}
+            </p>
+            <p className="m-0 mt-4 border-t border-nevo-near-black/8 pt-3.5 text-[13px] leading-[1.55] text-nevo-near-black/60">
+              {`What ${firstName} and Nevo said to each other is never shown here.`}
+            </p>
+          </div>
+        </>
+      ) : null}
 
       <SectionLabel>What Nevo has noticed</SectionLabel>
       <div className={cn(CARD, "mt-2.5 px-6 py-[22px]")}>
