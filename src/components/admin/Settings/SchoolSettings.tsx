@@ -470,12 +470,14 @@ export function SchoolSettings({
         title="Academic year"
         note="Your terms decide what 'this half-term' means everywhere in Nevo."
       >
-        <div className="flex gap-4 max-xl:flex-col">
+        {/* One row at every width: D12b's tablet frame keeps Year, Starts
+            and Ends side by side (Year 120 there, 150 on desktop). */}
+        <div className="flex gap-3 xl:gap-4">
           {/* D12.3's year label, read-only: made from the two dates beside
               it, so it can never disagree with them. Absent until both are
               there - never a label for a year that isn't set. */}
           {yearText ? (
-            <div className="flex-none xl:w-[150px]">
+            <div className="w-[120px] flex-none xl:w-[150px]">
               <label htmlFor="set-year" className={S_LABEL}>
                 Year
               </label>
@@ -488,7 +490,7 @@ export function SchoolSettings({
               />
             </div>
           ) : null}
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <label htmlFor="set-ystart" className={S_LABEL}>
               Year starts
             </label>
@@ -502,7 +504,7 @@ export function SchoolSettings({
               className={S_FIELD}
             />
           </div>
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <label htmlFor="set-yend" className={S_LABEL}>
               Year ends
             </label>
@@ -600,33 +602,47 @@ export function SchoolSettings({
                     </div>
                   </div>
                 ) : null}
-                <div className="mt-3 flex gap-3 max-xl:flex-col">
-                  <input
-                    type="date"
-                    value={t.start}
-                    onChange={(e) =>
-                      setTerms(
-                        terms.map((x, j) =>
-                          j === i ? { ...x, start: e.target.value } : x,
-                        ),
-                      )
-                    }
-                    aria-label={`Term ${i + 1} starts`}
-                    className={cn(S_FIELD, "flex-1")}
-                  />
-                  <input
-                    type="date"
-                    value={t.end}
-                    onChange={(e) =>
-                      setTerms(
-                        terms.map((x, j) =>
-                          j === i ? { ...x, end: e.target.value } : x,
-                        ),
-                      )
-                    }
-                    aria-label={`Term ${i + 1} ends`}
-                    className={cn(S_FIELD, "flex-1")}
-                  />
+                {/* D12b draws "Starts" and "Ends" over a term's dates, side by
+                    side on the tablet frame as on desktop (24 Nov QA). The
+                    words sit above the fields for the eye; each field keeps
+                    its full name - "Term 2 starts" - for a screen reader. */}
+                <div className="mt-3 flex gap-3">
+                  <div className="min-w-0 flex-1">
+                    <span aria-hidden className="mb-1 block text-[12.5px] text-nevo-near-black/55">
+                      Starts
+                    </span>
+                    <input
+                      type="date"
+                      value={t.start}
+                      onChange={(e) =>
+                        setTerms(
+                          terms.map((x, j) =>
+                            j === i ? { ...x, start: e.target.value } : x,
+                          ),
+                        )
+                      }
+                      aria-label={`Term ${i + 1} starts`}
+                      className={cn(S_FIELD, "w-full")}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span aria-hidden className="mb-1 block text-[12.5px] text-nevo-near-black/55">
+                      Ends
+                    </span>
+                    <input
+                      type="date"
+                      value={t.end}
+                      onChange={(e) =>
+                        setTerms(
+                          terms.map((x, j) =>
+                            j === i ? { ...x, end: e.target.value } : x,
+                          ),
+                        )
+                      }
+                      aria-label={`Term ${i + 1} ends`}
+                      className={cn(S_FIELD, "w-full")}
+                    />
+                  </div>
                 </div>
 
                 {/* SCRUM-99's term row is "term name, start date, end date,
@@ -635,7 +651,7 @@ export function SchoolSettings({
                     `halfTermBreak?: boolean` that nothing wrote and nothing
                     read, so a school could say a break existed but never
                     when, on the screen whose whole job is to say when. */}
-                <div className="mt-3 flex gap-3 max-xl:flex-col">
+                <div className="mt-3 flex gap-3">
                   <div className="flex-1">
                     <label
                       htmlFor={`half-start-${t.id}`}
