@@ -114,3 +114,40 @@ describe("the calendar's derived lines", () => {
     expect(termHasEnded({ id: "x", name: "x", start: ymd(-5), end: ymd(-1) }, now)).toBe(true);
   });
 });
+
+describe("a school that hasn't set its terms (backlog 69, SCRUM-99 NOT SET UP)", () => {
+  const LINE = /Until you set your terms, Nevo says .since setup. instead of naming a term\./;
+
+  it("says what Nevo says meanwhile, while the saved record holds no term starts", async () => {
+    get.mockResolvedValue({ ...school(), academicConfig: {} });
+    const { container } = render(<SchoolSettings />);
+    await screen.findByLabelText("Year starts");
+    expect(visibleText(container)).toMatch(LINE);
+  });
+
+  it("keeps saying it for terms typed but not yet saved - they've told Nevo nothing", async () => {
+    get.mockResolvedValue({ ...school(), academicConfig: {} });
+    const { container } = render(<SchoolSettings />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add a term" }));
+    expect(rows(container)).toHaveLength(1);
+    expect(visibleText(container)).toMatch(LINE);
+  });
+
+  it("says nothing once the school's term starts are saved", async () => {
+    get.mockResolvedValue({
+      ...school(),
+      academicConfig: { ...school().academicConfig, termStartDates: TERMS.map((t) => t.start) },
+    });
+    const { container } = render(<SchoolSettings />);
+    await screen.findByLabelText("Year");
+    expect(container.querySelector("[data-terms-not-set]")).toBeNull();
+  });
+
+  it("offers no made-up calendar: a fresh school's terms start empty", async () => {
+    get.mockResolvedValue({ ...school(), academicConfig: {} });
+    const { container } = render(<SchoolSettings />);
+    await screen.findByLabelText("Year starts");
+    expect(rows(container)).toHaveLength(0);
+    expect((screen.getByLabelText("Year starts") as HTMLInputElement).value).toBe("");
+  });
+});
