@@ -99,6 +99,7 @@ export function OfflineScreen() {
   const art = offlineArt();
   const [trying, setTrying] = useState(false);
   const alive = useRef(true);
+  const screenRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -119,9 +120,23 @@ export function OfflineScreen() {
   return (
     <DialogPrimitive.Root open>
       <DialogPrimitive.Portal>
+        {/*
+          THE SCREEN TAKES FOCUS, NOT TRY AGAIN (on-screen QA, 24 Nov). The
+          dialog's own default moved focus to its first control as the screen
+          came up, and the console's focus ring went round Try again - so the
+          frame's borderless ghost opened looking like an outlined button,
+          with nothing the child had done to put it there. The screen is what
+          arrived, as it was before the button existed: a screen reader reads
+          its title and line, and Tab still reaches Try again, ring and all.
+        */}
         <DialogPrimitive.Content
+          ref={screenRef}
           data-nevo-console="student"
           aria-describedby="offline-screen-body"
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            screenRef.current?.focus({ preventScroll: true });
+          }}
           onEscapeKeyDown={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
           className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-nevo-cream px-10 text-center text-nevo-near-black outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300 sm:px-12"
@@ -153,7 +168,7 @@ export function OfflineScreen() {
             onClick={tryAgain}
             disabled={trying}
             aria-busy={trying}
-            className="mt-8 h-12 w-full max-w-[290px] cursor-pointer rounded-[10px] text-[15px] text-nevo-navy transition-transform active:scale-[0.98] disabled:cursor-default disabled:opacity-60 sm:w-[340px] sm:max-w-none"
+            className="mt-8 h-12 w-full max-w-[290px] cursor-pointer rounded-[10px] text-[15px] text-nevo-navy transition-transform active:scale-[0.98] disabled:cursor-default disabled:opacity-60 sm:mt-9 sm:w-[340px] sm:max-w-none"
           >
             Try again
           </button>
