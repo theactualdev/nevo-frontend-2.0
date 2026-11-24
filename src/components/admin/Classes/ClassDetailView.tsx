@@ -446,7 +446,7 @@ export function ClassDetailView({
                           sentence above as our own clause. */}
                       {teachers.length === 1 ? (
                         <>
-                          {" "}This will leave {klass.name} without a teacher.
+                          {" "}This will leave {klass.name}{" "}without a teacher.
                           You can assign someone whenever you&rsquo;re ready.
                         </>
                       ) : null}

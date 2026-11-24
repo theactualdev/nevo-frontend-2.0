@@ -142,7 +142,7 @@ function ReadFailed({
   return (
     <div className="m-0 text-sm text-nevo-near-black/62">
       <p className="m-0">
-        We couldn&rsquo;t read {firstName}&rsquo;s {what} just now, so
+        We couldn&rsquo;t read {firstName}&rsquo;s {what}{" "}just now, so
         there&rsquo;s nothing to show here yet &ndash; this is not a record that
         it&rsquo;s empty.
       </p>

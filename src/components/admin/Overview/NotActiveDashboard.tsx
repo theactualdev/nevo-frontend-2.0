@@ -69,7 +69,7 @@ export function NotActiveDashboard({ state }: { state: OnboardingState }) {
       <div className="mx-auto max-w-[1000px]">
         <p className="m-0 text-[13.5px] text-nevo-near-black/55">Setup</p>
         <h2 className="mt-2 text-[23px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[28px]">
-          {school} isn&rsquo;t active yet
+          {school}{" "}isn&rsquo;t active yet
         </h2>
         <p className="mt-2.5 max-w-[640px] text-[15.5px] leading-[1.55] text-nevo-near-black/62">
           {leadFor(state)}
@@ -154,7 +154,7 @@ function StepRow({ step, last }: { step: SetupStep; last: boolean }) {
       </span>
       {step.action && (
         <span className="shrink-0 text-[13.5px] font-semibold text-nevo-navy">
-          {step.action} &rarr;
+          {step.action}{" "}&rarr;
         </span>
       )}
     </>

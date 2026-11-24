@@ -304,7 +304,7 @@ export function SignUpStep({
             </FieldNote>
           ) : (
             <p className={FIELD_HELP}>
-              At least {MIN_PASSWORD} characters. A phrase you&rsquo;ll remember
+              At least {MIN_PASSWORD}{" "}characters. A phrase you&rsquo;ll remember
               is stronger than a short jumble.
             </p>
           )}
