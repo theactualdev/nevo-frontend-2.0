@@ -373,6 +373,30 @@ export function consentRequestLine(
 }
 
 /**
+ * D07b's line after a REMINDER - a press of "Send a gentle reminder" on a
+ * request still awaiting an answer: "Reminder sent to Mrs. Eze - her
+ * progress is safe", with the child named where the frame says "her" (the
+ * frame's own guardian line names the child the same way), so nothing is
+ * guessed about the child. Said only on a receipt that says `sent`; a queued
+ * one is queued, as for a first request. "Sending reminder…" is the button's
+ * own, so nothing is said under it while it sends. Anything else is the
+ * request's line.
+ */
+export function consentReminderLine(
+  state: ConsentRequestState,
+  studentName: string,
+): string | null {
+  if (state.kind === "sending") return null;
+  if (state.kind === "done" && state.delivery === "sent") {
+    return `Reminder sent to ${state.parentName} – ${studentName}’s progress is safe.`;
+  }
+  if (state.kind === "done" && state.delivery !== "failed") {
+    return `Reminder queued for ${state.parentName}. It goes out shortly.`;
+  }
+  return consentRequestLine(state, studentName);
+}
+
+/**
  * One child's state from the bulk route's answer. A child the answer does not
  * mention was not queued - counted as a failure, never assumed sent.
  */

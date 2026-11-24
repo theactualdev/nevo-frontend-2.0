@@ -32,6 +32,16 @@ const LABEL: Record<ConsentState, string> = {
   withdrawn: "Withdrawn",
 };
 
+/**
+ * ON A CHILD'S OWN RECORD, "Awaiting consent" (D07b's header pill, and
+ * SCRUM-40's done-when) - the same state, in the words of the page that is
+ * about this one child. The roster's rows and its filter keep D07's
+ * "Pending", the word the column and its menu share.
+ */
+const RECORD_LABEL: Partial<Record<ConsentState, string>> = {
+  pending: "Awaiting consent",
+};
+
 const TONE: Record<ConsentState, string> = {
   confirmed: "bg-nevo-navy/10 text-nevo-navy",
   pending: "bg-nevo-violet/25 text-nevo-navy",
@@ -42,9 +52,12 @@ const TONE: Record<ConsentState, string> = {
 export function ConsentPill({
   consent,
   className,
+  place = "row",
 }: {
   consent: StudentConsent | null | undefined;
   className?: string;
+  /** "record" on the student's own page (D07b); "row" in a list (D07). */
+  place?: "row" | "record";
 }) {
   if (!consent) {
     return (
@@ -67,7 +80,7 @@ export function ConsentPill({
         className,
       )}
     >
-      {LABEL[consent.status]}
+      {(place === "record" && RECORD_LABEL[consent.status]) || LABEL[consent.status]}
     </span>
   );
 }
