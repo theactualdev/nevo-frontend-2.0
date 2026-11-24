@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useContext } from "react";
 import {
   act,
   cleanup,
@@ -8,6 +9,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
+import { LessonContext, LessonProvider } from "@/context/LessonContext";
 import { GIVES_WAY_AFTER_MS } from "./QuickCheckSheet";
 import { LESSON_STATUS } from "@/lib/api/lessons";
 import { SAVING_LESSON_LINE, SLOW_MARK_MS } from "@/lib/lessons/verdict";
@@ -719,6 +721,37 @@ describe("a saved lesson withdrawn for safety while open", () => {
 
     expect(screen.getByRole("heading", { name: ENDING })).toBeTruthy();
     expect(writes().at(-1)).toEqual([LESSON_STATUS.EXITED, { segment: 2 }]);
+  });
+
+  /*
+   * Hub, 24 Nov (on-screen QA): the ending switched Ask Nevo on, scoped to
+   * the lesson just withdrawn - and the server's lesson overview reads every
+   * section's title back, held ones included (S11). A lesson ended earns the
+   * launcher; this one was stopped.
+   */
+  it("puts no Ask Nevo over it", () => {
+    let allowed: boolean | undefined;
+    const Probe = () => {
+      allowed = useContext(LessonContext)?.askNevoAllowed;
+      return null;
+    };
+    const view = render(
+      <LessonProvider>
+        <LessonPlayer lesson={LESSON} plan={null} live />
+        <Probe />
+      </LessonProvider>,
+    );
+    next();
+    view.rerender(
+      <LessonProvider>
+        <LessonPlayer lesson={LESSON} plan={null} live withdrawn />
+        <Probe />
+      </LessonProvider>,
+    );
+    next();
+
+    expect(screen.getByRole("heading", { name: ENDING })).toBeTruthy();
+    expect(allowed).toBe(false);
   });
 
   it("goes back to Lessons from its one button", () => {

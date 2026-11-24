@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useContext } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonComplete } from "./LessonComplete";
+import { LessonContext, LessonProvider } from "@/context/LessonContext";
 import { SAVING_LESSON_LINE, SLOW_MARK_MS } from "@/lib/lessons/verdict";
 import {
   preloadSettlingCharacter,
@@ -97,5 +99,35 @@ describe("the end-of-lesson wait", () => {
     });
 
     expect(screen.queryByText(SAVING_LESSON_LINE)).toBeNull();
+  });
+});
+
+/*
+ * IA 31 puts Ask Nevo on a lesson's ending; the screen switches it on while it
+ * is up. Not over a lesson closed because its copy was withdrawn for safety
+ * (Hub, 24 Nov): that one was stopped, not ended.
+ */
+describe("Ask Nevo over the ending", () => {
+  const allowedWith = (askNevo?: boolean) => {
+    let allowed: boolean | undefined;
+    const Probe = () => {
+      allowed = useContext(LessonContext)?.askNevoAllowed;
+      return null;
+    };
+    render(
+      <LessonProvider>
+        <LessonComplete onDone={() => {}} askNevo={askNevo} />
+        <Probe />
+      </LessonProvider>,
+    );
+    return allowed;
+  };
+
+  it("is allowed on a lesson's ending", () => {
+    expect(allowedWith()).toBe(true);
+  });
+
+  it("is not, when the ending says so", () => {
+    expect(allowedWith(false)).toBe(false);
   });
 });
