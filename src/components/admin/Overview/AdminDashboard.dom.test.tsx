@@ -109,10 +109,33 @@ describe("AdminDashboard", () => {
 
     await waitFor(() => expect(visibleText(container)).toMatch(/₦54,825,000/));
     expect(visibleText(container)).toMatch(/for the 2026\/27 session/);
-    expect(visibleText(container)).toMatch(/340 students × ₦150,000/);
+    // D24 Moment C's line, with the school's own VAT rate (backlog 97).
+    expect(visibleText(container)).toMatch(/340 students × ₦150,000, incl\. 7\.5% VAT/);
     for (const name of [/Pay now/, /Pay by bank transfer/]) {
       expect(screen.getByRole("link", { name })).toHaveAttribute("href", "/admin/activate");
     }
+  });
+
+  it("states the VAT the server states, and none it can't read", async () => {
+    const confirmed = state({
+      stage: "confirmed",
+      teacherCount: 18,
+      studentCount: 340,
+      amountDue: "51000000.00",
+      currency: "NGN",
+      periodLabel: "the 2026/27 session",
+    });
+    subscription.mockResolvedValue({ pricing: { ...PRICING, vatRate: "0.00" } });
+    open(confirmed);
+    const first = render(<AdminDashboard />);
+    await waitFor(() => expect(visibleText(first.container)).toMatch(/incl\. 0% VAT/));
+    first.unmount();
+
+    subscription.mockResolvedValue({ pricing: { ...PRICING, vatRate: "not a rate" } });
+    open(confirmed);
+    const second = render(<AdminDashboard />);
+    await waitFor(() => expect(visibleText(second.container)).toMatch(/340 students × ₦150,000/));
+    expect(visibleText(second.container)).not.toMatch(/VAT/);
   });
 
   it("never puts a provisional total on screen before the roster is confirmed", async () => {
