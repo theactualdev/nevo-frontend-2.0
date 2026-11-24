@@ -562,16 +562,23 @@ export function StudentsView() {
               </div>
             ) : null}
 
-            <div className={cn(CARD, "mt-[18px]")}>
+            {/*
+              * NEVER A NAME SQUEEZED TO ONE LETTER (24 Nov QA). At 768 the fixed
+              * consent, status and action tracks left the name about 40px, so
+              * every row read "A", "C", "T". Each track now has a floor and the
+              * table keeps 860px, which fits the card from 1024 (D07's tablet
+              * frame) up; narrower, it scrolls sideways inside its card.
+              */}
+            <div className={cn(CARD, "mt-[18px] overflow-x-auto")}>
               {/* Four tracks, matching the rows. Consent sits BEFORE status
                   deliberately: it is the question D07 exists to answer, and the
                   two are easy to conflate when read side by side. */}
               <div
                 className={cn(
-                  "grid gap-4 border-b border-nevo-near-black/8 bg-nevo-near-black/[0.03] px-6 py-[13px] text-[11.5px] font-semibold uppercase tracking-[0.05em] text-nevo-near-black/50",
+                  "grid min-w-[860px] gap-4 border-b border-nevo-near-black/8 bg-nevo-near-black/[0.03] px-6 py-[13px] text-[11.5px] font-semibold uppercase tracking-[0.05em] text-nevo-near-black/50",
                   maySend
-                    ? "grid-cols-[20px_1.5fr_0.9fr_1fr_112px_112px_136px]"
-                    : "grid-cols-[1.5fr_0.9fr_1fr_112px_112px_136px]",
+                    ? "grid-cols-[20px_minmax(180px,1.5fr)_minmax(88px,0.9fr)_minmax(96px,1fr)_112px_112px_136px]"
+                    : "grid-cols-[minmax(180px,1.5fr)_minmax(88px,0.9fr)_minmax(96px,1fr)_112px_112px_136px]",
                 )}
               >
                 {maySend ? (
@@ -646,10 +653,10 @@ export function StudentsView() {
                     <div
                       key={s.id}
                       className={cn(
-                        "grid items-center gap-4 transition-colors hover:bg-nevo-navy/[0.03]",
+                        "grid min-w-[860px] items-center gap-4 transition-colors hover:bg-nevo-navy/[0.03]",
                         maySend
-                          ? "grid-cols-[20px_1.5fr_0.9fr_1fr_112px_112px_136px] pl-6"
-                          : "grid-cols-[1.5fr_0.9fr_1fr_112px_112px_136px]",
+                          ? "grid-cols-[20px_minmax(180px,1.5fr)_minmax(88px,0.9fr)_minmax(96px,1fr)_112px_112px_136px] pl-6"
+                          : "grid-cols-[minmax(180px,1.5fr)_minmax(88px,0.9fr)_minmax(96px,1fr)_112px_112px_136px]",
                         i < visible.length - 1 && ROW_DIVIDER,
                       )}
                     >
