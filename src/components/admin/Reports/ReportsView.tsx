@@ -14,6 +14,7 @@ import { ReadFailed } from "../ReadFailed";
 import { CARD, PRIMARY_BTN } from "../Roster/primitives";
 import { DualTrackBars, TrendLine, type DualTrackRow, type TrendPoint } from "./charts";
 import { NoAccess, failureKind } from "../NoAccess";
+import { YearGroupFigures } from "./YearGroupFigures";
 
 /**
  * D20 Cohort Analytics (SCRUM-65) - the proprietor's proof that Nevo is
@@ -246,6 +247,10 @@ export function ReportsView() {
           are going, concept by concept. Everything here is school-wide - no
           individual learner appears on this screen.
         </p>
+
+        {/* D20's metric row, by year group (backlog 47; Teslim T17). Its own
+            reads, so it never holds the analytics below. */}
+        <YearGroupFigures />
 
         {phase === "loading" ? (
           <div className={cn(CARD, "mt-7 h-[360px] animate-pulse")} />

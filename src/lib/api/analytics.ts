@@ -118,8 +118,16 @@ export interface UnavailableIndicator {
  * those children.
  */
 export interface CohortTransformation {
-  scope: "class" | "school";
-  scopeId: string;
+  scope: "class" | "school" | "year_group";
+  /** Null for a year group: there is no year-groups table, only a label. */
+  scopeId: string | null;
+  /** The year group the figures are for, as matched (T17); year group only. */
+  yearGroup?: string | null;
+  /**
+   * What to print where a figure is withheld - "Too few to report" - set
+   * only when something is (Teslim T17; Lydia: never a blank or a zero).
+   */
+  withheldLabel?: string | null;
   selfRegulation: CohortIndicator | null;
   calibration: UnavailableIndicator;
   flexibility: CohortFlexibility | null;
@@ -152,4 +160,14 @@ export const analyticsApi = {
   /** The school's figures over the last four weeks. See `CohortTransformation`. */
   getSchoolTransformation: (schoolId: string) =>
     api.get<CohortTransformation>(`/api/metrics/transformation/school/${schoolId}`),
+
+  /**
+   * One year group's figures, over every learner in its classes (T17, live 21
+   * Nov). The year group is the label on the school's classes, matched by the
+   * server ignoring case and spaces.
+   */
+  getYearGroupTransformation: (yearGroup: string) =>
+    api.get<CohortTransformation>(
+      `/api/metrics/transformation/year-group/${encodeURIComponent(yearGroup)}`,
+    ),
 };
