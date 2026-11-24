@@ -13,6 +13,7 @@ import { studentsApi, type AdminStudentRow, type ParentLink } from "@/lib/api/st
 import { classesApi } from "@/lib/api/classes";
 import { longDate } from "@/lib/dates";
 import { applyMark, type Mark } from "./draftMarks";
+import { StaffNotes } from "./StaffNotes";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -796,6 +797,9 @@ export function IepExporterView({
                 )}
               </div>
             </div>
+
+            {/* D08b SC-03's staff notes (backlog 43): added while a draft. */}
+            <StaffNotes className="mt-4" exportId={draft.id} firstName={firstName} editable />
           </>
         ) : null}
 
@@ -843,6 +847,9 @@ export function IepExporterView({
                 {content}
               </p>
             </div>
+
+            {/* The notes stand with the final report; none can be added now. */}
+            <StaffNotes className="mt-5" exportId={draft.id} firstName={firstName} editable={false} />
 
             <div className={cn(CARD, "mt-5 px-6 py-[26px]")}>
               <h3 className="m-0 text-[17px] font-semibold text-nevo-near-black">
