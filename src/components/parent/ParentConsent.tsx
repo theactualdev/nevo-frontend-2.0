@@ -342,7 +342,7 @@ export function ParentConsent({
                 (copy pass, 7 Nov), then what's left (SCRUM-321). */}
             {held ? (
               <>
-                Thank you. {childLead} can&rsquo;t start just yet, and we&rsquo;ll tell you as
+                Thank you. {childLead}{" "}can&rsquo;t start just yet, and we&rsquo;ll tell you as
                 soon as that changes.
               </>
             ) : (

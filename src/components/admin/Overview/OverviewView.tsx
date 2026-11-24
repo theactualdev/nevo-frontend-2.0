@@ -614,7 +614,7 @@ export function OverviewView() {
               >
                 {body}
                 <span className="shrink-0 text-[13.5px] font-semibold text-nevo-navy">
-                  {g.action} &rarr;
+                  {g.action}{" "}&rarr;
                 </span>
               </Link>
             ) : (
@@ -751,7 +751,7 @@ export function OverviewView() {
                     <>
                       <p className="mt-4 max-w-[68ch] text-[15px] leading-[1.7] text-nevo-near-black/62">
                         We couldn&rsquo;t load your summary just now. Nothing has
-                        changed for {school} &ndash; the figures below are still
+                        changed for {school}{" "}&ndash; the figures below are still
                         live.
                       </p>
                       <button
@@ -957,7 +957,7 @@ export function OverviewView() {
                         href={t.href}
                         className="mt-3 inline-block text-[13.5px] font-semibold text-nevo-navy hover:underline"
                       >
-                        {t.cta} &rarr;
+                        {t.cta}{" "}&rarr;
                       </Link>
                     )}
                   </div>

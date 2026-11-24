@@ -263,7 +263,7 @@ export function RemoveAccessSheet({
           {/* D06b's own words for this case (backlog 86), its opener first:
               there is nothing to hand over. The restore clause stands since
               the undo landed on 8 Oct (`POST /teachers/{id}/restore`). */}
-          {teacher.name} isn&rsquo;t teaching any classes yet, so there&rsquo;s
+          {teacher.name}{" "}isn&rsquo;t teaching any classes yet, so there&rsquo;s
           nothing to hand over. {firstName} will no longer be able to open
           their Nevo console, and you can restore their access whenever you
           need to.
@@ -399,7 +399,7 @@ export function RemoveAccessSheet({
       ) : staff.length === 0 ? (
         <p className="m-0 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-navy">
           There is no one else active to hand these classes to. You can still
-          remove {firstName} from each class below &ndash; they will be left
+          remove {firstName}{" "}from each class below &ndash; they will be left
           without a teacher until you assign one.
         </p>
       ) : null}

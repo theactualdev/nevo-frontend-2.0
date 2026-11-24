@@ -343,7 +343,7 @@ export function TeacherDetailView({
         <LockGlyph />
         <span>
           <span className="font-semibold">What you can see here:</span> how much{" "}
-          {teacher.name} is teaching - not how their individual students are
+          {teacher.name}{" "}is teaching - not how their individual students are
           doing. A student&rsquo;s learning detail stays between them and their
           teacher.
         </span>
@@ -406,7 +406,7 @@ export function TeacherDetailView({
         {held.length === 0 ? (
           <div className="px-[22px] py-6">
             <p className="m-0 text-sm text-nevo-near-black/62">
-              {teacher.name} doesn&rsquo;t hold any classes yet.
+              {teacher.name}{" "}doesn&rsquo;t hold any classes yet.
               {invited ? " Classes you assign take effect when they join." : null}
             </p>
           </div>

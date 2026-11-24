@@ -867,7 +867,7 @@ export function StudentDetailView({
              they have never been here. Saying so beats offering an action
              that does not apply to them. */
           <p className="max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/55">
-            {firstName} hasn&rsquo;t joined yet, so there&rsquo;s nothing to
+            {firstName}{" "}hasn&rsquo;t joined yet, so there&rsquo;s nothing to
             deactivate. Their invitation is still open.
           </p>
         ) : (

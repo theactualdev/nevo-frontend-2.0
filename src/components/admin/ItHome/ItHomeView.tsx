@@ -298,7 +298,7 @@ export function ItHomeView() {
                         </span>
                       </span>
                       <span className="shrink-0 text-[13.5px] font-semibold text-nevo-navy">
-                        {r.action} &rarr;
+                        {r.action}{" "}&rarr;
                       </span>
                     </Link>
                   ))}

@@ -411,7 +411,7 @@ export function WrittenConsentView({
                     </p>
                   ) : links.length === 0 ? (
                     <p className="m-0 text-[13.5px] leading-[1.55] text-nevo-near-black/68">
-                      No parent or guardian is linked to {firstName} yet, so there&rsquo;s no one to
+                      No parent or guardian is linked to {firstName}{" "}yet, so there&rsquo;s no one to
                       record this consent against.
                     </p>
                   ) : (
