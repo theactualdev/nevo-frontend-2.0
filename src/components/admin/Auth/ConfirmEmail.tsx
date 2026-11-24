@@ -344,8 +344,13 @@ export function ConfirmEmail({ token }: { token: string }) {
               </p>
             ) : null}
             {/* Signed in and waiting after an invalid link, Send a new link is
-                the only control (Lydia, 13d) - they're signed in already. */}
-            {OFFERS_SIGN_IN[state.status] && !(state.status === "invalid" && own) ? (
+                the only control (Lydia, 13d) - they're signed in already. And
+                SIGNED IN AFTER AN EXPIRED ONE (backlog 95): D01b's AC-03 has
+                no Sign in, only Send a new link - this drew a navy Sign in
+                above it, two navy primaries where she rules one (22 Oct). */}
+            {OFFERS_SIGN_IN[state.status] &&
+            !(state.status === "invalid" && own) &&
+            !(state.status === "expired" && !signedOut) ? (
               <Link
                 href="/auth/admin"
                 className="mt-7 flex h-[52px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-6 text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 active:brightness-93"
