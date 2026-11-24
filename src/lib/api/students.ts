@@ -107,6 +107,23 @@ export interface StudentAdaptation {
 /** What Nevo is currently offering this student, and on what evidence. */
 export type AccommodationType = "reading" | "attention" | "numerical";
 
+/**
+ * One learner's row of `GET /api/v1/accommodations` ("Current inferred
+ * delivery adjustments across the caller's school") - Learning
+ * Support-gated for an admin, so a refusal is the role, not a fault.
+ */
+export interface StudentAccommodationSummary {
+  studentId: string;
+  studentName: string;
+  active: AccommodationType[];
+  lastChangedAt: string | null;
+}
+
+export const accommodationsApi = {
+  /** D08b's ACTIVE SUPPORT, for every learner at once. */
+  listActive: () => api.get<StudentAccommodationSummary[]>("/api/v1/accommodations"),
+};
+
 export interface AccommodationSignal {
   accommodation: AccommodationType;
   frontendSignal: string;
