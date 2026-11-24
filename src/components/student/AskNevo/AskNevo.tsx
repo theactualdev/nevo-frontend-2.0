@@ -380,7 +380,11 @@ export function AskNevo() {
     <>
       {/* Idle affordances - docked button (mobile), corner pill (desktop).
           Fixed where the frame puts them (L6, above): a tap opens the
-          drawer, and nothing moves them. */}
+          drawer, and nothing moves them. The corner pill is frame 26's
+          "Idle · corner pill - Desktop" from xl: 52 high, 22 in from each
+          side, 16px words, a 20 sparkle 10 from them, and its own softer
+          shadow (on-screen QA, 24 Nov - it was the tablet's smaller pill,
+          made taller). The tablet's stays as it was: the frame draws none. */}
       <button
         type="button"
         aria-label="Ask Nevo"
@@ -392,9 +396,9 @@ export function AskNevo() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed right-6 bottom-6 z-30 hidden h-11 cursor-pointer items-center gap-2 rounded-full bg-nevo-navy px-[18px] text-sm font-medium text-nevo-cream shadow-[0_6px_20px_rgba(43,43,47,0.22)] transition-[filter,transform] hover:brightness-108 active:scale-[0.98] md:flex xl:right-8 xl:bottom-8 xl:h-[52px]"
+        className="fixed right-6 bottom-6 z-30 hidden h-11 cursor-pointer items-center gap-2 rounded-full bg-nevo-navy px-[18px] text-sm font-medium text-nevo-cream shadow-[0_6px_20px_rgba(43,43,47,0.22)] transition-[filter,transform] hover:brightness-108 active:scale-[0.98] md:flex xl:right-8 xl:bottom-8 xl:h-[52px] xl:gap-2.5 xl:px-[22px] xl:text-base xl:shadow-[0_8px_32px_rgba(43,43,47,0.20)]"
       >
-        {SPARKLE("size-[18px]")}
+        {SPARKLE("size-[18px] xl:size-5")}
         Ask Nevo
       </button>
 

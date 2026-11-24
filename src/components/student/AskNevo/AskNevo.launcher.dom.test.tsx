@@ -67,6 +67,27 @@ describe("the Ask Nevo launcher", () => {
     expect(screen.getByLabelText("Ask a question")).toBeInTheDocument();
   });
 
+  /*
+   * On-screen QA, 24 Nov: from xl the corner pill was the tablet's own pill
+   * made taller - 14px words, an 18 sparkle, 18 in from each side, 8 between,
+   * and the docked button's shadow - against frame 26's corner pill.
+   */
+  it("is frame 26's corner pill from desktop width", () => {
+    render(<AskNevo />);
+    const pill = launchers().find((b) => b.textContent?.includes("Ask Nevo"))!;
+
+    for (const value of [
+      "xl:h-[52px]",
+      "xl:px-[22px]",
+      "xl:gap-2.5",
+      "xl:text-base",
+      "xl:shadow-[0_8px_32px_rgba(43,43,47,0.20)]",
+    ]) {
+      expect(pill.className.split(/\s+/)).toContain(value);
+    }
+    expect(pill.querySelector("svg")?.getAttribute("class")).toContain("xl:size-5");
+  });
+
   it("lets go of the place a dragged one was kept on this device", () => {
     window.localStorage.setItem("nevo.asknevo.offset", JSON.stringify({ x: -200, y: -300 }));
     render(<AskNevo />);
