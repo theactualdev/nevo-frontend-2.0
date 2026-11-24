@@ -1203,8 +1203,18 @@ export function LessonPlayer({
   // "offer" returns to the same segment. A module boundary offers none (D91).
   // Trigger travels into `break_start`.
   const breakOrigin = useRef<
-    "advance" | "offer" | "check" | "assessment" | "leave"
+    "advance" | "offer" | "check" | "assessment" | "leave" | "reading"
   >("advance");
+  /**
+   * Where a break taken from the reading's pause card (L7) comes back to: the
+   * group after the pause, on the part it was taken on. The break screen takes
+   * the lesson's place, so the reading would otherwise start again at its
+   * first group. Let go of with any move to another part.
+   */
+  const [readingResume, setReadingResume] = useState<{
+    segmentId: string;
+    at: number;
+  } | null>(null);
   /**
    * Where the child tapped out of the end-of-lesson check (Lydia, 16 Nov):
    * the next question to ask, for when they move on into it again this visit.
@@ -2197,6 +2207,7 @@ export function LessonPlayer({
     // write goes on, and what it lands as is kept for a return visit.
     if (pendingSwitch.current !== null) endSwitchWait();
     setObserved((o) => ({ ...o, replays: 0 }));
+    setReadingResume(null);
     const nextSegment = asEntered(lesson.segments[next]);
     const nextPlan = livePlanFor(nextSegment.id);
     setIndex(next);
@@ -2639,6 +2650,18 @@ export function LessonPlayer({
   const takeBreakFromLeave = () => {
     setLeaveOpen(false);
     breakOrigin.current = "leave";
+    breakTrigger.current = "student_request";
+    breakOnSitting.current = startSittingBreak();
+    setBreakActive(BREAK_TYPES.MICRO);
+  };
+  /**
+   * "TAKE A BREAK" ON THE READING'S PAUSE CARD (17e; Lydia, 19 Nov, L7): the
+   * same child's own break, and back to the part it was taken on, at the
+   * group after the pause.
+   */
+  const takeBreakFromReading = (at: number) => {
+    setReadingResume({ segmentId: segment.id, at });
+    breakOrigin.current = "reading";
     breakTrigger.current = "student_request";
     breakOnSitting.current = startSittingBreak();
     setBreakActive(BREAK_TYPES.MICRO);
@@ -3594,7 +3617,8 @@ export function LessonPlayer({
   const serverRecordsBreak = () =>
     (breakOrigin.current === "check" ||
       breakOrigin.current === "assessment" ||
-      breakOrigin.current === "leave") &&
+      breakOrigin.current === "leave" ||
+      breakOrigin.current === "reading") &&
     breakOnSitting.current !== null;
   const breakScreen = breakActive ? (
     <BreakScreen
@@ -3633,8 +3657,13 @@ export function LessonPlayer({
           setCheckOpen(true);
         }
         if (breakOrigin.current === "assessment") returnFromBreak();
-        // From the leave dialog: back to the part it was taken on.
-        if (breakOrigin.current === "leave") returnFromBreak();
+        // From the leave dialog: back to the part it was taken on. From the
+        // reading's pause card: the same, at the group after the pause.
+        if (
+          breakOrigin.current === "leave" ||
+          breakOrigin.current === "reading"
+        )
+          returnFromBreak();
       }}
     />
   ) : null;
@@ -4293,6 +4322,12 @@ export function LessonPlayer({
                 reading={readingOn}
                 attention={attentionOn}
                 onReadProgress={noteReadProgress}
+                readingResumeAt={
+                  readingResume?.segmentId === segment.id
+                    ? readingResume.at
+                    : undefined
+                }
+                onReadingBreak={takeBreakFromReading}
                 onChunkSeen={(chunkId, action) =>
                   trackEvent(SIGNAL_EVENT_TYPES.READING_CHUNK_VIEWED, {
                     segmentId: segment.id,
@@ -4787,6 +4822,8 @@ function SegmentBody({
   reading,
   attention,
   onReadProgress,
+  readingResumeAt,
+  onReadingBreak,
   onChunkSeen,
   onReplay,
   onNarrationPlayed,
@@ -4828,6 +4865,10 @@ function SegmentBody({
   reading: boolean;
   attention: boolean;
   onReadProgress: (pct: number) => void;
+  /** The reading group to open on after a pause card's break (L7). */
+  readingResumeAt?: number;
+  /** 17e's pause card's Take a break (L7). */
+  onReadingBreak: (resumeAt: number) => void;
   onChunkSeen: OnChunkSeen;
   onReplay: () => void;
   onNarrationPlayed: () => void;
@@ -4864,6 +4905,8 @@ function SegmentBody({
       attention={attention}
       onReadProgress={onReadProgress}
       onChunkSeen={onChunkSeen}
+      readingResumeAt={readingResumeAt}
+      onReadingBreak={onReadingBreak}
     />
   ) : null;
   if (modality === MODALITY.TEXT && text) return text;
