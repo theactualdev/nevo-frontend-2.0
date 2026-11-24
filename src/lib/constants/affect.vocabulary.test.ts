@@ -33,7 +33,7 @@ const FILES = [
   "lib/mocks/adding-fractions.ts",
   "components/student/Lesson/LessonPlayer.tsx",
   "components/student/Lesson/AffectiveLayer.tsx",
-  "components/student/Lesson/BreakOfferPill.tsx",
+  "components/student/Lesson/BreakOfferCard.tsx",
 ];
 
 const read = (f: string) => readFileSync(join(ROOT, f), "utf8");
