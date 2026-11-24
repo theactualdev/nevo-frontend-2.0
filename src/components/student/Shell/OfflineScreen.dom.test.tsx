@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { OfflineNotice, strandedOffline } from "./OfflineScreen";
 import { offlineArt, resetOfflineArt } from "./offlineArt";
 import { clearSession, setSession } from "@/lib/auth/session";
@@ -126,8 +126,10 @@ describe("the full screen", () => {
     expect(dialog.textContent).not.toMatch(/progress is saved/i);
     // Nothing is downloaded, by definition of when this shows.
     expect(dialog.textContent).not.toMatch(/downloaded|saved lessons/i);
-    // And no button that can only re-ask what the browser already answered.
-    expect(screen.queryByRole("button")).toBeNull();
+    // One button, the frame's Try again (L5) - not its See saved lessons.
+    expect(
+      screen.getAllByRole("button").map((b) => b.textContent),
+    ).toEqual(["Try again"]);
     // Portalled out of the shell, so it carries the student scope itself.
     expect(dialog).toHaveAttribute("data-nevo-console", "student");
   });
@@ -208,5 +210,68 @@ describe("strandedOffline", () => {
   it("is only ever about a signed-in child", () => {
     expect(strandedOffline(null)).toBe(false);
     expect(strandedOffline(undefined)).toBe(false);
+  });
+});
+
+/**
+ * L5 (Lydia, 19 Nov): "Add Try again. In the connectivity conditions these
+ * children are actually in, the connection commonly returns within seconds."
+ * It asks the network, not the browser, which already answered.
+ */
+describe("the full screen's Try again", () => {
+  const online = vi.fn();
+  beforeEach(() => {
+    online.mockReset();
+    window.addEventListener("online", online);
+  });
+  afterEach(() => {
+    window.removeEventListener("online", online);
+    vi.unstubAllGlobals();
+  });
+
+  it("takes the screen away once the network answers, whatever the browser says", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", fetch);
+    signIn("child-a");
+    render(<OfflineNotice online={false} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+
+    await waitFor(() => expect(online).toHaveBeenCalledTimes(1));
+    const [url, init] = fetch.mock.calls[0];
+    expect(String(url)).toMatch(/^\/og-card\.png\?reach=/);
+    expect(init).toMatchObject({ method: "HEAD", cache: "no-store" });
+  });
+
+  it("changes nothing and says nothing when there is still no network", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    signIn("child-a");
+    render(<OfflineNotice online={false} />);
+    const before = (await screen.findByRole("dialog")).textContent;
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Try again" })).not.toBeDisabled(),
+    );
+    expect(online).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog").textContent).toBe(before);
+  });
+
+  it("asks once while it waits", async () => {
+    let answer: (r: Response) => void = () => {};
+    const fetch = vi.fn(() => new Promise<Response>((r) => (answer = r)));
+    vi.stubGlobal("fetch", fetch);
+    signIn("child-a");
+    render(<OfflineNotice online={false} />);
+    const button = await screen.findByRole("button", { name: "Try again" });
+
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(button).toBeDisabled();
+    answer(new Response(null, { status: 204 }));
+    await waitFor(() => expect(online).toHaveBeenCalledTimes(1));
   });
 });
