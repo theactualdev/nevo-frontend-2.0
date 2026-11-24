@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { billingApi, type Pricing } from "@/lib/api/billing";
 import type { OnboardingState } from "@/lib/api/onboarding";
 import { schoolApi } from "@/lib/api/school";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, formatVatRate } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { billingCurrency } from "../Roster/activation";
 import { leadFor, momentFor, setupSteps, type SetupStep } from "./notActive";
@@ -243,6 +243,14 @@ function WhatYoullPay({
   amount: string | null;
 }) {
   const students = `${state.studentCount} ${state.studentCount === 1 ? "student" : "students"}`;
+  /*
+   * D24 Moment C: "340 students × ₦150,000, incl. 7.5% VAT" (backlog 97).
+   * Without it the multiplication sat over a total that includes VAT, and
+   * the two figures disagreed on screen. The rate is the school's own, as
+   * the server states it - never a 7.5 written here - and only beside a
+   * total it describes. No readable rate, no clause.
+   */
+  const vat = pricing && amount ? formatVatRate(pricing.vatRate) : null;
   return (
     <>
       <h3 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
@@ -251,7 +259,7 @@ function WhatYoullPay({
       <div className={cn(CARD, "mt-3 px-[22px] py-[20px]")}>
         <p className="m-0 text-[13.5px] text-nevo-near-black/62">
           {pricing
-            ? `${students} × ${formatMoney(pricing.perStudentRate, pricing.currency)}`
+            ? `${students} × ${formatMoney(pricing.perStudentRate, pricing.currency)}${vat ? `, incl. ${vat} VAT` : ""}`
             : students}
         </p>
         {amount && (
