@@ -13,7 +13,14 @@ import { intelligenceApi, type AttentionFlag } from "@/lib/api/intelligence";
 import { escalationsApi, type Escalation } from "@/lib/api/escalations";
 import { teachersApi } from "@/lib/api/teachers";
 import { TeacherConcerns } from "./TeacherConcerns";
-import { studentsApi, type AdminStudentRow } from "@/lib/api/students";
+import {
+  accommodationsApi,
+  studentsApi,
+  type AccommodationType,
+  type AdminStudentRow,
+} from "@/lib/api/students";
+import { accommodationCopy } from "@/lib/constants/accommodations";
+import { ReadFailed } from "../ReadFailed";
 import { YEAR_GROUPS, yearGroupLabel } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
 import {
@@ -89,10 +96,17 @@ import { lookOfChild } from "@/lib/profile/rosterLook";
  * count. See `lib/adaptationWindow.ts`: `limit` caps at 100, and
  * `AdaptationEventLogResponse.total` carries NO DESCRIPTION in the deployed
  * spec, so termination is on a short page and `total` is not consulted at all.
- * A partial or failed read renders NO figures rather than a floor.
+ * A partial or failed read renders NO figures rather than a floor. And only
+ * for a Learning Support holder: a learner's adaptation history is the role's
+ * (SCRUM-247), so a viewer without it - or one whose role isn't known yet -
+ * sees no per-child count (backlog 40).
  *
- * TODO(api): a list-scoped accommodations read, for ACTIVE SUPPORT. That is
- * the one of the three that genuinely costs a call per learner.
+ * ACTIVE SUPPORT IS BUILT (backlog 40) from `GET /api/v1/accommodations`, one
+ * read for the whole school, Learning Support-gated. REDUCED: D08b draws
+ * short support names ("Audio scaffolding", "Extended pacing"), and the
+ * contract carries `reading | attention | numerical`. Those words beside a
+ * child's name are the label Zero-Tag forbids, so each is the same sentence
+ * the profile uses, with Nevo as its subject (`accommodations.ts`). Raised.
  */
 
 type Phase = "loading" | "ready" | "failed" | "denied";
@@ -199,6 +213,27 @@ export function SencoView() {
     string,
     number
   > | null>(null);
+  /*
+   * ACTIVE SUPPORT per learner (backlog 40). Null until read; "failed" says
+   * so above the list, because a learner with no line would otherwise look
+   * the same as one Nevo adjusts nothing for. A refusal is the role, which
+   * this screen already says - no line of its own.
+   */
+  const [support, setSupport] = useState<Record<string, AccommodationType[]> | null>(null);
+  const [supportFailed, setSupportFailed] = useState(false);
+  const readSupport = useCallback(() => {
+    // The failure line clears when a read answers, not when one starts.
+    accommodationsApi
+      .listActive()
+      .then((rows) => {
+        setSupport(Object.fromEntries(rows.map((r) => [r.studentId, r.active])));
+        setSupportFailed(false);
+      })
+      .catch((err: unknown) => {
+        setSupport(null);
+        setSupportFailed(failureKind(err) !== "denied");
+      });
+  }, []);
 
   const loadConcerns = useCallback(() => {
     escalationsApi
@@ -222,6 +257,7 @@ export function SencoView() {
     // Their own read, their own failure: a concern list that didn't answer
     // must not hold Nevo's flags or the profiles behind it.
     loadConcerns();
+    readSupport();
     /*
      * Its own read, its own failure. This pages the whole week's log, so it is
      * the slowest thing on the screen and must never hold the profiles behind
@@ -307,7 +343,7 @@ export function SencoView() {
         });
       })
       .catch((err: unknown) => setPhase(failureKind(err)));
-  }, [loadConcerns]);
+  }, [loadConcerns, readSupport]);
 
   useEffect(() => {
     load();
@@ -715,6 +751,16 @@ export function SencoView() {
               ) : null}
             </div>
 
+            {/* ACTIVE SUPPORT unread: said once, above the rows, so a learner
+                with no line isn't read as one Nevo adjusts nothing for. */}
+            {supportFailed ? (
+              <ReadFailed
+                className="mt-4"
+                what="what Nevo is adjusting for each learner"
+                onRetry={readSupport}
+              />
+            ) : null}
+
             <div className={cn(CARD, "mt-4")}>
               {profiles.length === 0 ? (
                 <div className="px-6 py-12 text-center">
@@ -785,6 +831,17 @@ export function SencoView() {
                           {describeClass(s.id)}
                         </div>
                       ) : null}
+                      {/* ACTIVE SUPPORT, as the profile says it: what Nevo
+                          does, never a word about the child. Only from a
+                          read that answered; an enum value this console
+                          hasn't been taught is skipped, never shown raw. */}
+                      {support && (support[s.id] ?? []).some((a) => accommodationCopy(a)) ? (
+                        <ul data-active-support className="m-0 mt-1 list-none p-0 text-[13px] leading-[1.5] text-nevo-near-black/66">
+                          {(support[s.id] ?? []).map((a) =>
+                            accommodationCopy(a) ? <li key={a}>{accommodationCopy(a)}</li> : null,
+                          )}
+                        </ul>
+                      ) : null}
                     </div>
                     {/* ABSENT, NOT ZERO. A learner whose class roster has not
                         answered - or failed - is simply not in `lessonsDone`,
@@ -799,7 +856,10 @@ export function SencoView() {
                         a real zero - nobody adapted anything for this learner
                         in seven days - which is why the partial case renders
                         nothing at all rather than a low number. */}
-                    {adaptationsWeek ? (
+                    {/* And only for a Learning Support holder (SCRUM-247): a
+                        learner's adaptation history is the role's. Unknown
+                        role, no figure. */}
+                    {adaptationsWeek && ls?.viewerHoldsIt === true ? (
                       <span className="flex-none text-[13px] text-nevo-near-black/55">
                         {`${adaptationsWeek[s.id] ?? 0} this week`}
                       </span>

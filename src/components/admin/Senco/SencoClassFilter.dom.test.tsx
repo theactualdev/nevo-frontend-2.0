@@ -62,6 +62,7 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
       // Whole-school only now - the per-class read is `classesApi.classStudents`.
       list: () => Promise.resolve(students),
     },
+    accommodationsApi: { listActive: async () => [] },
   };
 });
 
