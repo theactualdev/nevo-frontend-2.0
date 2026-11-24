@@ -20,10 +20,13 @@ import { cn } from "@/lib/utils";
 import { timeAgo } from "@/lib/relativeTime";
 import { CARD, PRIMARY_BTN } from "../Roster/primitives";
 import {
+  nowIndex,
+  termHasEnded,
   termIssues,
   TERM_STARTS_STORED,
   termStartDatesFrom,
   unresolvedLine,
+  yearLabel,
 } from "./academicCalendar";
 import {
   PRESETS,
@@ -99,6 +102,10 @@ export function SchoolSettings({
   const [calendar, setCalendar] = useState<Phase>("idle");
   /** The server's own 422 wording, when it gave one. See `SaveRow`. */
   const [calendarNote, setCalendarNote] = useState<string | null>(null);
+  /** The term row waiting on its inline Remove confirm (SCRUM-99). */
+  const [removingTerm, setRemovingTerm] = useState<string | null>(null);
+  /** Today, taken once when the page opens - for the Now pill and past terms. */
+  const [today] = useState(() => Date.now());
 
   const [labels, setLabels] = useState<Record<string, string>>({});
   /** A preset chosen over custom labels, waiting on the inline confirm. */
@@ -305,6 +312,9 @@ export function SchoolSettings({
    * period figure in the product resolves through.
    */
   const issues = termIssues(terms);
+  // Displayed, never sent: the year's label, which row is now, which have ended.
+  const nowAt = nowIndex(terms, today);
+  const yearText = yearLabel(academic.yearStart, academic.yearEnd);
   const issueFor = (i: number) => issues.find((x) => x.index === i) ?? null;
   const unresolved = unresolvedLine(issues);
 
@@ -461,6 +471,23 @@ export function SchoolSettings({
         note="Your terms decide what 'this half-term' means everywhere in Nevo."
       >
         <div className="flex gap-4 max-xl:flex-col">
+          {/* D12.3's year label, read-only: made from the two dates beside
+              it, so it can never disagree with them. Absent until both are
+              there - never a label for a year that isn't set. */}
+          {yearText ? (
+            <div className="flex-none xl:w-[150px]">
+              <label htmlFor="set-year" className={S_LABEL}>
+                Year
+              </label>
+              <input
+                id="set-year"
+                readOnly
+                tabIndex={-1}
+                value={yearText}
+                className={cn(S_FIELD, "bg-nevo-near-black/[0.04] font-semibold")}
+              />
+            </div>
+          ) : null}
           <div className="flex-1">
             <label htmlFor="set-ystart" className={S_LABEL}>
               Year starts
@@ -501,7 +528,13 @@ export function SchoolSettings({
             {terms.map((t, i) => (
               <div
                 key={t.id}
-                className="rounded-[10px] border border-nevo-near-black/12 px-4 py-3.5"
+                data-term-row
+                className={cn(
+                  "rounded-[10px] border border-nevo-near-black/12 px-4 py-3.5",
+                  // SCRUM-99's mid-term state: "past terms rendered at 0.6
+                  // opacity but still editable".
+                  termHasEnded(t, today) && "opacity-60",
+                )}
               >
                 <div className="flex items-center gap-3">
                   <input
@@ -516,14 +549,57 @@ export function SchoolSettings({
                     aria-label={`Term ${i + 1} name`}
                     className={cn(S_FIELD, "flex-1")}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setTerms(terms.filter((_, j) => j !== i))}
-                    className="flex-none cursor-pointer text-[13px] font-semibold text-nevo-navy hover:opacity-75"
-                  >
-                    Remove
-                  </button>
+                  {/* SCRUM-99: "current one marked with a violet 'Now' pill". */}
+                  {i === nowAt ? (
+                    <span className="inline-flex flex-none items-center rounded-full bg-nevo-violet/24 px-[11px] py-1 text-[11.5px] font-semibold text-nevo-navy">
+                      Now
+                    </span>
+                  ) : null}
+                  {/* D12b offers Remove only while there's more than one. */}
+                  {terms.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setRemovingTerm(removingTerm === t.id ? null : t.id)}
+                      aria-expanded={removingTerm === t.id}
+                      className="flex-none cursor-pointer text-[13px] font-semibold text-nevo-navy hover:opacity-75"
+                    >
+                      Remove
+                    </button>
+                  ) : null}
                 </div>
+
+                {/*
+                  * SCRUM-99: "Removing one is inline-confirmed". The pattern
+                  * is SCRUM-40's and SCRUM-98's: on the row, one line - what
+                  * ends and what is kept - and two actions, no modal. It
+                  * comes off the draft; nothing is stored until Save.
+                  */}
+                {removingTerm === t.id ? (
+                  <div data-remove-term className="mt-3 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3">
+                    <p className="m-0 text-[13.5px] leading-[1.5] text-nevo-navy">
+                      {`${t.name.trim() || `Term ${i + 1}`} comes off your calendar when you save. The other terms stay as they are.`}
+                    </p>
+                    <div className="mt-3 flex gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTerms(terms.filter((_, j) => j !== i));
+                          setRemovingTerm(null);
+                        }}
+                        className="cursor-pointer rounded-lg bg-nevo-navy px-4 py-2 text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110"
+                      >
+                        Remove this term
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRemovingTerm(null)}
+                        className="cursor-pointer rounded-lg px-4 py-2 text-[13.5px] font-semibold text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.06]"
+                      >
+                        Keep it
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="mt-3 flex gap-3 max-xl:flex-col">
                   <input
                     type="date"
