@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import Image from "next/image";
 import Link from "next/link";
 import { withBack } from "../back";
@@ -15,6 +16,7 @@ import {
   mayRequestConsent,
   withoutRecordedConsent,
   consentDateLine,
+  consentGiven,
 } from "./ConsentPill";
 import {
   bulkConsentLines,
@@ -236,6 +238,24 @@ export function StudentsView() {
     [students],
   );
 
+  /*
+   * CONSENT, FOLDED INTO THE ROSTER (Lydia 19 Nov, L24, approved by
+   * Olayinka): D25's tallies at the top - cleared, outstanding, and how each
+   * was given - rather than a page of their own. Counts of the school's own
+   * records over everyone enrolled, read as sent; nothing is scored.
+   * "Outstanding" is every record that isn't confirmed, as
+   * `withoutRecordedConsent` counts it.
+   */
+  const tallies = useMemo(() => {
+    const confirmed = enrolled.filter((s) => s.consent?.status === "confirmed");
+    return {
+      cleared: confirmed.length,
+      outstanding: withoutRecordedConsent(enrolled),
+      digital: confirmed.filter((s) => consentGiven(s.consent?.channel ?? null) === "digital").length,
+      written: confirmed.filter((s) => consentGiven(s.consent?.channel ?? null) === "written").length,
+    };
+  }, [enrolled]);
+
   const classById = useMemo(
     () => new Map(classes.map((c) => [c.id, c])),
     [classes],
@@ -257,6 +277,8 @@ export function StudentsView() {
       .filter((s) => !onlyIds || onlyIds.has(s.id))
       .filter((s) => {
         if (!consent) return true;
+        // L24: the school-wide outstanding list is this filter, on this view.
+        if (consent === "outstanding") return Boolean(s.consent) && s.consent.status !== "confirmed";
         /*
          * NO "no record at all" OPTION, and there was one for a day.
          *
@@ -336,19 +358,8 @@ export function StudentsView() {
                     header had with archived classes. Both counts are over
                     enrolled students only. */}
                 {enrolled.length} enrolled
-                {/* Was "N can't begin lessons yet", which is not true of
-                    `not_sent` or `pending` - see `withoutRecordedConsent`.
-                    This says what the school's own records show, which is the
-                    thing an admin can actually act on. */}
-                {withoutRecordedConsent(enrolled) > 0 ? (
-                  <>
-                    {" · "}
-                    <span className="text-nevo-navy">
-                      {withoutRecordedConsent(enrolled)}
-                      {" without recorded consent"}
-                    </span>
-                  </>
-                ) : null}
+                {/* The consent count moved into D25's tallies below (L24): one
+                    number, said once, as "outstanding". */}
                 {/* D07 (96cd4b4): the held children, one quiet link to D30. */}
                 {dobNotes.size > 0 ? (
                   <>
@@ -391,6 +402,18 @@ export function StudentsView() {
             </div>
           ) : null}
         </div>
+
+        {/* D25 PC-03's tallies, on the roster (Lydia 19 Nov, L24). */}
+        {phase === "ready" && enrolled.length > 0 ? (
+          <div data-consent-tallies className="mt-5 flex flex-wrap gap-3">
+            <Tally n={String(tallies.cleared)} label="cleared" />
+            <Tally n={String(tallies.outstanding)} label="outstanding" />
+            <Tally
+              n={`${tallies.digital} digital · ${tallies.written} written`}
+              label="how it was given"
+            />
+          </div>
+        ) : null}
 
         <PausedNote className="mt-3" />
 
@@ -451,40 +474,37 @@ export function StudentsView() {
                 />
               </label>
 
-              <label className={FILTER_PILL}>
-                <span className="sr-only">Filter by class</span>
-                <select
-                  value={classId}
-                  onChange={(e) => setClassId(e.target.value)}
-                  className="cursor-pointer appearance-none bg-transparent outline-none"
-                >
-                  <option value="">All classes</option>
-                  {classes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <NevoSelect
+                aria-label="Filter by class"
+                value={classId}
+                onValueChange={setClassId}
+                options={[
+                  { value: "", label: "All classes" },
+                  ...classes.map((c) => ({ value: c.id, label: c.name })),
+                ]}
+                triggerClassName={FILTER_PILL}
+              />
 
-              <label className={FILTER_PILL}>
-                <span className="sr-only">Filter by consent</span>
-                <select
-                  value={consent}
-                  onChange={(e) => setConsent(e.target.value)}
-                  className="cursor-pointer appearance-none bg-transparent outline-none"
-                >
-                  <option value="">Any consent</option>
-                  {/* The pills' own words, so a filter and the rows it narrows
-                      say the same thing - D07's options are "Confirmed",
-                      "Pending", "Not sent". These read "Recorded", "Asked, no
-                      reply yet", "Not asked yet" beside pills that did not. */}
-                  <option value="confirmed">Confirmed</option>
-                  <option value="pending">Pending</option>
-                  <option value="not_sent">Not sent</option>
-                  <option value="withdrawn">Withdrawn</option>
-                </select>
-              </label>
+              <NevoSelect
+                aria-label="Filter by consent"
+                value={consent}
+                onValueChange={setConsent}
+                options={[
+                  { value: "", label: "Any consent" },
+                  /* D25's own word, and Lydia's 19 Nov route for chasing
+                     consent across the school (L24). */
+                  { value: "outstanding", label: "Outstanding" },
+                  /* The pills' own words, so a filter and the rows it narrows
+                     say the same thing - D07's options are "Confirmed",
+                     "Pending", "Not sent". These read "Recorded", "Asked, no
+                     reply yet", "Not asked yet" beside pills that did not. */
+                  { value: "confirmed", label: "Confirmed" },
+                  { value: "pending", label: "Pending" },
+                  { value: "not_sent", label: "Not sent" },
+                  { value: "withdrawn", label: "Withdrawn" },
+                ]}
+                triggerClassName={FILTER_PILL}
+              />
 
               <button
                 type="button"
@@ -839,6 +859,21 @@ export function StudentsView() {
           </>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * One of D25's tallies: a figure over its plain label. Navy, never an alarm
+ * colour - "outstanding" states a position, it doesn't accuse.
+ */
+function Tally({ n, label }: { n: string; label: string }) {
+  return (
+    <div className={cn(CARD, "min-w-[140px] flex-[1_1_140px] px-[18px] py-3.5")}>
+      <div className="text-[20px] leading-tight font-semibold tracking-[-0.01em] text-nevo-navy">
+        {n}
+      </div>
+      <div className="mt-1 text-[12.5px] text-nevo-near-black/58">{label}</div>
     </div>
   );
 }

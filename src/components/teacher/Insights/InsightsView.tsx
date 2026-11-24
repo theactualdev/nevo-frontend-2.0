@@ -271,14 +271,10 @@ export function InsightsView() {
                       {data.misconception.desktop}
                     </span>
                   </p>
-                  {/* Destination is unspecified by the frame - the class
-                      roster is the honest target. Flagged to design. */}
-                  <Link
-                    href={data.misconception.href}
-                    className="mt-2 inline-block cursor-pointer text-[12.5px] font-semibold text-nevo-violet xl:mt-[9px] xl:text-[13px]"
-                  >
-                    View students
-                  </Link>
+                  {/* NO "View students" (Lydia, 19 Nov, L19; backlog 29). The
+                      card is for re-teaching the misconception, which needs no
+                      names; the roster and the mastery view already carry
+                      which child. */}
                 </div>
               </div>
             )}

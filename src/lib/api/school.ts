@@ -60,6 +60,12 @@ export interface School {
   academicConfig: Record<string, unknown>;
   retentionPolicy: string;
   retentionDays: number;
+  /**
+   * When the school's record last changed (T19, live by 23 Nov): the row's
+   * own timestamp, so any write to the school moves it, not only a Settings
+   * save. Nullable, and absent on an older answer.
+   */
+  updatedAt?: string | null;
 }
 
 /** Read our provisional block back off a school record. */

@@ -207,6 +207,8 @@ describe("a compliance audit that fails", () => {
     fireEvent.click(copy);
 
     const pasted = writeText.mock.calls[0][0] as string;
+    // Markdown on the clipboard, the headline as its heading (23 Nov).
+    expect(pasted).toMatch(/^# \S/);
     expect(pasted).toMatch(/Two hundred and forty students/);
     expect(pasted).not.toMatch(/Diagnostic labels stored/);
   });

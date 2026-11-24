@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useCallback, useEffect, useState } from "react";
 import {
   exportApi,
@@ -536,19 +537,14 @@ export function IepExporterView({
                         onRetry={retryStudents}
                       />
                     ) : null}
-                    <select
+                    <NevoSelect
                       id="iep-student"
                       value={studentId}
-                      onChange={(e) => setStudentId(e.target.value)}
-                      className={cn(FIELD, "cursor-pointer")}
-                    >
-                      <option value="">Choose a student</option>
-                      {students.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
+                      onValueChange={setStudentId}
+                      placeholder="Choose a student"
+                      options={students.map((s) => ({ value: s.id, label: s.name }))}
+                      triggerClassName={FIELD}
+                    />
                   </div>
 
                   <div className="flex gap-4 max-xl:flex-col">

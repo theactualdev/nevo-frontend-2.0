@@ -17,6 +17,7 @@ import {
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { SENIOR_ADMIN_REQUIRED, type AdminAccessLevel } from "@/lib/api/permissions";
 import { cn } from "@/lib/utils";
+import { timeAgo } from "@/lib/relativeTime";
 import { CARD, PRIMARY_BTN } from "../Roster/primitives";
 import {
   termIssues,
@@ -349,8 +350,31 @@ export function SchoolSettings({
     (yg) => shown(labels, yg) !== shown(savedAcademic.yearGroupLabels ?? {}, yg),
   );
 
+  /*
+   * "LAST SAVED", ONCE, AT THE TOP (backlog 68; T19; the Hub, 23 Nov: once at
+   * the top until L42 settles whether each section carries its own). D12 and
+   * SCRUM-99: "a 'Saved just now' line that otherwise reads 'Last saved 3 days
+   * ago' ... the timestamp stays visible so an admin can tell whether their
+   * last visit stuck". Each section's Save keeps its own "Saved" moment; this
+   * is the standing line, and every save here refreshes it from the record
+   * the server answers with.
+   *
+   * NOTHING WHEN THERE IS NO INSTANT. A null or unreadable `updatedAt` shows
+   * no line - never "Last saved never", which would claim the school has
+   * never been saved.
+   */
+  const lastSaved =
+    school.updatedAt && !Number.isNaN(Date.parse(school.updatedAt))
+      ? timeAgo(school.updatedAt)
+      : null;
+
   return (
     <>
+      {lastSaved ? (
+        <p data-last-saved className="m-0 mt-2 text-[13px] text-nevo-near-black/55">
+          {`Last saved ${lastSaved}`}
+        </p>
+      ) : null}
       {readOnly ? (
         <p
           id="settings-senior-only"
@@ -781,7 +805,14 @@ export function SchoolSettings({
           several classes at once.
         </p>
 
-        <SaveRow phase={taxonomy} onSave={saveTaxonomy} dirty={taxonomyDirty} />
+        {/* SCRUM-99, D12.4: "plus a line noting the change is now live on
+            every screen" - the labels are read through one lookup. */}
+        <SaveRow
+          phase={taxonomy}
+          onSave={saveTaxonomy}
+          dirty={taxonomyDirty}
+          savedNote="Now live on every screen."
+        />
       </SettingsSection>
 
       {/* ---------------------------------------------------------- PROMOTION */}

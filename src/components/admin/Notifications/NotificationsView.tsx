@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { NevoSelect } from "@/components/shared/NevoSelect";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePermissions } from "@/hooks";
 import { notificationsApi, type Notification } from "@/lib/api/notifications";
 import { announceReadStateChanged } from "./readState";
@@ -138,10 +139,21 @@ export function NotificationsView() {
     return () => clearTimeout(t);
   }, [search]);
 
+  /*
+   * ONLY THE LATEST ASK IS SHOWN. Each read is numbered; an answer to an
+   * earlier one - the unfiltered feed landing after a search, an archived view
+   * after the inbox, a page of a previous search - is dropped rather than
+   * shown under a search box or a view it doesn't belong to. (Found 19 Nov: a
+   * slow first read could replace a search's results with the whole feed.)
+   */
+  const latestRead = useRef(0);
+
   const load = useCallback((wantArchived: boolean, q: string) => {
+    const read = ++latestRead.current;
     notificationsApi
       .list({ archived: wantArchived, limit: PAGE, offset: 0, q })
       .then((feed) => {
+        if (read !== latestRead.current) return;
         setRows(feed.notifications);
         setHasMore(Boolean(feed.hasMore));
         setTotal(typeof feed.total === "number" ? feed.total : undefined);
@@ -149,7 +161,9 @@ export function NotificationsView() {
         setAllRead(feed.unreadCount === 0);
         setPhase("ready");
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
+      .catch((err: unknown) => {
+        if (read === latestRead.current) setPhase(failureKind(err));
+      });
   }, []);
 
   useEffect(() => {
@@ -160,14 +174,19 @@ export function NotificationsView() {
   const showOlder = () => {
     setOlderFailed(false);
     setLoadingMore(true);
+    // A page of the feed as it stood when asked; if the view or the search
+    // has changed since, it belongs to nothing on screen and is dropped.
+    const read = latestRead.current;
     notificationsApi
       .list({ archived, limit: PAGE, offset: rows.length, q: query })
       .then((feed) => {
+        if (read !== latestRead.current) return;
         // Append: "Show older" must never move what the reader was looking at.
         setRows((prev) => [...prev, ...feed.notifications]);
         setHasMore(Boolean(feed.hasMore));
       })
       .catch(() => {
+        if (read !== latestRead.current) return;
         // Was `setHasMore(false)`, which rendered "That's everything." - a
         // failed page-read told the admin they had seen the lot. Keep
         // `hasMore` as it was so the control stays, and say what happened.
@@ -306,28 +325,23 @@ export function NotificationsView() {
               {/* D13b's ONE view menu (backlog 74): Everything, Unread
                   only, Archived. It was two pills that could be read as two
                   filters at once, "Show archived" and "Unread only". */}
-              <label
-                className={cn(
+              <NevoSelect
+                aria-label="View"
+                value={archived ? "archived" : unreadOnly ? "unread" : "everything"}
+                onValueChange={(v) => {
+                  setView(v === "archived" ? "archived" : "inbox");
+                  setUnreadOnly(v === "unread");
+                }}
+                options={[
+                  { value: "everything", label: "Everything" },
+                  { value: "unread", label: "Unread only" },
+                  { value: "archived", label: "Archived" },
+                ]}
+                triggerClassName={cn(
                   FILTER_PILL,
-                  "relative",
                   (archived || unreadOnly) && "border-nevo-navy bg-nevo-navy/[0.06] text-nevo-navy",
                 )}
-              >
-                <span className="sr-only">View</span>
-                <select
-                  value={archived ? "archived" : unreadOnly ? "unread" : "everything"}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setView(v === "archived" ? "archived" : "inbox");
-                    setUnreadOnly(v === "unread");
-                  }}
-                  className="cursor-pointer appearance-none bg-transparent pr-1 outline-none"
-                >
-                  <option value="everything">Everything</option>
-                  <option value="unread">Unread only</option>
-                  <option value="archived">Archived</option>
-                </select>
-              </label>
+              />
 
               {!archived ? (
                 <button

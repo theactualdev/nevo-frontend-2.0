@@ -6,10 +6,12 @@ import { lessonsApi } from "@/lib/api/lessons";
 import { isOnboardingRequired } from "@/lib/auth/onboardingGate";
 import { getSession, getToken } from "@/lib/auth/session";
 import {
+  canOpenOffline,
   isPartialCopy,
   refreshSavedLesson,
   savedLesson,
 } from "@/lib/offline/savedLessons";
+import { checkSavedLesson } from "@/lib/offline/shelfCheck";
 import type { AdaptSegment } from "@/lib/api/intelligence";
 import type { DashboardProgressRow } from "@/lib/api/students";
 import { adaptSegmentsFor, indicatorLevel } from "@/lib/lessons/adaptation";
@@ -271,9 +273,15 @@ export function useStudentLesson(
       .then((res) => {
         if (cancelled) return;
         // A lesson the child saved for offline is kept as fresh as their last
-        // online open. Only ever one they chose to save.
+        // online open. Only ever one they chose to save, and only once its
+        // copy has passed its status check on this connection (safety v2):
+        // the refresh reads the copy, and nothing cached is read before it.
         const owner = getSession()?.userId;
-        if (owner) refreshSavedLesson(owner, res);
+        if (owner) {
+          void checkSavedLesson(owner, lessonId).then((verdict) => {
+            if (verdict === "current") refreshSavedLesson(owner, res);
+          });
+        }
         // Read online: the server holds the keys and marks (41c2f83).
         const built = lessonFromContent(res, res.modules ?? [], {
           serverMarks: true,
@@ -316,23 +324,48 @@ export function useStudentLesson(
          * they saved it, through the same builder - so it opens exactly as it
          * would online. Only this child's shelf, and never for a 404: a lesson
          * the school removed stays removed.
+         *
+         * AND ONLY A COPY THE SERVER CAN STILL VOUCH FOR (safety v2, Teslim
+         * 18 Nov). With no response at all there is no connection, and the
+         * copy opens if `canOpenOffline` allows - "preserve true offline
+         * access". Any other failure came WITH a response, so there is a
+         * connection: the copy is read only once its status check says
+         * `current` - "do not render cached content after the client detects
+         * a connection and the check remains unresolved". A 409 or a 500 used
+         * to fall straight to the copy.
          */
         const owner = getSession()?.userId;
-        const kept = owner ? savedLesson(owner, lessonId) : null;
-        const fromShelf = kept
-          ? lessonFromContent(kept.detail, kept.detail.modules ?? [])
-          : null;
-        if (kept && fromShelf) {
-          setResolved({
-            id: lessonId,
-            lesson: fromShelf,
-            adaptSegments: adaptSegmentsFor(kept.detail.segments),
-            fromShelf: true,
-            partial: isPartialCopy(kept.detail),
-          });
-        } else {
+        if (!owner) {
           setResolved({ id: lessonId, failed: true });
+          return;
         }
+        const noResponse = err instanceof ApiError && err.status === 0;
+        void (
+          noResponse
+            ? Promise.resolve("offline" as const)
+            : checkSavedLesson(owner, lessonId)
+        ).then((verdict) => {
+          if (cancelled) return;
+          const held =
+            verdict === "current" || verdict === "offline"
+              ? savedLesson(owner, lessonId)
+              : null;
+          const kept = held && canOpenOffline(held) ? held : null;
+          const fromShelf = kept
+            ? lessonFromContent(kept.detail, kept.detail.modules ?? [])
+            : null;
+          if (kept && fromShelf) {
+            setResolved({
+              id: lessonId,
+              lesson: fromShelf,
+              adaptSegments: adaptSegmentsFor(kept.detail.segments),
+              fromShelf: true,
+              partial: isPartialCopy(kept.detail),
+            });
+          } else {
+            setResolved({ id: lessonId, failed: true });
+          }
+        });
       });
 
     return () => {

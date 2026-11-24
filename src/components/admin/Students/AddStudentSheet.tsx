@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
@@ -336,19 +337,14 @@ export function AddStudentSheet({
         <label htmlFor="student-class" className={LABEL}>
           Class
         </label>
-        <select
+        <NevoSelect
           id="student-class"
           value={classId}
-          onChange={(e) => setClassId(e.target.value)}
-          className={cn(FIELD, "cursor-pointer")}
-        >
-          <option value="">Choose a class</option>
-          {classes.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          onValueChange={setClassId}
+          placeholder="Choose a class"
+          options={classes.map((c) => ({ value: c.id, label: c.name }))}
+          triggerClassName={FIELD}
+        />
         {classesFailed ? (
           <ReadFailed
             className="mt-2"

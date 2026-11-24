@@ -150,3 +150,33 @@ export function mergesLeftLine(n: number): string | null {
   if (n <= 0) return null;
   return `${n} class ${n === 1 ? "question" : "questions"} still to answer before you can go on.`;
 }
+
+/**
+ * How many data rows a CSV holds, counted in the browser for OB-01's file line
+ * (Lydia 19 Nov, L23: "{file} · N rows", from the browser, stored nowhere).
+ *
+ * Records, not lines: a newline inside a quoted field is part of its row, and
+ * blank lines (a trailing one, or Excel's) are not rows. The header is not a
+ * row either. A count of what the FILE holds - the server's own tallies, on
+ * the next step, say what it read cleanly.
+ */
+export function countCsvRows(text: string): number {
+  let records = 0;
+  let quoted = false;
+  let filled = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (ch === '"') {
+      quoted = !quoted;
+      filled = true;
+    } else if ((ch === "\n" || ch === "\r") && !quoted) {
+      if (filled) records += 1;
+      filled = false;
+      if (ch === "\r" && text[i + 1] === "\n") i += 1;
+    } else if (ch.trim() !== "" && ch !== ",") {
+      filled = true;
+    }
+  }
+  if (filled) records += 1;
+  return Math.max(0, records - 1);
+}

@@ -1,3 +1,4 @@
+import { chooseOption, openSelect, optionNames } from "@/test/nevoSelect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
@@ -125,13 +126,8 @@ const fromClass = (assigned: AssignedTeacher[] = [], done = onAssigned) =>
   );
 
 const choose = async (subject = "Mathematics") => {
-  fireEvent.change(await screen.findByRole("combobox", { name: "Teacher" }), {
-    target: { value: "t-bello" },
-  });
-  await waitFor(() => expect(screen.getByRole("option", { name: subject })).toBeInTheDocument());
-  fireEvent.change(screen.getByLabelText("2 · Subject"), {
-    target: { value: subject === "Biology" ? "sub-bio" : "sub-maths" },
-  });
+  await chooseOption(await screen.findByRole("combobox", { name: "Teacher" }), "Bisi Bello");
+  await chooseOption(screen.getByRole("combobox", { name: "2 · Subject" }), subject);
 };
 /** The sentence as a reader sees it: pieces joined as rendered, curly apostrophes straightened. */
 const said = (el: HTMLElement) =>
@@ -255,10 +251,13 @@ describe("making somebody primary where the class has one", () => {
     const { container } = fromClass([ADEYEMI]);
     await choose();
     fireEvent.click(screen.getByRole("button", { name: /^Primary teacher/ }));
+    // BACKLOG 81: SCRUM-40's fixed line, the name and "they" for its "her"
+    // and "she", and the commit label the spec gives this state.
     expect(said(container)).toMatch(
-      /Folake Adeyemi is the primary teacher for JSS 2A\. Making Bisi Bello primary moves Folake Adeyemi to co-teacher; they keep the class and their notes\./,
+      /Folake Adeyemi is Primary for JSS 2A right now\. Making Bisi Bello Primary moves Folake Adeyemi to Co-teacher; they keep the class and their notes\./,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Assign Mathematics to 1 class" }));
+    expect(screen.queryByRole("button", { name: "Assign Mathematics to 1 class" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Assign and make Primary" }));
 
     await waitFor(() => expect(createAssignment).toHaveBeenCalled());
     // Her own assignment, back to her, as co-teacher: she keeps her subject.
@@ -279,7 +278,7 @@ describe("making somebody primary where the class has one", () => {
     fromClass([ADEYEMI]);
     await choose();
     fireEvent.click(screen.getByRole("button", { name: /^Primary teacher/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Assign Mathematics to 1 class" }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign and make Primary" }));
     await waitFor(() =>
       expect(said(row("JSS 2A"))).toMatch(
         /Folake Adeyemi is now co-teacher for JSS 2A, but making Bisi Bello primary didn't go through/,
@@ -325,8 +324,7 @@ describe("from the teacher's page", () => {
     );
     expect(screen.queryByRole("combobox", { name: "Teacher" })).toBeNull();
     expect(screen.getByText("Bisi Bello")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("option", { name: "Mathematics" })).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText("2 · Subject"), { target: { value: "sub-maths" } });
+    await chooseOption(screen.getByRole("combobox", { name: "2 · Subject" }), "Mathematics");
     expect(screen.getByText("JSS 2A", { selector: "span" })).toBeInTheDocument();
     expect(screen.queryByText("JSS 2B", { selector: "span" })).toBeNull();
   });
@@ -334,16 +332,14 @@ describe("from the teacher's page", () => {
 
 describe("D05's Teaches, from the teacher's record (8 Oct)", () => {
   const pickTeacher = async () =>
-    fireEvent.change(await screen.findByRole("combobox", { name: "Teacher" }), {
-      target: { value: "t-bello" },
-    });
+    chooseOption(await screen.findByRole("combobox", { name: "Teacher" }), "Bisi Bello");
 
   it("states a single subject and makes it the pick", async () => {
     getTeacher.mockResolvedValue({ id: "t-bello", name: "Bisi Bello", subjects: ["Mathematics"] });
     fromClass();
     await pickTeacher();
     await waitFor(() => expect(said(document.body)).toMatch(/Teaches Mathematics/));
-    expect(screen.queryByLabelText("2 · Subject", { selector: "select" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "2 · Subject" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /^Co-teacher/ }));
     fireEvent.click(screen.getByRole("button", { name: "Assign Mathematics to 1 class" }));
@@ -368,7 +364,9 @@ describe("D05's Teaches, from the teacher's record (8 Oct)", () => {
     getTeacher.mockResolvedValue({ id: "t-bello", name: "Bisi Bello", subjects: [] });
     fromClass(undefined, vi.fn());
     await pickTeacher();
-    await waitFor(() => expect(screen.getByRole("option", { name: "Biology" })).toBeInTheDocument());
+    const subject = screen.getByRole("combobox", { name: "2 · Subject" });
+    await waitFor(() => expect(subject).toBeEnabled());
+    expect(optionNames(subject)).toContain("Biology");
     expect(screen.queryByRole("radiogroup")).toBeNull();
   });
 
@@ -381,8 +379,7 @@ describe("D05's Teaches, from the teacher's record (8 Oct)", () => {
     getTeacher.mockResolvedValue({ id: "t-bello", name: "Bisi Bello", subjects: [] });
     const { container } = fromClass(undefined, vi.fn());
     await pickTeacher();
-    await waitFor(() => expect(screen.getByRole("option", { name: "Mathematics" })).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText("2 · Subject"), { target: { value: "sub-maths" } });
+    await chooseOption(screen.getByRole("combobox", { name: "2 · Subject" }), "Mathematics");
     fireEvent.click(screen.getByRole("button", { name: /^Co-teacher/ }));
 
     expect(said(container)).toMatch(
@@ -415,8 +412,7 @@ describe("D05's Teaches, from the teacher's record (8 Oct)", () => {
     );
     const { container } = fromClass(undefined, vi.fn());
     await pickTeacher();
-    await waitFor(() => expect(screen.getByRole("option", { name: "Biology" })).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText("2 · Subject"), { target: { value: "sub-bio" } });
+    await chooseOption(screen.getByRole("combobox", { name: "2 · Subject" }), "Biology");
     fireEvent.click(screen.getByRole("button", { name: "Add Biology to Bisi Bello’s subjects" }));
     fireEvent.click(screen.getByRole("button", { name: "Add Biology" }));
     await waitFor(() => expect(said(container)).toMatch(/A teacher can hold at most 12 subjects\./));
@@ -434,17 +430,23 @@ describe("a teacher who hasn't joined yet (L11, 26 Oct; backend 4c5706a)", () =>
   it("can be chosen - no greyed state - and a removed teacher isn't listed at all", async () => {
     listTeachers.mockResolvedValue(STAFF);
     fromClass(undefined, vi.fn());
-    expect(await screen.findByRole("option", { name: "Invited Teacher (invited)" })).toBeEnabled();
-    expect(screen.queryByRole("option", { name: /Gone Teacher/ })).toBeNull();
+    const teacher = await screen.findByRole("combobox", { name: "Teacher" });
+    await waitFor(() => expect(optionNames(teacher)).toContain("Invited Teacher (invited)"));
+    const list = openSelect(teacher);
+    expect(within(list).getByRole("option", { name: "Invited Teacher (invited)" })).not.toHaveAttribute(
+      "aria-disabled",
+    );
+    expect(within(list).queryByRole("option", { name: /Gone Teacher/ })).toBeNull();
   });
 
   it("says plainly the assignment takes effect when they join, and makes it", async () => {
     listTeachers.mockResolvedValue(STAFF);
     getTeacher.mockResolvedValue({ id: "t-new", name: "Invited Teacher", status: "invited", subjects: ["Mathematics"] });
     const { container } = fromClass(undefined, vi.fn());
-    fireEvent.change(await screen.findByRole("combobox", { name: "Teacher" }), {
-      target: { value: "t-new" },
-    });
+    await chooseOption(
+      await screen.findByRole("combobox", { name: "Teacher" }),
+      "Invited Teacher (invited)",
+    );
     await waitFor(() =>
       expect(said(container)).toMatch(/Invited Teacher hasn't joined yet\. This assignment takes effect when they join\./),
     );
@@ -461,10 +463,8 @@ describe("a teacher who hasn't joined yet (L11, 26 Oct; backend 4c5706a)", () =>
   it("says nothing about joining for a teacher who already has", async () => {
     listTeachers.mockResolvedValue(STAFF);
     const { container } = fromClass(undefined, vi.fn());
-    fireEvent.change(await screen.findByRole("combobox", { name: "Teacher" }), {
-      target: { value: "t-bello" },
-    });
-    await screen.findByRole("option", { name: "Bisi Bello" });
+    await chooseOption(await screen.findByRole("combobox", { name: "Teacher" }), "Bisi Bello");
+    expect(screen.getByRole("combobox", { name: "Teacher" })).toHaveTextContent("Bisi Bello");
     expect(said(container)).not.toMatch(/hasn't joined yet/);
   });
 });

@@ -4,6 +4,7 @@ import { OfflineNotice, strandedOffline } from "./OfflineScreen";
 import { offlineArt, resetOfflineArt } from "./offlineArt";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { saveLesson } from "@/lib/offline/savedLessons";
+import { FRESH_DOWNLOAD } from "@/lib/offline/testDownload";
 import { holdProgress } from "@/lib/lessons/pendingProgress";
 import type { LessonDetailResponse } from "@/lib/api/lessons";
 
@@ -56,11 +57,28 @@ describe("which a child gets when the connection drops", () => {
 
   it("the banner, for a child with a lesson downloaded", async () => {
     signIn("child-a");
-    saveLesson("child-a", lesson("leaf"));
+    saveLesson("child-a", lesson("leaf"), FRESH_DOWNLOAD);
     render(<OfflineNotice online={false} />);
 
     expect(await screen.findByText(/No internet connection/)).toBeInTheDocument();
     expect(fullScreen()).toBeNull();
+  });
+
+  /*
+   * Safety v2 (Teslim 18 Nov): a copy past its expiry, or kept before safety
+   * v2, does not open offline - so it is nothing to do, and the child is told
+   * the truth rather than handed a banner over a lesson that will not open.
+   */
+  it("the full screen, for a child whose only downloads can no longer open", async () => {
+    signIn("child-a");
+    saveLesson("child-a", lesson("leaf"), {
+      ...FRESH_DOWNLOAD,
+      expiresAt: "2020-01-01T00:00:00Z",
+    });
+    saveLesson("child-a", lesson("stem"));
+    render(<OfflineNotice online={false} />);
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 
   it("the banner, for a child with progress held on this device", async () => {
@@ -73,7 +91,7 @@ describe("which a child gets when the connection drops", () => {
   });
 
   it("does not count another child's downloads on a shared tablet", async () => {
-    saveLesson("child-b", lesson("leaf"));
+    saveLesson("child-b", lesson("leaf"), FRESH_DOWNLOAD);
     signIn("child-a");
     render(<OfflineNotice online={false} />);
 

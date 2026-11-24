@@ -1,3 +1,4 @@
+import { chooseOption } from "@/test/nevoSelect";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
@@ -97,11 +98,9 @@ const shareRecord = (over: Partial<IepExportShare> = {}): IepExportShare => ({
 });
 
 /** Drive the picker to a finalised export, where the share card lives. */
-async function reachShareCard(container: HTMLElement) {
+async function reachShareCard() {
   await screen.findByRole("button", { name: "Generate draft" });
-  const select = container.querySelector("select")!;
-  select.value = "s1";
-  select.dispatchEvent(new Event("change", { bubbles: true }));
+  await chooseOption(screen.getByRole("combobox", { name: "Student" }), "Amara Okafor");
   await waitFor(() =>
     expect(screen.getByRole("button", { name: "Generate draft" })).toBeEnabled(),
   );
@@ -122,7 +121,7 @@ describe("IEP share history", () => {
     listShares.mockResolvedValue([shareRecord()]);
 
     const { container } = render(<IepExporterView />);
-    await reachShareCard(container);
+    await reachShareCard();
 
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/Shared with Ngozi Okafor on 15 September 2026/),
@@ -138,7 +137,7 @@ describe("IEP share history", () => {
     listShares.mockResolvedValue([shareRecord({ status: "revoked" })]);
 
     const { container } = render(<IepExporterView />);
-    await reachShareCard(container);
+    await reachShareCard();
 
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/no longer has access/i),
@@ -154,7 +153,7 @@ describe("IEP share history", () => {
     listShares.mockRejectedValue(new Error("500"));
 
     const { container } = render(<IepExporterView />);
-    await reachShareCard(container);
+    await reachShareCard();
 
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/couldn't check who this has already been shared with/i),
@@ -167,7 +166,7 @@ describe("IEP share history", () => {
     listShares.mockResolvedValue([]);
 
     const { container } = render(<IepExporterView />);
-    await reachShareCard(container);
+    await reachShareCard();
 
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/hasn't been shared with anyone yet/i),
@@ -180,7 +179,7 @@ describe("IEP share history", () => {
     listShares.mockResolvedValue([shareRecord({ parentId: "someone-else" })]);
 
     const { container } = render(<IepExporterView />);
-    await reachShareCard(container);
+    await reachShareCard();
 
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/Shared with a linked guardian on 15 September 2026/),
@@ -198,7 +197,7 @@ describe("IEP share history", () => {
     listShares.mockResolvedValueOnce([]).mockResolvedValue([shareRecord()]);
 
     const { container } = render(<IepExporterView />);
-    await reachShareCard(container);
+    await reachShareCard();
     await waitFor(() => expect(screen.getByRole("button", { name: "Share" })).toBeEnabled());
     screen.getByRole("button", { name: "Share" }).click();
 

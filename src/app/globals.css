@@ -193,6 +193,22 @@
   --animate-nevo-tile-hi: nevo-tile-hi 1.6s ease-in-out infinite;
   /* The heard sentence's speaker mark (Nevo Sentence Verify Frame, svWave) */
   --animate-nevo-wave: nevo-wave 1.8s ease-out infinite;
+  /* Admin: the dot beside "Assign a teacher" (Olayinka, 23 Nov) - calm and
+     slow, its own violet only. Used behind `motion-safe:`, so reduced motion
+     leaves a plain dot. */
+  --animate-nevo-dot-pulse: nevo-dot-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes nevo-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(1.35);
+  }
 }
 
 @keyframes nevo-pulse {

@@ -157,6 +157,27 @@ function channelWords(channel: string | null): string {
 }
 
 /**
+ * HOW A CONFIRMED CONSENT WAS GIVEN, for the roster's D25 tally ("218 digital
+ * · 78 written · how it was given"; Lydia 19 Nov, L24). The same reading as
+ * `channelWords`: the parent's own confirmation - through the emailed link,
+ * by email, or restored in their account - is digital; a signed paper form is
+ * written. Anything else counts as neither, so the two never claim a child
+ * they can't place.
+ */
+export function consentGiven(channel: string | null): "digital" | "written" | null {
+  switch (channel) {
+    case "email":
+    case "digital":
+    case "parent_portal":
+      return "digital";
+    case "written":
+      return "written";
+    default:
+      return null;
+  }
+}
+
+/**
  * The sentence under a student's consent state, when there is one to tell.
  *
  * SCRUM-40 line 354 wants the actor and the date on a withdrawal - "Mrs. Eze

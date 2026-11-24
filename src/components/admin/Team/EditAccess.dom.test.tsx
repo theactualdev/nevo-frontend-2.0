@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { setSession } from "@/lib/auth/session";
+import { ApiError } from "@/lib/api/client";
 import type { TeamMember } from "@/lib/api/team";
 import { AdminTeamView } from "./AdminTeamView";
 import { ScopeChecklist } from "./EditAccess";
@@ -150,5 +151,68 @@ describe("the founder's General Oversight (8 Oct)", () => {
     expect(oversight).toBeChecked();
     expect(oversight).toBeDisabled();
     expect(within(sheet).getByText(/so the school can never lock itself out/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * BACKLOG 87: a save the server refuses for good - the last General Oversight
+ * admin, a Learning Support grant still active, any 409 - is said in the
+ * server's words, and never with "try again", which would not change it.
+ */
+describe("a save the server refuses", () => {
+  const untickRoster = async () => {
+    render(<AdminTeamView />);
+    const sheet = await openBukola();
+    fireEvent.click(within(sheet).getByRole("checkbox", { name: /Roster/ }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "Save access" }));
+    return sheet;
+  };
+
+  it("says the server's own refusal, and no try again", async () => {
+    updateScopes.mockRejectedValue(
+      new ApiError(409, "Conflict", {
+        detail: { code: "last_oversight_admin", message: "Someone has to keep General Oversight." },
+      }),
+    );
+    const sheet = await untickRoster();
+
+    expect(
+      await within(sheet).findByText("Someone has to keep General Oversight."),
+    ).toBeInTheDocument();
+    // No retry in what the save says (the holders read keeps its own).
+    expect(within(sheet).queryByText(/try again in a moment/i)).toBeNull();
+  });
+
+  it("says it did not save, without try again, when a refusal carries no words", async () => {
+    updateScopes.mockRejectedValue(new ApiError(409, "Conflict", {}));
+    const sheet = await untickRoster();
+
+    expect(
+      await within(sheet).findByText(/That didn.t save, and nothing changed\. The areas you chose are still here\.$/),
+    ).toBeInTheDocument();
+    // No retry in what the save says (the holders read keeps its own).
+    expect(within(sheet).queryByText(/try again in a moment/i)).toBeNull();
+  });
+
+  it("says a coded 400 in the server's words, without try again", async () => {
+    updateScopes.mockRejectedValue(
+      new ApiError(400, "Bad Request", {
+        detail: { code: "invalid_scope", message: "That area isn't one this school has." },
+      }),
+    );
+    const sheet = await untickRoster();
+
+    expect(
+      await within(sheet).findByText("That area isn't one this school has."),
+    ).toBeInTheDocument();
+    // No retry in what the save says (the holders read keeps its own).
+    expect(within(sheet).queryByText(/try again in a moment/i)).toBeNull();
+  });
+
+  it("still offers try again for a save that merely failed", async () => {
+    updateScopes.mockRejectedValue(new ApiError(500, "Server", {}));
+    const sheet = await untickRoster();
+
+    expect(await within(sheet).findByText(/try again in a moment/)).toBeInTheDocument();
   });
 });

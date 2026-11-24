@@ -264,7 +264,8 @@ describe("objecting", () => {
       "object",
       "  I did not agree to profiling.  ",
     );
-    expect(await screen.findByText(/within 48 hours/i)).toBeInTheDocument();
+    // Lydia, 19 Nov (L35): what happens, with no address and no window.
+    expect(await screen.findByText(/Your request has been recorded and sent to the school\. They will reply to you directly\./)).toBeInTheDocument();
   });
 
   it("admits it when the reason was NOT recorded", async () => {
@@ -288,7 +289,8 @@ describe("objecting", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Object to processing/i }));
 
-    expect(await screen.findByText(/within 48 hours/i)).toBeInTheDocument();
+    // Lydia, 19 Nov (L35): what happens, with no address and no window.
+    expect(await screen.findByText(/Your request has been recorded and sent to the school\. They will reply to you directly\./)).toBeInTheDocument();
     expect(screen.queryByText(/could not attach your note/i)).not.toBeInTheDocument();
   });
 });

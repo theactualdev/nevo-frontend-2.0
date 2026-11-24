@@ -6,7 +6,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { CombinedMark } from "@/components/shared/BrandMarks";
 import { getSession } from "@/lib/auth/session";
 import { holdsProgress } from "@/lib/lessons/pendingProgress";
-import { savedLessons } from "@/lib/offline/savedLessons";
+import { canOpenOffline, savedLessons } from "@/lib/offline/savedLessons";
 import { TabOfflineBanner } from "./TabOfflineBanner";
 import {
   OFFLINE_ILLUSTRATION,
@@ -20,7 +20,9 @@ import {
  * D50): the banner is the default, and the full screen appears only when the
  * child cannot continue at all - nothing downloaded and nothing in progress.
  *
- * Downloaded is a lesson on this child's shelf (`savedLessons`). In progress is
+ * Downloaded is a lesson on this child's shelf (`savedLessons`) that can still
+ * open offline (`canOpenOffline`, safety v2): an expired copy, or one the
+ * server has not vouched for, is nothing to do. In progress is
  * a position this device holds and has not sent (`holdsProgress`). A child with
  * either keeps the tab and the banner over it, because there is something here
  * for them to do.
@@ -30,7 +32,7 @@ import {
  */
 export function strandedOffline(userId: string | null | undefined): boolean {
   if (!userId) return false;
-  return savedLessons(userId).length === 0 && !holdsProgress();
+  return !savedLessons(userId).some(canOpenOffline) && !holdsProgress();
 }
 
 /**
