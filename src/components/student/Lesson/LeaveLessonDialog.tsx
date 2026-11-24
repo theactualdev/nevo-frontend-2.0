@@ -75,7 +75,8 @@ export function LeaveLessonDialog({
             Stepping away and coming back later is a good thing to do.
           </DialogPrimitive.Description>
 
-          <Button className="mt-6 w-full" onClick={() => onOpenChange(false)}>
+          {/* The frame's 16px (`primaryBtn`), over the shared button's 15. */}
+          <Button className="mt-6 w-full text-base" onClick={() => onOpenChange(false)}>
             Keep learning
           </Button>
           {onTakeBreak && (
