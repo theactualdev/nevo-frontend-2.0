@@ -191,6 +191,8 @@
   --animate-nevo-stage-pulse: nevo-stage-pulse 1600ms ease-in-out infinite;
   --animate-nevo-rise: nevo-rise 240ms ease-out;
   --animate-nevo-tile-hi: nevo-tile-hi 1.6s ease-in-out infinite;
+  /* The heard sentence's speaker mark (Nevo Sentence Verify Frame, svWave) */
+  --animate-nevo-wave: nevo-wave 1.8s ease-out infinite;
   /* Admin: the dot beside "Assign a teacher" (Olayinka, 23 Nov) - calm and
      slow, its own violet only. Used behind `motion-safe:`, so reduced motion
      leaves a plain dot. */
@@ -384,6 +386,17 @@
     box-shadow: 0 0 0 7px rgba(154, 156, 203, 0);
   }
 }
+@keyframes nevo-wave {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
 @keyframes nevo-tile-hi {
   0%,
   100% {

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { CombinedMark } from "@/components/shared/BrandMarks";
 import { getSession } from "@/lib/auth/session";
@@ -76,10 +76,16 @@ export function OfflineNotice({ online }: { online: boolean }) {
  * held answer, a signal in the outbox or a write that failed outright ever
  * reached the server. That is an inference, not a confirmation.
  *
- * NO "TRY AGAIN", for the reason the banner gives: reconnecting is the retry,
- * and the screen goes the moment the browser says the connection is back. A
- * button that can only re-ask a question the browser already answered is a
- * tap that does nothing.
+ * TRY AGAIN, THE FRAME'S (Lydia, 19 Nov, L5): "In the connectivity
+ * conditions these children are actually in, the connection commonly returns
+ * within seconds. A bare takeover leaves a child with no option but to kill
+ * the app, which also loses their place." The screen still goes by itself the
+ * moment the browser says the connection is back; Try again does not re-ask
+ * the browser, which already answered - it asks the network, with a request
+ * of its own (`reachable`). If that answers, the connection is back whatever
+ * the browser said, and the screen goes as it would have. If not, nothing
+ * changes and nothing is said: the screen already says it. The frame's
+ * ghost button, alone, since "See saved lessons" is not on this screen.
  *
  * OVER THE TAB, NOT IN PLACE OF IT. The tab stays mounted underneath, so
  * anything half-written is still there when the screen goes. Modal and not
@@ -91,12 +97,46 @@ export function OfflineNotice({ online }: { online: boolean }) {
  */
 export function OfflineScreen() {
   const art = offlineArt();
+  const [trying, setTrying] = useState(false);
+  const alive = useRef(true);
+  const screenRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const tryAgain = () => {
+    if (trying) return;
+    setTrying(true);
+    void reachable().then((up) => {
+      if (!alive.current) return;
+      setTrying(false);
+      // The shell's own `online` listener takes the screen away, and runs
+      // everything a returning connection runs (held progress, the shelf).
+      if (up) window.dispatchEvent(new Event("online"));
+    });
+  };
   return (
     <DialogPrimitive.Root open>
       <DialogPrimitive.Portal>
+        {/*
+          THE SCREEN TAKES FOCUS, NOT TRY AGAIN (on-screen QA, 24 Nov). The
+          dialog's own default moved focus to its first control as the screen
+          came up, and the console's focus ring went round Try again - so the
+          frame's borderless ghost opened looking like an outlined button,
+          with nothing the child had done to put it there. The screen is what
+          arrived, as it was before the button existed: a screen reader reads
+          its title and line, and Tab still reaches Try again, ring and all.
+        */}
         <DialogPrimitive.Content
+          ref={screenRef}
           data-nevo-console="student"
           aria-describedby="offline-screen-body"
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            screenRef.current?.focus({ preventScroll: true });
+          }}
           onEscapeKeyDown={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
           className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-nevo-cream px-10 text-center text-nevo-near-black outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300 sm:px-12"
@@ -123,8 +163,43 @@ export function OfflineScreen() {
           >
             No internet connection right now.
           </p>
+          <button
+            type="button"
+            onClick={tryAgain}
+            disabled={trying}
+            aria-busy={trying}
+            className="mt-8 h-12 w-full max-w-[290px] cursor-pointer rounded-[10px] text-[15px] text-nevo-navy transition-transform active:scale-[0.98] disabled:cursor-default disabled:opacity-60 sm:mt-9 sm:w-[340px] sm:max-w-none"
+          >
+            Try again
+          </button>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );
+}
+
+/** How long Try again waits for the network before it counts as no answer. */
+export const REACH_TIMEOUT_MS = 8000;
+
+/**
+ * Whether the network answers at all: a request of our own for a small file
+ * this site serves, never from a cache. ANY response is an answer - the point
+ * is that something came back, not what. No response, or none in time, is
+ * offline still.
+ */
+export async function reachable(): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REACH_TIMEOUT_MS);
+  try {
+    await fetch(`/og-card.png?reach=${Date.now()}`, {
+      method: "HEAD",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
 }

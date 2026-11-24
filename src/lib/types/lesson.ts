@@ -64,6 +64,14 @@ export interface TextContent {
    * never reads through them.
    */
   readingChunks?: { id: string; text: string }[];
+  /**
+   * The server's groups over those chunks, for this child's delivery
+   * (`content_parsing/chunks.reading_groups`; Lydia, 19 Nov, L7): read under
+   * the attention accommodation only, one group to a part, with a pause card
+   * after a group whose `pauseAfter` is true. Absent where the groups do not
+   * cover the chunks exactly, in order - see `groupsOf`.
+   */
+  readingGroups?: { id: string; chunkIds: string[]; pauseAfter: boolean }[];
 }
 
 /** Visual modality — an illustration and/or a simple input→output diagram. */

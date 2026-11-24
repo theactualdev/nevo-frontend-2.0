@@ -1,7 +1,7 @@
 "use client";
 
 import { NevoSelect } from "@/components/shared/NevoSelect";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   exportApi,
   type IepExport,
@@ -10,6 +10,10 @@ import {
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { studentsApi, type AdminStudentRow, type ParentLink } from "@/lib/api/students";
+import { classesApi } from "@/lib/api/classes";
+import { longDate } from "@/lib/dates";
+import { applyMark, type Mark } from "./draftMarks";
+import { StaffNotes } from "./StaffNotes";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -185,6 +189,13 @@ export function IepExporterView({
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [draft, setDraft] = useState<IepExport | null>(null);
+  /**
+   * D08's meta table names the learner's class (backlog 98). The student list
+   * carries none, so it is the student's own record and the class list - and
+   * either failing leaves the row out rather than guessing it.
+   */
+  const [draftClass, setDraftClass] = useState<string | null>(null);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
   const [content, setContent] = useState("");
   /** The reviewer's own note. Written on finalise, never shared with a parent. */
   const [note, setNote] = useState("");
@@ -295,6 +306,37 @@ export function IepExporterView({
   useEffect(() => {
     loadStudents();
   }, [loadStudents]);
+
+  /* The class for D08's meta table, read once a draft is on screen. */
+  const draftStudent = draft?.studentId ?? null;
+  useEffect(() => {
+    if (!draftStudent) return;
+    let alive = true;
+    Promise.all([studentsApi.get(draftStudent), classesApi.list()])
+      .then(([s, classes]) => {
+        if (!alive) return;
+        const names = classes.filter((c) => s.classIds.includes(c.id)).map((c) => c.name);
+        setDraftClass(names.length ? names.join(", ") : null);
+      })
+      .catch(() => {
+        if (alive) setDraftClass(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [draftStudent]);
+
+  /** D08's B / I: markdown's own marks around the reviewer's selection. */
+  const mark = (m: Mark) => {
+    const el = contentRef.current;
+    if (!el) return;
+    const next = applyMark(content, el.selectionStart, el.selectionEnd, m);
+    setContent(next.text);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(next.start, next.end);
+    });
+  };
 
   const student = students.find((s) => s.id === studentId);
   const firstName = student?.name.split(" ").filter(Boolean)[0] ?? "this learner";
@@ -635,19 +677,68 @@ export function IepExporterView({
               <h3 className="m-0 text-[17px] font-semibold text-nevo-near-black">
                 Individual learning summary
               </h3>
-              <p className="m-0 mt-1 text-[13px] text-nevo-near-black/58">
-                {student?.name} · {periodStart} to {periodEnd}
-              </p>
+              {/* D08's meta table (backlog 98): Student, Class, Period.
+                  D08's "Prepared by" is not drawn - the export names who
+                  asked for it by id only. */}
+              <dl className="m-0 mt-4 grid grid-cols-2 gap-x-6 gap-y-2.5 border-b border-nevo-near-black/12 pb-[18px]">
+                {(
+                  [
+                    ["Student", student?.name ?? null],
+                    ["Class", draftClass],
+                    [
+                      "Period",
+                      longDate(draft.periodStart) && longDate(draft.periodEnd)
+                        ? `${longDate(draft.periodStart)} – ${longDate(draft.periodEnd)}`
+                        : null,
+                    ],
+                  ] as const
+                ).map(([k, v]) =>
+                  v ? (
+                    <div key={k}>
+                      <dt className="text-[11.5px] font-semibold tracking-[0.04em] text-nevo-near-black/45 uppercase">
+                        {k}
+                      </dt>
+                      <dd className="m-0 mt-0.5 text-[14px] text-nevo-near-black">{v}</dd>
+                    </div>
+                  ) : null,
+                )}
+              </dl>
+
+              {/* D08's toolbar, its B and I (backlog 98). */}
+              <div
+                role="toolbar"
+                aria-label="Format"
+                aria-controls="iep-content"
+                className="mt-4 flex items-center gap-1.5"
+              >
+                <button
+                  type="button"
+                  onClick={() => mark("bold")}
+                  aria-label="Bold"
+                  className="inline-flex size-8 cursor-pointer items-center justify-center rounded-lg text-[14px] font-bold text-nevo-near-black transition-colors hover:bg-nevo-near-black/[0.06]"
+                >
+                  B
+                </button>
+                <button
+                  type="button"
+                  onClick={() => mark("italic")}
+                  aria-label="Italic"
+                  className="inline-flex size-8 cursor-pointer items-center justify-center rounded-lg text-[14px] font-semibold text-nevo-near-black italic transition-colors hover:bg-nevo-near-black/[0.06]"
+                >
+                  I
+                </button>
+              </div>
 
               <label htmlFor="iep-content" className="sr-only">
                 Report wording
               </label>
               <textarea
+                ref={contentRef}
                 id="iep-content"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 rows={18}
-                className="mt-4 w-full resize-y rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream p-4 text-[15px] leading-[1.7] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
+                className="mt-2 w-full resize-y rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream p-4 text-[15px] leading-[1.7] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
               />
 
               <div className="mt-4">
@@ -706,6 +797,9 @@ export function IepExporterView({
                 )}
               </div>
             </div>
+
+            {/* D08b SC-03's staff notes (backlog 43): added while a draft. */}
+            <StaffNotes className="mt-4" exportId={draft.id} firstName={firstName} editable />
           </>
         ) : null}
 
@@ -753,6 +847,9 @@ export function IepExporterView({
                 {content}
               </p>
             </div>
+
+            {/* The notes stand with the final report; none can be added now. */}
+            <StaffNotes className="mt-5" exportId={draft.id} firstName={firstName} editable={false} />
 
             <div className={cn(CARD, "mt-5 px-6 py-[26px]")}>
               <h3 className="m-0 text-[17px] font-semibold text-nevo-near-black">

@@ -318,3 +318,67 @@ describe("a part of the lesson held back", () => {
     expect(screen.getByText(TEXT_HELD_BACK_LINE)).toBeInTheDocument();
   });
 });
+
+/**
+ * WHICH CHECK HELD IT (T12 / SCRUM-354, backend 20 Nov: `heldAtCheck`).
+ * Lydia's line says the file passed and Nevo's own text was refused. A part
+ * of the teacher's file held at the first check (safety policy v2) is the
+ * other case, and the line would tell that teacher something untrue.
+ */
+describe("which check held the part", () => {
+  const SOURCE =
+    "A safety check held source material in this part of your file. The lesson cannot be assigned until this part is resolved.";
+  const GENERATED =
+    "Your file was not the problem. A safety check held Nevo's generated content for this part. We will look at the check; the lesson cannot be assigned until it is resolved.";
+  const note = (over: Record<string, unknown>) => ({
+    code: "lesson_text_blocked_by_safety",
+    chunkNumber: 1,
+    safetyEventId: "ev-1",
+    reasonCategory: "violence",
+    ...over,
+  });
+  const source = (pages: number[]) =>
+    note({ heldAtCheck: "lesson_source", textRetained: false, pageNumbers: pages, message: SOURCE });
+  const generated = (pages: number[]) =>
+    note({ heldAtCheck: "generated_content", textRetained: true, pageNumbers: pages, message: GENERATED });
+
+  it("says Lydia's line where Nevo's generated content was held", () => {
+    expect(textHeldBack([generated([2])])).toEqual([{ pages: "Page 2" }]);
+    render(<QuestionsLeftOut notes={[generated([2])]} />);
+
+    expect(screen.getByText(TEXT_HELD_BACK_LINE)).toBeInTheDocument();
+  });
+
+  it("never tells a teacher their file passed where their own file was held", () => {
+    expect(textHeldBack([source([5])])).toEqual([]);
+    const { container } = render(<QuestionsLeftOut notes={[source([5])]} />);
+
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText(/passed its own check/)).not.toBeInTheDocument();
+  });
+
+  it("says each case only where it is true when one file has both", () => {
+    render(<QuestionsLeftOut notes={[source([5]), generated([8, 9])]} />);
+
+    expect(screen.getAllByText(TEXT_HELD_BACK_LINE)).toHaveLength(1);
+    expect(screen.getByText("Pages 8 and 9")).toBeInTheDocument();
+    expect(screen.queryByText("Page 5")).not.toBeInTheDocument();
+  });
+
+  it("never says the category, the event or the server's message", () => {
+    render(<QuestionsLeftOut notes={[source([5]), generated([8])]} />);
+
+    expect(screen.queryByText(/violence/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ev-1/)).not.toBeInTheDocument();
+    expect(screen.queryByText(SOURCE)).not.toBeInTheDocument();
+    expect(screen.queryByText(GENERATED)).not.toBeInTheDocument();
+  });
+
+  it("reads an older server's textRetained the same way, and says nothing for a check it does not know", () => {
+    expect(textHeldBack([note({ textRetained: false, pageNumbers: [1] })])).toEqual([]);
+    expect(textHeldBack([note({ textRetained: true, pageNumbers: [1] })])).toEqual([{ pages: "Page 1" }]);
+    expect(textHeldBack([note({ heldAtCheck: "some_later_check", textRetained: true, pageNumbers: [1] })])).toEqual(
+      [],
+    );
+  });
+});

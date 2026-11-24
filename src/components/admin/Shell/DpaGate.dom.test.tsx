@@ -57,11 +57,31 @@ describe("DpaGate", () => {
     const { container } = render(<DpaGate>{page}</DpaGate>);
 
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/How we handle your students' data/),
+      expect(visibleText(container)).toMatch(/Please read this through - the checkbox unlocks once you reach the end\./),
     );
     expect(screen.queryByRole("heading", { name: "Classes" })).toBeNull();
     // There is no earlier step to go back to from inside the console.
     expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+  });
+
+  /*
+   * D01's step 3 words in place of SCRUM-39's (backlog 93, 94): its heading,
+   * its line, and its checkbox, naming the school. The clauses are counsel's.
+   */
+  it("says D01's heading, line and checkbox, naming the school", async () => {
+    dpaAcceptance.mockResolvedValue(null);
+    const { container } = render(<DpaGate>{page}</DpaGate>);
+
+    expect(
+      await screen.findByRole("heading", { name: "Data processing agreement" }),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(
+        /I have read and agree to the Data Processing Agreement on behalf of Brightgate Academy\./,
+      ),
+    );
+    expect(visibleText(container)).not.toMatch(/How we handle your students' data/);
+    expect(visibleText(container)).not.toMatch(/I.ve read this and I agree/);
   });
 
   it("opens the console once the school has accepted", async () => {
@@ -76,7 +96,7 @@ describe("DpaGate", () => {
     render(<DpaGate>{page}</DpaGate>);
     await waitFor(() => expect(dpaAcceptance).toHaveBeenCalled());
     expect(await screen.findByRole("heading", { name: "Classes" })).toBeInTheDocument();
-    expect(screen.queryByText(/How we handle your students' data/)).toBeNull();
+    expect(screen.queryByText(/Please read this through - the checkbox unlocks once you reach the end\./)).toBeNull();
   });
 
   it("lets an unconfirmed email come first, as the wizard does", async () => {
@@ -119,7 +139,7 @@ describe("DpaGate and schools that agreed before the typed record", () => {
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "Classes" })).toBeInTheDocument(),
     );
-    expect(screen.queryByText(/How we handle your students' data/)).toBeNull();
+    expect(screen.queryByText(/Please read this through - the checkbox unlocks once you reach the end\./)).toBeNull();
   });
 
   it("fails open when the school cannot be read to check", async () => {

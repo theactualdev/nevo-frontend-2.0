@@ -117,7 +117,7 @@ function HostWithBack({ onDone }: { onDone: () => void }) {
 }
 
 const submit = () =>
-  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
 describe("SignUpStep", () => {
   it("does not say nothing was created when the school was", async () => {
@@ -126,7 +126,7 @@ describe("SignUpStep", () => {
 
     const { container } = step();
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled(),
+      expect(screen.getByRole("button", { name: "Create account" })).toBeEnabled(),
     );
     submit();
 
@@ -146,7 +146,7 @@ describe("SignUpStep", () => {
 
     step();
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled(),
+      expect(screen.getByRole("button", { name: "Create account" })).toBeEnabled(),
     );
     submit();
 
@@ -165,7 +165,7 @@ describe("SignUpStep", () => {
 
     const { container } = step();
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled(),
+      expect(screen.getByRole("button", { name: "Create account" })).toBeEnabled(),
     );
     submit();
 
@@ -180,7 +180,7 @@ describe("SignUpStep", () => {
 
     const { onDone } = step();
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled(),
+      expect(screen.getByRole("button", { name: "Create account" })).toBeEnabled(),
     );
     submit();
 
@@ -197,7 +197,7 @@ describe("SignUpStep", () => {
 
     const { container } = step();
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled(),
+      expect(screen.getByRole("button", { name: "Create account" })).toBeEnabled(),
     );
     submit();
 
@@ -207,7 +207,7 @@ describe("SignUpStep", () => {
     expect(visibleText(container)).not.toMatch(/is created/);
     expect(loginPassword).not.toHaveBeenCalled();
     // And they can try again, because nothing exists to duplicate.
-    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Create account" })).toBeEnabled();
   });
 
   it("still offers sign-in on a duplicate email", async () => {
@@ -215,7 +215,7 @@ describe("SignUpStep", () => {
 
     const { container } = step();
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled(),
+      expect(screen.getByRole("button", { name: "Create account" })).toBeEnabled(),
     );
     submit();
 
@@ -249,7 +249,7 @@ describe("SignUpStep", () => {
     set("ob-confirm", "a-long-enough-password");
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled(),
+      expect(screen.getByRole("button", { name: "Create account" })).toBeEnabled(),
     );
     submit();
     await screen.findByRole("button", { name: "Try signing in" });
@@ -262,7 +262,7 @@ describe("SignUpStep", () => {
 
     // The school still exists, so this step must still know it.
     await screen.findByRole("button", { name: "Try signing in" });
-    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create account" })).toBeNull();
     expect(container.querySelector("#ob-school")).toHaveAttribute("readonly");
     expect(register).toHaveBeenCalledTimes(1);
   });
@@ -280,7 +280,7 @@ describe("D01's Location", () => {
     saveContact.mockResolvedValue(undefined);
     const { container, onDone } = step();
     typeLocation(container, "  Lagos, Nigeria ");
-    await waitFor(() => expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create account" })).toBeEnabled());
     submit();
 
     await waitFor(() => expect(onDone).toHaveBeenCalled());
@@ -296,7 +296,7 @@ describe("D01's Location", () => {
     register.mockResolvedValue(CREATED);
     loginPassword.mockResolvedValue(undefined);
     const { onDone } = step();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create account" })).toBeEnabled());
     submit();
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     expect(saveContact).not.toHaveBeenCalled();
@@ -308,8 +308,29 @@ describe("D01's Location", () => {
     saveContact.mockRejectedValue(new Error("500"));
     const { container, onDone } = step();
     typeLocation(container, "Abuja");
-    await waitFor(() => expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create account" })).toBeEnabled());
     submit();
     await waitFor(() => expect(onDone).toHaveBeenCalled());
+  });
+});
+
+/**
+ * D01's step 1 words (backlog 92): its line, its email helper and its
+ * button. "School type" and "Role" stay off: registration takes neither.
+ */
+describe("D01's sign-up words", () => {
+  it("says D01's line, email helper and Create account", () => {
+    const { container } = step();
+
+    expect(visibleText(container)).toMatch(
+      /A few details to create your Nevo workspace\. You can change any of this later\./,
+    );
+    expect(visibleText(container)).not.toMatch(/except how everyone signs in/);
+    expect(visibleText(container)).toMatch(
+      /We.ll send a confirmation link here\. This becomes the first admin account, so it needs to be one you own\./,
+    );
+    expect(screen.getByRole("button", { name: "Create account" })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/School type/)).toBeNull();
+    expect(screen.queryByLabelText(/^Role/)).toBeNull();
   });
 });

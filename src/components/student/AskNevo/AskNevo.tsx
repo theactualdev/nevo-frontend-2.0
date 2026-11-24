@@ -6,7 +6,6 @@ import { ChevronLeft, Clock, MessageCircle, Send } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
 import { SampleRegion } from "@/components/shared/SampleRegion";
-import { useDraggablePill } from "./useDraggablePill";
 import { useAskNevoHistory } from "@/hooks/useAskNevoHistory";
 import { useHasSession } from "@/hooks/useHasSession";
 import { askNevoApi, asUuid } from "@/lib/api";
@@ -24,6 +23,9 @@ import { LessonContext } from "@/context/LessonContext";
 import { useAuth, useSignals } from "@/hooks";
 import { SIGNAL_EVENT_TYPES } from "@/lib/constants";
 import { cn, randomId } from "@/lib/utils";
+
+/** Where a dragged launcher was kept, before L6 fixed it in place. */
+const RETIRED_OFFSET_KEY = "nevo.asknevo.offset";
 
 /**
  * Board 26's launcher mark, on both the docked button and the corner pill.
@@ -181,13 +183,20 @@ export function AskNevo() {
   const [signalSession] = useState(() => randomId());
   const { trackEvent } = useSignals(signalSession, undefined, "ask_nevo");
   const [open, setOpen] = useState(false);
-  // One per breakpoint because they are different sizes and clamp differently,
-  // but they share a stored offset - only ever one of them is on screen, and a
-  // child who moves it on their own device means it for that device.
-  const compactRef = useRef<HTMLButtonElement>(null);
-  const fullRef = useRef<HTMLButtonElement>(null);
-  const compact = useDraggablePill(compactRef, () => setOpen(true));
-  const full = useDraggablePill(fullRef, () => setOpen(true));
+  /*
+   * FIXED IN PLACE, NEVER DRAGGED (Lydia, 19 Nov, L6): "A draggable launcher
+   * gets moved by accident, lands over content, and the child cannot find it
+   * again. It also makes its position unpredictable for any instruction
+   * anyone gives about it." The place a child once dragged it to was kept on
+   * the device; it is let go, so nothing still reads it.
+   */
+  useEffect(() => {
+    try {
+      window.localStorage.removeItem(RETIRED_OFFSET_KEY);
+    } catch {
+      // Private mode, blocked storage: there is nothing kept to let go of.
+    }
+  }, []);
   const [messages, setMessages] = useState<Message[]>([]);
   const [thinking, setThinking] = useState(false);
   const [input, setInput] = useState("");
@@ -370,33 +379,26 @@ export function AskNevo() {
   return (
     <>
       {/* Idle affordances - docked button (mobile), corner pill (desktop).
-          Both can be dragged out of the way and stay where they are put; see
-          `useDraggablePill` for why that is the child's call and not ours. */}
+          Fixed where the frame puts them (L6, above): a tap opens the
+          drawer, and nothing moves them. The corner pill is frame 26's
+          "Idle · corner pill - Desktop" from xl: 52 high, 22 in from each
+          side, 16px words, a 20 sparkle 10 from them, and its own softer
+          shadow (on-screen QA, 24 Nov - it was the tablet's smaller pill,
+          made taller). The tablet's stays as it was: the frame draws none. */}
       <button
         type="button"
         aria-label="Ask Nevo"
-        ref={compactRef}
-        style={compact.style}
-        {...compact.handlers}
-        className={cn(
-          "fixed right-[18px] bottom-[82px] z-30 flex size-[52px] cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream shadow-[0_6px_20px_rgba(43,43,47,0.22)] transition-[filter,transform] hover:brightness-108 md:hidden",
-          // No press-scale mid-drag: it would fight the finger.
-          compact.dragging ? "cursor-grabbing" : "active:scale-[0.96]",
-        )}
+        onClick={() => setOpen(true)}
+        className="fixed right-[18px] bottom-[82px] z-30 flex size-[52px] cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream shadow-[0_6px_20px_rgba(43,43,47,0.22)] transition-[filter,transform] hover:brightness-108 active:scale-[0.96] md:hidden"
       >
         {SPARKLE("size-6")}
       </button>
       <button
         type="button"
-        ref={fullRef}
-        style={full.style}
-        {...full.handlers}
-        className={cn(
-          "fixed right-6 bottom-6 z-30 hidden h-11 cursor-pointer xl:right-8 xl:bottom-8 xl:h-[52px] items-center gap-2 rounded-full bg-nevo-navy px-[18px] text-sm font-medium text-nevo-cream shadow-[0_6px_20px_rgba(43,43,47,0.22)] transition-[filter,transform] hover:brightness-108 md:flex",
-          full.dragging ? "cursor-grabbing" : "active:scale-[0.98]",
-        )}
+        onClick={() => setOpen(true)}
+        className="fixed right-6 bottom-6 z-30 hidden h-11 cursor-pointer items-center gap-2 rounded-full bg-nevo-navy px-[18px] text-sm font-medium text-nevo-cream shadow-[0_6px_20px_rgba(43,43,47,0.22)] transition-[filter,transform] hover:brightness-108 active:scale-[0.98] md:flex xl:right-8 xl:bottom-8 xl:h-[52px] xl:gap-2.5 xl:px-[22px] xl:text-base xl:shadow-[0_8px_32px_rgba(43,43,47,0.20)]"
       >
-        {SPARKLE("size-[18px]")}
+        {SPARKLE("size-[18px] xl:size-5")}
         Ask Nevo
       </button>
 

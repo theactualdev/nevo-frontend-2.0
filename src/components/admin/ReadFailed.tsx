@@ -44,7 +44,7 @@ export function ReadFailed({
   return (
     <div className={cn("text-sm text-nevo-near-black/62", className)}>
       <p id={messageId} className="m-0">
-        We couldn&rsquo;t read {what} just now, so there&rsquo;s nothing to show
+        We couldn&rsquo;t read {what}{" "}just now, so there&rsquo;s nothing to show
         here yet &ndash; this is not a record that it&rsquo;s empty.
       </p>
       <button

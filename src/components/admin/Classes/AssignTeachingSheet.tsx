@@ -502,7 +502,7 @@ export function AssignTeachingSheet({
               </p>
             ) : teachers.value.find((t) => t.id === teacherId)?.status === "invited" ? (
               <p className={ASSIGN_HINT}>
-                {teacherName ?? "This teacher"} hasn&rsquo;t joined yet. This assignment takes
+                {teacherName ?? "This teacher"}{" "}hasn&rsquo;t joined yet. This assignment takes
                 effect when they join.
               </p>
             ) : null}
@@ -595,7 +595,7 @@ export function AssignTeachingSheet({
           ) : (
             <div className="mt-2">
               <p className="m-0 text-[13px] leading-[1.5] text-nevo-near-black/62">
-                {who} doesn&rsquo;t teach {subject.displayName} yet, so it can&rsquo;t be
+                {who} doesn&rsquo;t teach {subject.displayName}{" "}yet, so it can&rsquo;t be
                 assigned. Add {subject.displayName} to {who}&rsquo;s subjects and it&rsquo;s ready.
               </p>
               {teacherAdd?.phase === "failed" ? (

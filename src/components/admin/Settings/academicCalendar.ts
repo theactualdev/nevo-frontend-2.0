@@ -1,4 +1,5 @@
 import type { SchoolTerm } from "@/lib/api/school";
+import { currentTerm, startOfDay } from "../Adaptations/logWindow";
 
 /**
  * D12.3's term calendar: what a school may save, and what Nevo is actually
@@ -159,4 +160,37 @@ export function termStartDatesFrom(terms: SchoolTerm[]): string[] {
     .filter((s) => !Number.isNaN(Date.parse(s)))
     .sort((a, b) => Date.parse(a) - Date.parse(b))
     .map((s) => s.slice(0, 10));
+}
+
+/**
+ * D12.3's year label, "2026 / 27": "generated from the dates, not typed, so
+ * it can never disagree with them" (SCRUM-99). Null until both dates are
+ * there and read, and for an end before the start - a label made from those
+ * would be a claim about a year that isn't one. A year inside one calendar
+ * year is that year.
+ */
+export function yearLabel(start: string | undefined, end: string | undefined): string | null {
+  const a = /^(\d{4})-\d{2}-\d{2}/.exec(start ?? "");
+  const b = /^(\d{4})-\d{2}-\d{2}/.exec(end ?? "");
+  if (!a || !b || (at(start) ?? 0) > (at(end) ?? 0)) return null;
+  const from = Number(a[1]);
+  const to = Number(b[1]);
+  return from === to ? String(from) : `${from} / ${String(to % 100).padStart(2, "0")}`;
+}
+
+/**
+ * The row SCRUM-99 marks "Now": the one `currentTerm` would name, so this
+ * pill and the Overview's "in {term}" can never point at different terms.
+ * -1 between terms, where there is no "now" to mark.
+ */
+export function nowIndex(terms: SchoolTerm[], now: number): number {
+  return terms.findIndex((t) => currentTerm([t], now) !== null);
+}
+
+/** Over by the end of its last day - SCRUM-99's past term, shown at 0.6. */
+export function termHasEnded(term: SchoolTerm, now: number): boolean {
+  const end = startOfDay(term.end ?? "");
+  if (!end) return false;
+  end.setHours(23, 59, 59, 999);
+  return now > end.getTime();
 }

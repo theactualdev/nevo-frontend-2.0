@@ -94,7 +94,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
    *
    * Here rather than only in the player, because a child who gave up on a
    * lesson while offline may never open that lesson again - and their position
-   * still belongs in Home's "Pick up where you left off" list. Any student
+   * still belongs in Home's in-progress card. Any student
    * screen is enough.
    */
   useEffect(() => {
@@ -365,8 +365,8 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
           docked: the launcher is `fixed` over the bottom of the screen, which
           is where that keyboard is, so it sat on the keys a child was typing
           with. Its sheet portals out of here, so an open one is unaffected.
-          `invisible`, not `hidden`: the launcher keeps its box, so a resize
-          while it is away clamps a dragged one against where it really is. */}
+          `invisible`, not `hidden`: the launcher keeps its box while it is
+          away. */}
       {pathname !== PROFILE_HREF && (
         <div className="not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:invisible">
           <AskNevo />

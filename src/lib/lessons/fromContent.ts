@@ -3,6 +3,7 @@ import type {
   LessonModule as ContentModule,
   LessonSegment as ContentSegment,
   ReadingChunk,
+  ReadingGroup,
   SavedLessonDetail,
 } from "@/lib/api/lessons";
 import { toQuickCheck } from "@/lib/api/checkpoints";
@@ -261,6 +262,7 @@ function textFor(segment: ContentSegment, lessonTitle: string): TextContent {
   const keyTerms = keyTermsOf(variant?.keyTerms);
   const equations = equationsOf(variant?.equationCallouts);
   const readingChunks = chunksOf(segment.readingChunks, base);
+  const readingGroups = groupsOf(segment.readingGroups, readingChunks);
   return {
     heading: segment.title ?? lessonTitle,
     body: {
@@ -280,7 +282,40 @@ function textFor(segment: ContentSegment, lessonTitle: string): TextContent {
     ...(keyTerms ? { keyTerms } : {}),
     ...(equations ? { equations } : {}),
     ...(readingChunks ? { readingChunks } : {}),
+    ...(readingGroups ? { readingGroups } : {}),
   };
+}
+
+/**
+ * The server's reading groups over the chunks kept (L7), or nothing.
+ *
+ * ONLY GROUPS THAT ARE THE CHUNKS, IN ORDER. Every chunk once, in the order
+ * the chunks run, and no id the chunks do not have. Anything else is a
+ * grouping of something other than the passage on screen, and the attention
+ * flow keeps reading the chunks themselves rather than guess at a part. The
+ * server's `wordCount` is its sizing and is never carried.
+ */
+function groupsOf(
+  groups: readonly ReadingGroup[] | null | undefined,
+  chunks: TextContent["readingChunks"],
+): TextContent["readingGroups"] {
+  if (!chunks || !Array.isArray(groups) || groups.length === 0) return undefined;
+  const out = groups.map((g) => ({
+    id: typeof g?.id === "string" ? g.id : "",
+    chunkIds: Array.isArray(g?.chunkIds)
+      ? (g.chunkIds as unknown[]).filter(
+          (id): id is string => typeof id === "string",
+        )
+      : [],
+    pauseAfter: g?.pauseAfter === true,
+  }));
+  if (out.some((g) => !g.id || g.chunkIds.length === 0)) return undefined;
+  const flat = out.flatMap((g) => g.chunkIds);
+  const order = chunks.map((c) => c.id);
+  if (flat.length !== order.length || flat.some((id, i) => id !== order[i])) {
+    return undefined;
+  }
+  return out;
 }
 
 /** The non-blank strings of a list, trimmed, or nothing when none are left. */
