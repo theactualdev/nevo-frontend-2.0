@@ -5,6 +5,7 @@ import {
   readAcademic,
   readContact,
   schoolApi,
+  termStartDates,
   type AcademicConfig,
   type School,
   type SchoolTerm,
@@ -524,6 +525,24 @@ export function SchoolSettings({
 
         <div className="mt-6">
           <p className={S_LABEL}>Terms</p>
+          {/*
+            * SCRUM-99's NOT SET UP line (backlog 69), in its words. True as
+            * long as the SAVED record holds no term starts - the one field
+            * Nevo reads - because the parent portal then dates its cards
+            * "Since setup" (the server's `since_setup` window). Driven by the
+            * saved record, not the draft: terms typed and not yet saved have
+            * told Nevo nothing.
+            *
+            * BUILT WITHOUT "a prefilled suggestion for the Nigerian academic
+            * year": nothing in the frames or the spec gives its dates, and
+            * dates made up here would become a school's calendar on one
+            * Save. Raised.
+            */}
+          {termStartDates(readAcademic(school)).length === 0 ? (
+            <p data-terms-not-set className="m-0 mb-3 max-w-[60ch] text-[13.5px] leading-[1.55] text-nevo-navy">
+              Until you set your terms, Nevo says &lsquo;since setup&rsquo; instead of naming a term.
+            </p>
+          ) : null}
           <div className="flex flex-col gap-3">
             {terms.map((t, i) => (
               <div
