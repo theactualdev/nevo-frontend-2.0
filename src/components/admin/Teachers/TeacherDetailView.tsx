@@ -27,6 +27,7 @@ import {
 import { useSetupGate } from "@/hooks";
 import { AssignTeachingSheet } from "../Classes/AssignTeachingSheet";
 import { RemoveAccessSheet } from "./RemoveAccessSheet";
+import { InviteActions } from "./InviteActions";
 import { TeacherSubjects } from "./TeacherSubjects";
 import { StatusPill, isInvited } from "./status";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -301,13 +302,17 @@ export function TeacherDetailView({
         <StatusPill status={teacher.status} />
       </div>
 
+      {/* Resend and Revoke here, D19's own (backlog 82) - see InviteActions. */}
       {invited ? (
-        <p className="mt-5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-          This teacher hasn&rsquo;t opened their console yet.{" "}
-          <Link href="/admin/invitations" className="font-semibold text-nevo-navy hover:opacity-75">
-            Manage the invitation
-          </Link>
-        </p>
+        <InviteActions
+          teacher={teacher}
+          here={{
+            href: back
+              ? withBack(`/admin/teachers/${teacher.id}`, back)
+              : `/admin/teachers/${teacher.id}`,
+            label: teacher.name,
+          }}
+        />
       ) : null}
 
       {/* D06's three cards. Last active joined on 8 Oct; with no timestamp
