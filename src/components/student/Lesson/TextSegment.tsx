@@ -72,6 +72,60 @@ const PAUSE_REVEAL_MS = 4_000;
  * The rule is decorative to a screen reader too. The tap-to-continue flow
  * above takes its parts from them as well. With none, the body is one block.
  */
+/**
+ * WHAT THE TEXT PART DRAWS ITS BODY AS, for these settings: the server's
+ * chunks of the body shown, whether it is read a part at a time, and the
+ * server's groups where those are what is read. Shared with the player,
+ * which holds Next for 17e's pause after the last group (`endPauseDue`).
+ */
+export function readingShape(
+  content: TextContent,
+  density: Density | null,
+  attention: boolean,
+): {
+  chunks: readonly { id: string; text: string }[] | undefined;
+  inParts: boolean;
+  groups: TextContent["readingGroups"];
+} {
+  const body = (density && content.body[density]) ?? content.body.default;
+  const steps = density === DENSITY.SLOWER ? content.slowerSteps : undefined;
+  /*
+   * The server's chunks are of the standard body, so they are asked of the
+   * text actually shown. A reshape, or any other text standing in for the
+   * standard body, reads whole and reports no chunk it is not showing.
+   */
+  const chunks = chunksForBody(body, content.readingChunks);
+  /*
+   * The authored numbered cards are the richer Slower and win where they
+   * exist; chunking is the form that needs no content. Never both, or the
+   * child reads the same idea twice and the second time in pieces.
+   */
+  const chunkedForSlower = density === DENSITY.SLOWER && !steps;
+  /*
+   * A PART AT A TIME ONLY WHERE THERE ARE PARTS. One chunk, or none, is the
+   * body whole, drawn as it is for every other child - not the flow with a
+   * single part. That flow tells the player its one part is all the body, so
+   * a long body arriving whole there was reported read the moment it opened,
+   * and the column's own scroll, the true reading, was kept quiet.
+   */
+  const inParts =
+    (attention || chunkedForSlower) && chunks !== undefined && chunks.length > 1;
+  /*
+   * THE ATTENTION ACCOMMODATION READS BY THE SERVER'S GROUPS (Lydia, 19 Nov,
+   * L7; 17e, kept): a part is one reading group, its chunks with 17c's silent
+   * rules between, and a real pause only after a group the server marks
+   * `pauseAfter` - not a pause after every chunk, 17e's rejected Candidate A.
+   * NOT UNDER SLOWER: Slower is the child's own "less at a time" and stays one
+   * chunk at a time (L7); its pause card waits on the break frames (L12).
+   * Groups only where the chunks shown are the ones they group.
+   */
+  const groups =
+    inParts && !chunkedForSlower && chunks === content.readingChunks
+      ? content.readingGroups
+      : undefined;
+  return { chunks, inParts, groups };
+}
+
 export function TextSegment({
   content,
   density,
@@ -80,23 +134,24 @@ export function TextSegment({
   onReadProgress,
   onChunkSeen,
   readingResumeAt,
-  onReadingBreak,
+  onReadingPause,
 }: {
   content: TextContent;
   density: Density | null;
   reading?: boolean;
   attention?: boolean;
   /**
-   * The reading group to open on, where a break taken from the pause card
-   * left the child (L7) - the break screen takes the lesson's place, so the
-   * part shown would otherwise start again from the first.
+   * The reading group to open on, where a pause or a break left the child
+   * (L7) - the pause screen and the break screen take the lesson's place, so
+   * the part shown would otherwise start again from the first.
    */
   readingResumeAt?: number;
   /**
-   * 17e's pause card's "Take a break": the child's own break, from the
-   * reading, coming back to the group after the pause (`resumeAt`).
+   * A group the server marks `pauseAfter` was read and tapped on from: the
+   * player's own screen for 17e's pause, back at group `resumeAt` after it.
+   * See `ReadingPauseScreen`.
    */
-  onReadingBreak?: (resumeAt: number) => void;
+  onReadingPause?: (resumeAt: number) => void;
   /**
    * How much of the body the child has actually been shown, 0-100.
    *
@@ -164,40 +219,7 @@ export function TextSegment({
       : content.keyTerms;
   const equations = content.equations;
   const keyPoints = !expand ? content.keyPoints : undefined;
-  /*
-   * The server's chunks are of the standard body, so they are asked of the
-   * text actually shown. A reshape, or any other text standing in for the
-   * standard body, reads whole and reports no chunk it is not showing.
-   */
-  const chunks = chunksForBody(body, content.readingChunks);
-  /*
-   * The authored numbered cards are the richer Slower and win where they
-   * exist; chunking is the form that needs no content. Never both, or the
-   * child reads the same idea twice and the second time in pieces.
-   */
-  const chunkedForSlower = density === DENSITY.SLOWER && !steps;
-  /*
-   * A PART AT A TIME ONLY WHERE THERE ARE PARTS. One chunk, or none, is the
-   * body whole, drawn as it is for every other child - not the flow with a
-   * single part. That flow tells the player its one part is all the body, so
-   * a long body arriving whole there was reported read the moment it opened,
-   * and the column's own scroll, the true reading, was kept quiet.
-   */
-  const inParts =
-    (attention || chunkedForSlower) && chunks !== undefined && chunks.length > 1;
-  /*
-   * THE ATTENTION ACCOMMODATION READS BY THE SERVER'S GROUPS (Lydia, 19 Nov,
-   * L7; 17e, kept): a part is one reading group, its chunks with 17c's silent
-   * rules between, and a real pause only after a group the server marks
-   * `pauseAfter` - not a pause after every chunk, 17e's rejected Candidate A.
-   * NOT UNDER SLOWER: Slower is the child's own "less at a time" and stays one
-   * chunk at a time (L7); its pause card waits on the break frames (L12).
-   * Groups only where the chunks shown are the ones they group.
-   */
-  const groups =
-    inParts && !chunkedForSlower && chunks === content.readingChunks
-      ? content.readingGroups
-      : undefined;
+  const { chunks, inParts, groups } = readingShape(content, density, attention);
 
   /*
    * Reading support is merged over the standard type, never put in its place:
@@ -220,19 +242,19 @@ export function TextSegment({
       startAt={readingResumeAt}
       onReadProgress={onReadProgress}
       onChunkSeen={onChunkSeen}
-      onTakeBreak={onReadingBreak}
+      onPause={onReadingPause}
     />
   ) : groups ? (
     // One group is the whole reading, read as one part (17e: "The whole
-    // reading · one part"), and nothing pauses after it: the lesson's own
-    // way on follows.
+    // reading · one part"). A pause after it is the player's, on Next - see
+    // `endPauseDue` there.
     <ChunkedPassage
       chunks={chunks!}
       className={bodyType}
       reading={reading}
       onChunkSeen={onChunkSeen}
     />
-  ) : inParts ? (
+  ) : inParts && chunks ? (
     <ChunkedBody
       key={body}
       chunks={chunks}
@@ -618,12 +640,10 @@ function useChunkViews(
  *
  * One reading group at a time: its chunks together, 17c's silent rules
  * between them, "Tap to continue" under it while groups are left. Where the
- * server marks a group `pauseAfter`, tapping on from it brings 17e's pause
- * card - "A good place to pause", Keep going and Take a break - and nowhere
- * else. NO BODY ON THE CARD: 17e's lines are about its own example lesson
- * ("You've read how a leaf makes its food"), and no field carries one for a
- * real lesson (rule 5). A `pauseAfter` on the last group places nothing: the
- * reading ends there, and the lesson's own way on follows it.
+ * server marks a group `pauseAfter`, tapping on from it hands the child to
+ * the player's pause screen (`onPause`), and they come back on the next
+ * group. After the last group there is no tap: the pause there is the
+ * player's, on Next. See `ReadingPauseScreen`.
  *
  * Read progress is the groups shown, as the chunk flow's is its parts - the
  * player keeps Next back while groups are left (37c). Every chunk in a group
@@ -637,7 +657,7 @@ function GroupedBody({
   startAt,
   onReadProgress,
   onChunkSeen,
-  onTakeBreak,
+  onPause,
 }: {
   chunks: readonly { id: string; text: string }[];
   groups: readonly { id: string; chunkIds: string[]; pauseAfter: boolean }[];
@@ -646,32 +666,20 @@ function GroupedBody({
   startAt?: number;
   onReadProgress?: (pct: number) => void;
   onChunkSeen?: OnChunkSeen;
-  onTakeBreak?: (resumeAt: number) => void;
+  /** The pause after a `pauseAfter` group, coming back at `resumeAt`. */
+  onPause?: (resumeAt: number) => void;
 }) {
   const total = groups.length;
   const [part, setPart] = useState(() =>
     Math.min(Math.max(startAt ?? 0, 0), total - 1),
   );
-  const [pausing, setPausing] = useState(false);
   const shown = useRef<HTMLElement>(null);
   const group = groups[part];
-  const markPassed = useChunkViews(shown, onChunkSeen, pausing ? "" : group.id);
+  const markPassed = useChunkViews(shown, onChunkSeen, group.id);
 
   useEffect(() => {
     onReadProgress?.(Math.round(((part + 1) / total) * 100));
   }, [part, total, onReadProgress]);
-
-  if (pausing) {
-    return (
-      <ReadingPause
-        onKeepGoing={() => {
-          setPausing(false);
-          setPart((p) => p + 1);
-        }}
-        onTakeBreak={onTakeBreak ? () => onTakeBreak(part + 1) : undefined}
-      />
-    );
-  }
 
   const text = new Map(chunks.map((c) => [c.id, c.text]));
   const last = part === total - 1;
@@ -708,7 +716,7 @@ function GroupedBody({
           type="button"
           onClick={() => {
             group.chunkIds.forEach((id) => markPassed(id));
-            if (group.pauseAfter) setPausing(true);
+            if (group.pauseAfter && onPause) onPause(part + 1);
             else setPart((p) => p + 1);
           }}
           className="mt-5 flex h-11 w-full cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy/8 px-5 text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/12 active:scale-[0.99]"
@@ -716,46 +724,6 @@ function GroupedBody({
           Tap to continue
         </button>
       )}
-    </div>
-  );
-}
-
-/**
- * 17e's pause card, at the seam where the idea ends: its heading, Keep going
- * and Take a break, and no body (see `GroupedBody`). 320 wide, 440 from 800.
- */
-function ReadingPause({
-  onKeepGoing,
-  onTakeBreak,
-}: {
-  onKeepGoing: () => void;
-  onTakeBreak?: () => void;
-}) {
-  return (
-    <div className="mt-6 flex justify-center py-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 min-[800px]:py-10">
-      <div className="w-full max-w-[320px] rounded-[16px] bg-nevo-cream-elevated px-6 py-7 text-center shadow-[0_8px_32px_rgba(0,0,0,0.16)] min-[800px]:max-w-[440px] min-[800px]:px-8 min-[800px]:py-[34px]">
-        <h3 className="text-xl font-semibold tracking-[-0.01em] text-pretty text-nevo-near-black min-[800px]:text-2xl">
-          A good place to pause
-        </h3>
-        <div className="mt-[22px] flex flex-col gap-2.5">
-          <button
-            type="button"
-            onClick={onKeepGoing}
-            className="flex h-12 cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy text-[15px] font-semibold text-nevo-cream transition-transform active:scale-[0.98]"
-          >
-            Keep going
-          </button>
-          {onTakeBreak && (
-            <button
-              type="button"
-              onClick={onTakeBreak}
-              className="flex h-12 cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-navy/40 text-[15px] font-semibold text-nevo-navy transition-transform active:scale-[0.98]"
-            >
-              Take a break
-            </button>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

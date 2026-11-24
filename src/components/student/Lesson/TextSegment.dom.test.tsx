@@ -872,8 +872,9 @@ describe("an authored callout, under a view with or without its own", () => {
 
 /**
  * L7 (Lydia, 19 Nov; 17e, kept): UNDER THE ATTENTION ACCOMMODATION A PART IS
- * ONE OF THE SERVER'S READING GROUPS, with a pause card only after a group it
- * marks `pauseAfter`. Slower stays one chunk at a time.
+ * ONE OF THE SERVER'S READING GROUPS, with a pause only after a group it
+ * marks `pauseAfter` - the player's own screen since 24 Nov (Hub), so the
+ * reading hands it up. Slower stays one chunk at a time.
  */
 describe("the attention accommodation's reading groups", () => {
   const GROUPS = [
@@ -891,24 +892,22 @@ describe("the attention accommodation's reading groups", () => {
     expect(screen.queryByText("Oxygen is what they give out.")).toBeNull();
   });
 
-  it("pauses with 17e's card after a group marked pauseAfter, with no body", () => {
-    render(<TextSegment content={grouped()} density={null} attention onReadingBreak={() => {}} />);
+  it("hands a group marked pauseAfter to the player's pause, back on the next group", () => {
+    const onReadingPause = vi.fn();
+    render(
+      <TextSegment content={grouped()} density={null} attention onReadingPause={onReadingPause} />,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Tap to continue" }));
 
-    expect(screen.getByRole("heading", { name: "A good place to pause" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Keep going" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Take a break" })).toBeInTheDocument();
-    // 17e's body is about its own example lesson; none is drawn.
-    expect(screen.queryByText(/You've read/)).toBeNull();
+    expect(onReadingPause).toHaveBeenCalledWith(1);
+    // No card in the reading: 17e draws the pause as its own screen.
+    expect(screen.queryByRole("heading", { name: "A good place to pause" })).toBeNull();
     // Not the chunk flow's breathing pause.
     expect(screen.queryByText(/Take a breath/)).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
-
-    expect(screen.getByText("Oxygen is what they give out.")).toBeInTheDocument();
   });
 
   it("goes straight on where the group is not marked", () => {
+    const onReadingPause = vi.fn();
     render(
       <TextSegment
         content={grouped({
@@ -919,24 +918,16 @@ describe("the attention accommodation's reading groups", () => {
         })}
         density={null}
         attention
+        onReadingPause={onReadingPause}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Tap to continue" }));
 
-    expect(screen.queryByRole("heading", { name: "A good place to pause" })).toBeNull();
+    expect(onReadingPause).not.toHaveBeenCalled();
     expect(screen.getByText("Oxygen is what they give out.")).toBeInTheDocument();
   });
 
-  it("takes the break at the child's word, to come back after the pause", () => {
-    const onReadingBreak = vi.fn();
-    render(<TextSegment content={grouped()} density={null} attention onReadingBreak={onReadingBreak} />);
-    fireEvent.click(screen.getByRole("button", { name: "Tap to continue" }));
-    fireEvent.click(screen.getByRole("button", { name: "Take a break" }));
-
-    expect(onReadingBreak).toHaveBeenCalledWith(1);
-  });
-
-  it("opens on the group a break came back to", () => {
+  it("opens on the group a pause or a break came back to", () => {
     render(<TextSegment content={grouped()} density={null} attention readingResumeAt={1} />);
 
     expect(screen.getByText("Oxygen is what they give out.")).toBeInTheDocument();
