@@ -365,8 +365,8 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
           docked: the launcher is `fixed` over the bottom of the screen, which
           is where that keyboard is, so it sat on the keys a child was typing
           with. Its sheet portals out of here, so an open one is unaffected.
-          `invisible`, not `hidden`: the launcher keeps its box, so a resize
-          while it is away clamps a dragged one against where it really is. */}
+          `invisible`, not `hidden`: the launcher keeps its box while it is
+          away. */}
       {pathname !== PROFILE_HREF && (
         <div className="not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:invisible">
           <AskNevo />
