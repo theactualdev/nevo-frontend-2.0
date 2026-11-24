@@ -258,6 +258,21 @@ describe("the full screen's Try again", () => {
     expect(screen.getByRole("dialog").textContent).toBe(before);
   });
 
+  /*
+   * On-screen QA, 24 Nov: the dialog's default put focus on its first control,
+   * so the console's focus ring went round Try again the moment the screen
+   * came up - the frame's borderless ghost, drawn outlined, by nothing the
+   * child did. The screen takes focus; Try again is a Tab away.
+   */
+  it("arrives with the screen focused, not Try again", async () => {
+    signIn("child-a");
+    render(<OfflineNotice online={false} />);
+    const dialog = await screen.findByRole("dialog");
+
+    await waitFor(() => expect(document.activeElement).toBe(dialog));
+    expect(screen.getByRole("button", { name: "Try again" })).not.toHaveFocus();
+  });
+
   it("asks once while it waits", async () => {
     let answer: (r: Response) => void = () => {};
     const fetch = vi.fn(() => new Promise<Response>((r) => (answer = r)));
