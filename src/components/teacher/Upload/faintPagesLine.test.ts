@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { faintPagesLine, retryPagesLabel } from "./UploadWizard";
+import { cleanPagesLine, faintPagesLine, retryPagesLabel } from "./UploadWizard";
 
 /**
  * How the faint pages are said.
@@ -66,5 +66,29 @@ describe("the retry's label", () => {
     expect(retryPagesLabel([15, 16])).toBe("Retry pages 15 and 16");
     expect(retryPagesLabel([3, 4, 5, 9])).toBe("Retry pages 3 to 5 and 9");
     expect(faintPagesLine([3, 4, 5, 9])).toContain("Pages 3 to 5 and 9 ");
+  });
+});
+
+// C07f's "Pages 1-14 parsed cleanly." from the server's `pageTotal` (T11).
+describe("cleanPagesLine", () => {
+  it("names every page the server did not list as failed", () => {
+    expect(cleanPagesLine(16, [15, 16])).toBe("Pages 1 to 14 parsed cleanly.");
+  });
+
+  it("names a gap in the middle as the pages either side of it", () => {
+    expect(cleanPagesLine(8, [4, 5])).toBe("Pages 1 to 3 and 6 to 8 parsed cleanly.");
+  });
+
+  it("says one page in the singular", () => {
+    expect(cleanPagesLine(2, [2])).toBe("Page 1 parsed cleanly.");
+  });
+
+  it("says nothing without a page total, as for pasted text", () => {
+    expect(cleanPagesLine(null, [3])).toBeNull();
+    expect(cleanPagesLine(undefined, [3])).toBeNull();
+  });
+
+  it("says nothing when no page came through", () => {
+    expect(cleanPagesLine(2, [1, 2])).toBeNull();
   });
 });
