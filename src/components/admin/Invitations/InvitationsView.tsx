@@ -508,7 +508,7 @@ export function InvitationsView() {
                 <span>Class</span>
                 <span>Invited</span>
                 <span>Status</span>
-                <span>Actions</span>
+                <span className="text-right">Actions</span>
               </div>
 
               {visible.length === 0 ? (
@@ -588,7 +588,19 @@ export function InvitationsView() {
                         <span className="flex max-xl:col-start-2 max-xl:row-start-1 max-xl:justify-end">
                           <InviteStatusPill status={s} />
                         </span>
-                        <span className="flex items-center gap-3 max-xl:col-span-2 max-xl:border-t max-xl:border-nevo-near-black/[0.07] max-xl:pt-3">
+                        {/*
+                          * D19'S ACTIONS COLUMN IS ICONS (Olayinka's TO-DO
+                          * item 10, 24 Nov). Its table draws Resend and Revoke
+                          * as 28px icon buttons, right-aligned 8px apart; this
+                          * drew them as words, so once a resend handed back a
+                          * link and "Copy link" joined them, three words
+                          * wrapped in a 150px column. At the table's widths
+                          * they are D19's icons now, each keeping its word as
+                          * its name; "Copy link" - ours, D19 has no glyph for
+                          * it - stays a word and fits beside them. The cards
+                          * below 1280 keep the words, as D19's cards do.
+                          */}
+                        <span className="flex items-center gap-3 xl:justify-end xl:gap-2 max-xl:col-span-2 max-xl:border-t max-xl:border-nevo-near-black/[0.07] max-xl:pt-3">
                           {/*
                             * EACH ACTION ONLY WHERE IT MEANS SOMETHING, as the
                             * frame draws them. All three used to show on every
@@ -634,11 +646,17 @@ export function InvitationsView() {
                               {s === "conflicted" ? null : (
                                 <button
                                   type="button"
+                                  title="Resend invite"
                                   disabled={working || writesPaused}
                                   onClick={() => resend(invite)}
-                                  className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:opacity-45"
+                                  className={cn(
+                                    "cursor-pointer text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:opacity-45",
+                                    ICON_ACTION,
+                                    "xl:hover:bg-nevo-navy/10",
+                                  )}
                                 >
-                                  Resend
+                                  <SendGlyph />
+                                  <span className="xl:sr-only">Resend</span>
                                 </button>
                               )}
                               {/* Revoke is for a live invite - one whose
@@ -647,11 +665,17 @@ export function InvitationsView() {
                               {s === "pending" || s === "conflicted" ? (
                                 <button
                                   type="button"
+                                  title="Revoke invite"
                                   disabled={working || writesPaused}
                                   onClick={() => setConfirmRevoke(confirming ? null : invite.id)}
-                                  className="cursor-pointer text-[13.5px] font-semibold text-nevo-near-black/60 transition-opacity hover:opacity-75 disabled:opacity-45"
+                                  className={cn(
+                                    "cursor-pointer text-[13.5px] font-semibold text-nevo-near-black/60 transition-opacity hover:opacity-75 disabled:opacity-45",
+                                    ICON_ACTION,
+                                    "xl:text-nevo-near-black/40 xl:hover:bg-nevo-near-black/[0.06] xl:hover:text-nevo-near-black/80",
+                                  )}
                                 >
-                                  Revoke
+                                  <RevokeGlyph />
+                                  <span className="xl:sr-only">Revoke</span>
                                 </button>
                               ) : null}
                             </>
@@ -784,5 +808,32 @@ export function InvitationsView() {
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * D19's 28px icon button, at the table's widths only (`xl`). Below them it is
+ * a word again, as D19's cards draw it. The glyph shows only where the word
+ * is hidden, so a screen reader always meets the word.
+ */
+const ICON_ACTION =
+  "xl:flex xl:size-7 xl:items-center xl:justify-center xl:rounded-[7px] xl:opacity-100 xl:hover:opacity-100";
+
+/** D19's send glyph (its `sendIc`). */
+function SendGlyph() {
+  return (
+    <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="hidden xl:block">
+      <path d="M22 2L11 13M22 2l-7 20-4-9-9-4z" />
+    </svg>
+  );
+}
+
+/** D19's revoke glyph (its `xCircleIc`). */
+function RevokeGlyph() {
+  return (
+    <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="hidden xl:block">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M15 9l-6 6M9 9l6 6" />
+    </svg>
   );
 }
