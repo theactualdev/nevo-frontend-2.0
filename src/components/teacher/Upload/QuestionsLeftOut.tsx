@@ -191,6 +191,17 @@ export function questionsLeftOut(
   return out;
 }
 
+/**
+ * THE LOOK IS C07f's NOTICE CARD (Hub, 25 Nov). No frame draws these notes,
+ * and they sit right above C07f's partly-read notice on both reviews, so they
+ * take its card and the two read as one kind of thing: 14% violet with no
+ * rule down the side, 15/17, the body at 13.5px and .7, no wider than 600.
+ * Not its page icon: that glyph says "a page of your file", which a refused
+ * picture or a left-out question is not.
+ */
+const CARD = "w-full max-w-[600px] rounded-[12px] bg-nevo-violet/14 px-[17px] py-[15px]";
+const BODY = "text-[13.5px] leading-[1.55] text-pretty text-nevo-near-black/70";
+
 export function QuestionsLeftOut({
   notes,
   className,
@@ -222,12 +233,12 @@ export function QuestionsLeftOut({
       {held.map((part) => (
         <div
           key={part.pages ?? "no pages"}
-          className="w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4"
+          className={CARD}
         >
           {part.pages && (
             <span className="block text-[12.5px] font-semibold text-nevo-near-black/60">{part.pages}</span>
           )}
-          <p className={cn("text-[14.5px] leading-[1.55] text-nevo-near-black/82", part.pages && "mt-1")}>
+          <p className={cn(BODY, part.pages && "mt-1")}>
             {TEXT_HELD_BACK_LINE}
           </p>
         </div>
@@ -236,7 +247,7 @@ export function QuestionsLeftOut({
       {reader.map((message) => (
         <p
           key={message}
-          className="w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 text-[14.5px] leading-[1.55] text-nevo-near-black/82"
+          className={cn(CARD, BODY)}
         >
           {message}
         </p>
@@ -246,12 +257,12 @@ export function QuestionsLeftOut({
         return (
           <div
             key={p.segment}
-            className="w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4"
+            className={CARD}
           >
             {name && (
               <span className="block text-[12.5px] font-semibold text-nevo-near-black/60">{name}</span>
             )}
-            <p className={cn("text-[14.5px] leading-[1.55] text-nevo-near-black/82", name && "mt-1")}>
+            <p className={cn(BODY, name && "mt-1")}>
               {REFUSED_PICTURE_LINE}
             </p>
           </div>
@@ -260,13 +271,13 @@ export function QuestionsLeftOut({
       {left.map((note, i) => (
         <div
           key={i}
-          className="w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4"
+          className={CARD}
         >
-          <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
+          <p className={BODY}>
             {note.message ?? QUESTIONS_LEFT_OUT}
           </p>
           {note.questions.length > 0 && (
-            <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 text-[14px] leading-[1.5] text-nevo-near-black/72">
+            <ul className={cn("mt-2 flex list-disc flex-col gap-1 pl-5", BODY)}>
               {note.questions.map((q, j) => (
                 <li key={j}>{q}</li>
               ))}

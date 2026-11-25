@@ -205,6 +205,13 @@ function PartialReadNotice({
             ? "Nothing you did is lost - you can retry just those pages."
             : "Nothing you did is lost - you can retry just that page."}
         </p>
+        {/*
+          A GHOST, NOT C07f's NAVY primaryBtnSm (Hub, 25 Nov, on Lydia's
+          one-navy-primary rule). This notice only ever shows on the live
+          review, whose commit bar holds the screen's navy primary - "Looks
+          right, continue" or "Looks right - add to my library" - on screen
+          beside it at every width.
+        */}
         <button
           type="button"
           onClick={onRetry}
