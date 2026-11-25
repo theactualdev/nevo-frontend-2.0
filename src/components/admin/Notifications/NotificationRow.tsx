@@ -154,6 +154,12 @@ export function NotificationRow({
           {categoryLabel(notification.category) ? (
             <span className="text-[10.5px] font-semibold uppercase tracking-[0.04em] text-nevo-near-black/45">
               {categoryLabel(notification.category)}
+              {/* A space nobody sees - it ends a flex item's line, so it
+                  collapses - that keeps the label and the title apart as
+                  text. Drawn on separate lines, they still ran together
+                  wherever the raw text is read or copied: "PlatformRoster
+                  sync could not run" (TO-DO 14). */}
+              {" "}
             </span>
           ) : null}
           {unread ? (

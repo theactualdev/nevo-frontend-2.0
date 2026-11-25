@@ -79,6 +79,21 @@ describe("a notification row's label", () => {
     expect(visibleText(container)).not.toMatch(/modality/i);
   });
 
+  /*
+   * TO-DO 14: "PlatformRoster sync could not run". The label sits on its own
+   * line above the title, but as text the two ran into one word - in a raw
+   * copy, and to anything that reads the row's text in order.
+   */
+  it("stays apart from the title as text, not only on screen", () => {
+    const { container } = row(
+      note({ type: "roster_sync_failed", category: "account", title: "Roster sync could not run" }),
+    );
+    expect(container.textContent).not.toMatch(/PlatformRoster/);
+    expect(container.textContent).toMatch(/Platform\s+Roster sync could not run/);
+    // The look is the same: the label still reads just "Platform".
+    expect(screen.getByText("Platform").textContent?.trim()).toBe("Platform");
+  });
+
   it("is absent for a category this console does not show", () => {
     const { container } = row(note({ type: "modality_shift", category: "engine_internal" }));
     expect(visibleText(container)).not.toMatch(/engine internal|modality/i);
