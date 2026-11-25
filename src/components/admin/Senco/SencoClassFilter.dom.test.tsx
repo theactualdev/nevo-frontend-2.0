@@ -2,6 +2,7 @@ import { chooseOption } from "@/test/nevoSelect";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
+import { ApiError } from "@/lib/api/client";
 import type { AdminClass } from "@/lib/api/classes";
 import type { AdminStudentRow } from "@/lib/api/students";
 import { SencoView } from "./SencoView";
@@ -213,5 +214,69 @@ describe("lessons finished on the profile row", () => {
 
     await waitFor(() => expect(visibleText(container)).toMatch(/Amara Okafor/));
     expect(visibleText(container)).not.toMatch(/lessons? finished/);
+  });
+});
+
+/**
+ * TO-DO 12 (Hub, 25 Nov), after S14 went live in v43 (608b880): the roster
+ * route admits an admin with roster or SENCO access or a Learning Support
+ * grant, and answers anyone else 403 `class_students_forbidden` - about the
+ * viewer, never the class. For them the class filter could only print an
+ * absence the records never stated, or a wait no retry ends.
+ */
+describe("for an admin the roster route refuses", () => {
+  const REFUSED = new ApiError(403, "Forbidden", { detail: { code: "class_students_forbidden" } });
+  const twoYears = () => [klass("c1", "JSS 2A"), { ...klass("c2", "JSS 3A"), yearGroup: "jss3" }];
+
+  it("lists every learner, and offers no class or year filter, no figure and no Try again", async () => {
+    classList.mockResolvedValue(twoYears());
+    perClass.mockRejectedValue(REFUSED);
+
+    const { container } = render(<SencoView />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Learner profiles" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("combobox", { name: "Filter by class" })).toBeNull(),
+    );
+    expect(screen.queryByRole("combobox", { name: "Filter by year group" })).toBeNull();
+    expect(visibleText(container)).toMatch(/Amara Okafor/);
+    expect(visibleText(container)).not.toMatch(/lessons? finished/);
+    expect(visibleText(container)).not.toMatch(/couldn.t read|Still reading|No profiles match/i);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("drops a class chosen before the refusal landed, rather than calling the class empty", async () => {
+    classList.mockResolvedValue(twoYears());
+    const held: ((err: unknown) => void)[] = [];
+    perClass.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          held.push(reject);
+        }),
+    );
+
+    const { container } = render(<SencoView />);
+    await openProfilesAndFilter(container, "JSS 2A");
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/Still reading that class's roster/i),
+    );
+
+    held.forEach((refuse) => refuse(REFUSED));
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/Amara Okafor/));
+    expect(visibleText(container)).not.toMatch(/couldn.t read|Still reading|No profiles match/i);
+  });
+
+  it("still fills the class filter for an admin the route admits", async () => {
+    classList.mockResolvedValue(twoYears());
+    perClass.mockImplementation((id: string) =>
+      Promise.resolve(id === "c1" ? [onRoster("s1", [{ pattern: "completed_lessons", count: 3 }])] : []),
+    );
+
+    const { container } = render(<SencoView />);
+    await openProfilesAndFilter(container, "JSS 2A");
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/3 lessons finished/));
+    expect(visibleText(container)).toMatch(/Amara Okafor/);
   });
 });

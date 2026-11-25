@@ -184,9 +184,16 @@ export function SencoView() {
    * only "failed", and `undefined` doubled as both "fine" and "still in the
    * air" - so selecting a class before its request landed printed "No profiles
    * match", the same false absence, in a different window.
+   *
+   * "refused" is the server's 403 (`class_students_forbidden`, S14, 25 Nov):
+   * an admin with neither roster nor SENCO access nor a Learning Support
+   * grant. It is about the VIEWER, not the class - the route never asks which
+   * class an admin wants - so no retry can succeed, and nothing that rides on
+   * this read (class line, lessons finished, the class and year filters) is
+   * drawn for them.
    */
   const [classRead, setClassRead] = useState<
-    Record<string, "pending" | "ok" | "failed">
+    Record<string, "pending" | "ok" | "failed" | "refused">
   >({});
   /*
    * Lessons finished, per learner, from the SAME per-class read that builds
@@ -337,8 +344,11 @@ export function SencoView() {
               });
               setClassRead((prev) => ({ ...prev, [klass.id]: "ok" }));
             })
-            .catch(() =>
-              setClassRead((prev) => ({ ...prev, [klass.id]: "failed" })),
+            .catch((err: unknown) =>
+              setClassRead((prev) => ({
+                ...prev,
+                [klass.id]: failureKind(err) === "denied" ? "refused" : "failed",
+              })),
             );
         });
       })
@@ -372,19 +382,30 @@ export function SencoView() {
     return YEAR_GROUPS.filter((y) => seen.has(y));
   }, [classes]);
 
+  /*
+   * The server refused this viewer the class rosters (see `classRead`). A
+   * class or year filter can then only ever answer "No profiles match" - an
+   * absence the school's records never stated - so neither is offered, and a
+   * choice made before the refusal landed stops applying.
+   */
+  const rosterRefused = useMemo(
+    () => Object.values(classRead).includes("refused"),
+    [classRead],
+  );
+
   const profiles = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return students
-      .filter((s) => (classId ? classOf[s.id] === classId : true))
+      .filter((s) => (classId && !rosterRefused ? classOf[s.id] === classId : true))
       .filter((s) => {
-        if (!year) return true;
+        if (!year || rosterRefused) return true;
         // A learner whose class we have not resolved is not evidence of any
         // year group, so a year filter leaves them out rather than guessing.
         const c = classById.get(classOf[s.id] ?? "");
         return c?.yearGroup === year;
       })
       .filter((s) => (needle ? s.name.toLowerCase().includes(needle) : true));
-  }, [students, search, classId, year, classOf, classById]);
+  }, [students, search, classId, year, classOf, classById, rosterRefused]);
 
   /*
    * PESSIMISTIC, AND DELIBERATELY SO.
@@ -722,22 +743,25 @@ export function SencoView() {
                   className="min-w-0 flex-1 border-none bg-transparent outline-none"
                 />
               </label>
-              <NevoSelect
-                aria-label="Filter by class"
-                value={classId}
-                onValueChange={setClassId}
-                options={[
-                  { value: "", label: "All classes" },
-                  ...classes.map((c) => ({ value: c.id, label: c.name })),
-                ]}
-                triggerClassName={FILTER_PILL}
-              />
+              {/* Not offered when the rosters were refused (`rosterRefused`). */}
+              {rosterRefused ? null : (
+                <NevoSelect
+                  aria-label="Filter by class"
+                  value={classId}
+                  onValueChange={setClassId}
+                  options={[
+                    { value: "", label: "All classes" },
+                    ...classes.map((c) => ({ value: c.id, label: c.name })),
+                  ]}
+                  triggerClassName={FILTER_PILL}
+                />
+              )}
               {/* A YEAR GROUP IS HOW A SENCo THINKS ABOUT THIS LIST, and the
                   screen offered only search and class. The options are the
                   year groups this school's own classes actually use, in the
                   enum's order - never the full canonical seventeen, which
                   would offer a SENCo levels their school does not run. */}
-              {years.length > 1 ? (
+              {years.length > 1 && !rosterRefused ? (
                 <NevoSelect
                   aria-label="Filter by year group"
                   value={year}
@@ -764,13 +788,15 @@ export function SencoView() {
             <div className={cn(CARD, "mt-4")}>
               {profiles.length === 0 ? (
                 <div className="px-6 py-12 text-center">
-                  {classId && classRead[classId] === "failed" ? (
+                  {/* With the rosters refused no class filter applies, so
+                      only the search can have emptied the list. */}
+                  {classId && !rosterRefused && classRead[classId] === "failed" ? (
                     <p className="m-0 text-sm text-nevo-near-black/62">
                       We couldn&rsquo;t read that class&rsquo;s roster just now,
                       so there&rsquo;s nothing to show here yet &ndash; this is
                       not a record that the class has no profiles.
                     </p>
-                  ) : classId && classRead[classId] !== "ok" ? (
+                  ) : classId && !rosterRefused && classRead[classId] !== "ok" ? (
                     /* Still in the air. Not an answer, so not a claim. */
                     <p className="m-0 text-sm text-nevo-near-black/62">
                       Still reading that class&rsquo;s roster&hellip;

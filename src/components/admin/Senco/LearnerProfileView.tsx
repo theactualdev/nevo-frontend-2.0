@@ -186,8 +186,14 @@ export function LearnerProfileView({
   );
   /** The child's look, from the same class roster read (see `ChildAvatar`). */
   const [look, setLook] = useState<AvatarLook | null>(null);
+  /*
+   * "refused" is the server's 403 (`class_students_forbidden`, S14, 25 Nov):
+   * this viewer may not read class rosters at all - an admin with neither
+   * roster nor SENCO access nor a Learning Support grant. No retry can change
+   * that, so it is not said as a failure; see `noticedLeftOut`.
+   */
   const [observationsPhase, setObservationsPhase] = useState<
-    "idle" | "ready" | "failed"
+    "idle" | "ready" | "failed" | "refused"
   >("idle");
   /*
    * A read that FAILED is not a child with nothing on their record.
@@ -310,8 +316,8 @@ export function LearnerProfileView({
         setLook(mine ? lookOfChild(mine) : null);
         setObservationsPhase("ready");
       })
-      .catch(() => {
-        if (live) setObservationsPhase("failed");
+      .catch((err: unknown) => {
+        if (live) setObservationsPhase(failureKind(err) === "denied" ? "refused" : "failed");
       });
     return () => {
       live = false;
@@ -380,6 +386,15 @@ export function LearnerProfileView({
     Boolean(rosterClassId) && observationsPhase === "idle";
   const active = accommodations?.activeAccommodations ?? [];
   const signals = accommodations?.frontendSignals ?? [];
+  /*
+   * REFUSED, AND NOTHING ELSE TO SAY: the section is left out (Hub, 25 Nov).
+   * "Nothing consistent enough to describe yet" would answer a question this
+   * viewer was never allowed to ask, and "couldn't read the class roster just
+   * now" offers a wait that ends nowhere. The accommodation record's signals,
+   * or its own failure, still draw the section as before.
+   */
+  const noticedLeftOut =
+    observationsPhase === "refused" && !failed.accommodations && signals.length === 0;
 
   return (
     <Wrapper>
@@ -504,81 +519,85 @@ export function LearnerProfileView({
         </>
       ) : null}
 
-      <SectionLabel>What Nevo has noticed</SectionLabel>
-      <div className={cn(CARD, "mt-2.5 px-6 py-[22px]")}>
-        {observationsLoading ? (
-          <div className="h-[72px] animate-pulse rounded-[10px] bg-nevo-navy/[0.05]" />
-        ) : observationsPhase === "ready" &&
-          observations &&
-          observations.length > 0 ? (
-          <ul className="m-0 flex list-none flex-col gap-4 p-0">
-            {observations.map((o) => {
-              const copy = OBSERVATION_COPY[o.pattern];
-              // A pattern the enum gained since this shipped is skipped rather
-              // than rendered as its raw key - `revisited_content` on a SENCo
-              // screen reads as a judgement nobody wrote.
-              if (!copy) return null;
-              const times = observationCount(o.pattern, o.count);
-              return (
-                <li key={o.pattern} className="flex items-start gap-2.5">
-                  <span
-                    aria-hidden="true"
-                    className="mt-[7px] size-[6px] flex-none rounded-full bg-nevo-violet"
-                  />
-                  <span className="flex min-w-0 flex-col">
-                    <span className="text-[12.5px] font-semibold tracking-[0.05em] text-nevo-near-black/55 uppercase">
-                      {copy.title}
-                    </span>
-                    <span className="mt-1 text-sm leading-[1.55] text-nevo-near-black/78">
-                      {copy.body(firstName)}
-                    </span>
-                    {times && (
-                      <span className="mt-1 text-[13px] text-nevo-near-black/50">
-                        {times}
+      {noticedLeftOut ? null : (
+        <>
+          <SectionLabel>What Nevo has noticed</SectionLabel>
+          <div className={cn(CARD, "mt-2.5 px-6 py-[22px]")}>
+            {observationsLoading ? (
+              <div className="h-[72px] animate-pulse rounded-[10px] bg-nevo-navy/[0.05]" />
+            ) : observationsPhase === "ready" &&
+              observations &&
+              observations.length > 0 ? (
+              <ul className="m-0 flex list-none flex-col gap-4 p-0">
+                {observations.map((o) => {
+                  const copy = OBSERVATION_COPY[o.pattern];
+                  // A pattern the enum gained since this shipped is skipped rather
+                  // than rendered as its raw key - `revisited_content` on a SENCo
+                  // screen reads as a judgement nobody wrote.
+                  if (!copy) return null;
+                  const times = observationCount(o.pattern, o.count);
+                  return (
+                    <li key={o.pattern} className="flex items-start gap-2.5">
+                      <span
+                        aria-hidden="true"
+                        className="mt-[7px] size-[6px] flex-none rounded-full bg-nevo-violet"
+                      />
+                      <span className="flex min-w-0 flex-col">
+                        <span className="text-[12.5px] font-semibold tracking-[0.05em] text-nevo-near-black/55 uppercase">
+                          {copy.title}
+                        </span>
+                        <span className="mt-1 text-sm leading-[1.55] text-nevo-near-black/78">
+                          {copy.body(firstName)}
+                        </span>
+                        {times && (
+                          <span className="mt-1 text-[13px] text-nevo-near-black/50">
+                            {times}
+                          </span>
+                        )}
                       </span>
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        ) : failed.accommodations && observationsPhase !== "ready" ? (
-          <ReadFailed
-            firstName={firstName}
-            what="signals"
-            onRetry={load}
-            denied={denied.accommodations}
-          />
-        ) : signals.length > 0 ? (
-          <>
-            {/* The weaker source, and labelled as one. These are signal NAMES
-                off the accommodations read, not the roster's observations. */}
-            <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
-              {signals.map((s) => (
-                <li
-                  key={s}
-                  className="flex items-start gap-2.5 text-sm leading-[1.55] text-nevo-near-black/78"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="mt-[7px] size-[6px] flex-none rounded-full bg-nevo-violet"
-                  />
-                  {humanise(s)}
-                </li>
-              ))}
-            </ul>
-            <p className="m-0 mt-3 text-[13px] text-nevo-near-black/50">
-              These are the signals on {firstName}&rsquo;s accommodation record.
-            </p>
-          </>
-        ) : (
-          <p className="m-0 text-sm text-nevo-near-black/62">
-            {observationsPhase === "failed"
-              ? `We couldn't read ${firstName}'s class roster just now, so what Nevo has noticed isn't here. Nothing about their record has changed.`
-              : `Nothing consistent enough to describe yet. This fills in as ${firstName} works through more lessons.`}
-          </p>
-        )}
-      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : failed.accommodations && observationsPhase !== "ready" ? (
+              <ReadFailed
+                firstName={firstName}
+                what="signals"
+                onRetry={load}
+                denied={denied.accommodations}
+              />
+            ) : signals.length > 0 ? (
+              <>
+                {/* The weaker source, and labelled as one. These are signal NAMES
+                    off the accommodations read, not the roster's observations. */}
+                <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+                  {signals.map((s) => (
+                    <li
+                      key={s}
+                      className="flex items-start gap-2.5 text-sm leading-[1.55] text-nevo-near-black/78"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="mt-[7px] size-[6px] flex-none rounded-full bg-nevo-violet"
+                      />
+                      {humanise(s)}
+                    </li>
+                  ))}
+                </ul>
+                <p className="m-0 mt-3 text-[13px] text-nevo-near-black/50">
+                  These are the signals on {firstName}&rsquo;s accommodation record.
+                </p>
+              </>
+            ) : (
+              <p className="m-0 text-sm text-nevo-near-black/62">
+                {observationsPhase === "failed"
+                  ? `We couldn't read ${firstName}'s class roster just now, so what Nevo has noticed isn't here. Nothing about their record has changed.`
+                  : `Nothing consistent enough to describe yet. This fills in as ${firstName} works through more lessons.`}
+              </p>
+            )}
+          </div>
+        </>
+      )}
 
       <SectionLabel>Concept mastery · dual-track</SectionLabel>
       <div className={cn(CARD, "mt-2.5")}>
