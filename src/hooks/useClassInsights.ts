@@ -52,9 +52,9 @@ import { useStudentDirectory } from "./useStudentDirectory";
 export interface InsightsConcept {
   conceptId: string;
   name: string;
-  /** 0-100, as the dual-track bars want. */
-  understanding: number;
-  reading: number;
+  /** 0-100, as the dual-track bars want, or null for no estimate. */
+  understanding: number | null;
+  reading: number | null;
   studentCount: number;
 }
 
@@ -101,7 +101,20 @@ export interface ClassInsightsState {
   narrativeFailed: boolean;
 }
 
-const pct = (p: number) => Math.round(Math.max(0, Math.min(1, p)) * 100);
+/**
+ * A probability as the bars want it, or null for none - the student profile's
+ * guard (`useStudentProfile`), which this one lacked. `pct(null)` was 0
+ * (`Math.min(1, null)` is 0), and an empty bar "reads as zero, which is a
+ * claim we have not earned" (Lydia, SCRUM-200, 28 Oct). Null draws
+ * `MasteryDualTrack`'s "Not enough yet to show this." (Hub, 25 Nov).
+ *
+ * The class aggregate is a non-null float in the contract today, so this is
+ * the guard for the day it is not - and for a NaN, which drew the same way.
+ */
+const pct = (p: number | null | undefined): number | null =>
+  typeof p === "number" && Number.isFinite(p)
+    ? Math.round(Math.max(0, Math.min(1, p)) * 100)
+    : null;
 
 function suddenish(flagType: string): boolean {
   const t = flagType.toLowerCase();

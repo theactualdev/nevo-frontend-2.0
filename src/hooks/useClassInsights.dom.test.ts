@@ -214,3 +214,26 @@ describe("a class mastery row with no name", () => {
     expect(result.current.concepts.map((c) => c.name)).toEqual(["Fractions"]);
   });
 });
+
+/**
+ * NO ESTIMATE IS NOT 0 (Hub, 25 Nov; the profile's rule since SCRUM-200).
+ * `pct(null)` here was 0, so a concept with no estimate drew an empty bar,
+ * which reads as a class that understood none of it.
+ */
+describe("a class mastery value with no estimate", () => {
+  it("stays null, never 0 - and a real 0 stays 0", async () => {
+    mastery.mockResolvedValue([
+      { conceptId: "c-1", conceptName: "Fractions", masteryProbabilityConcept: null, masteryProbabilityReading: 0.5, studentCount: 7 },
+      { conceptId: "c-2", conceptName: "Ratio", masteryProbabilityConcept: Number.NaN, masteryProbabilityReading: null, studentCount: 7 },
+      { conceptId: "c-3", conceptName: "Area", masteryProbabilityConcept: 0, masteryProbabilityReading: 0.25, studentCount: 7 },
+    ]);
+    const { result } = renderHook(() => useClassInsights("c-1"));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.concepts.map((c) => [c.name, c.understanding, c.reading])).toEqual([
+      ["Fractions", null, 50],
+      ["Ratio", null, null],
+      ["Area", 0, 25],
+    ]);
+  });
+});
