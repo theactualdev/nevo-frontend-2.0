@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { ApiError } from "@/lib/api/client";
@@ -76,10 +76,12 @@ const RESPONSE = {
       occurredAt: "2026-09-04T10:00:00Z",
     },
   ],
+  // Mondays, as the server's date_trunc('week') writes them. The weeks
+  // between 17 Aug and 14 Sep had no adaptation, so the server left them out.
   adaptationsPerWeek: [
-    { weekStarting: "2026-08-11", count: 5 },
-    { weekStarting: "2026-08-18", count: 4 },
-    { weekStarting: "2026-09-15", count: 2 },
+    { weekStarting: "2026-08-10", count: 5 },
+    { weekStarting: "2026-08-17", count: 4 },
+    { weekStarting: "2026-09-14", count: 2 },
   ],
   series: [
     {
@@ -99,8 +101,18 @@ const section = async (container: HTMLElement) => {
   return container.querySelector("[data-what-changed]") as HTMLElement;
 };
 
+/** A Tuesday: the 12-week window runs from Monday 29 Jun to Monday 21 Sep. */
+const NOW = Date.parse("2026-09-22T12:00:00Z");
+
 beforeEach(() => {
   h.history.mockReset().mockResolvedValue(RESPONSE);
+  // Only the clock is fixed; timers stay real for waitFor.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("what changed, and when", () => {
@@ -121,12 +133,49 @@ describe("what changed, and when", () => {
     const el = await section(container);
 
     expect(visibleText(el)).toMatch(/Adaptations per week/);
-    expect(screen.getByText(/in the week of 11 Aug/)).toBeInTheDocument();
-    expect(weekBars(RESPONSE).map((b) => [b.label, b.count, b.height])).toEqual([
-      ["11 Aug", 5, 80],
-      ["18 Aug", 4, 64],
-      [expect.stringMatching(/^15 Sept?$/), 2, 32],
+    expect(screen.getByText(/in the week of 10 Aug/)).toBeInTheDocument();
+    expect(
+      weekBars(RESPONSE, NOW)
+        .filter((b) => b.count !== null)
+        .map((b) => [b.label, b.count, b.height]),
+    ).toEqual([
+      ["10 Aug", 5, 80],
+      ["17 Aug", 4, 64],
+      [expect.stringMatching(/^14 Sept?$/), 2, 32],
     ]);
+  });
+
+  it("gives each of the window's 13 weeks its own slot, and a quiet week an empty one", async () => {
+    const { container } = render(<LearnerProfileView studentId="s1" />);
+    const el = await section(container);
+    const slots = [...el.querySelectorAll("li[data-week]")];
+
+    // 12 weeks asked for are 13 calendar weeks, the first and last partial.
+    expect(slots.map((s) => s.getAttribute("data-week"))).toEqual([
+      "2026-06-29", "2026-07-06", "2026-07-13", "2026-07-20", "2026-07-27", "2026-08-03",
+      "2026-08-10", "2026-08-17", "2026-08-24", "2026-08-31", "2026-09-07", "2026-09-14",
+      "2026-09-21",
+    ]);
+    // 17 Aug and 14 Sep are NOT neighbours: three quiet weeks sit between them.
+    const at = (week: string) => slots.findIndex((s) => s.getAttribute("data-week") === week);
+    expect(at("2026-09-14") - at("2026-08-17")).toBe(4);
+    for (const quiet of ["2026-08-24", "2026-08-31", "2026-09-07"]) {
+      const slot = slots[at(quiet)];
+      // Its date, and nothing else: no bar, and no 0 we were never given.
+      expect(slot.querySelector("[style]")).toBeNull();
+      expect(slot.textContent).not.toMatch(/\d+\s*in the week|^0|\b0\b/);
+      expect(slot.querySelector(".sr-only")).toBeNull();
+    }
+  });
+
+  it("draws a 0 the server sends as a 0 (S15), and a week it leaves out as nothing", () => {
+    const slots = weekBars(
+      { ...RESPONSE, adaptationsPerWeek: [{ weekStarting: "2026-09-07", count: 0 }, ...RESPONSE.adaptationsPerWeek] },
+      NOW,
+    );
+    const week = (key: string) => slots.find((s) => s.key === key);
+    expect(week("2026-09-07")).toMatchObject({ count: 0, height: 0 });
+    expect(week("2026-08-31")).toMatchObject({ count: null, height: 0 });
   });
 
   it("never renders the engine's series, its codes or its lesson counts", async () => {

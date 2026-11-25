@@ -722,8 +722,9 @@ export function LearnerProfileView({
         *   beside the console's Zero-Tag sentence for what Nevo does - the
         *   frame's past-tense phrases ("Larger text applied") name specific
         *   adaptations the contract does not carry.
-        * - Only the weeks the server sends are drawn; it leaves out a week
-        *   with no adaptation, so a quiet week shows as a gap in the dates.
+        * - Each bar sits in its own week of the window; a week the server
+        *   left out (it sends no zeros) is an empty slot, never a 0. S15 asks
+        *   for every week with explicit zeros (`weekBars`).
         * - The empty line is the Hub's interim words until Lydia's (L82),
         *   in the backend's own two action words. It is said only when the
         *   server sent no change at all - never when it sent changes this
@@ -754,24 +755,34 @@ export function LearnerProfileView({
       ) : (
         <div data-what-changed>
           {(() => {
-            const bars = weekBars(history.history);
-            return bars.length > 0 ? (
+            const bars = weekBars(history.history, history.readAt);
+            return bars.some((b) => b.count !== null) ? (
               <div className="mt-3.5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5">
                 <div className="text-[12px] font-bold uppercase tracking-[0.06em] text-nevo-navy">
                   Adaptations per week
                 </div>
                 <ol className="m-0 mt-4 flex list-none items-end gap-4 p-0">
                   {bars.map((b) => (
-                    <li key={b.key} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-                      <span className="text-[12px] font-semibold text-nevo-navy">
-                        {b.count}
-                        <span className="sr-only">{` in the week of ${b.label}`}</span>
-                      </span>
-                      <span
-                        aria-hidden="true"
-                        className="block w-full rounded-t-[6px] bg-nevo-violet"
-                        style={{ height: `${b.height}px` }}
-                      />
+                    <li
+                      key={b.key}
+                      data-week={b.key}
+                      className="flex min-w-0 flex-1 flex-col items-center gap-2"
+                    >
+                      {/* A week the server did not send: its slot, its date,
+                          and nothing else - no bar, no 0. */}
+                      {b.count === null ? null : (
+                        <>
+                          <span className="text-[12px] font-semibold text-nevo-navy">
+                            {b.count}
+                            <span className="sr-only">{` in the week of ${b.label}`}</span>
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            className="block w-full rounded-t-[6px] bg-nevo-violet"
+                            style={{ height: `${b.height}px` }}
+                          />
+                        </>
+                      )}
                       {/* Two lines' height whether the date wraps or not, so
                           every bar stands on the same baseline (review, 25 Nov:
                           a wrapped "31 Aug" sat its bar 17px lower at 768). */}
