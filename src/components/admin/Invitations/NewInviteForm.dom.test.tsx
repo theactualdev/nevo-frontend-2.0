@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
+import { chooseOption, optionNames } from "@/test/nevoSelect";
 import { NewInviteModal } from "./NewInviteModal";
 
 /**
@@ -61,7 +62,7 @@ describe("Invite a teacher (D19)", () => {
     type("First name", "Mary Ann");
     type("Last name", "Okafor-Bello");
     type("Email", " f@school.edu.ng ");
-    fireEvent.change(screen.getByLabelText("Class"), { target: { value: "c1" } });
+    await chooseOption(screen.getByLabelText("Class"), "JSS 2A");
     fireEvent.click(screen.getByRole("button", { name: "Send invite" }));
     await waitFor(() =>
       expect(create).toHaveBeenCalledWith({
@@ -72,5 +73,46 @@ describe("Invite a teacher (D19)", () => {
         classId: "c1",
       }),
     );
+  });
+});
+
+/*
+ * THE CLASS PICKER IS NEVO'S, not the browser's (Olayinka's TO-DO item 2).
+ * It was the last native <select> in the admin console, and the scan that
+ * found the others missed it because its tag broke the line.
+ */
+describe("Invite a teacher's class picker", () => {
+  const openWith = (classes: unknown[]) =>
+    render(<NewInviteModal classes={classes as never} onClose={vi.fn()} onSent={vi.fn()} />);
+
+  it("is Nevo's dropdown, still labelled Class", () => {
+    open();
+    const picker = screen.getByLabelText("Class");
+    expect(picker.tagName).not.toBe("SELECT");
+    expect(picker).toHaveAttribute("role", "combobox");
+    expect(document.querySelector("select")).toBeNull();
+  });
+
+  it("offers No class yet first, then the classes still in use", () => {
+    openWith([
+      { id: "c1", name: "JSS 2A", archivedAt: null },
+      { id: "c2", name: "JSS 1C", archivedAt: "2026-09-01T00:00:00Z" },
+      { id: "c3", name: "SS 1B", archivedAt: null },
+    ]);
+    const picker = screen.getByLabelText("Class");
+    expect(picker).toHaveTextContent("No class yet");
+    expect(optionNames(picker)).toEqual(["No class yet", "JSS 2A", "SS 1B"]);
+  });
+
+  it("sends no class when No class yet stays chosen, or is chosen again", async () => {
+    open();
+    type("First name", "Folake");
+    type("Last name", "Adeyemi");
+    type("Email", "f@school.edu.ng");
+    const picker = screen.getByLabelText("Class");
+    await chooseOption(picker, "JSS 2A");
+    await chooseOption(picker, "No class yet");
+    fireEvent.click(screen.getByRole("button", { name: "Send invite" }));
+    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ classId: null })));
   });
 });
