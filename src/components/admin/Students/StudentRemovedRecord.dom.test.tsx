@@ -108,6 +108,23 @@ describe("a removed child's record", () => {
     expect(await screen.findByText("Hauwa Musa")).toBeInTheDocument();
   });
 
+  /*
+   * Nor a consent card (the Hub, 25 Nov): D07c's deactivated record is its
+   * enrolment and its two ways on, Restore and Erase - nothing else.
+   */
+  it("after Remove, draws no consent card either, and Restore brings it back", async () => {
+    const { container } = render(<StudentDetailView studentId="s1" />);
+    expect(await screen.findByText("Consent is recorded for Binta")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Remove Binta from the school/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Deactivate Binta" }));
+    await screen.findByRole("button", { name: "Restore this student" });
+    expect(visibleText(container)).not.toMatch(/Consent is recorded|Record a signed paper form/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Restore this student" }));
+    expect(await screen.findByText("Consent is recorded for Binta")).toBeInTheDocument();
+  });
+
   it("takes any 404 from the guardians read as withheld, never as lost", async () => {
     h.parentLinks.mockImplementation(refusedForRemoved);
     const { container } = render(<StudentDetailView studentId="s1" />);

@@ -538,141 +538,147 @@ export function StudentDetailView({
         </div>
       </div>
 
-      {/* D07b's consent card. The actor and date are the point: SCRUM-40 wants
-          "Mrs. Eze withdrew consent on 14 July" rather than a bare state, and a
-          withdrawal must be legible as a withdrawal rather than as an absence. */}
-      <SectionLabel>Consent</SectionLabel>
-      <div className={cn(CARD, "mt-2.5 px-6 py-[22px]")}>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-0">
-            {/* NAMING A CHILD AS BLOCKED IS THE WORST PLACE TO GET THIS
-                WRONG. The line says what is recorded, which is true in every
-                state. (The consent gate is the product - Hub, 2 Nov - so an
-                unconfirmed consent does stop the child; the Overview's row
-                says so.) */}
-            <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
-              {student.consent?.status === "confirmed"
-                ? `Consent is recorded for ${firstName}`
-                : student.consent?.status === "withdrawn"
-                  ? `A parent has withdrawn consent for ${firstName}`
-                  : student.consent?.status === "pending"
-                    ? // D07b's card title for a request out and unanswered.
-                      "Awaiting parent consent"
-                    : `No consent is recorded for ${firstName} yet`}
-            </p>
-            {student.consent?.status === "withdrawn" ? (
-              /*
-               * WHAT WITHDRAWN ACTUALLY MEANS, which this card never said.
-               *
-               * It named the fact and stopped. Since 15 September the backend
-               * enforces withdrawal on the four processing endpoints with a
-               * 403 `consent_withdrawn`, so the child genuinely cannot start a
-               * lesson - and this is the screen an admin opens when a parent
-               * rings to ask why. Saying only "a parent has withdrawn consent"
-               * leaves them with no answer and no route.
-               *
-               * It states the three things the reader needs: that access is
-               * paused, that nothing of the child's is lost, and that only the
-               * parent can lift it - because SCRUM-80 makes withdrawal the
-               * parent's decision and nothing in this console may override it.
-               */
-              <p className="m-0 mt-1.5 max-w-[62ch] text-[13.5px] leading-[1.55] text-nevo-near-black/70">
-                {firstName}&rsquo;s lessons are paused while this stands, and
-                everything they have done is kept. Only the parent who
-                withdrew can restore it &ndash; there is nothing to change
-                here.
+      {/* D07c: nor a consent card. A removed child's record is its
+          enrolment and its two ways on - Restore, Erase (the Hub, 25 Nov). */}
+      {deactivated ? null : (
+        <>
+          {/* D07b's consent card. The actor and date are the point: SCRUM-40 wants
+              "Mrs. Eze withdrew consent on 14 July" rather than a bare state, and a
+              withdrawal must be legible as a withdrawal rather than as an absence. */}
+          <SectionLabel>Consent</SectionLabel>
+          <div className={cn(CARD, "mt-2.5 px-6 py-[22px]")}>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="min-w-0">
+                {/* NAMING A CHILD AS BLOCKED IS THE WORST PLACE TO GET THIS
+                    WRONG. The line says what is recorded, which is true in every
+                    state. (The consent gate is the product - Hub, 2 Nov - so an
+                    unconfirmed consent does stop the child; the Overview's row
+                    says so.) */}
+                <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
+                  {student.consent?.status === "confirmed"
+                    ? `Consent is recorded for ${firstName}`
+                    : student.consent?.status === "withdrawn"
+                      ? `A parent has withdrawn consent for ${firstName}`
+                      : student.consent?.status === "pending"
+                        ? // D07b's card title for a request out and unanswered.
+                          "Awaiting parent consent"
+                        : `No consent is recorded for ${firstName} yet`}
+                </p>
+                {student.consent?.status === "withdrawn" ? (
+                  /*
+                   * WHAT WITHDRAWN ACTUALLY MEANS, which this card never said.
+                   *
+                   * It named the fact and stopped. Since 15 September the backend
+                   * enforces withdrawal on the four processing endpoints with a
+                   * 403 `consent_withdrawn`, so the child genuinely cannot start a
+                   * lesson - and this is the screen an admin opens when a parent
+                   * rings to ask why. Saying only "a parent has withdrawn consent"
+                   * leaves them with no answer and no route.
+                   *
+                   * It states the three things the reader needs: that access is
+                   * paused, that nothing of the child's is lost, and that only the
+                   * parent can lift it - because SCRUM-80 makes withdrawal the
+                   * parent's decision and nothing in this console may override it.
+                   */
+                  <p className="m-0 mt-1.5 max-w-[62ch] text-[13.5px] leading-[1.55] text-nevo-near-black/70">
+                    {firstName}&rsquo;s lessons are paused while this stands, and
+                    everything they have done is kept. Only the parent who
+                    withdrew can restore it &ndash; there is nothing to change
+                    here.
+                  </p>
+                ) : null}
+                {student.consent ? (
+                  (() => {
+                    const line = consentDetailLine(student.consent);
+                    return line ? (
+                      <p className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+                        {line}
+                      </p>
+                    ) : (
+                      <p className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+                        Nevo does not hold a confirmation from a parent yet.
+                      </p>
+                    );
+                  })()
+                ) : null}
+              </div>
+              <ConsentPill consent={student.consent} place="record" />
+            </div>
+
+            {/*
+              * D07b's card action, and the reason this whole surface existed on
+              * paper only: `consentsApi.requestParentConsent` was typed with no
+              * caller anywhere, so nothing in Nevo could send a family the link -
+              * and the finished parent console had no way to be reached.
+              *
+              * Offered only where consent is not already confirmed. The frame's
+              * own words for the two cases, and it never claims delivery it has
+              * not been told about - the receipt's `deliveryStatus` decides.
+              */}
+            {mayRequestConsent(student.consent) && !maySend ? (
+              <p className="m-0 mt-4 max-w-[54ch] border-t border-nevo-near-black/8 pt-4 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+                {CANNOT_SEND_LINE}
               </p>
             ) : null}
-            {student.consent ? (
-              (() => {
-                const line = consentDetailLine(student.consent);
-                return line ? (
-                  <p className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-                    {line}
+            {mayRequestConsent(student.consent) && maySend ? (
+              <div className="mt-4 border-t border-nevo-near-black/8 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReminding(student.consent?.status === "pending");
+                    sendConsent(student.id);
+                  }}
+                  disabled={consentState.kind === "sending"}
+                  className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:cursor-wait disabled:opacity-55"
+                >
+                  {/*
+                    * ONE ACTION, NOT D07b'S TWO. The frame also draws "Resend
+                    * request" beside the reminder, but the server has one route
+                    * for both: every send issues a new link and revokes the one
+                    * before it (backend consent/repositories.py). Two buttons
+                    * would offer a choice that does not exist (raised, rule 10,
+                    * 24 Nov).
+                    */}
+                  {consentState.kind === "sending"
+                    ? reminding
+                      ? "Sending reminder…"
+                      : "Sending…"
+                    : student.consent?.status === "pending"
+                      ? "Send a gentle reminder"
+                      : "Send the consent request"}
+                </button>
+                {consentLine ? (
+                  <p
+                    role="status"
+                    className="m-0 mt-2 max-w-[54ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62"
+                  >
+                    {consentLine}
                   </p>
-                ) : (
-                  <p className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-                    Nevo does not hold a confirmation from a parent yet.
-                  </p>
-                );
-              })()
+                ) : null}
+              </div>
+            ) : null}
+
+            {/*
+              * D25's written route, beside the emailed one: some parents never
+              * reply to a link, and a signed paper form is consent too. Not for a
+              * withdrawn child - only the parent who withdrew can lift that - nor
+              * once consent is recorded. Any admin may record a form; the backend
+              * takes it from any school role.
+              */}
+            {mayRequestConsent(student.consent) ? (
+              <div className="mt-4 flex flex-wrap items-start gap-x-6 gap-y-2 border-t border-nevo-near-black/8 pt-4">
+                <Link
+                  href={withBack(`/admin/students/${student.id}/consent`, { href: here, label: name })}
+                  className="text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75"
+                >
+                  Record a signed paper form
+                </Link>
+                <ConsentFormDownload studentId={student.id} />
+              </div>
             ) : null}
           </div>
-          <ConsentPill consent={student.consent} place="record" />
-        </div>
-
-        {/*
-          * D07b's card action, and the reason this whole surface existed on
-          * paper only: `consentsApi.requestParentConsent` was typed with no
-          * caller anywhere, so nothing in Nevo could send a family the link -
-          * and the finished parent console had no way to be reached.
-          *
-          * Offered only where consent is not already confirmed. The frame's
-          * own words for the two cases, and it never claims delivery it has
-          * not been told about - the receipt's `deliveryStatus` decides.
-          */}
-        {mayRequestConsent(student.consent) && !maySend ? (
-          <p className="m-0 mt-4 max-w-[54ch] border-t border-nevo-near-black/8 pt-4 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-            {CANNOT_SEND_LINE}
-          </p>
-        ) : null}
-        {mayRequestConsent(student.consent) && maySend ? (
-          <div className="mt-4 border-t border-nevo-near-black/8 pt-4">
-            <button
-              type="button"
-              onClick={() => {
-                setReminding(student.consent?.status === "pending");
-                sendConsent(student.id);
-              }}
-              disabled={consentState.kind === "sending"}
-              className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:cursor-wait disabled:opacity-55"
-            >
-              {/*
-                * ONE ACTION, NOT D07b'S TWO. The frame also draws "Resend
-                * request" beside the reminder, but the server has one route
-                * for both: every send issues a new link and revokes the one
-                * before it (backend consent/repositories.py). Two buttons
-                * would offer a choice that does not exist (raised, rule 10,
-                * 24 Nov).
-                */}
-              {consentState.kind === "sending"
-                ? reminding
-                  ? "Sending reminder…"
-                  : "Sending…"
-                : student.consent?.status === "pending"
-                  ? "Send a gentle reminder"
-                  : "Send the consent request"}
-            </button>
-            {consentLine ? (
-              <p
-                role="status"
-                className="m-0 mt-2 max-w-[54ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62"
-              >
-                {consentLine}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
-        {/*
-          * D25's written route, beside the emailed one: some parents never
-          * reply to a link, and a signed paper form is consent too. Not for a
-          * withdrawn child - only the parent who withdrew can lift that - nor
-          * once consent is recorded. Any admin may record a form; the backend
-          * takes it from any school role.
-          */}
-        {mayRequestConsent(student.consent) ? (
-          <div className="mt-4 flex flex-wrap items-start gap-x-6 gap-y-2 border-t border-nevo-near-black/8 pt-4">
-            <Link
-              href={withBack(`/admin/students/${student.id}/consent`, { href: here, label: name })}
-              className="text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75"
-            >
-              Record a signed paper form
-            </Link>
-            <ConsentFormDownload studentId={student.id} />
-          </div>
-        ) : null}
-      </div>
+        </>
+      )}
 
       {/* D07c: a removed child's record has no guardians card (see
           `guardiansWithheld`). */}
