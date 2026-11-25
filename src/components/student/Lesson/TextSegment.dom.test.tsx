@@ -941,10 +941,43 @@ describe("the attention accommodation's reading groups", () => {
     expect(screen.queryByText("They use sunlight to do it.")).toBeNull();
   });
 
-  it("leaves a child without the accommodation the one passage", () => {
-    render(<TextSegment content={grouped()} density={null} />);
+  /*
+   * Hub, 24 Nov (rule 5): the engine marks `pauseAfter` for the attention
+   * accommodation AND for a sitting at lower depth, with or without it. A
+   * marked group is read by groups for any child; with none marked, the one
+   * passage, as before.
+   */
+  it("reads a child without the accommodation by group where the server marks a pause", () => {
+    const onReadingPause = vi.fn();
+    render(<TextSegment content={grouped()} density={null} onReadingPause={onReadingPause} />);
+
+    expect(screen.getByText("Plants make their own food.")).toBeInTheDocument();
+    expect(screen.queryByText("Oxygen is what they give out.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Tap to continue" }));
+    expect(onReadingPause).toHaveBeenCalledWith(1);
+  });
+
+  it("leaves a child without the accommodation the one passage where no group is marked", () => {
+    render(
+      <TextSegment
+        content={grouped({
+          readingGroups: [
+            { id: "g1", chunkIds: ["c1", "c2"], pauseAfter: false },
+            { id: "g2", chunkIds: ["c3"], pauseAfter: false },
+          ],
+        })}
+        density={null}
+      />,
+    );
 
     expect(screen.getByText("Oxygen is what they give out.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Tap to continue" })).toBeNull();
+  });
+
+  it("keeps Slower one chunk at a time where the server marks a pause, too", () => {
+    render(<TextSegment content={grouped()} density={DENSITY.SLOWER} />);
+
+    expect(screen.getByText("Plants make their own food.")).toBeInTheDocument();
+    expect(screen.queryByText("They use sunlight to do it.")).toBeNull();
   });
 });

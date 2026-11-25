@@ -222,9 +222,40 @@ describe("the pause at the end of the reading", () => {
   });
 });
 
+/*
+ * FOR EVERY CHILD THE ENGINE ASKS IT FOR (Hub, 24 Nov, rule 5): backend
+ * 3877924's `delivery_snapshot` sets the pause for the attention accommodation
+ * and for a sitting at lower depth (More support), with or without it. The
+ * pause was ours to gate on attention; it is the server's to ask.
+ */
 describe("a child without the accommodation", () => {
-  it("reads the passage whole and goes on at Next, whatever the server marks", () => {
-    render(<LessonPlayer lesson={lessonOf(segment("s1", "Numerators"), segment("s2", "Denominators"))} plan={{ ...ATTENTION, accommodations: { attention: false } }} />);
+  const NO_ATTENTION: AdaptationPlan = { ...ATTENTION, accommodations: { attention: false } };
+
+  it("gets the pause wherever the server marks a group", () => {
+    render(<LessonPlayer lesson={lessonOf(segment("s1", "Numerators"), segment("s2", "Denominators"))} plan={NO_ATTENTION} />);
+
+    // Read by the server's groups, with no Next while one is left unread.
+    expect(screen.queryByText("A third idea here.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+    tapOn();
+
+    expect(pauseHeading()).toBeInTheDocument();
+    keepGoing();
+    expect(screen.getByText("A third idea here.")).toBeInTheDocument();
+    next();
+
+    expect(pauseHeading()).toBeInTheDocument();
+    expect(screen.getByText(READING_PAUSE_END)).toBeInTheDocument();
+  });
+
+  it("reads the passage whole and goes on at Next where no group is marked", () => {
+    const UNMARKED = [
+      { id: "g1", chunkIds: ["c1", "c2"], pauseAfter: false },
+      { id: "g2", chunkIds: ["c3"], pauseAfter: false },
+    ];
+    render(<LessonPlayer lesson={lessonOf(segment("s1", "Numerators", { groups: UNMARKED }), segment("s2", "Denominators"))} plan={NO_ATTENTION} />);
+
+    expect(screen.getByText("A third idea here.")).toBeInTheDocument();
     next();
 
     expect(pauseHeading()).toBeNull();

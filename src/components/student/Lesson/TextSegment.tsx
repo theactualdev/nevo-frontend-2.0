@@ -108,15 +108,34 @@ export function readingShape(
    * a long body arriving whole there was reported read the moment it opened,
    * and the column's own scroll, the true reading, was kept quiet.
    */
-  const inParts =
-    (attention || chunkedForSlower) && chunks !== undefined && chunks.length > 1;
   /*
-   * THE ATTENTION ACCOMMODATION READS BY THE SERVER'S GROUPS (Lydia, 19 Nov,
-   * L7; 17e, kept): a part is one reading group, its chunks with 17c's silent
+   * THE SERVER'S GROUPS ARE READ WHERE THE ENGINE ASKED FOR A PAUSE (Hub, 24
+   * Nov, rule 5): a group marked `pauseAfter` in this part, for any child.
+   * The engine sets it on purpose - for the attention accommodation, and for
+   * a sitting at lower depth (More support), with or without it
+   * (`session_delivery.delivery_snapshot`, backend 3877924). Deciding here
+   * that only attention earns it was the app deciding. Where no group is
+   * marked, the one passage with its silent rules, as for most children.
+   * Only where the chunks shown are the ones the groups group.
+   */
+  const pauseAsked =
+    !chunkedForSlower &&
+    chunks !== undefined &&
+    chunks === content.readingChunks &&
+    (content.readingGroups ?? []).some((g) => g.pauseAfter);
+  const inParts =
+    (attention || chunkedForSlower || pauseAsked) &&
+    chunks !== undefined &&
+    chunks.length > 1;
+  /*
+   * READ BY THE SERVER'S GROUPS (Lydia, 19 Nov, L7; 17e, kept) under the
+   * attention accommodation, and wherever the engine asked for a pause
+   * (above): a part is one reading group, its chunks with 17c's silent
    * rules between, and a real pause only after a group the server marks
    * `pauseAfter` - not a pause after every chunk, 17e's rejected Candidate A.
    * NOT UNDER SLOWER: Slower is the child's own "less at a time" and stays one
-   * chunk at a time (L7); its pause card waits on the break frames (L12).
+   * chunk at a time (L7), and the child's own control outranks the engine
+   * (Lydia, 21 Oct). Its pause card waits on the break frames (L12).
    * Groups only where the chunks shown are the ones they group.
    */
   const groups =

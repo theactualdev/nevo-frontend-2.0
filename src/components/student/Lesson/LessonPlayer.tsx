@@ -2711,12 +2711,13 @@ export function LessonPlayer({
   };
   /**
    * WHERE 17E'S PAUSE FALLS AT THE END OF THIS PART'S READING, or null: the
-   * attention accommodation reading the server's groups (`readingShape`),
-   * the last of them marked `pauseAfter`, and its pause not yet answered on
-   * this part. Read when Next is pressed, so it is never stale.
+   * part read by the server's groups (`readingShape` - under the attention
+   * accommodation, or wherever the engine asked for a pause), the last of
+   * them marked `pauseAfter`, and its pause not yet answered on this part.
+   * Read when Next is pressed, so it is never stale.
    */
   const endPauseShape = (): { last: number } | null => {
-    if (!attentionOn || modality !== MODALITY.TEXT || !segment.text) return null;
+    if (modality !== MODALITY.TEXT || !segment.text) return null;
     if (endPausedOn.has(segment.id)) return null;
     const { groups } = readingShape(segment.text, effectiveDensity, attentionOn);
     const lastGroup = groups?.at(-1);
@@ -3629,8 +3630,20 @@ export function LessonPlayer({
    * its own. The child's own Slower chunks too, and keeps its chevrons: that
    * pace is theirs to leave.
    */
+  /*
+   * AND WHEREVER THE PART READS BY THE SERVER'S GROUPS because the engine
+   * asked for a pause (Hub, 24 Nov): "Tap to continue" is the way on there
+   * too, or Next would skip the groups left unread. Slower's own chunks are
+   * not groups, and keep their chevrons.
+   */
+  const groupedHere = segment.text
+    ? readingShape(segment.text, effectiveDensity, attentionOn).groups !==
+      undefined
+    : false;
   const partsLeft =
-    attentionOn && modality === MODALITY.TEXT && partsLeftOn === segment.id;
+    (attentionOn || groupedHere) &&
+    modality === MODALITY.TEXT &&
+    partsLeftOn === segment.id;
 
   /*
    * A COMPLETED LESSON WHOSE SITTING CANNOT BE FOUND (409
