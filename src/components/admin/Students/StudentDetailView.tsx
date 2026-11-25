@@ -125,6 +125,17 @@ export function StudentDetailView({
    * (SCRUM-327, 12 Nov dry run - a cold server takes seconds to answer).
    */
   const [guardiansAnswered, setGuardiansAnswered] = useState(false);
+  /**
+   * NO GUARDIANS CARD FOR THIS CHILD (Olayinka's TO-DO item 8, 24 Nov). The
+   * server keeps a removed child's guardians to itself: `parent-links` answers
+   * 404 for a deactivated student (`_require_student` skips them), so straight
+   * after Remove the card said "We couldn't read Binta's guardians just now"
+   * about a read that had not failed - it had been refused on purpose. D07c's
+   * deactivated record draws no guardians card at all, so it isn't drawn, and
+   * it isn't asked for. Any other 404 from that read means the same: this is
+   * not a child whose guardians the server will give - never a lost read.
+   */
+  const [guardiansWithheld, setGuardiansWithheld] = useState(false);
   const { stateFor: consentStateFor, send: sendConsent } = useConsentRequests();
   /**
    * Whether the last press was a REMINDER - a request already awaiting an
@@ -263,6 +274,13 @@ export function StudentDetailView({
         // exists to be shown to a parent, and the card below states real
         // absences in almost the same shape.
         setGuardiansFailed(false);
+        if (studentStatus(s.status) === "deactivated") {
+          setGuardians([]);
+          setGuardiansWithheld(true);
+          setGuardiansAnswered(true);
+          return;
+        }
+        setGuardiansWithheld(false);
         studentsApi
           .parentLinks(studentId)
           .then((links) => {
@@ -270,9 +288,10 @@ export function StudentDetailView({
             setGuardiansFailed(false);
             setGuardiansAnswered(true);
           })
-          .catch(() => {
+          .catch((err: unknown) => {
             setGuardians([]);
-            setGuardiansFailed(true);
+            if (isRecordGone(err)) setGuardiansWithheld(true);
+            else setGuardiansFailed(true);
             setGuardiansAnswered(true);
           });
       })
@@ -655,146 +674,152 @@ export function StudentDetailView({
         ) : null}
       </div>
 
-      <SectionLabel>Parent / guardian accounts</SectionLabel>
-      {guardianAdded ? (
-        <p
-          role="status"
-          className="m-0 mt-2 max-w-[60ch] text-[13.5px] leading-[1.55] text-nevo-navy"
-        >
-          {guardianAdded}
-        </p>
-      ) : null}
-      <div className={cn(CARD, "mt-2.5")}>
-        {guardiansFailed ? (
-          <ReadFailed
-            className="px-6 py-[22px]"
-            what={`${firstName}’s guardians`}
-            onRetry={load}
-          />
-        ) : !guardiansAnswered ? (
-          // Still asking. Nothing is claimed either way until it answers.
-          <div className="px-6 py-[22px]" aria-busy="true">
-            <div className="h-4 w-52 animate-pulse rounded bg-nevo-near-black/[0.07]" />
-            <div className="mt-2.5 h-3.5 w-72 max-w-full animate-pulse rounded bg-nevo-near-black/[0.05]" />
-          </div>
-        ) : guardians.length === 0 ? (
-          /*
-           * WAS A DEAD END: "No guardian on the record. A parent account is
-           * created automatically once a guardian confirms consent." - with
-           * nothing to press. Consent is a gate, so a child with nobody on
-           * record could never start. See `AddGuardianForm`.
-           */
-          <div className="px-6 py-[22px]">
-            <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
-              No guardian on the record
+      {/* D07c: a removed child's record has no guardians card (see
+          `guardiansWithheld`). */}
+      {guardiansWithheld ? null : (
+        <>
+          <SectionLabel>Parent / guardian accounts</SectionLabel>
+          {guardianAdded ? (
+            <p
+              role="status"
+              className="m-0 mt-2 max-w-[60ch] text-[13.5px] leading-[1.55] text-nevo-navy"
+            >
+              {guardianAdded}
             </p>
-            {/*
-              * "CAN'T START" ONLY WHERE IT IS TRUE (12 Nov dry run): it sat
-              * beside "Consent is recorded… Confirmed" on a child who learned
-              * all morning. A guardian row and a consent record are separate
-              * things on the server, so a confirmed child can have no row
-              * here. Said only while consent is outstanding (pending or not
-              * sent); a withdrawal has its own words on the consent card, and
-              * an unread consent claims nothing. One string, so text readers
-              * keep the space after the name.
-              */}
-            <p className="m-0 mt-1.5 max-w-[56ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-              {mayRequestConsent(student.consent)
-                ? `${firstName} can’t start until a parent or guardian gives permission. `
-                : null}
-              {maySend ? "Add one and we’ll send them the request." : CANNOT_SEND_LINE}
-            </p>
-            {/* No other route writes a guardian onto an existing student: the
-                request is the write. So the form follows the request's role. */}
-            {!maySend ? null : addingGuardian ? (
-              <div className="mt-4">
-                <AddGuardianForm
-                  studentId={student.id}
-                  studentFirstName={firstName}
-                  onCancel={() => setAddingGuardian(false)}
-                  onAdded={(receipt, name) => {
-                    setAddingGuardian(false);
-                    setGuardianAdded(
-                      consentRequestLine(
-                        { kind: "done", parentName: name, delivery: receipt.deliveryStatus },
-                        firstName,
-                      ),
-                    );
-                    load();
-                  }}
-                />
+          ) : null}
+          <div className={cn(CARD, "mt-2.5")}>
+            {guardiansFailed ? (
+              <ReadFailed
+                className="px-6 py-[22px]"
+                what={`${firstName}’s guardians`}
+                onRetry={load}
+              />
+            ) : !guardiansAnswered ? (
+              // Still asking. Nothing is claimed either way until it answers.
+              <div className="px-6 py-[22px]" aria-busy="true">
+                <div className="h-4 w-52 animate-pulse rounded bg-nevo-near-black/[0.07]" />
+                <div className="mt-2.5 h-3.5 w-72 max-w-full animate-pulse rounded bg-nevo-near-black/[0.05]" />
+              </div>
+            ) : guardians.length === 0 ? (
+              /*
+               * WAS A DEAD END: "No guardian on the record. A parent account is
+               * created automatically once a guardian confirms consent." - with
+               * nothing to press. Consent is a gate, so a child with nobody on
+               * record could never start. See `AddGuardianForm`.
+               */
+              <div className="px-6 py-[22px]">
+                <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
+                  No guardian on the record
+                </p>
+                {/*
+                  * "CAN'T START" ONLY WHERE IT IS TRUE (12 Nov dry run): it sat
+                  * beside "Consent is recorded… Confirmed" on a child who learned
+                  * all morning. A guardian row and a consent record are separate
+                  * things on the server, so a confirmed child can have no row
+                  * here. Said only while consent is outstanding (pending or not
+                  * sent); a withdrawal has its own words on the consent card, and
+                  * an unread consent claims nothing. One string, so text readers
+                  * keep the space after the name.
+                  */}
+                <p className="m-0 mt-1.5 max-w-[56ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+                  {mayRequestConsent(student.consent)
+                    ? `${firstName} can’t start until a parent or guardian gives permission. `
+                    : null}
+                  {maySend ? "Add one and we’ll send them the request." : CANNOT_SEND_LINE}
+                </p>
+                {/* No other route writes a guardian onto an existing student: the
+                    request is the write. So the form follows the request's role. */}
+                {!maySend ? null : addingGuardian ? (
+                  <div className="mt-4">
+                    <AddGuardianForm
+                      studentId={student.id}
+                      studentFirstName={firstName}
+                      onCancel={() => setAddingGuardian(false)}
+                      onAdded={(receipt, name) => {
+                        setAddingGuardian(false);
+                        setGuardianAdded(
+                          consentRequestLine(
+                            { kind: "done", parentName: name, delivery: receipt.deliveryStatus },
+                            firstName,
+                          ),
+                        );
+                        load();
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAddingGuardian(true)}
+                    disabled={writesPaused}
+                    className={cn(TEXT_ACTION, "mt-3")}
+                  >
+                    Add a parent or guardian
+                  </button>
+                )}
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => setAddingGuardian(true)}
-                disabled={writesPaused}
-                className={cn(TEXT_ACTION, "mt-3")}
-              >
-                Add a parent or guardian
-              </button>
+              guardians.map((g, i) => {
+                /*
+                  * D07b's line under a guardian with no account yet, while the
+                  * request is still out: the account is made when they consent,
+                  * so there is nothing for the school to do on this row. Never
+                  * where consent is recorded or withdrawn - there it would be
+                  * untrue - and never once the account exists.
+                  */
+                const accountComing = !g.accountCreated && mayRequestConsent(student.consent);
+                const who = g.parentName.trim();
+                return (
+                <div
+                  key={g.id}
+                  className={cn(
+                    "flex gap-3.5 px-6 py-[18px]",
+                    accountComing ? "items-start" : "items-center",
+                    i < guardians.length - 1 && ROW_DIVIDER,
+                  )}
+                >
+                  {/*
+                    * A GUARDIAN RECORDED AT ENROLMENT HAS NO NAME YET, on purpose:
+                    * enrolment stores the email alone and the parent gives their
+                    * own name at consent. So the address stands in for the name
+                    * rather than the row rendering blank.
+                    */}
+                  <Avatar name={g.parentName.trim() || g.parentContact} size={44} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-base font-semibold text-nevo-near-black">
+                      {g.parentName.trim() || g.parentContact}
+                    </div>
+                    <div className="truncate text-[13.5px] text-nevo-near-black/62">
+                      {g.parentName.trim()
+                        ? g.parentContact
+                        : "They’ll give their own name when they answer the request"}
+                    </div>
+                    {accountComing ? (
+                      <p className="m-0 mt-1 max-w-[60ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+                        {`A parent account${who ? ` for ${who}` : ""} is created automatically the moment consent is confirmed. Nothing to do here in the meantime – ${firstName}’s progress is safe.`}
+                      </p>
+                    ) : null}
+                  </div>
+                  <span
+                    className={cn(
+                      "inline-flex flex-none items-center gap-2 rounded-full px-3 py-1 text-[12.5px] font-semibold",
+                      g.accountCreated
+                        ? "bg-nevo-navy/12 text-nevo-navy"
+                        : "bg-nevo-near-black/[0.07] text-nevo-near-black/60",
+                    )}
+                  >
+                    {g.accountCreated ? (
+                      <span aria-hidden="true" className="size-[7px] rounded-full bg-nevo-navy" />
+                    ) : null}
+                    {g.accountCreated ? "Account active" : "No account yet"}
+                  </span>
+                </div>
+                );
+              })
             )}
           </div>
-        ) : (
-          guardians.map((g, i) => {
-            /*
-              * D07b's line under a guardian with no account yet, while the
-              * request is still out: the account is made when they consent,
-              * so there is nothing for the school to do on this row. Never
-              * where consent is recorded or withdrawn - there it would be
-              * untrue - and never once the account exists.
-              */
-            const accountComing = !g.accountCreated && mayRequestConsent(student.consent);
-            const who = g.parentName.trim();
-            return (
-            <div
-              key={g.id}
-              className={cn(
-                "flex gap-3.5 px-6 py-[18px]",
-                accountComing ? "items-start" : "items-center",
-                i < guardians.length - 1 && ROW_DIVIDER,
-              )}
-            >
-              {/*
-                * A GUARDIAN RECORDED AT ENROLMENT HAS NO NAME YET, on purpose:
-                * enrolment stores the email alone and the parent gives their
-                * own name at consent. So the address stands in for the name
-                * rather than the row rendering blank.
-                */}
-              <Avatar name={g.parentName.trim() || g.parentContact} size={44} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-base font-semibold text-nevo-near-black">
-                  {g.parentName.trim() || g.parentContact}
-                </div>
-                <div className="truncate text-[13.5px] text-nevo-near-black/62">
-                  {g.parentName.trim()
-                    ? g.parentContact
-                    : "They’ll give their own name when they answer the request"}
-                </div>
-                {accountComing ? (
-                  <p className="m-0 mt-1 max-w-[60ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-                    {`A parent account${who ? ` for ${who}` : ""} is created automatically the moment consent is confirmed. Nothing to do here in the meantime – ${firstName}’s progress is safe.`}
-                  </p>
-                ) : null}
-              </div>
-              <span
-                className={cn(
-                  "inline-flex flex-none items-center gap-2 rounded-full px-3 py-1 text-[12.5px] font-semibold",
-                  g.accountCreated
-                    ? "bg-nevo-navy/12 text-nevo-navy"
-                    : "bg-nevo-near-black/[0.07] text-nevo-near-black/60",
-                )}
-              >
-                {g.accountCreated ? (
-                  <span aria-hidden="true" className="size-[7px] rounded-full bg-nevo-navy" />
-                ) : null}
-                {g.accountCreated ? "Account active" : "No account yet"}
-              </span>
-            </div>
-            );
-          })
-        )}
-      </div>
+        </>
+      )}
 
       {/* THE ACTIONS FOOT. Deactivate is the only action on an active student;
           erase only appears once they are already deactivated. */}
