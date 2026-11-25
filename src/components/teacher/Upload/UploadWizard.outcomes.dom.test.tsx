@@ -913,6 +913,18 @@ describe("where a unit's reading is drawn", () => {
     expect(scroll).toContainElement(screen.getByDisplayValue("Rivers"));
   });
 
+  // C07f's PARTIAL card as drawn (Hub, 25 Nov): its page icon, no rule down the side, 600 at most.
+  it("draws the card C07f draws", () => {
+    stagedState({ ...READY, failedPages: [3] });
+    startUnitUpload();
+
+    const card = screen.getByRole("button", { name: "Retry page 3" }).closest("[class*='rounded-[12px]']")!;
+
+    expect(card).toHaveClass("max-w-[600px]", "bg-nevo-violet/14");
+    expect(card.className).not.toMatch(/border-l/);
+    expect(card.querySelector("svg[aria-hidden='true']")).not.toBeNull();
+  });
+
   // Backlog item 38: C07f's words, where the contract can make them true.
   it("says it in C07f's words, without claiming how much of the file was read", () => {
     stagedState({ ...READY, failedPages: [15, 16] });
