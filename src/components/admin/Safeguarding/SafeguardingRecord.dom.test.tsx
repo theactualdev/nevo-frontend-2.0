@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { ApiError } from "@/lib/api/client";
 import type { SafetyEvent } from "@/lib/api/safety";
 import type { LearningSupportHolders } from "@/lib/api/learningSupport";
 
@@ -74,10 +75,44 @@ describe("the safeguarding line on a profile", () => {
     expect(container.textContent).toBe("");
   });
 
-  it("is absent when the read is refused", async () => {
-    events.mockRejectedValue(new Error("403"));
+  it("is absent when the server refuses the read - the record is not this viewer's", async () => {
+    events.mockRejectedValue(new ApiError(403, "Forbidden"));
     const { container } = render(<SafeguardingRecord studentId="s-amara" firstName="Amara" holders={HOLDS} />);
     await waitFor(() => expect(events).toHaveBeenCalled());
     expect(container.textContent).toBe("");
+  });
+});
+
+/**
+ * TO-DO 13 (Hub, 25 Nov): a read that FAILED drew nothing, and on this line
+ * nothing reads as "not flagged" - an untrue state about a child.
+ */
+describe("the safeguarding line when its read fails", () => {
+  it("says the read failed - never silence - and reads again on Try again", async () => {
+    events.mockRejectedValueOnce(new ApiError(500, "down")).mockResolvedValueOnce([event({})]);
+    const { container } = render(<SafeguardingRecord studentId="s-amara" firstName="Amara" holders={HOLDS} />);
+
+    await waitFor(() =>
+      expect(container.textContent).toMatch(/couldn.t read Amara.s safeguarding record just now/),
+    );
+    expect(container.textContent).toMatch(/Safeguarding/);
+    expect(container.textContent).toMatch(/not a record that it.s empty/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(
+      await screen.findByText(
+        "A safeguarding concern was recorded for Amara on 18 October 2026. What Amara asked is never shown here.",
+      ),
+    ).toBeInTheDocument();
+    expect(events).toHaveBeenCalledTimes(2);
+  });
+
+  it("still asks when who holds Learning Support could not be read", async () => {
+    events.mockResolvedValue([event({})]);
+    render(<SafeguardingRecord studentId="s-amara" firstName="Amara" holders={null} />);
+
+    expect(
+      await screen.findByText(/A safeguarding concern was recorded for Amara/),
+    ).toBeInTheDocument();
   });
 });
