@@ -724,7 +724,10 @@ export function LearnerProfileView({
         *   adaptations the contract does not carry.
         * - Only the weeks the server sends are drawn; it leaves out a week
         *   with no adaptation, so a quiet week shows as a gap in the dates.
-        * - The empty line is ours until Lydia words it.
+        * - The empty line is the Hub's interim words until Lydia's (L82),
+        *   in the backend's own two action words. It is said only when the
+        *   server sent no change at all - never when it sent changes this
+        *   console has no words for, which would be untrue.
         */}
       <SectionLabel>What changed, and when</SectionLabel>
       <p className="m-0 mt-2.5 max-w-[580px] text-[13px] leading-[1.6] text-nevo-near-black/60">
@@ -769,7 +772,13 @@ export function LearnerProfileView({
                         className="block w-full rounded-t-[6px] bg-nevo-violet"
                         style={{ height: `${b.height}px` }}
                       />
-                      <span aria-hidden="true" className="text-[11px] text-nevo-near-black/55">
+                      {/* Two lines' height whether the date wraps or not, so
+                          every bar stands on the same baseline (review, 25 Nov:
+                          a wrapped "31 Aug" sat its bar 17px lower at 768). */}
+                      <span
+                        aria-hidden="true"
+                        className="flex h-[28px] items-start justify-center text-center text-[11px] leading-[1.25] text-nevo-near-black/55"
+                      >
                         {b.label}
                       </span>
                     </li>
@@ -795,11 +804,11 @@ export function LearnerProfileView({
                   </li>
                 ))}
               </ol>
-            ) : (
+            ) : history.history.changes.length === 0 ? (
               <p className={cn(CARD, "m-0 mt-3 px-6 py-5 text-sm text-nevo-near-black/62")}>
-                {`No change to what Nevo does for ${firstName} in the last ${HISTORY_WEEKS} weeks.`}
+                {`Nevo hasn’t started or stopped any support for ${firstName} in the last ${HISTORY_WEEKS} weeks.`}
               </p>
-            );
+            ) : null;
           })()}
         </div>
       )}

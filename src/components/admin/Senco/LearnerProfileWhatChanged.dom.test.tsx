@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { ApiError } from "@/lib/api/client";
+import { LEARNING_SUPPORT_REQUIRED } from "@/lib/api/learningSupport";
 import { LearnerProfileView } from "./LearnerProfileView";
 import { changeRows, weekBars } from "./useAccommodationHistory";
 
@@ -168,13 +169,37 @@ describe("what changed, and when", () => {
 });
 
 describe("the nothing and the failures", () => {
-  it("says nothing changed in the window when the record is empty", async () => {
+  it("says nothing started or stopped in the window when the record is empty", async () => {
     h.history.mockResolvedValue({ studentId: "s1", changes: [], adaptationsPerWeek: [], series: [] });
     const { container } = render(<LearnerProfileView studentId="s1" />);
     const el = await section(container);
 
-    expect(visibleText(el)).toMatch(/No change to what Nevo does for Amara in the last 12 weeks\./);
+    expect(visibleText(el)).toMatch(
+      /Nevo hasn.t started or stopped any support for Amara in the last 12 weeks\./,
+    );
     expect(visibleText(el)).not.toMatch(/Adaptations per week/);
+  });
+
+  it("says the same under a chart of adaptations, which that line does not contradict", async () => {
+    h.history.mockResolvedValue({ ...RESPONSE, changes: [] });
+    const { container } = render(<LearnerProfileView studentId="s1" />);
+    const el = await section(container);
+
+    expect(visibleText(el)).toMatch(/Adaptations per week/);
+    expect(visibleText(el)).toMatch(/hasn.t started or stopped any support for Amara/);
+    expect(visibleText(el)).not.toMatch(/No change/);
+  });
+
+  it("never says nothing changed when every change it was sent is one it has no words for", async () => {
+    h.history.mockResolvedValue({
+      ...RESPONSE,
+      changes: [{ accommodation: "sensory", action: "added", occurredAt: "2026-09-01T10:00:00Z" }],
+    });
+    const { container } = render(<LearnerProfileView studentId="s1" />);
+    const el = await section(container);
+
+    expect(visibleText(el)).not.toMatch(/hasn.t started or stopped/);
+    expect(visibleText(el)).not.toMatch(/sensory/);
   });
 
   it("says a lost read is lost, and reads again on Try again", async () => {
@@ -192,14 +217,17 @@ describe("the nothing and the failures", () => {
   });
 
   it("names Learning Support when the route is refused for want of it", async () => {
+    // The code the backend sends (api/learning_support.py), as the client holds it.
     h.history.mockRejectedValue(
-      new ApiError(403, "Forbidden", { detail: { code: "learning_support_required" } }),
+      new ApiError(403, "Forbidden", { detail: { code: LEARNING_SUPPORT_REQUIRED } }),
     );
     const { container } = render(<LearnerProfileView studentId="s1" />);
 
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/You don.t have access to Amara\s?.s record of changes/),
     );
+    // Any 403 says the line above; only this refusal names the way to it.
+    expect(visibleText(container)).toMatch(/It needs Learning Support/);
     expect(visibleText(container)).not.toMatch(/couldn.t read Amara\s?.s record of changes/);
   });
 });
