@@ -30,6 +30,18 @@ describe("openParentRequests", () => {
     await expect(openParentRequests()).resolves.toBe(0);
   });
 
+  it("is unknown past its page cap with pages still to read - never a partial count", async () => {
+    // A log far longer than any school's: every page full, the total never reached.
+    rightsLog.mockImplementation(async (q: { offset: number }) => ({
+      entries: rows(100, 1),
+      total: 1_000_000,
+      limit: 100,
+      offset: q.offset,
+    }));
+    await expect(openParentRequests()).resolves.toBeNull();
+    expect(rightsLog).toHaveBeenCalledTimes(20);
+  });
+
   it("is unknown when any page fails - never the pages it managed", async () => {
     rightsLog
       .mockResolvedValueOnce({ entries: rows(100, 7), total: 130, limit: 100, offset: 0 })
