@@ -3559,6 +3559,8 @@ export function LessonPlayer({
         onDone={() => exitTo(LESSONS_HREF)}
         heading={WITHDRAWN_ENDING.heading}
         note={WITHDRAWN_ENDING.note}
+        // No Ask Nevo over a lesson withdrawn for safety - see `LessonComplete`.
+        askNevo={false}
       />
     );
   }
