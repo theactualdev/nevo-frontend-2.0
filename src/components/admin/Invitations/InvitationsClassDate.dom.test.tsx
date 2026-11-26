@@ -103,7 +103,7 @@ describe("D19's Class and Invited columns", () => {
     ]);
     const { container } = render(<InvitationsView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/In 2A only/));
-    fireEvent.change(screen.getByLabelText("Filter by class"), { target: { value: "c-3b" } });
+    await chooseOption(screen.getByLabelText("Filter by class"), "JSS 3B");
     await waitFor(() => expect(visibleText(container)).not.toMatch(/In 2A only/));
     expect(visibleText(container)).toMatch(/In 2A and 3B/);
   });

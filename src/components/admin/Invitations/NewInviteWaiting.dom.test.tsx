@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ApiError } from "@/lib/api/client";
+import { chooseOption } from "@/test/nevoSelect";
 import { NewInviteModal } from "./NewInviteModal";
 
 /**
@@ -44,7 +45,7 @@ const send = async () => {
   fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Folake" } });
   fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Adeyemi" } });
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: "f@school.edu.ng" } });
-  fireEvent.change(screen.getByLabelText("Class"), { target: { value: "c1" } });
+  await chooseOption(screen.getByLabelText("Class"), "JSS 2A");
   fireEvent.click(await screen.findByRole("checkbox", { name: "Mathematics" }));
   fireEvent.click(screen.getByRole("button", { name: "Send invite" }));
 };

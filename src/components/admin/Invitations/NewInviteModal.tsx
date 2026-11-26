@@ -15,6 +15,7 @@ import {
 } from "@/lib/api/invites";
 import { classTakes, subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
 import { ReadFailed } from "../ReadFailed";
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import { reissueRefusal, reissuedLine } from "./reissueCopy";
 import { cn } from "@/lib/utils";
 import { deliveryLine } from "./deliveryCopy";
@@ -121,10 +122,10 @@ export function NewInviteModal({
    * is one of the "N things still to fill in", and Send waits for none. No
    * "(optional)" anywhere (SCRUM-207).
    *
-   * BUILT WITHOUT D19's "Other" ("{name} will be added to {class}"): the
-   * invitation names a SCHOOL subject id, so Other would first have to add a
-   * new subject to the class - a class write the admin hasn't confirmed, made
-   * before the invite is even sent. Raised to Lydia.
+   * WITHOUT D19's "Other" ("{name} will be added to {class}"), as Lydia ruled
+   * (L54, 25 Nov: "Drop it until the subject is added on the class itself").
+   * The invitation names a SCHOOL subject id, so Other would first have to add
+   * a new subject to the class - a write nobody sending an invite expects.
    */
   const openRows = assigns.filter((a) => !a.classId || a.subjectIds.length === 0).length;
   const missing =
@@ -547,21 +548,18 @@ export function NewInviteModal({
                   <label htmlFor={`invite-class-${a.key}`} className="sr-only">
                     Class
                   </label>
-                  <select
+                  {/* The house dropdown, never a native select: the
+                      admin console's guard (noNativeSelect.test.ts). */}
+                  <NevoSelect
                     id={`invite-class-${a.key}`}
                     value={a.classId}
-                    onChange={(e) => setAssign(a.key, { classId: e.target.value, subjectIds: [] })}
-                    className={cn(FIELD, "h-[44px] cursor-pointer")}
-                  >
-                    <option value="">Select a class</option>
-                    {liveClasses
+                    onValueChange={(v) => setAssign(a.key, { classId: v, subjectIds: [] })}
+                    placeholder="Select a class"
+                    options={liveClasses
                       .filter((c) => c.id === a.classId || !usedElsewhere.has(c.id))
-                      .map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                  </select>
+                      .map((c) => ({ value: c.id, label: c.name }))}
+                    triggerClassName={cn(FIELD, "h-[44px]")}
+                  />
                   {klass ? (
                     <div role="group" aria-label={`Subjects ${klass.name} offers`} className="mt-2.5">
                       <p className="m-0 text-[12px] text-nevo-near-black/60">
