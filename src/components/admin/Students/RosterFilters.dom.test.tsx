@@ -105,6 +105,10 @@ describe("the consent filter", () => {
       "Pending",
       "Not sent",
       "Withdrawn",
+      // L24 (Lydia, 25 Nov): how a confirmed consent was given, as the tallies
+      // count it - each matches the rows its tally counts.
+      "Written",
+      "Digital",
     ]);
   });
 });
