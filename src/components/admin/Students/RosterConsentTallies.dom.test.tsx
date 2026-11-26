@@ -79,25 +79,27 @@ const ROSTER = () => [
 ];
 
 describe("D25's tallies on the roster", () => {
-  it("count cleared, outstanding, and how each consent was given, over the enrolled", async () => {
+  // L53 (Lydia, 25 Nov): withdrawn is counted apart from outstanding - only
+  // the parent can lift it, so it is not something the school can chase.
+  it("count cleared, outstanding, withdrawn apart, and how each consent was given, over the enrolled", async () => {
     list.mockResolvedValue(ROSTER());
     const { container } = render(<StudentsView />);
     await waitFor(() => expect(container.querySelector("[data-consent-tallies]")).not.toBeNull());
     const tallies = container.querySelector("[data-consent-tallies]") as HTMLElement;
     expect(visibleText(tallies)).toBe(
-      "4 cleared 3 outstanding 2 digital · 1 written how it was given",
+      "4 cleared 2 outstanding 1 withdrawn 2 digital · 1 written how it was given",
     );
   });
 });
 
 describe("the outstanding list", () => {
-  it("is a filter on this same view, school-wide", async () => {
+  it("is a filter on this same view, school-wide - and never a withdrawn consent (L53)", async () => {
     list.mockResolvedValue(ROSTER());
     const { container } = render(<StudentsView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Amara Obi/));
     await chooseOption(screen.getByLabelText("Filter by consent"), "Outstanding");
     const text = visibleText(container);
-    for (const n of ["Efe Okon", "Femi Lade", "Gbemi Ola"]) expect(text).toMatch(n);
-    for (const n of ["Amara Obi", "Bayo Ade", "Chidi Eze", "Dara Demo"]) expect(text).not.toMatch(n);
+    for (const n of ["Efe Okon", "Femi Lade"]) expect(text).toMatch(n);
+    for (const n of ["Amara Obi", "Bayo Ade", "Chidi Eze", "Dara Demo", "Gbemi Ola"]) expect(text).not.toMatch(n);
   });
 });
