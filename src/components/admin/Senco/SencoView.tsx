@@ -152,10 +152,11 @@ export function SencoView() {
   /*
    * Marking a flag as seen needs it too (13 Oct): only a holder can say
    * learning support saw it. Known up front from the holders read, or learned
-   * from the refusal itself when that read did not answer.
+   * from a refusal itself when that read did not answer - a refused "Mark as
+   * seen", or the Active support read refused for the role.
    */
-  const [ackRefused, setAckRefused] = useState(false);
-  const lacksRole = ls?.viewerHoldsIt === false || ackRefused;
+  const [roleRefused, setRoleRefused] = useState(false);
+  const lacksRole = ls?.viewerHoldsIt === false || roleRefused;
   const [flags, setFlags] = useState<AttentionFlag[]>([]);
   /** Teachers' concerns: null until read, and a failed read is its own state. */
   const [concerns, setConcerns] = useState<Escalation[] | null>(null);
@@ -222,24 +223,64 @@ export function SencoView() {
     number
   > | null>(null);
   /*
-   * ACTIVE SUPPORT per learner (backlog 40). Null until read; "failed" says
-   * so above the list, because a learner with no line would otherwise look
-   * the same as one Nevo adjusts nothing for. A refusal is the role, which
-   * this screen already says - no line of its own.
+   * ACTIVE SUPPORT per learner (backlog 40), and how its read went - its own
+   * state, so each outcome draws what it draws on purpose (Hub, 26 Nov):
+   *  - "ok": a line on each learner Nevo adjusts something for;
+   *  - "failed": said once above the list, because a learner with no line
+   *    would otherwise look the same as one Nevo adjusts nothing for;
+   *  - "refused": the server's 403. For this read that is the role
+   *    (`learning_support_role_required`, backend 608b880): what Nevo adjusts
+   *    for a named child is Learning Support's to see. The nothing-state - no
+   *    line on any row, no failure line, no retry that could not succeed -
+   *    and, as a refused "Mark as seen" does, it tells the screen the role is
+   *    missing when the holders read did not answer.
+   * It used to be one boolean, and a refusal drew nothing only because any
+   * 403 cleared it (its test sent a code the server never sends).
    */
   const [support, setSupport] = useState<Record<string, AccommodationType[]> | null>(null);
-  const [supportFailed, setSupportFailed] = useState(false);
+  const [supportRead, setSupportRead] = useState<"pending" | "ok" | "failed" | "refused">(
+    "pending",
+  );
   const readSupport = useCallback(() => {
     // The failure line clears when a read answers, not when one starts.
     accommodationsApi
       .listActive()
       .then((rows) => {
         setSupport(Object.fromEntries(rows.map((r) => [r.studentId, r.active])));
-        setSupportFailed(false);
+        setSupportRead("ok");
       })
       .catch((err: unknown) => {
         setSupport(null);
-        setSupportFailed(failureKind(err) !== "denied");
+        if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setRoleRefused(true);
+        setSupportRead(failureKind(err) === "denied" ? "refused" : "failed");
+      });
+  }, []);
+  /*
+   * ADAPTATIONS THIS WEEK, unread: said above the list, as Active support's
+   * failure is (Hub, 26 Nov) - a row with no figure must not read as a quiet
+   * week. A refusal is the viewer's scope, which no retry changes, so it draws
+   * nothing; and the cap (more of the week than we page) is not a failure
+   * either, so it stays the silent nothing `collectAdaptationWindow` returns.
+   */
+  const [adaptationsFailed, setAdaptationsFailed] = useState(false);
+  const readAdaptations = useCallback(() => {
+    // Its own read, its own failure. This pages the whole week's log, so it is
+    // the slowest thing on the screen and must never hold the profiles behind
+    // it - the list renders, and the figures appear when they are trustworthy.
+    // The failure line clears when a read answers, not when one starts.
+    const from = windowStart(Date.now());
+    collectAdaptationWindow((offset) =>
+      schoolIntelligenceApi
+        .adaptationLog({ dateFrom: from, limit: 100, offset })
+        .then((log) => ({ events: log.events, total: log.total })),
+    )
+      .then((w) => {
+        setAdaptationsWeek(w.complete ? w.perLearner : null);
+        setAdaptationsFailed("error" in w && failureKind(w.error) !== "denied");
+      })
+      .catch((err: unknown) => {
+        setAdaptationsWeek(null);
+        setAdaptationsFailed(failureKind(err) !== "denied");
       });
   }, []);
 
@@ -266,19 +307,7 @@ export function SencoView() {
     // must not hold Nevo's flags or the profiles behind it.
     loadConcerns();
     readSupport();
-    /*
-     * Its own read, its own failure. This pages the whole week's log, so it is
-     * the slowest thing on the screen and must never hold the profiles behind
-     * it - the list renders, and the figures appear when they are trustworthy.
-     */
-    const from = windowStart(Date.now());
-    collectAdaptationWindow((offset) =>
-      schoolIntelligenceApi
-        .adaptationLog({ dateFrom: from, limit: 100, offset })
-        .then((log) => ({ events: log.events, total: log.total })),
-    )
-      .then((w) => setAdaptationsWeek(w.complete ? w.perLearner : null))
-      .catch(() => setAdaptationsWeek(null));
+    readAdaptations();
 
     /*
      * EVERY FLAG, NOT THE FIRST FIFTY. This read `getFlags({ limit: 50 })` and
@@ -354,7 +383,7 @@ export function SencoView() {
         });
       })
       .catch((err: unknown) => setPhase(failureKind(err)));
-  }, [loadConcerns, readSupport]);
+  }, [loadConcerns, readSupport, readAdaptations]);
 
   useEffect(() => {
     load();
@@ -374,6 +403,19 @@ export function SencoView() {
   /** Every concern was read, so a count is a total and "none" is true. */
   const concernsComplete = concerns !== null && concernsRead;
   const concernsClear = concernsComplete && openConcerns.length === 0;
+  /*
+   * WHOSE LISTS THESE ARE (Hub, 26 Nov). The server answers a viewer without
+   * Learning Support with less than the school's lists, and says nothing in
+   * either response about having narrowed them (backend 608b880):
+   *  - flags narrow to the classes they teach, when they also teach;
+   *  - teachers' concerns narrow to the ones sent to them or about their own
+   *    classes.
+   * So "Nothing needs your attention right now" and a flag or concern TOTAL -
+   * claims about the school - are made only to a holder, whose lists are not
+   * narrowed. Anyone else, or anyone whose role isn't known yet, gets what was
+   * read as a floor, and no all-clear.
+   */
+  const listsAreTheSchools = ls?.viewerHoldsIt === true;
 
   /** The year groups this school's classes actually use, in enum order. */
   const years = useMemo(() => {
@@ -443,7 +485,7 @@ export function SencoView() {
         ),
       )
       .catch((err: unknown) => {
-        if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setAckRefused(true);
+        if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setRoleRefused(true);
         else setAckFailed(true);
       })
       .finally(() => setAcking(null));
@@ -462,7 +504,7 @@ export function SencoView() {
         ),
       )
       .catch((err: unknown) => {
-        if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setAckRefused(true);
+        if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setRoleRefused(true);
         else setAckFailed(true);
       })
       .finally(() => setAcking(null));
@@ -581,7 +623,7 @@ export function SencoView() {
           ) : null}
           <TeacherConcerns
             open={openConcerns}
-            complete={concernsComplete}
+            complete={concernsComplete && listsAreTheSchools}
             failed={concernsFailed}
             studentName={(e) => byId.get(e.studentId)?.name ?? e.studentFirstName?.trim() ?? "A student"}
             describeClass={describeClass}
@@ -609,8 +651,9 @@ export function SencoView() {
             </div>
           ) : openFlags.length === 0 ? (
             // The all-clear waits for the concerns too: open ones are shown
-            // above, and a failed or partial read is never "nothing".
-            !concernsClear ? null : (
+            // above, and a failed or partial read is never "nothing". Nor is
+            // a narrowed one (`listsAreTheSchools`).
+            !concernsClear || !listsAreTheSchools ? null : (
             <div className={cn(CARD, "mt-6 px-6 py-14 text-center")}>
               {/* The frame's mark, which every sibling admin empty state has
                   and this one did not - so the calmest screen in the console
@@ -649,8 +692,9 @@ export function SencoView() {
               <div className="mt-7 flex items-center justify-between gap-4">
                 <SectionHeading>Flagged by Nevo</SectionHeading>
                 <span className="text-[13px] text-nevo-near-black/50">
-                  {/* A floor is never shown as a total. */}
-                  {flagsComplete
+                  {/* A floor is never shown as a total - and a narrowed
+                      list is a floor (`listsAreTheSchools`). */}
+                  {flagsComplete && listsAreTheSchools
                     ? `${openFlags.length} to look at`
                     : `At least ${openFlags.length} to look at`}
                 </span>
@@ -777,12 +821,23 @@ export function SencoView() {
             </div>
 
             {/* ACTIVE SUPPORT unread: said once, above the rows, so a learner
-                with no line isn't read as one Nevo adjusts nothing for. */}
-            {supportFailed ? (
+                with no line isn't read as one Nevo adjusts nothing for. A
+                refusal says nothing here (`supportRead`). */}
+            {supportRead === "failed" ? (
               <ReadFailed
                 className="mt-4"
                 what="what Nevo is adjusting for each learner"
                 onRetry={readSupport}
+              />
+            ) : null}
+            {/* ADAPTATIONS THIS WEEK unread, likewise - to a holder only, the
+                one viewer shown the figure (SCRUM-247). "The adaptation log"
+                is the name D21 and its no-access line already use. */}
+            {adaptationsFailed && ls?.viewerHoldsIt === true ? (
+              <ReadFailed
+                className="mt-4"
+                what="the adaptation log"
+                onRetry={readAdaptations}
               />
             ) : null}
 
@@ -862,7 +917,7 @@ export function SencoView() {
                           does, never a word about the child. Only from a
                           read that answered; an enum value this console
                           hasn't been taught is skipped, never shown raw. */}
-                      {support && (support[s.id] ?? []).some((a) => accommodationCopy(a)) ? (
+                      {supportRead === "ok" && support && (support[s.id] ?? []).some((a) => accommodationCopy(a)) ? (
                         <ul data-active-support className="m-0 mt-1 list-none p-0 text-[13px] leading-[1.5] text-nevo-near-black/66">
                           {(support[s.id] ?? []).map((a) =>
                             accommodationCopy(a) ? <li key={a}>{accommodationCopy(a)}</li> : null,
