@@ -398,3 +398,97 @@ describe("a child who can't or won't use the camera (P5)", () => {
     ).toBeVisible();
   });
 });
+
+/**
+ * L59 (Lydia, 25 Nov): typed paper work, where the check's steps can be
+ * typed. Her words; "Check", the wait's line and "Send again" are the ones
+ * every check already uses.
+ */
+describe("typing what was worked out, with no camera (L59)", () => {
+  const STEPS = [
+    { stepId: "st-1", prompt: "What is the common denominator?" },
+    { stepId: "st-2", prompt: "What is the sum?" },
+  ];
+  const typedWith = (onSubmit = vi.fn().mockResolvedValue("matched")) => ({
+    typed: { steps: STEPS, onSubmit },
+    onSubmit,
+  });
+
+  it("offers it where the camera is not used: \"No camera? You can type what you worked out instead.\"", () => {
+    const { typed } = typedWith();
+    mount({ typed });
+
+    fireEvent.click(button("I can't use a camera right now"));
+
+    expect(screen.getByRole("heading", { name: "No camera?" })).toBeVisible();
+    expect(screen.getByText("You can type what you worked out instead.")).toBeVisible();
+    expect(button("Keep going")).toBeVisible();
+    expect(button("Try the camera again")).toBeVisible();
+  });
+
+  it("keeps P5 as it was where nothing can be typed", () => {
+    mount({ typed: { steps: [], onSubmit: vi.fn() } });
+
+    fireEvent.click(button("I can't use a camera right now"));
+
+    expect(screen.getByRole("heading", { name: "No problem" })).toBeVisible();
+    expect(screen.queryByText(/type what you worked out/i)).toBeNull();
+  });
+
+  it("asks for each step under its own prompt, and sends them all, in order, once each is answered", async () => {
+    const { typed, onSubmit } = typedWith();
+    const { onContinue } = mount({ typed });
+    fireEvent.click(button("I can't use a camera right now"));
+    fireEvent.click(button("Type what you worked out"));
+
+    expect(screen.getByRole("heading", { name: "Type what you worked out." })).toBeVisible();
+    expect(button("Check")).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("What is the common denominator?"), { target: { value: " 4 " } });
+    expect(button("Check")).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("What is the sum?"), { target: { value: "3/4" } });
+    fireEvent.click(button("Check"));
+
+    await waitFor(() => expect(onContinue).toHaveBeenCalledWith("typed"));
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith(
+      [
+        { stepId: "st-1", answer: "4" },
+        { stepId: "st-2", answer: "3/4" },
+      ],
+      expect.any(String),
+    );
+  });
+
+  it("hands back what the server said when the steps need work, and says nothing of its own", async () => {
+    const { typed } = typedWith(vi.fn().mockResolvedValue("needs_work"));
+    const { onContinue } = mount({ typed });
+    fireEvent.click(button("I can't use a camera right now"));
+    fireEvent.click(button("Type what you worked out"));
+    fireEvent.change(screen.getByLabelText("What is the common denominator?"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("What is the sum?"), { target: { value: "2/4" } });
+
+    fireEvent.click(button("Check"));
+
+    await waitFor(() => expect(onContinue).toHaveBeenCalledWith("typed_needs_work"));
+    expect(screen.queryByText(/wrong|not quite|try again/i)).toBeNull();
+  });
+
+  it("offers Send again only when the send fails, and sends the same submission again", async () => {
+    const onSubmit = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Network"))
+      .mockResolvedValue("matched");
+    const { onContinue } = mount({ typed: { steps: STEPS, onSubmit } });
+    fireEvent.click(button("I can't use a camera right now"));
+    fireEvent.click(button("Type what you worked out"));
+    fireEvent.change(screen.getByLabelText("What is the common denominator?"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("What is the sum?"), { target: { value: "3/4" } });
+    expect(screen.queryByRole("button", { name: "Send again" })).toBeNull();
+
+    fireEvent.click(button("Check"));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Send again" }));
+    await waitFor(() => expect(onContinue).toHaveBeenCalledWith("typed"));
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+    expect(onSubmit.mock.calls[1][1]).toBe(onSubmit.mock.calls[0][1]);
+  });
+});

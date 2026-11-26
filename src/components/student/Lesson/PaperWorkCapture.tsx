@@ -2,6 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, CameraOff, Check, LoaderCircle } from "lucide-react";
+import { Button } from "@/components/shared";
+import { randomId } from "@/lib/utils";
+import {
+  MARK_WAIT_LINE,
+  SEND_AGAIN,
+  SLOW_MARK_MS,
+} from "@/lib/lessons/verdict";
 
 /**
  * PAPER WORK: DO IT ON PAPER, PHOTOGRAPH THE PAGE (design 17g, 5 Nov; the
@@ -46,6 +53,18 @@ import { Camera, CameraOff, Check, LoaderCircle } from "lucide-react";
  * guessed: such a photo hands straight back to the lesson
  * (`onContinue("needs_work")`).
  *
+ * TYPED, WHERE THERE IS NO CAMERA (Lydia, 25 Nov, L59), built to her spec
+ * before its frame, from what exists. Where the check's steps can be typed
+ * (`typed`), "I can't use a camera right now" leads to "No camera? You can
+ * type what you worked out instead.", and her screen heading is "Type what
+ * you worked out." One field per guided step, named by its prompt; "Check"
+ * sends them, as every check does; past two seconds the wait's one line, and
+ * "Send again" only on a real failure (the mark wait's words, SCRUM-315).
+ * The server says whether they matched; NO WORDS FOR WHAT IT SAYS YET, so
+ * the child is handed back to the lesson with the answer (`typed` or
+ * `typed_needs_work`) - raised, not guessed. It never passes the check.
+ * Where nothing can be typed, P5 is as above.
+ *
  * THE VERDICTS ARE OURS TO NAME UNTIL THE CAMERA ROUTE IS SPECIFIED (T5).
  * They are the outcomes her lines cover; the server's shape maps onto them
  * when it exists.
@@ -77,7 +96,30 @@ export type PaperWorkExit =
   | "read"
   | "needs_work"
   | "without_photo"
-  | "no_camera";
+  | "no_camera"
+  | "typed"
+  | "typed_needs_work";
+
+/** One guided step of the check, as the lesson read gives it to a child. */
+export interface PaperStep {
+  stepId: string;
+  prompt: string;
+}
+
+/** The typed route for this check: its steps, and how to send them. */
+export interface TypedPaperWork {
+  /** Every guided step of the check, in order. None: nothing is typed. */
+  steps: PaperStep[];
+  /**
+   * Sends what was typed, one answer per step in order, under one
+   * submission id (so a send sent again is the same one), and resolves with
+   * the server's word on it.
+   */
+  onSubmit: (
+    answers: { stepId: string; answer: string }[],
+    clientSubmissionId: string,
+  ) => Promise<"matched" | "needs_work">;
+}
 
 /**
  * The longest side a photo is sent at. The checker refuses images over 3.5 MB
@@ -96,14 +138,18 @@ type Step =
   | "person"
   | "held"
   | "sendFailed"
-  | "noCamera";
+  | "noCamera"
+  | "typed";
 
 export function PaperWorkCapture({
   instruction,
   teacherAsked = false,
+  typed,
   onSend,
   onContinue,
 }: {
+  /** The typed route, where this check's steps can be typed (L59). */
+  typed?: TypedPaperWork | null;
   /** What to do on paper, in the lesson's words. Absent renders nothing. */
   instruction: string | null | undefined;
   /** The server says the teacher asked for this one on paper. */
@@ -251,6 +297,7 @@ export function PaperWorkCapture({
   };
 
   if (!instruction) return null;
+  const canType = !!typed && typed.steps.length > 0;
 
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-[460px] flex-1 flex-col p-[22px] text-nevo-near-black">
@@ -446,7 +493,46 @@ export function PaperWorkCapture({
         </>
       )}
 
-      {step === "noCamera" && (
+      {step === "noCamera" && canType && (
+        <>
+          <div className="flex flex-1 flex-col items-center justify-center text-center">
+            <span className="flex size-[60px] items-center justify-center rounded-full bg-nevo-violet/22 text-nevo-navy">
+              <CameraOff className="size-7" strokeWidth={1.9} aria-hidden />
+            </span>
+            <h2 className="mt-5 text-[21px] font-semibold">No camera?</h2>
+            <p className="mt-2 max-w-[290px] text-[14.5px] leading-[1.55] text-pretty text-nevo-near-black/66">
+              You can type what you worked out instead.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setStep("typed")}
+            className={PRIMARY}
+          >
+            Type what you worked out
+          </button>
+          <button
+            type="button"
+            onClick={() => onContinue("no_camera")}
+            className={QUIET}
+          >
+            Keep going
+          </button>
+          <button
+            type="button"
+            onClick={() => void openCamera()}
+            className={QUIET}
+          >
+            Try the camera again
+          </button>
+        </>
+      )}
+
+      {step === "typed" && typed && (
+        <TypedSteps typed={typed} onDone={onContinue} />
+      )}
+
+      {step === "noCamera" && !canType && (
         <>
           <div className="flex flex-1 flex-col items-center justify-center text-center">
             <span className="flex size-[60px] items-center justify-center rounded-full bg-nevo-violet/22 text-nevo-navy">
@@ -571,6 +657,109 @@ function PhotoHeld({
         >
           Continue without it
         </button>
+      </div>
+    </>
+  );
+}
+
+/**
+ * "Type what you worked out." (L59): one field per guided step, named by its
+ * prompt, all of them answered before "Check" sends them - the server takes
+ * every step, in order, or none. The wait and the failure are the mark
+ * wait's (SCRUM-315): nothing said for two seconds, then its one line;
+ * "Send again" only on a real failure, sending the same submission again.
+ */
+function TypedSteps({
+  typed,
+  onDone,
+}: {
+  typed: TypedPaperWork;
+  onDone: (how: PaperWorkExit) => void;
+}) {
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [sending, setSending] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const [failed, setFailed] = useState(false);
+  // One submission, however many times it is sent.
+  const [submission] = useState(() => randomId());
+  const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (slowTimer.current) clearTimeout(slowTimer.current);
+    },
+    [],
+  );
+
+  const ready = typed.steps.every((s) => (answers[s.stepId] ?? "").trim() !== "");
+
+  const send = async () => {
+    if (!ready || sending) return;
+    setSending(true);
+    setFailed(false);
+    setSlow(false);
+    slowTimer.current = setTimeout(() => setSlow(true), SLOW_MARK_MS);
+    let status: "matched" | "needs_work";
+    try {
+      status = await typed.onSubmit(
+        typed.steps.map((s) => ({ stepId: s.stepId, answer: answers[s.stepId].trim() })),
+        submission,
+      );
+    } catch {
+      setFailed(true);
+      return;
+    } finally {
+      if (slowTimer.current) clearTimeout(slowTimer.current);
+      setSlow(false);
+      setSending(false);
+    }
+    onDone(status === "matched" ? "typed" : "typed_needs_work");
+  };
+
+  return (
+    <>
+      <Eyebrow>On paper</Eyebrow>
+      <h2 className="mt-2 text-xl leading-[1.35] font-semibold tracking-[-0.01em]">
+        Type what you worked out.
+      </h2>
+      <div className="mt-5 flex flex-col gap-4">
+        {typed.steps.map((s) => (
+          <label key={s.stepId} className="flex flex-col gap-2">
+            <span className="text-[14.5px] leading-[1.5] text-pretty text-nevo-near-black">
+              {s.prompt}
+            </span>
+            <input
+              type="text"
+              autoComplete="off"
+              value={answers[s.stepId] ?? ""}
+              onChange={(e) =>
+                setAnswers((prev) => ({ ...prev, [s.stepId]: e.target.value }))
+              }
+              disabled={sending}
+              className="h-[52px] w-full rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream-elevated px-4 text-base text-nevo-near-black outline-none focus:border-nevo-navy focus:bg-nevo-cream"
+            />
+          </label>
+        ))}
+      </div>
+      <div className="flex-1" />
+      <button
+        type="button"
+        disabled={!ready || sending}
+        aria-busy={sending || undefined}
+        onClick={() => void send()}
+        className={`${PRIMARY} mt-6 disabled:cursor-default disabled:bg-nevo-navy/32`}
+      >
+        Check
+      </button>
+      <div aria-live="polite">
+        {failed ? (
+          <Button variant="secondary" className="mt-3 w-full" onClick={() => void send()}>
+            {SEND_AGAIN}
+          </Button>
+        ) : slow ? (
+          <p className="mt-3 text-center text-[13.5px] leading-[1.5] text-nevo-near-black/70">
+            {MARK_WAIT_LINE}
+          </p>
+        ) : null}
       </div>
     </>
   );
