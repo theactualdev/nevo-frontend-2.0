@@ -102,3 +102,38 @@ export function observationCount(
   if (typeof count !== "number") return null;
   return count === 1 ? "1 lesson" : `${count} lessons`;
 }
+
+/**
+ * THE WINDOW THE ROSTER'S OBSERVATIONS COVER, AS THE CONTRACT DECLARES IT -
+ * and it declares none yet. The server counts the LAST 30 DAYS, so "12
+ * lessons" beside a child read as a total when it was a month: an untrue
+ * state. Raised as S22 (25 Nov): declare `observationWindowDays`. Until it
+ * does, every lessons-finished figure is LEFT OUT, and no window is written
+ * from our reading of the server's source (Hub, 25 Nov, rule 10).
+ *
+ * When S22 lands, a caller passes the response's declared window instead of
+ * this, and the figure comes back with `inTheLast` beside it.
+ */
+export const DECLARED_OBSERVATION_WINDOW_DAYS: number | null = null;
+
+/** "in the last {n} days" from a declared window, or null - and then no figure. */
+export function inTheLast(windowDays: number | null | undefined): string | null {
+  if (typeof windowDays !== "number" || !Number.isInteger(windowDays) || windowDays < 1) {
+    return null;
+  }
+  return windowDays === 1 ? "in the last day" : `in the last ${windowDays} days`;
+}
+
+/**
+ * The count WITH its window - "12 lessons in the last 30 days" - or null when
+ * either is missing. A count with no declared window is never shown.
+ */
+export function observationCountWithin(
+  pattern: ObservationPattern,
+  count: number | null | undefined,
+  windowDays: number | null | undefined,
+): string | null {
+  const figure = observationCount(pattern, count);
+  const window = inTheLast(windowDays);
+  return figure && window ? `${figure} ${window}` : null;
+}
