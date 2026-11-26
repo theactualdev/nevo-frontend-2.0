@@ -8,7 +8,8 @@ import {
   type IepExportShare,
 } from "@/lib/api/export";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
+import { ApiError, apiErrorCode, apiErrorMessage, incidentId } from "@/lib/api/client";
+import { IncidentLine } from "@/components/teacher/Upload/ParseFallback";
 import { studentsApi, type AdminStudentRow, type ParentLink } from "@/lib/api/students";
 import { classesApi } from "@/lib/api/classes";
 import { longDate } from "@/lib/dates";
@@ -232,9 +233,19 @@ export function IepExporterView({
    * scope - so it says what it is instead.
    */
   const [denied, setDenied] = useState(false);
+  /*
+   * THE SERVER'S REFERENCE FOR THE FAILURE (TO-DO 11, 25 Nov). A draft that
+   * fails at the server - the model, its safety check, anything unplanned -
+   * comes back as a 500 carrying an `incidentId`, and this page dropped it:
+   * "Something went wrong" was all anyone could report, and nothing on the
+   * backend could be matched to it. Shown as the teacher console shows it,
+   * "Reference {id}" and nothing round it (Lydia, 11 Nov). With none, no line.
+   */
+  const [incident, setIncident] = useState<string | null>(null);
   const failWith = (err: unknown) => {
     if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setRoleRefused(true);
     if (failureKind(err) === "denied") setDenied(true);
+    setIncident(err instanceof ApiError ? incidentId(err.detail) : null);
     setPhase("failed");
   };
   /*
@@ -995,6 +1006,7 @@ export function IepExporterView({
                 ? "Anything you had written is still here. We couldn’t confirm whether the share reached them, so check their account before sending it again."
                 : "Nothing has been shared, and anything you had written is still here. Please give it another try."}
             </p>
+            <IncidentLine id={incident} />
             {/*
               * Back to where the export ACTUALLY is, not to the editor.
               *
