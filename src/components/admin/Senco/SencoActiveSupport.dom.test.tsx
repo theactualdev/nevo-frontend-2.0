@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { visibleText } from "@/test/visibleText";
 import { ApiError } from "@/lib/api/client";
 import { LEARNING_SUPPORT_REQUIRED } from "@/lib/api/learningSupport";
+import { MAX_PAGES, PAGE } from "@/lib/adaptationWindow";
 import type { AdminClass } from "@/lib/api/classes";
 import type { AdminStudentRow } from "@/lib/api/students";
 import { SencoView } from "./SencoView";
@@ -226,6 +227,38 @@ describe("adaptations this week, when the log does not answer", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/Amara Okafor/));
     await settle();
     expect(visibleText(container)).not.toMatch(/the adaptation log/);
+  });
+
+  it("draws no figure when the week runs past the page cap - not the partial count, and no failure line", async () => {
+    // Hub, 26 Nov: hitting the cap is not a failure, but a count of the pages
+    // we read is a floor beside a child's name - an untrue state. Same rule
+    // as L51's count. Every page is full, so the log never ends.
+    adaptationLog.mockImplementation((q: { offset: number }) =>
+      Promise.resolve({
+        events: Array.from({ length: PAGE }, (_, i) => ({
+          id: `e${q.offset + i}`,
+          studentId: "s1",
+          studentFirstName: "Amara",
+          lessonId: "l1",
+          lessonTitle: "F",
+          timestamp: new Date().toISOString(),
+          trigger: "t",
+          adaptation: "a",
+          eventType: "x",
+        })),
+        total: 99_999,
+        limit: PAGE,
+        offset: q.offset,
+      }),
+    );
+    const { container } = render(<SencoView />);
+    await openProfiles();
+
+    await waitFor(() => expect(adaptationLog).toHaveBeenCalledTimes(MAX_PAGES));
+    await waitFor(() => expect(visibleText(container)).toMatch(/Amara Okafor/));
+    await settle();
+    expect(visibleText(container)).not.toMatch(/this week|the adaptation log/);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
 });
 
