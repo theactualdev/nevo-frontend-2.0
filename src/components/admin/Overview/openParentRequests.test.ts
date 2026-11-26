@@ -13,7 +13,11 @@ import { openParentRequests } from "./openParentRequests";
 const rows = (n: number, open: number) =>
   Array.from({ length: n }, (_, i) => ({ id: `r${i}`, resolvedAt: i < open ? null : "2026-11-22T09:00:00Z" }));
 
-beforeEach(() => rightsLog.mockReset());
+// A block, not an arrow's value: a function returned from beforeEach is run as
+// its teardown, so returning the mock would call it with no arguments.
+beforeEach(() => {
+  rightsLog.mockReset();
+});
 
 describe("openParentRequests", () => {
   it("counts the unresolved rows on every page, and stops at the total", async () => {
