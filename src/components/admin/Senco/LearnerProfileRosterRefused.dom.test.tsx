@@ -136,6 +136,8 @@ describe("What Nevo has noticed, otherwise", () => {
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/Amara has been finishing the lessons they start\./),
     );
+    // The count stays out until the roster declares its window (S22).
+    expect(visibleText(container)).not.toMatch(/6 lessons/);
   });
 
   it("still says a read that FAILED, which a retry can mend", async () => {
