@@ -3,6 +3,15 @@ import { render, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { LearnerProfileView } from "./LearnerProfileView";
 
+// The profile's "What changed, and when" read (backlog 42), answered empty
+// so this file never reaches the network for it.
+vi.mock("@/lib/api/accommodationHistory", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/accommodationHistory")>()),
+  accommodationHistoryApi: {
+    forStudent: async () => ({ studentId: "s1", changes: [], adaptationsPerWeek: [] }),
+  },
+}));
+
 /**
  * Architecture rule 3: the frontend computes no thresholds. The learner
  * profile used to say "Reading is the barrier here" about a named child

@@ -24,6 +24,8 @@ import { helpSeekingLine } from "@/hooks/useStudentProfile";
 import { yearGroupLabel } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
 import { accommodationCopy } from "@/lib/constants/accommodations";
+import { HISTORY_WEEKS } from "@/lib/api/accommodationHistory";
+import { changeRows, useAccommodationHistory, weekBars } from "./useAccommodationHistory";
 import {
   CARD,
   GHOST_BTN,
@@ -228,6 +230,8 @@ export function LearnerProfileView({
    */
   const { holders: ls } = useLearningSupport();
   const lacksRole = ls?.viewerHoldsIt === false;
+  /** D08b's "What changed, and when" (backlog 42) - its own read, its own failure. */
+  const { state: history, retry: retryHistory } = useAccommodationHistory(studentId, lacksRole);
 
   const load = useCallback(() => {
     Promise.all([studentsApi.get(studentId), classesApi.list(true)])
@@ -700,6 +704,125 @@ export function LearnerProfileView({
           ))
         )}
       </div>
+
+      {/*
+        * WHAT CHANGED, AND WHEN (D08b SC-04, admin backlog 42), from
+        * `GET /students/{id}/accommodation-history`. Below the current state,
+        * as the frame places it: a dated list, never a line over time.
+        *
+        * NEVER THE SERIES. The same response carries cognitiveLoadThreshold
+        * and processingSpeed over time with a confidence on each point -
+        * engine parameters about a child (Zero-Tag, 30 Aug). They are not
+        * even typed (`accommodationHistory.ts`).
+        *
+        * BUILT REDUCED, and raised (24 Nov):
+        * - D08b's "and what prompted each" is not said, and no row has a
+        *   reason: `promptedBy` is an internal signal code, not a cause.
+        * - Each change is the backend's own two words, Started / Stopped,
+        *   beside the console's Zero-Tag sentence for what Nevo does - the
+        *   frame's past-tense phrases ("Larger text applied") name specific
+        *   adaptations the contract does not carry.
+        * - Each bar sits in its own week of the window; a week the server
+        *   left out (it sends no zeros) is an empty slot, never a 0. S15 asks
+        *   for every week with explicit zeros (`weekBars`).
+        * - The empty line is the Hub's interim words until Lydia's (L82),
+        *   in the backend's own two action words. It is said only when the
+        *   server sent no change at all - never when it sent changes this
+        *   console has no words for, which would be untrue.
+        */}
+      <SectionLabel>What changed, and when</SectionLabel>
+      <p className="m-0 mt-2.5 max-w-[580px] text-[13px] leading-[1.6] text-nevo-near-black/60">
+        {`A dated record of what Nevo did for ${firstName}. Not a rising line: a list of changes.`}
+      </p>
+      {lacksRole || history.phase === "failed" ? (
+        <div data-what-changed className={cn(CARD, "mt-3.5 px-6 py-6")}>
+          <ReadFailed
+            firstName={firstName}
+            what="record of changes"
+            onRetry={retryHistory}
+            denied={lacksRole || (history.phase === "failed" && history.denied)}
+            needsLearningSupport={
+              lacksRole || (history.phase === "failed" && history.needsLearningSupport)
+            }
+          />
+        </div>
+      ) : history.phase === "loading" ? (
+        <div
+          data-what-changed
+          aria-busy="true"
+          className="mt-3.5 h-[150px] animate-pulse rounded-[12px] bg-nevo-cream-elevated"
+        />
+      ) : (
+        <div data-what-changed>
+          {(() => {
+            const bars = weekBars(history.history, history.readAt);
+            return bars.some((b) => b.count !== null) ? (
+              <div className="mt-3.5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5">
+                <div className="text-[12px] font-bold uppercase tracking-[0.06em] text-nevo-navy">
+                  Adaptations per week
+                </div>
+                <ol className="m-0 mt-4 flex list-none items-end gap-4 p-0">
+                  {bars.map((b) => (
+                    <li
+                      key={b.key}
+                      data-week={b.key}
+                      className="flex min-w-0 flex-1 flex-col items-center gap-2"
+                    >
+                      {/* A week the server did not send: its slot, its date,
+                          and nothing else - no bar, no 0. */}
+                      {b.count === null ? null : (
+                        <>
+                          <span className="text-[12px] font-semibold text-nevo-navy">
+                            {b.count}
+                            <span className="sr-only">{` in the week of ${b.label}`}</span>
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            className="block w-full rounded-t-[6px] bg-nevo-violet"
+                            style={{ height: `${b.height}px` }}
+                          />
+                        </>
+                      )}
+                      {/* Two lines' height whether the date wraps or not, so
+                          every bar stands on the same baseline (review, 25 Nov:
+                          a wrapped "31 Aug" sat its bar 17px lower at 768). */}
+                      <span
+                        aria-hidden="true"
+                        className="flex h-[28px] items-start justify-center text-center text-[11px] leading-[1.25] text-nevo-near-black/55"
+                      >
+                        {b.label}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null;
+          })()}
+          {(() => {
+            const rows = changeRows(history.history);
+            return rows.length > 0 ? (
+              <ol className="m-0 mt-3 flex list-none flex-col gap-1.5 p-0">
+                {rows.map((r) => (
+                  <li
+                    key={r.key}
+                    className="grid grid-cols-[80px_1fr] items-baseline gap-4 rounded-[8px] bg-nevo-cream-elevated px-4 py-[13px] max-sm:grid-cols-[64px_1fr] max-sm:gap-3"
+                  >
+                    <span className="text-[12px] text-nevo-near-black/55">{r.date}</span>
+                    <span className="text-[13px] leading-[1.55] text-nevo-near-black">
+                      {/* One string each, so a text reader keeps "Started:" whole. */}
+                      <strong className="font-semibold">{`${r.verb}:`}</strong> {r.what}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            ) : history.history.changes.length === 0 ? (
+              <p className={cn(CARD, "m-0 mt-3 px-6 py-5 text-sm text-nevo-near-black/62")}>
+                {`Nevo hasn’t started or stopped any support for ${firstName} in the last ${HISTORY_WEEKS} weeks.`}
+              </p>
+            ) : null;
+          })()}
+        </div>
+      )}
 
       <div className="mt-8 border-t border-nevo-near-black/10 pt-5">
         {lacksRole ? (

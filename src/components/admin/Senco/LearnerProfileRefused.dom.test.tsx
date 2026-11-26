@@ -4,6 +4,15 @@ import { visibleText } from "@/test/visibleText";
 import { ApiError } from "@/lib/api/client";
 import { LearnerProfileView } from "./LearnerProfileView";
 
+// The profile's "What changed, and when" read (backlog 42), answered empty
+// so this file never reaches the network for it.
+vi.mock("@/lib/api/accommodationHistory", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/accommodationHistory")>()),
+  accommodationHistoryApi: {
+    forStudent: async () => ({ studentId: "s1", changes: [], adaptationsPerWeek: [] }),
+  },
+}));
+
 /**
  * QA, 10 Oct: "We couldn't read Ada's adaptation history … Try again" over a
  * read that was REFUSED. A 403 is a permission decision; retrying cannot
