@@ -228,6 +228,30 @@ export function allowanceSpent(cause: unknown): boolean {
 }
 
 /**
+ * The code on the 403 `POST /api/v1/ask-nevo/` answers when the account may
+ * not ask in the role it asked as (backend `ask_role_forbidden`, with a
+ * `reason` and `availableRoles` since T8, 20 Nov). The code is the one clients
+ * switch on; its `message` names a role, which means nothing to a child.
+ */
+export const ROLE_REFUSED_CODE = "ask_role_forbidden";
+
+/**
+ * Was this refusal the account itself, not the question?
+ *
+ * BY ITS CODE, as the allowance and the stop are. Asking again cannot change
+ * it, so it is never the "try again in a moment" failure (Lydia, 25 Nov, L55).
+ * Not `student_context_forbidden` either: that one is about whose context was
+ * sent, not about this account, and keeps the ordinary failure.
+ */
+export function roleRefused(cause: unknown): boolean {
+  return (
+    cause instanceof ApiError &&
+    cause.status === 403 &&
+    apiErrorCode(cause.detail) === ROLE_REFUSED_CODE
+  );
+}
+
+/**
  * The code on the 403 `POST /api/v1/ask-nevo/` answers when a question, or the
  * answer it would have drawn, trips the safety check (SCRUM-259). The spec's
  * 403 description names it first; the backend's `SafetyBlocked` sends it as

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   allowanceSpent,
+  roleRefused,
   HISTORY_DAYS,
   HISTORY_LIMIT,
   recentThreads,
@@ -173,5 +174,32 @@ describe("safetyStop", () => {
     ).toBeNull();
     expect(safetyStop(new ApiError(0, "offline"))).toBeNull();
     expect(safetyStop(new Error("content_safety_blocked"))).toBeNull();
+  });
+});
+
+/**
+ * L55 (Lydia, 25 Nov): an account that may not ask is a 403 with its own
+ * code. Told apart by the code, as the allowance and the stop are.
+ */
+describe("roleRefused", () => {
+  const refusal = (status: number, code: string) =>
+    new ApiError(status, "x", {
+      detail: { code, reason: "account_cannot_ask", availableRoles: [], message: "You cannot ask Nevo in that role." },
+    });
+
+  it("is the 403 that says this account cannot ask in that role", () => {
+    expect(roleRefused(refusal(403, "ask_role_forbidden"))).toBe(true);
+  });
+
+  it("is not a safety stop, another learner's context, or any other 403", () => {
+    expect(roleRefused(refusal(403, "content_safety_blocked"))).toBe(false);
+    expect(roleRefused(refusal(403, "student_context_forbidden"))).toBe(false);
+    expect(roleRefused(new ApiError(403, "x"))).toBe(false);
+  });
+
+  it("is not that code on any other status, nor a failure with no response", () => {
+    expect(roleRefused(refusal(500, "ask_role_forbidden"))).toBe(false);
+    expect(roleRefused(new ApiError(0, "offline"))).toBe(false);
+    expect(roleRefused(new Error("ask_role_forbidden"))).toBe(false);
   });
 });
