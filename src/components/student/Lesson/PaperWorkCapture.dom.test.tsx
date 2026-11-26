@@ -216,7 +216,7 @@ describe("the camera on the page (P2) and the retake (P3)", () => {
 });
 
 describe("sending the photo", () => {
-  it("sends the picture, and hands back to the lesson when it is read - no P4 words", async () => {
+  it("sends the picture and, read, says so in Lydia's words - never that the page is saved (P4, L15)", async () => {
     const { onSend, onContinue } = mount();
     onSend.mockResolvedValue("read");
     await toCamera();
@@ -224,12 +224,16 @@ describe("sending the photo", () => {
 
     fireEvent.click(button("Use this photo"));
 
-    await waitFor(() => expect(onContinue).toHaveBeenCalledWith("read"));
+    expect(
+      await screen.findByRole("heading", { name: "Got it, Nevo has read your page." }),
+    ).toBeVisible();
+    expect(screen.getByText("Your teacher will see how you did.")).toBeVisible();
     expect(onSend.mock.calls[0][0]).toBeInstanceOf(Blob);
+    // The picture is gone as soon as it is read (SCRUM-343).
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:photo-1");
-    // Held for Lydia: untrue under the never-stored rule (SCRUM-343).
-    expect(screen.queryByText(/your page is saved/)).toBeNull();
-    expect(screen.queryByText(/Your teacher will see/)).toBeNull();
+    expect(screen.queryByText(/saved|what you wrote/)).toBeNull();
+    fireEvent.click(button("Keep going"));
+    expect(onContinue).toHaveBeenCalledWith("read");
   });
 
   it("says calmly when the photo could not be read, and never blames the child (P6)", async () => {
@@ -252,17 +256,78 @@ describe("sending the photo", () => {
     expect(onContinue).toHaveBeenCalledWith("without_photo");
   });
 
-  it("keeps the photo to send again when the send fails, and calls nothing unreadable", async () => {
-    const { onSend } = mount();
-    onSend.mockRejectedValueOnce(new Error("Network"));
+  it("says a send that fails is the send (P8, L16), keeps the photo, and sends it again", async () => {
+    const { onSend, onContinue } = mount();
+    onSend.mockRejectedValueOnce(new Error("Network")).mockResolvedValue("read");
     await toCamera();
     await snap();
 
     fireEvent.click(button("Use this photo"));
 
-    await waitFor(() => expect(button("Use this photo")).toBeVisible());
+    expect(await screen.findByText("That didn't send.")).toBeVisible();
+    expect(
+      screen.getByText("Try again, and if it still doesn't work you can carry on and photograph it later."),
+    ).toBeVisible();
     expect(screen.queryByText("We couldn't quite read that one")).toBeNull();
     expect(revokeObjectURL).not.toHaveBeenCalled();
+
+    fireEvent.click(button("Try again"));
+    expect(await screen.findByText("Got it, Nevo has read your page.")).toBeVisible();
+    expect(onSend).toHaveBeenCalledTimes(2);
+    expect(onContinue).not.toHaveBeenCalled();
+  });
+
+  it("lets a child whose send keeps failing carry on without it", async () => {
+    const { onSend, onContinue } = mount();
+    onSend.mockRejectedValue(new Error("Network"));
+    await toCamera();
+    await snap();
+    fireEvent.click(button("Use this photo"));
+    await screen.findByText("That didn't send.");
+
+    fireEvent.click(button("Continue without it"));
+
+    expect(onContinue).toHaveBeenCalledWith("without_photo");
+  });
+
+  it.each([
+    [
+      "person",
+      "There's a person in this photo.",
+      "Nevo only reads your written work, so take another one of just the page.",
+    ],
+    [
+      "held",
+      "Nevo couldn't read this one.",
+      "Take another photo of just the page, with the whole page in frame.",
+    ],
+  ] as const)("says a %s hold in Lydia's words (L16, L41), with a retake and a way on", async (verdict, title, body) => {
+    const { onSend, onContinue } = mount();
+    onSend.mockResolvedValue(verdict);
+    await toCamera();
+    await snap();
+
+    fireEvent.click(button("Use this photo"));
+
+    expect(await screen.findByText(title)).toBeVisible();
+    expect(screen.getByText(body)).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent(title);
+    fireEvent.click(button("Retake"));
+    await screen.findByText("Line your page up inside the frame");
+    expect(onContinue).not.toHaveBeenCalled();
+  });
+
+  it("hands a photo read but needing more work straight back: P9 has no words yet", async () => {
+    const { onSend, onContinue } = mount();
+    onSend.mockResolvedValue("needs_work");
+    await toCamera();
+    await snap();
+
+    fireEvent.click(button("Use this photo"));
+
+    await waitFor(() => expect(onContinue).toHaveBeenCalledWith("needs_work"));
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:photo-1");
   });
 
   it("keeps the picture out of device storage", async () => {
@@ -281,14 +346,18 @@ describe("sending the photo", () => {
 });
 
 describe("a child who can't or won't use the camera (P5)", () => {
-  it("is never blocked, and the untrue second sentence is held", () => {
+  it("is never blocked, and says Nevo can still read it later, never that a teacher will see it (L15)", () => {
     const { onContinue } = mount();
 
     fireEvent.click(button("I can't use a camera right now"));
 
     expect(screen.getByRole("heading", { name: "No problem" })).toBeVisible();
-    expect(screen.getByText("Do this one on paper and carry on.")).toBeVisible();
-    expect(screen.queryByText(/photograph it later/)).toBeNull();
+    expect(
+      screen.getByText(
+        "Do this one on paper and carry on. If you can photograph it later, Nevo will still read it.",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText(/teacher will still see/)).toBeNull();
     fireEvent.click(button("Keep going"));
     expect(onContinue).toHaveBeenCalledWith("no_camera");
   });

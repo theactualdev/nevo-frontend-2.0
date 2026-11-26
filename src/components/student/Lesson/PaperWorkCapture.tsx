@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CameraOff, LoaderCircle } from "lucide-react";
+import { Camera, CameraOff, Check, LoaderCircle } from "lucide-react";
 
 /**
  * PAPER WORK: DO IT ON PAPER, PHOTOGRAPH THE PAGE (design 17g, 5 Nov; the
@@ -24,19 +24,31 @@ import { Camera, CameraOff, LoaderCircle } from "lucide-react";
  * never blocked) and P6 (the photo couldn't be read - calm, no blame), in the
  * frame's words, at its one 460 column on every viewport.
  *
- * WHAT IS HELD, for Lydia (rule 10: the frame and the 12 Nov ruling differ):
- * - P4, "Got it - your page is saved" / "Your teacher will see what you
- *   wrote." SCRUM-343 (ruled 12 Nov, after the frame): the picture is NEVER
- *   stored - "Nevo reads it, keeps the step marks and discards the image".
- *   The page is not saved and no teacher sees it, so both lines are untrue.
- *   A read photo hands straight back to the lesson (`onContinue("read")`)
- *   until there are true words for it.
- * - P5's second sentence, "If you can photograph it later, your teacher
- *   will still see it." Untrue for the same reason, and there is no later.
- * - The person-in-the-photo refusal (SCRUM-343's person-present verdict).
- *   Not drawn; its words are in Lydia's 28 Oct document, quoted, never ours.
- * - A send that fails. Not drawn: the photo stays held on P3 so it can be
- *   sent again, and nothing calls a dropped connection an unreadable photo.
+ * AND, IN LYDIA'S WORDS NOW THAT PHOTOS ARE NEVER STORED (25 Nov, L15, L16
+ * and L41), in place of the frame's, which said the page was saved and a
+ * teacher would see it (SCRUM-343: "Nevo reads it, keeps the step marks and
+ * discards the image"):
+ * - P4, the photo read: "Got it, Nevo has read your page." / "Your teacher
+ *   will see how you did." - and Keep going, the frame's.
+ * - P5's second sentence: "If you can photograph it later, Nevo will still
+ *   read it."
+ * - P7, a person in the photo, in the frame's layout.
+ * - P8, a send that fails, in the frame's layout - its own state, so nothing
+ *   calls a dropped connection an unreadable photo. The photo is kept to send
+ *   again.
+ * - Anything else the check holds, in P6's layout.
+ * Each of her lines is one paragraph; its first sentence takes the frame's
+ * bold line and the rest the sentence under it. Not a word is changed.
+ *
+ * STILL HELD: P9, read but the working needs more doing. Lydia: "the
+ * existing P9 state and keeps its wording" - but 17g (reworked 25 Nov) draws
+ * P9 "copy not written", so there is no wording to keep. Raised, not
+ * guessed: such a photo hands straight back to the lesson
+ * (`onContinue("needs_work")`).
+ *
+ * THE VERDICTS ARE OURS TO NAME UNTIL THE CAMERA ROUTE IS SPECIFIED (T5).
+ * They are the outcomes her lines cover; the server's shape maps onto them
+ * when it exists.
  *
  * NEVER STORED, ON THIS SIDE TOO (SCRUM-343, ADR 0009: "never written to
  * disk ... no thumbnail and no cache of ours. The camera roll is the
@@ -48,11 +60,24 @@ import { Camera, CameraOff, LoaderCircle } from "lucide-react";
  * the viewfinder.
  */
 
-/** The server's word on a photo. Only what the frame draws. */
-export type PaperWorkVerdict = "read" | "unreadable";
+/**
+ * The server's word on a photo: read; read, but the working needs more doing
+ * (P9); couldn't be read (P6); a person in it (P7); or held by the check for
+ * anything else.
+ */
+export type PaperWorkVerdict =
+  | "read"
+  | "needs_work"
+  | "unreadable"
+  | "person"
+  | "held";
 
 /** How the child carried on. */
-export type PaperWorkExit = "read" | "without_photo" | "no_camera";
+export type PaperWorkExit =
+  | "read"
+  | "needs_work"
+  | "without_photo"
+  | "no_camera";
 
 /**
  * The longest side a photo is sent at. The checker refuses images over 3.5 MB
@@ -62,7 +87,16 @@ export type PaperWorkExit = "read" | "without_photo" | "no_camera";
 const LONGEST_SIDE_PX = 2000;
 const JPEG_QUALITY = 0.85;
 
-type Step = "instruction" | "capture" | "review" | "unreadable" | "noCamera";
+type Step =
+  | "instruction"
+  | "capture"
+  | "review"
+  | "done"
+  | "unreadable"
+  | "person"
+  | "held"
+  | "sendFailed"
+  | "noCamera";
 
 export function PaperWorkCapture({
   instruction,
@@ -192,17 +226,23 @@ export function PaperWorkCapture({
     try {
       verdict = await onSend(photo.blob);
     } catch {
-      // Not drawn (see the docblock): held on P3, to send again.
+      // P8: the send, not the photo. The picture stays, to send again.
       setSending(false);
+      setStep("sendFailed");
       return;
     }
     setSending(false);
-    if (verdict === "unreadable") {
-      setStep("unreadable");
+    if (verdict === "unreadable" || verdict === "person" || verdict === "held") {
+      setStep(verdict);
       return;
     }
     dropPhoto();
-    onContinue("read");
+    if (verdict === "needs_work") {
+      // P9 has no words yet (see the docblock): straight back to the lesson.
+      onContinue("needs_work");
+      return;
+    }
+    setStep("done");
   };
 
   const carryOnWithout = () => {
@@ -314,6 +354,63 @@ export function PaperWorkCapture({
         </>
       )}
 
+      {step === "done" && (
+        <>
+          <div className="flex flex-1 flex-col items-center justify-center text-center">
+            <span className="flex size-[60px] items-center justify-center rounded-full bg-nevo-navy text-nevo-cream motion-safe:animate-nevo-pop">
+              <Check className="size-[30px]" strokeWidth={2.4} aria-hidden />
+            </span>
+            <h2 className="mt-5 text-[21px] font-semibold">
+              Got it, Nevo has read your page.
+            </h2>
+            <p className="mt-2 max-w-[290px] text-[14.5px] leading-[1.55] text-pretty text-nevo-near-black/66">
+              Your teacher will see how you did.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onContinue("read")}
+            className={PRIMARY}
+          >
+            Keep going
+          </button>
+        </>
+      )}
+
+      {step === "person" && photo && (
+        <PhotoHeld
+          url={photo.url}
+          title="There's a person in this photo."
+          body="Nevo only reads your written work, so take another one of just the page."
+          again="Retake"
+          onAgain={() => void openCamera()}
+          onCarryOn={carryOnWithout}
+        />
+      )}
+
+      {step === "held" && photo && (
+        <PhotoHeld
+          url={photo.url}
+          title="Nevo couldn't read this one."
+          body="Take another photo of just the page, with the whole page in frame."
+          again="Retake"
+          onAgain={() => void openCamera()}
+          onCarryOn={carryOnWithout}
+        />
+      )}
+
+      {step === "sendFailed" && photo && (
+        <PhotoHeld
+          url={photo.url}
+          title="That didn't send."
+          body="Try again, and if it still doesn't work you can carry on and photograph it later."
+          again="Try again"
+          busy={sending}
+          onAgain={() => void send()}
+          onCarryOn={carryOnWithout}
+        />
+      )}
+
       {step === "unreadable" && photo && (
         <>
           <Eyebrow>On paper</Eyebrow>
@@ -357,7 +454,8 @@ export function PaperWorkCapture({
             </span>
             <h2 className="mt-5 text-[21px] font-semibold">No problem</h2>
             <p className="mt-2 max-w-[290px] text-[14.5px] leading-[1.55] text-pretty text-nevo-near-black/66">
-              Do this one on paper and carry on.
+              Do this one on paper and carry on. If you can photograph it
+              later, Nevo will still read it.
             </p>
           </div>
           <button
@@ -421,5 +519,59 @@ function Picture({ url, className }: { url: string; className: string }) {
         className="absolute inset-0 size-full object-contain"
       />
     </div>
+  );
+}
+
+/**
+ * P6's layout, for the frame's other holds on a photo (P7, P8) and the
+ * check's: the photo, a calm violet box with the line, and two ways on - the
+ * second always carries on without it, so no state is a dead end (17g).
+ */
+function PhotoHeld({
+  url,
+  title,
+  body,
+  again,
+  busy = false,
+  onAgain,
+  onCarryOn,
+}: {
+  url: string;
+  title: string;
+  body: string;
+  again: string;
+  busy?: boolean;
+  onAgain: () => void;
+  onCarryOn: () => void;
+}) {
+  return (
+    <>
+      <Eyebrow>On paper</Eyebrow>
+      <Picture url={url} className="mt-3 min-h-[240px]" />
+      <div role="status" className="mt-3.5 rounded-xl bg-nevo-violet/18 px-4 py-3.5">
+        <p className="text-[15px] font-semibold">{title}</p>
+        <p className="mt-1.5 text-[13.5px] leading-normal text-nevo-violet-text">
+          {body}
+        </p>
+      </div>
+      <div className="mt-3.5 flex gap-3">
+        <button
+          type="button"
+          disabled={busy}
+          aria-busy={busy || undefined}
+          onClick={onAgain}
+          className={SECONDARY}
+        >
+          {again}
+        </button>
+        <button
+          type="button"
+          onClick={onCarryOn}
+          className={`${SOLID} h-[52px] flex-1 rounded-[10px] text-[15px]`}
+        >
+          Continue without it
+        </button>
+      </div>
+    </>
   );
 }
