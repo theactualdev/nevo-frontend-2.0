@@ -178,6 +178,8 @@ describe("D01b's own copy", () => {
     expect(visibleText(container)).toMatch(/f\.adebayo@brightgate\.edu\.ng/);
     // The server's one-liner knows neither fact, so it must not win here.
     expect(visibleText(container)).not.toMatch(/Ran out/);
+    // L70 (Lydia, 25 Nov): an expired link has no "Wrong address?" line.
+    expect(visibleText(container)).not.toMatch(/Wrong address/);
   });
 
   it("does not print a null address when the server named nobody", async () => {

@@ -449,8 +449,10 @@ export function ConfirmEmail({ token }: { token: string }) {
                   * Before that this sentence pointed at nothing: the only
                   * caller of the address change was the setup wizard, which a
                   * signed-in admin never sees again.
+                  *
+                  * NOT ON AN EXPIRED LINK: Lydia dropped it there (L70, 25 Nov).
                   */}
-                {state.status === "invalid" && own ? null : (
+                {(state.status === "invalid" && own) || state.status === "expired" ? null : (
                   <p className="m-0 max-w-[340px] text-[13.5px] leading-[1.55] text-nevo-near-black/55">
                     Wrong address? Sign in and you can change it there.
                   </p>
