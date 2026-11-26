@@ -1392,7 +1392,10 @@ function SingleChoice({
                   picked === i
                     ? "border-nevo-violet bg-nevo-violet text-nevo-near-black"
                     : soft
-                      ? "border-nevo-violet bg-nevo-cream text-nevo-violet"
+                      ? // D174, as 09f fixed the baseline's: the words in
+                        // Violet-Ink. The Warm-Up Run Frame still draws them
+                        // #9a9ccb, which fails 4.5:1 on cream.
+                        "border-nevo-violet bg-nevo-cream text-nevo-violet-text"
                       : "border-nevo-navy bg-nevo-cream text-nevo-navy",
                 )}
               >

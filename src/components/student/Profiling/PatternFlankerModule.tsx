@@ -578,7 +578,9 @@ export function TrialButton({
         pressed
           ? "border-nevo-violet bg-nevo-violet text-nevo-near-black"
           : soft
-            ? "border-nevo-violet bg-nevo-cream text-nevo-violet"
+            ? // D174 (09f): the soft answer's words in Violet-Ink, which
+              // passes on cream; the violet border stays.
+              "border-nevo-violet bg-nevo-cream text-nevo-violet-text"
             : "border-nevo-navy bg-nevo-cream text-nevo-navy",
         className,
       )}
