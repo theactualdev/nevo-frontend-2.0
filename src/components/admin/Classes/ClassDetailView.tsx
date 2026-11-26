@@ -228,6 +228,12 @@ export function ClassDetailView({
   // Where the provider owns the class list, membership is read-only and archive
   // is absent - the school does not hand-edit a synced roster.
   const ssoSourced = klass.source === "roster_sync";
+  /**
+   * Whether the header's own action is paused - Restore on an archived class,
+   * Edit class otherwise (a synced class has neither) - which decides where
+   * the paused line goes (L57).
+   */
+  const headerPaused = archived ? writesPaused : !ssoSourced && editPaused;
 
   const meta = [
     yearGroupLabel(klass.yearGroup),
@@ -307,7 +313,14 @@ export function ClassDetailView({
         ) : null}
       </div>
 
-      <PausedNote className="mt-3" />
+      {/*
+        * L57 (Lydia, 25 Nov): the paused line sits under the first thing it
+        * pauses. Here only while the header's own action is paused - Edit
+        * class (any pause but `not_active`) or an archived class's Restore.
+        * Before the school is active, Edit class is pressable, so the line
+        * moves down to Subjects, the first section that is paused. Same words.
+        */}
+      {headerPaused ? <PausedNote className="mt-3" /> : null}
 
       {ssoSourced ? (
         <p className="mt-4 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
@@ -326,6 +339,7 @@ export function ClassDetailView({
         */}
       <div className="mt-[30px]">
         <SectionHeading>Subjects this class takes</SectionHeading>
+        {headerPaused ? null : <PausedNote className="mt-2" />}
       </div>
       <div className={cn(CARD, "mt-3.5 px-[22px] py-5")}>
         <ClassSubjects
