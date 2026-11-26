@@ -161,7 +161,8 @@ import {
   saveReviewAnswers,
 } from "./reviewStore";
 import { TeacherNote } from "./TeacherNote";
-import { TextSegment, type OnChunkSeen } from "./TextSegment";
+import { TextSegment, readingShape, type OnChunkSeen } from "./TextSegment";
+import { ReadingPauseScreen } from "./ReadingPauseScreen";
 import { VisualSegment } from "./VisualSegment";
 import type { MediaFailReason } from "./useMediaSource";
 
@@ -1203,8 +1204,28 @@ export function LessonPlayer({
   // "offer" returns to the same segment. A module boundary offers none (D91).
   // Trigger travels into `break_start`.
   const breakOrigin = useRef<
-    "advance" | "offer" | "check" | "assessment" | "leave" | "reading"
+    | "advance"
+    | "offer"
+    | "check"
+    | "assessment"
+    | "leave"
+    | "reading"
+    | "readingEnd"
   >("advance");
+  /**
+   * 17e's pause, up as its own screen (`ReadingPauseScreen`): on the part it
+   * belongs to, the group to come back on, and whether it is the one after
+   * the reading's last group, on Next, or one between groups.
+   */
+  const [readingPause, setReadingPause] = useState<{
+    segmentId: string;
+    at: number;
+    end: boolean;
+  } | null>(null);
+  /** Parts whose end-of-reading pause has been answered, this sitting. */
+  const [endPausedOn, setEndPausedOn] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   /**
    * Where a break taken from the reading's pause card (L7) comes back to: the
    * group after the pause, on the part it was taken on. The break screen takes
@@ -2208,6 +2229,7 @@ export function LessonPlayer({
     if (pendingSwitch.current !== null) endSwitchWait();
     setObserved((o) => ({ ...o, replays: 0 }));
     setReadingResume(null);
+    setReadingPause(null);
     const nextSegment = asEntered(lesson.segments[next]);
     const nextPlan = livePlanFor(nextSegment.id);
     setIndex(next);
@@ -2344,12 +2366,32 @@ export function LessonPlayer({
   };
 
   /** Next chevron — an unpassed Quick Check intercepts the advance. */
-  const handleNext = () => {
+  const handleNext = () => nextFrom(false);
+  /**
+   * Next, from the part or from the end-of-reading pause (`pastPause`), which
+   * goes on as Next would have.
+   */
+  const nextFrom = (pastPause: boolean) => {
     // Next under a hand-off panel is its Keep going by another way: the
     // panel goes, and the check is asked again - never on past it.
     if (handoffHere) {
       backToCheckAfterHandoff();
       return;
+    }
+    /*
+     * 17E'S PAUSE AT THE END OF THE READING (Hub, 24 Nov, on 17e's kept
+     * Candidate B: "the one real pause sits at its end"): where the server
+     * marks the last group `pauseAfter`, Next brings the pause before the
+     * check or the next part - once a part, a sitting. The engine set it
+     * (rule 5). Not for a lesson closing for safety: that closes now.
+     */
+    if (!pastPause && !withdrawn) {
+      const shape = endPauseShape();
+      if (shape) {
+        setReadingResume({ segmentId: segment.id, at: shape.last });
+        setReadingPause({ segmentId: segment.id, at: shape.last, end: true });
+        return;
+      }
     }
     if (segment.quickCheck && !passedChecks.has(segment.id)) {
       /*
@@ -2660,8 +2702,58 @@ export function LessonPlayer({
    * group after the pause.
    */
   const takeBreakFromReading = (at: number) => {
+    setReadingPause(null);
     setReadingResume({ segmentId: segment.id, at });
     breakOrigin.current = "reading";
+    breakTrigger.current = "student_request";
+    breakOnSitting.current = startSittingBreak();
+    setBreakActive(BREAK_TYPES.MICRO);
+  };
+  /**
+   * WHERE 17E'S PAUSE FALLS AT THE END OF THIS PART'S READING, or null: the
+   * part read by the server's groups (`readingShape` - under the attention
+   * accommodation, or wherever the engine asked for a pause), the last of
+   * them marked `pauseAfter`, and its pause not yet answered on this part.
+   * Read when Next is pressed, so it is never stale.
+   */
+  const endPauseShape = (): { last: number } | null => {
+    if (modality !== MODALITY.TEXT || !segment.text) return null;
+    if (endPausedOn.has(segment.id)) return null;
+    const { groups } = readingShape(segment.text, effectiveDensity, attentionOn);
+    const lastGroup = groups?.at(-1);
+    return groups && lastGroup?.pauseAfter ? { last: groups.length - 1 } : null;
+  };
+  /** A group between was read: the pause, back on the next group after it. */
+  const pauseReading = (at: number) =>
+    setReadingPause({ segmentId: segment.id, at, end: false });
+  /** Keep going: back to the reading, or on as Next would have, at the end. */
+  const keepGoingFromPause = () => {
+    const pause = readingPause;
+    if (!pause) return;
+    setReadingPause(null);
+    if (!pause.end) {
+      setReadingResume({ segmentId: pause.segmentId, at: pause.at });
+      return;
+    }
+    setEndPausedOn((prev) => new Set(prev).add(pause.segmentId));
+    nextFrom(true);
+  };
+  /**
+   * Take a break: the child's own, as the check's. From between groups, back
+   * on the next group (`takeBreakFromReading`); from the end, on to the
+   * questions or the next part afterwards - "Ready for the questions, or
+   * take a break first?"
+   */
+  const breakFromPause = () => {
+    const pause = readingPause;
+    if (!pause) return;
+    if (!pause.end) {
+      takeBreakFromReading(pause.at);
+      return;
+    }
+    setReadingPause(null);
+    setEndPausedOn((prev) => new Set(prev).add(pause.segmentId));
+    breakOrigin.current = "readingEnd";
     breakTrigger.current = "student_request";
     breakOnSitting.current = startSittingBreak();
     setBreakActive(BREAK_TYPES.MICRO);
@@ -3538,8 +3630,20 @@ export function LessonPlayer({
    * its own. The child's own Slower chunks too, and keeps its chevrons: that
    * pace is theirs to leave.
    */
+  /*
+   * AND WHEREVER THE PART READS BY THE SERVER'S GROUPS because the engine
+   * asked for a pause (Hub, 24 Nov): "Tap to continue" is the way on there
+   * too, or Next would skip the groups left unread. Slower's own chunks are
+   * not groups, and keep their chevrons.
+   */
+  const groupedHere = segment.text
+    ? readingShape(segment.text, effectiveDensity, attentionOn).groups !==
+      undefined
+    : false;
   const partsLeft =
-    attentionOn && modality === MODALITY.TEXT && partsLeftOn === segment.id;
+    (attentionOn || groupedHere) &&
+    modality === MODALITY.TEXT &&
+    partsLeftOn === segment.id;
 
   /*
    * A COMPLETED LESSON WHOSE SITTING CANNOT BE FOUND (409
@@ -3620,7 +3724,8 @@ export function LessonPlayer({
     (breakOrigin.current === "check" ||
       breakOrigin.current === "assessment" ||
       breakOrigin.current === "leave" ||
-      breakOrigin.current === "reading") &&
+      breakOrigin.current === "reading" ||
+      breakOrigin.current === "readingEnd") &&
     breakOnSitting.current !== null;
   const breakScreen = breakActive ? (
     <BreakScreen
@@ -3666,6 +3771,11 @@ export function LessonPlayer({
           breakOrigin.current === "reading"
         )
           returnFromBreak();
+        // From the end-of-reading pause: on, as its Keep going would have.
+        if (breakOrigin.current === "readingEnd") {
+          returnFromBreak();
+          nextFrom(true);
+        }
       }}
     />
   ) : null;
@@ -3891,6 +4001,22 @@ export function LessonPlayer({
   }
 
   if (breakScreen) return breakScreen;
+
+  // 17e's pause, as its own screen - see `ReadingPauseScreen`.
+  if (readingPause?.segmentId === segment.id) {
+    const questionsNext =
+      readingPause.end &&
+      ((Boolean(segment.quickCheck) && !passedChecks.has(segment.id)) ||
+        (index === total - 1 && hasAssessment && !review));
+    return (
+      <ReadingPauseScreen
+        end={readingPause.end}
+        questionsNext={questionsNext}
+        onKeepGoing={keepGoingFromPause}
+        onTakeBreak={breakFromPause}
+      />
+    );
+  }
 
   // Module boundary landing (SCRUM-101) — a full player screen between modules,
   // never a modal. Its one action, Continue, completes the move (D91).
@@ -4329,7 +4455,7 @@ export function LessonPlayer({
                     ? readingResume.at
                     : undefined
                 }
-                onReadingBreak={takeBreakFromReading}
+                onReadingPause={pauseReading}
                 onChunkSeen={(chunkId, action) =>
                   trackEvent(SIGNAL_EVENT_TYPES.READING_CHUNK_VIEWED, {
                     segmentId: segment.id,
@@ -4825,7 +4951,7 @@ function SegmentBody({
   attention,
   onReadProgress,
   readingResumeAt,
-  onReadingBreak,
+  onReadingPause,
   onChunkSeen,
   onReplay,
   onNarrationPlayed,
@@ -4867,10 +4993,10 @@ function SegmentBody({
   reading: boolean;
   attention: boolean;
   onReadProgress: (pct: number) => void;
-  /** The reading group to open on after a pause card's break (L7). */
+  /** The reading group to open on after a pause or its break (L7). */
   readingResumeAt?: number;
-  /** 17e's pause card's Take a break (L7). */
-  onReadingBreak: (resumeAt: number) => void;
+  /** A group marked `pauseAfter` was read: 17e's pause (L7). */
+  onReadingPause: (resumeAt: number) => void;
   onChunkSeen: OnChunkSeen;
   onReplay: () => void;
   onNarrationPlayed: () => void;
@@ -4908,7 +5034,7 @@ function SegmentBody({
       onReadProgress={onReadProgress}
       onChunkSeen={onChunkSeen}
       readingResumeAt={readingResumeAt}
-      onReadingBreak={onReadingBreak}
+      onReadingPause={onReadingPause}
     />
   ) : null;
   if (modality === MODALITY.TEXT && text) return text;
