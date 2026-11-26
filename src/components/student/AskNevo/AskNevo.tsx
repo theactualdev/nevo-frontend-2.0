@@ -119,6 +119,8 @@ const ALLOWANCE_SPENT =
  * cannot work.
  */
 const NOT_ON_THIS_ACCOUNT = "Ask Nevo is not available on this account.";
+
+/**
  * A CHILD'S BLOCK, BY ITS REASON (S2). The server's line - "Nevo can't help
  * with this one. Please talk to a trusted adult or your teacher." - is right
  * for a child in difficulty and wrong for one who typed a friend's name

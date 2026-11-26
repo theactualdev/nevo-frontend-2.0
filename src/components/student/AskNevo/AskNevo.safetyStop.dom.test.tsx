@@ -202,10 +202,13 @@ describe("a question the safety check stops", () => {
 
 describe("every other refusal keeps the ordinary failure, with its line to try again", () => {
   it.each([
+    // A role refusal is no longer one of these: it reads Lydia's line,
+    // "Ask Nevo is not available on this account." (25 Nov, L55 - see the
+    // failure tests). Another learner's context still is.
     [
-      "a 403 that is a role refusal",
+      "a 403 for another learner's context",
       new ApiError(403, "Forbidden", {
-        detail: { code: "ask_role_forbidden", message: "You cannot ask Nevo in that role." },
+        detail: { code: "student_context_forbidden", message: "Student Ask Nevo must use the current student." },
       }),
     ],
     ["a 403 that names no code", new ApiError(403, "Forbidden")],

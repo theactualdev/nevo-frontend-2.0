@@ -202,6 +202,10 @@ describe("roleRefused", () => {
     expect(roleRefused(refusal(500, "ask_role_forbidden"))).toBe(false);
     expect(roleRefused(new ApiError(0, "offline"))).toBe(false);
     expect(roleRefused(new Error("ask_role_forbidden"))).toBe(false);
+  });
+});
+
+/**
  * L46 (Lydia, 25 Nov) and the Hub's ruling the same day: a child's block has
  * a line of Lydia's for "other" and "names_person" only. Everything else -
  * trusted_adult, no reason, a reason this build does not know - keeps the
