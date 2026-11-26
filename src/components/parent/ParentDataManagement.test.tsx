@@ -118,7 +118,7 @@ describe("a student the school never named", () => {
     render(<ParentDataManagement token={TOKEN} invitation={NAMELESS} />);
 
     expect(
-      screen.getByRole("heading", { name: /^Your child[’']s data on Nevo$/ }),
+      screen.getByRole("heading", { name: /^Your child[’']s Data on Nevo$/ }),
     ).toBeInTheDocument();
   });
 
@@ -145,7 +145,7 @@ describe("a student the school never named", () => {
 
   it("does not mangle a real name", () => {
     render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
-    expect(screen.getByText(/Amara[’']s data on Nevo/)).toBeInTheDocument();
+    expect(screen.getByText(/Amara[’']s Data on Nevo/)).toBeInTheDocument();
   });
 });
 
@@ -304,6 +304,22 @@ describe("withdrawing consent", () => {
 
     expect(exerciseRight).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /Keep active/i })).toBeInTheDocument();
+  });
+
+  it("is D01c's row: the title opens it, with no second button beside it", () => {
+    render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
+    const opener = screen.getByRole("button", { name: "Withdraw Consent" });
+    expect(opener).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getAllByRole("button", { name: /Withdraw consent/i })).toHaveLength(1);
+
+    fireEvent.click(opener);
+    // Open, the title is a heading again; the only button by the name acts.
+    expect(screen.getByRole("heading", { name: "Withdraw Consent" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Withdraw consent/i })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Withdraw Consent" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Keep active/i }));
+    expect(screen.getByRole("button", { name: "Withdraw Consent" })).toBeInTheDocument();
   });
 
   it("sends withdraw_consent only after confirming", async () => {

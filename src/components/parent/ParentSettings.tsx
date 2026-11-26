@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { authApi } from "@/lib/api/auth";
-import { parentApi, type ParentChild } from "@/lib/api/parent";
+import { parentApi, type ChildConsents, type ParentChild } from "@/lib/api/parent";
+import { holdsEveryConsent } from "./consentHolder";
 import { usersApi, type CurrentUser } from "@/lib/api/users";
 import { legalHref } from "@/lib/legal/returns";
 import { FeedbackPanel } from "@/components/teacher/Shell/FeedbackPanel";
@@ -20,7 +21,8 @@ import { FeedbackPanel } from "@/components/teacher/Shell/FeedbackPanel";
  *    nothing to edit it with here, so it isn't a link.
  *  - Each child, with their school (`/parents/me/children`). The frame's
  *    class ("JSS 2A") isn't on that read, so it's left out.
- *  - Consent & data -> the existing data page (D01c).
+ *  - Consent & data -> the existing data page (D01c); for a guardian who
+ *    didn't give the consent, D01g's "{child}'s data" row instead (see Rows).
  *  - Sign out (`POST /auth/logout`), with the frame's "Signed in as" line.
  *  - Share feedback at the foot: the shared Nevo Feedback panel in its parent
  *    words (`POST /api/v1/feedback`, any signed-in role).
@@ -38,7 +40,8 @@ import { FeedbackPanel } from "@/components/teacher/Shell/FeedbackPanel";
 type Read =
   | { kind: "loading" }
   | { kind: "failed" }
-  | { kind: "ready"; me: CurrentUser; children: ParentChild[] };
+  /** `consents` null: that read failed, so who holds them isn't known. */
+  | { kind: "ready"; me: CurrentUser; children: ParentChild[]; consents: ChildConsents[] | null };
 
 const ROW = "flex items-center justify-between gap-4 px-5 py-4";
 const ROW_TITLE = "m-0 text-[15px] font-semibold text-nevo-near-black";
@@ -53,9 +56,15 @@ export function ParentSettings() {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([usersApi.me(), parentApi.myChildren()])
-      .then(([me, children]) => {
-        if (alive) setRead({ kind: "ready", me, children });
+    Promise.all([
+      usersApi.me(),
+      parentApi.myChildren(),
+      // Only decides which data row to draw (D01g), so it never holds the page
+      // up: failed, the row makes no claim about withdrawing.
+      parentApi.myConsents().catch(() => null),
+    ])
+      .then(([me, children, consents]) => {
+        if (alive) setRead({ kind: "ready", me, children, consents });
       })
       .catch((err: unknown) => {
         if (!alive) return;
@@ -121,6 +130,7 @@ export function ParentSettings() {
             <Rows
               me={read.me}
               kids={read.children}
+              consents={read.consents}
               signingOut={signingOut}
               onSignOut={signOut}
               onFeedback={() => setFeedback(true)}
@@ -136,12 +146,14 @@ export function ParentSettings() {
 function Rows({
   me,
   kids,
+  consents,
   signingOut,
   onSignOut,
   onFeedback,
 }: {
   me: CurrentUser;
   kids: ParentChild[];
+  consents: ChildConsents[] | null;
   signingOut: boolean;
   onSignOut: () => void;
   onFeedback: () => void;
@@ -154,6 +166,26 @@ function Rows({
   const school = schools.length === 1 ? schools[0] : null;
   const only = kids.length === 1 ? kids[0] : null;
   const dataHref = `/parent-portal/data${only ? `?child=${encodeURIComponent(only.studentId)}` : ""}`;
+  /*
+   * D01g, THE SAME SETTINGS FOR A SECOND GUARDIAN. The withdrawal route is the
+   * consenting guardian's alone, so for anyone else this row says nothing about
+   * consent as a permission and never the word withdraw: "{child}'s data" in
+   * place of "Consent & data". It's decided for the child the link opens (the
+   * data page opens the first child when there's no `?child=`), and only the
+   * server's word that every consent held is theirs draws the withdraw line -
+   * unknown draws the row that claims nothing.
+   *
+   * REDUCED: D01g's line goes on "and her account status", which the view it
+   * opens draws as Account, Class and Lessons. That view isn't built - the
+   * class isn't on the children read and nothing sends "Lessons" (rule 10) -
+   * and the page this opens shows no status, so the line stops where it's true.
+   * The frame's "her" is the child's name; no pronoun is picked for a child.
+   */
+  const opened = only ?? kids[0] ?? null;
+  const theirs =
+    opened === null ||
+    holdsEveryConsent(consents?.find((c) => c.studentId === opened.studentId)?.consents);
+  const openedName = opened?.firstName?.trim() || null;
 
   return (
     <>
@@ -173,10 +205,17 @@ function Rows({
           </div>
         ))}
         <Link href={dataHref} className={`${ROW} cursor-pointer hover:bg-nevo-navy/[0.04]`}>
-          <div className="min-w-0">
-            <p className={ROW_TITLE}>Consent &amp; data</p>
-            <p className={ROW_SUB}>See, manage or withdraw your consent</p>
-          </div>
+          {theirs ? (
+            <div className="min-w-0">
+              <p className={ROW_TITLE}>Consent &amp; data</p>
+              <p className={ROW_SUB}>See, manage or withdraw your consent</p>
+            </div>
+          ) : (
+            <div className="min-w-0">
+              <p className={ROW_TITLE}>{`${openedName ?? "Your child"}’s data`}</p>
+              <p className={ROW_SUB}>{`What Nevo holds about ${openedName ?? "your child"}`}</p>
+            </div>
+          )}
           <span aria-hidden className="text-nevo-navy">
             &rarr;
           </span>

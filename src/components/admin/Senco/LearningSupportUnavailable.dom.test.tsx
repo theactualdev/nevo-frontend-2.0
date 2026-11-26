@@ -64,6 +64,15 @@ vi.mock("@/lib/api/classes", async (importOriginal) => {
 import { LearnerProfileView } from "./LearnerProfileView";
 import { IepExporterView } from "./IepExporterView";
 
+// The profile's "What changed, and when" read (backlog 42), answered empty
+// so this file never reaches the network for it.
+vi.mock("@/lib/api/accommodationHistory", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/accommodationHistory")>()),
+  accommodationHistoryApi: {
+    forStudent: async () => ({ studentId: "s1", changes: [], adaptationsPerWeek: [] }),
+  },
+}));
+
 const ROLE_REFUSAL = new ApiError(403, "Forbidden", {
   detail: { code: "learning_support_role_required", message: "…from the compliance screen…" },
 });

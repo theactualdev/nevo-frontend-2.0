@@ -29,6 +29,7 @@ import { LONGEST_STAGE, ProcessingStages, stageOf } from "./ProcessingStages";
 import { SectionReview } from "./SectionReview";
 import { LiveStructureTree } from "./LiveStructureTree";
 import { pageList } from "./pageList";
+import { sourceHeldPages, type SourceHolds } from "./QuestionsLeftOut";
 import { StructureTree } from "./StructureTree";
 import { UploadResult } from "./UploadResult";
 import { MaybeSample, SampleRegion } from "@/components/shared/SampleRegion";
@@ -106,10 +107,20 @@ export function faintPagesLine(pages: number[]): string {
  * every page of the file the server did not list as failed - its two facts,
  * set side by side, nothing judged. No total (pasted text, an older server)
  * or no clean page: no line.
+ *
+ * NEVER VOUCHING FOR A HELD PAGE (Hub ruling, 25 Nov, under Lydia's 4 Nov
+ * rule): a page of the teacher's own file a safety check held is left out of
+ * the clean pages, and where a hold did not say which pages, there is no line
+ * at all. The hold's own words wait on the 23 Nov ask, so none are added.
  */
-export function cleanPagesLine(pageTotal: number | null | undefined, failed: number[]): string | null {
+export function cleanPagesLine(
+  pageTotal: number | null | undefined,
+  failed: number[],
+  held: SourceHolds = { pages: [], unknown: false },
+): string | null {
   if (!pageTotal || !Number.isInteger(pageTotal)) return null;
-  const missed = new Set(failed);
+  if (held.unknown) return null;
+  const missed = new Set([...failed, ...held.pages]);
   const clean = Array.from({ length: pageTotal }, (_, i) => i + 1).filter((p) => !missed.has(p));
   if (!clean.length) return null;
   return `${clean.length > 1 ? "Pages" : "Page"} ${pageList(clean)} parsed cleanly.`;
@@ -165,33 +176,65 @@ function ReuploadNotice() {
 function PartialReadNotice({
   pages,
   pageTotal,
+  notes,
   retrying,
   onRetry,
 }: {
   pages: number[];
   /** The file's page count, when the server sends one. */
   pageTotal?: number | null;
+  /** The upload's review notes, for the pages a safety check held. */
+  notes?: readonly unknown[] | null;
   retrying: boolean;
   onRetry: () => void;
 }) {
-  const clean = cleanPagesLine(pageTotal, pages);
+  const clean = cleanPagesLine(pageTotal, pages, sourceHeldPages(notes));
   return (
-    <div className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
-      <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
-        {clean ? `${clean} ` : ""}
-        {faintPagesLine(pages)}{" "}
-        {pages.length > 1
-          ? "Nothing you did is lost - you can retry just those pages."
-          : "Nothing you did is lost - you can retry just that page."}
-      </p>
-      <button
-        type="button"
-        onClick={onRetry}
-        disabled={retrying}
-        className="mt-3 inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 bg-nevo-cream-elevated px-[18px] text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
+    /*
+      C07f's PARTIAL card, as drawn (Hub, 25 Nov): 14% violet, no rule down
+      the side, 15/17, the frame's page icon, the body at 13.5px and .7, no
+      wider than 600. One size: C07f draws this card once, for every width.
+    */
+    <div className="mb-5 flex w-full max-w-[600px] items-start gap-3 rounded-[12px] bg-nevo-violet/14 px-[17px] py-[15px]">
+      <svg
+        aria-hidden="true"
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="mt-px shrink-0 text-nevo-navy"
       >
-        {retrying ? "Retrying…" : retryPagesLabel(pages)}
-      </button>
+        <path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+        <path d="M14 3v6h6" />
+      </svg>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13.5px] leading-[1.55] text-pretty text-nevo-near-black/70">
+          {clean ? `${clean} ` : ""}
+          {faintPagesLine(pages)}{" "}
+          {pages.length > 1
+            ? "Nothing you did is lost - you can retry just those pages."
+            : "Nothing you did is lost - you can retry just that page."}
+        </p>
+        {/*
+          A GHOST, NOT C07f's NAVY primaryBtnSm (Hub, 25 Nov, on Lydia's
+          one-navy-primary rule). This notice only ever shows on the live
+          review, whose commit bar holds the screen's navy primary - "Looks
+          right, continue" or "Looks right - add to my library" - on screen
+          beside it at every width.
+        */}
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={retrying}
+          className="mt-3 inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 bg-nevo-cream-elevated px-[18px] text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
+        >
+          {retrying ? "Retrying…" : retryPagesLabel(pages)}
+        </button>
+      </div>
     </div>
   );
 }
@@ -791,6 +834,7 @@ export function UploadWizard() {
                 <PartialReadNotice
                   pages={staged.failedPages}
                   pageTotal={staged.structure?.pageTotal}
+                  notes={staged.structure?.reviewNotes}
                   retrying={staged.retrying}
                   onRetry={staged.retryFailedPages}
                 />
@@ -858,6 +902,7 @@ export function UploadWizard() {
                 <PartialReadNotice
                   pages={staged.failedPages}
                   pageTotal={staged.structure?.pageTotal}
+                  notes={staged.structure?.reviewNotes}
                   retrying={staged.retrying}
                   onRetry={staged.retryFailedPages}
                 />

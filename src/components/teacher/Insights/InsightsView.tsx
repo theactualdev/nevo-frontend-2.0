@@ -265,7 +265,7 @@ export function InsightsView() {
                   <div className="text-sm font-semibold text-nevo-navy xl:text-[15px]">
                     {data.misconception.title}
                   </div>
-                  <p className="mt-[5px] text-sm leading-[1.5] text-nevo-near-black xl:text-[14.5px] xl:leading-[1.55]">
+                  <p className="mt-[5px] text-sm leading-[1.5] text-pretty text-nevo-near-black xl:text-[14.5px] xl:leading-[1.55]">
                     <span className="xl:hidden">{data.misconception.tablet}</span>
                     <span className="hidden xl:inline">
                       {data.misconception.desktop}

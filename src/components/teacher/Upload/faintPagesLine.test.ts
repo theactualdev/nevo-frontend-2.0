@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cleanPagesLine, faintPagesLine, retryPagesLabel } from "./UploadWizard";
+import { sourceHeldPages } from "./QuestionsLeftOut";
 
 /**
  * How the faint pages are said.
@@ -90,5 +91,50 @@ describe("cleanPagesLine", () => {
 
   it("says nothing when no page came through", () => {
     expect(cleanPagesLine(2, [1, 2])).toBeNull();
+  });
+});
+
+/*
+ * NEVER VOUCHING FOR A HELD PAGE (Hub ruling, 25 Nov, under Lydia's 4 Nov
+ * rule): a page of the teacher's own file held at the first check is not
+ * "parsed cleanly", and a hold that names no page leaves no page to vouch for.
+ */
+describe("the clean pages, beside a safety hold on the teacher's file", () => {
+  const hold = (over: Record<string, unknown>) => ({ code: "lesson_text_blocked_by_safety", ...over });
+
+  it("leaves the held page out of the clean ones", () => {
+    const held = sourceHeldPages([hold({ heldAtCheck: "lesson_source", pageNumbers: [5] })]);
+
+    expect(cleanPagesLine(16, [15, 16], held)).toBe("Pages 1 to 4 and 6 to 14 parsed cleanly.");
+  });
+
+  it("draws no line where the hold names no page", () => {
+    const held = sourceHeldPages([hold({ heldAtCheck: "lesson_source" })]);
+
+    expect(held.unknown).toBe(true);
+    expect(cleanPagesLine(16, [15, 16], held)).toBeNull();
+  });
+
+  it("reads an older server's source hold the same way", () => {
+    const held = sourceHeldPages([hold({ textRetained: false, pageNumbers: [2, 3] })]);
+
+    expect(held).toEqual({ pages: [2, 3], unknown: false });
+    expect(cleanPagesLine(6, [6], held)).toBe("Pages 1, 4 and 5 parsed cleanly.");
+  });
+
+  it("still counts a page whose own text passed, where only Nevo's lesson was held", () => {
+    // The file passed its own check: its pages did parse cleanly.
+    const held = sourceHeldPages([hold({ heldAtCheck: "generated_content", pageNumbers: [5] })]);
+
+    expect(held).toEqual({ pages: [], unknown: false });
+    expect(cleanPagesLine(16, [15, 16], held)).toBe("Pages 1 to 14 parsed cleanly.");
+  });
+
+  it("reads no other note as a hold", () => {
+    expect(sourceHeldPages([{ code: "source_read_by_backup_reader", pageNumbers: [5] }, null, "x"])).toEqual({
+      pages: [],
+      unknown: false,
+    });
+    expect(sourceHeldPages(undefined)).toEqual({ pages: [], unknown: false });
   });
 });

@@ -3,6 +3,15 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { LearnerProfileView } from "./LearnerProfileView";
 
+// The profile's "What changed, and when" read (backlog 42), answered empty
+// so this file never reaches the network for it.
+vi.mock("@/lib/api/accommodationHistory", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/accommodationHistory")>()),
+  accommodationHistoryApi: {
+    forStudent: async () => ({ studentId: "s1", changes: [], adaptationsPerWeek: [] }),
+  },
+}));
+
 /**
  * SCRUM-200 (Lydia, 28 Oct): a mastery estimate the server sends as null is
  * no estimate, never a zero. An empty bar reads as zero - "a claim we have

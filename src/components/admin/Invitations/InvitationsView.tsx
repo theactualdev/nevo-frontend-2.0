@@ -10,6 +10,7 @@ import {
   CARD,
   GHOST_BTN,
   CheckIcon,
+  Modal,
   PausedNote,
   PRIMARY_BTN,
   PlusIcon,
@@ -24,9 +25,11 @@ import { NewInviteModal } from "./NewInviteModal";
 import { LinkHandout } from "./LinkHandout";
 import {
   confirmedSent,
+  needsManualDelivery,
   unconfirmedResendLead,
   unconfirmedResendToast,
 } from "./deliveryCopy";
+import { bulkResendLines, resendable, type BulkResendTally } from "./bulkResend";
 import { inviteeName, joinLink } from "./joinLink";
 import { NoAccess, failureKind } from "../NoAccess";
 
@@ -147,6 +150,16 @@ export function InvitationsView() {
   const [resent, setResent] = useState<Record<string, string>>({});
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  /*
+   * MASS RESEND (Olayinka's TO-DO item 9) - D07's bulk pattern over the row's
+   * own resend; see `bulkResend.ts`. What is resent is always the ticked rows
+   * still on this page and still resendable (`chosen`), so a filter changed
+   * after ticking never resends to someone the admin can no longer see.
+   */
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [confirmingBulk, setConfirmingBulk] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [bulkLines, setBulkLines] = useState<string[] | null>(null);
   /** The instant every row's expiry is judged against - see `normaliseStatus`. */
   const [now, setNow] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -219,6 +232,18 @@ export function InvitationsView() {
    */
   const pager = pageWindow(visible.length, page);
   const rows = visible.slice(pager.start, pager.start + PAGE_SIZE);
+  /** What a tick can reach: this page's rows that Resend is offered on. */
+  const selectable = rows.filter((inv) => resendable(normaliseStatus(inv.status, inv.expiresAt, now)));
+  const chosen = selectable.filter((inv) => selected.has(inv.id));
+  const allChosen = selectable.length > 0 && chosen.length === selectable.length;
+  const bulkBusy = bulkProgress !== null;
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const filtering = Boolean(search.trim() || status || classFilter);
 
@@ -298,6 +323,37 @@ export function InvitationsView() {
         say("That didn't resend. We're on it - try again in a moment.");
       })
       .finally(() => setBusy(null));
+  };
+
+  /** The ticked invites, one resend after another, then one outcome line. */
+  const resendChosen = async () => {
+    const targets = chosen;
+    setConfirmingBulk(false);
+    setBulkLines(null);
+    setHandout(null);
+    setResent((prev) => {
+      const next = { ...prev };
+      targets.forEach((t) => delete next[t.id]);
+      return next;
+    });
+    setBulkProgress({ done: 0, total: targets.length });
+    const tally: BulkResendTally = { resent: 0, noEmail: 0, unconfirmed: 0, failed: 0 };
+    for (const [i, invite] of targets.entries()) {
+      try {
+        const answer = await invitesApi.resend(invite.id);
+        setInvites((prev) => prev.map((row) => (row.id === invite.id ? withResend(row, answer) : row)));
+        // Read from THIS answer, as the single resend does.
+        if (confirmedSent(answer.deliveryStatus)) tally.resent += 1;
+        else if (needsManualDelivery(answer.deliveryStatus)) tally.noEmail += 1;
+        else tally.unconfirmed += 1;
+      } catch {
+        tally.failed += 1;
+      }
+      setBulkProgress({ done: i + 1, total: targets.length });
+    }
+    setBulkProgress(null);
+    setBulkLines(bulkResendLines(tally));
+    setSelected(new Set());
   };
 
   const revoke = (invite: Invitation) => {
@@ -501,14 +557,45 @@ export function InvitationsView() {
               * D19's tablet card frame draws it. One list, two layouts, so
               * the two cannot drift apart.
               */}
+            {/* What the mass resend came to, every invite accounted for, as
+                D07's bulk send says its own. */}
+            {bulkLines && bulkLines.length > 0 ? (
+              <div
+                role="status"
+                className="mt-4 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3 text-[13.5px] leading-[1.55] text-nevo-navy"
+              >
+                {bulkLines.map((line) => (
+                  <p key={line} className="m-0">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+
             <div className={cn(CARD, "mt-4 max-xl:overflow-visible max-xl:rounded-none max-xl:bg-transparent max-xl:shadow-none")}>
-              <div className="grid grid-cols-[1.2fr_1.3fr_96px_72px_104px_150px] gap-4 border-b border-nevo-near-black/8 bg-nevo-near-black/[0.03] px-6 py-[13px] text-[11.5px] font-semibold uppercase tracking-[0.05em] text-nevo-near-black/50 max-xl:hidden">
+              <div className="grid grid-cols-[20px_1.2fr_1.3fr_96px_72px_104px_150px] gap-4 border-b border-nevo-near-black/8 bg-nevo-near-black/[0.03] px-6 py-[13px] text-[11.5px] font-semibold uppercase tracking-[0.05em] text-nevo-near-black/50 max-xl:hidden">
+                <span className="flex items-center">
+                  {/* D07's select-all: this page's rows that can be resent. */}
+                  <input
+                    type="checkbox"
+                    aria-label="Select every invite that can be resent"
+                    checked={allChosen}
+                    ref={(el) => {
+                      if (el) el.indeterminate = chosen.length > 0 && !allChosen;
+                    }}
+                    disabled={selectable.length === 0 || bulkBusy || writesPaused}
+                    onChange={() =>
+                      setSelected(allChosen ? new Set() : new Set(selectable.map((inv) => inv.id)))
+                    }
+                    className="size-4 cursor-pointer accent-nevo-navy disabled:cursor-not-allowed"
+                  />
+                </span>
                 <span>Name</span>
                 <span className="max-xl:hidden">Email</span>
                 <span>Class</span>
                 <span>Invited</span>
                 <span>Status</span>
-                <span>Actions</span>
+                <span className="text-right">Actions</span>
               </div>
 
               {visible.length === 0 ? (
@@ -548,7 +635,19 @@ export function InvitationsView() {
                         i < rows.length - 1 && cn(ROW_DIVIDER, "max-xl:border-b-0"),
                       )}
                     >
-                      <div className="grid grid-cols-[1.2fr_1.3fr_96px_72px_104px_150px] items-center gap-4 max-xl:grid-cols-[minmax(0,1fr)_auto] max-xl:items-start max-xl:gap-x-3 max-xl:gap-y-3">
+                      <div className="grid grid-cols-[20px_1.2fr_1.3fr_96px_72px_104px_150px] items-center gap-4 max-xl:grid-cols-[20px_minmax(0,1fr)_auto] max-xl:items-start max-xl:gap-x-3 max-xl:gap-y-3">
+                        <span className="flex items-center max-xl:pt-0.5">
+                          {/* Only where Resend is offered: a joined, revoked
+                              or account-changed invite has nothing to resend. */}
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${invite.name ?? invite.email ?? "this invite"}`}
+                            checked={resendable(s) && selected.has(invite.id)}
+                            disabled={!resendable(s) || bulkBusy || writesPaused}
+                            onChange={() => toggle(invite.id)}
+                            className="size-4 cursor-pointer accent-nevo-navy disabled:cursor-not-allowed disabled:opacity-35"
+                          />
+                        </span>
                         <span className="min-w-0">
                           <span className="block truncate text-[15px] font-semibold text-nevo-near-black max-xl:whitespace-normal max-xl:break-words">
                             {invite.name ?? invite.email ?? "Invited person"}
@@ -585,10 +684,22 @@ export function InvitationsView() {
                         <span className="text-sm text-nevo-near-black/66 tabular-nums max-xl:hidden">
                           {invite.createdAt ? formatDate(invite.createdAt) : "—"}
                         </span>
-                        <span className="flex max-xl:col-start-2 max-xl:row-start-1 max-xl:justify-end">
+                        <span className="flex max-xl:col-start-3 max-xl:row-start-1 max-xl:justify-end">
                           <InviteStatusPill status={s} />
                         </span>
-                        <span className="flex items-center gap-3 max-xl:col-span-2 max-xl:border-t max-xl:border-nevo-near-black/[0.07] max-xl:pt-3">
+                        {/*
+                          * D19'S ACTIONS COLUMN IS ICONS (Olayinka's TO-DO
+                          * item 10, 24 Nov). Its table draws Resend and Revoke
+                          * as 28px icon buttons, right-aligned 8px apart; this
+                          * drew them as words, so once a resend handed back a
+                          * link and "Copy link" joined them, three words
+                          * wrapped in a 150px column. At the table's widths
+                          * they are D19's icons now, each keeping its word as
+                          * its name; "Copy link" - ours, D19 has no glyph for
+                          * it - stays a word and fits beside them. The cards
+                          * below 1280 keep the words, as D19's cards do.
+                          */}
+                        <span className="flex items-center gap-3 xl:justify-end xl:gap-2 max-xl:col-span-3 max-xl:border-t max-xl:border-nevo-near-black/[0.07] max-xl:pt-3">
                           {/*
                             * EACH ACTION ONLY WHERE IT MEANS SOMETHING, as the
                             * frame draws them. All three used to show on every
@@ -634,11 +745,17 @@ export function InvitationsView() {
                               {s === "conflicted" ? null : (
                                 <button
                                   type="button"
+                                  title="Resend invite"
                                   disabled={working || writesPaused}
                                   onClick={() => resend(invite)}
-                                  className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:opacity-45"
+                                  className={cn(
+                                    "cursor-pointer text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:opacity-45",
+                                    ICON_ACTION,
+                                    "xl:hover:bg-nevo-navy/10",
+                                  )}
                                 >
-                                  Resend
+                                  <SendGlyph />
+                                  <span className="xl:sr-only">Resend</span>
                                 </button>
                               )}
                               {/* Revoke is for a live invite - one whose
@@ -647,11 +764,17 @@ export function InvitationsView() {
                               {s === "pending" || s === "conflicted" ? (
                                 <button
                                   type="button"
+                                  title="Revoke invite"
                                   disabled={working || writesPaused}
                                   onClick={() => setConfirmRevoke(confirming ? null : invite.id)}
-                                  className="cursor-pointer text-[13.5px] font-semibold text-nevo-near-black/60 transition-opacity hover:opacity-75 disabled:opacity-45"
+                                  className={cn(
+                                    "cursor-pointer text-[13.5px] font-semibold text-nevo-near-black/60 transition-opacity hover:opacity-75 disabled:opacity-45",
+                                    ICON_ACTION,
+                                    "xl:text-nevo-near-black/40 xl:hover:bg-nevo-near-black/[0.06] xl:hover:text-nevo-near-black/80",
+                                  )}
                                 >
-                                  Revoke
+                                  <RevokeGlyph />
+                                  <span className="xl:sr-only">Revoke</span>
                                 </button>
                               ) : null}
                             </>
@@ -755,6 +878,63 @@ export function InvitationsView() {
                 ) : null}
               </div>
             ) : null}
+
+            {/* D07's selection bar: what is ticked, a way to clear it, and
+                the resend - then the progress, so a long run visibly moves. */}
+            {chosen.length > 0 || bulkProgress ? (
+              <div className="sticky bottom-4 z-20 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-nevo-navy px-5 py-3 text-nevo-cream shadow-[0_8px_28px_rgba(0,0,0,0.24)]">
+                {bulkProgress ? (
+                  <span role="status" className="text-[14px] font-semibold">
+                    {`Resending ${bulkProgress.done} of ${bulkProgress.total}…`}
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-[14px] font-semibold">{`${chosen.length} selected`}</span>
+                    <span className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelected(new Set())}
+                        className="cursor-pointer rounded-lg px-3.5 py-2 text-[13.5px] font-semibold text-nevo-cream/85 transition-colors hover:bg-nevo-cream/10"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        disabled={writesPaused}
+                        onClick={() => setConfirmingBulk(true)}
+                        className="cursor-pointer rounded-lg bg-nevo-cream px-4 py-2 text-[13.5px] font-semibold text-nevo-navy transition-[filter] hover:brightness-95 disabled:cursor-default disabled:opacity-60"
+                      >
+                        Resend invites
+                      </button>
+                    </span>
+                  </>
+                )}
+              </div>
+            ) : null}
+
+            {confirmingBulk ? (
+              <Modal
+                title={`Resend ${chosen.length} ${chosen.length === 1 ? "invite" : "invites"}?`}
+                onClose={() => setConfirmingBulk(false)}
+                footer={
+                  <>
+                    <button type="button" onClick={() => setConfirmingBulk(false)} className={GHOST_BTN}>
+                      Cancel
+                    </button>
+                    <button type="button" onClick={() => void resendChosen()} className={PRIMARY_BTN}>
+                      Resend
+                    </button>
+                  </>
+                }
+              >
+                {/* Who it goes to - the names, rather than a sentence of ours. */}
+                <ul className="m-0 list-none p-0 text-[14px] leading-[1.6] text-nevo-near-black/72">
+                  {chosen.map((inv) => (
+                    <li key={inv.id}>{inv.name ?? inv.email ?? "Invited person"}</li>
+                  ))}
+                </ul>
+              </Modal>
+            ) : null}
           </>
         ) : null}
       </div>
@@ -784,5 +964,32 @@ export function InvitationsView() {
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * D19's 28px icon button, at the table's widths only (`xl`). Below them it is
+ * a word again, as D19's cards draw it. The glyph shows only where the word
+ * is hidden, so a screen reader always meets the word.
+ */
+const ICON_ACTION =
+  "xl:flex xl:size-7 xl:items-center xl:justify-center xl:rounded-[7px] xl:opacity-100 xl:hover:opacity-100";
+
+/** D19's send glyph (its `sendIc`). */
+function SendGlyph() {
+  return (
+    <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="hidden xl:block">
+      <path d="M22 2L11 13M22 2l-7 20-4-9-9-4z" />
+    </svg>
+  );
+}
+
+/** D19's revoke glyph (its `xCircleIc`). */
+function RevokeGlyph() {
+  return (
+    <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="hidden xl:block">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M15 9l-6 6M9 9l6 6" />
+    </svg>
   );
 }

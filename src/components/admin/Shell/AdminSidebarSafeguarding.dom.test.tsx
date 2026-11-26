@@ -62,10 +62,21 @@ describe("Safeguarding on the rail", () => {
     expect(screen.queryByText("Safeguarding")).toBeNull();
   });
 
-  it("stays absent while the answer is unknown", async () => {
-    holders.mockRejectedValue(new Error("down"));
+  it("stays absent while the read is still in the air", async () => {
+    holders.mockImplementation(() => new Promise(() => {}));
     render(<AdminSidebar />);
     await waitFor(() => expect(holders).toHaveBeenCalled());
     expect(screen.queryByText("Safeguarding")).toBeNull();
+  });
+
+  it("stays when the read FAILED - a failure is not an answer that they don't hold it", async () => {
+    // TO-DO 13 (Hub, 25 Nov): it used to vanish here, even for a holder. The
+    // page answers from its own read: the list, or the server's refusal.
+    holders.mockRejectedValue(new Error("down"));
+    render(<AdminSidebar />);
+    expect(await screen.findByRole("link", { name: "Safeguarding" })).toHaveAttribute(
+      "href",
+      "/admin/safeguarding",
+    );
   });
 });
