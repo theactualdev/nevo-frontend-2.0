@@ -260,4 +260,15 @@ describe("the walkthrough's misconception card", () => {
     expect(screen.queryByRole("link", { name: "View students" })).not.toBeInTheDocument();
     expect(screen.queryByText("View students")).not.toBeInTheDocument();
   });
+
+  // C09 sets its body `text-wrap: pretty` (Hub, 25 Nov).
+  it("wraps its body as C09 does, with no word left alone on the last line", async () => {
+    useTeacherClasses.mockReturnValue(state());
+    render(<InsightsView />);
+
+    fireEvent.click(screen.getByRole("button", { name: FIXTURE_CLASS }));
+
+    const title = await screen.findByText("Common misconception in algebraic fractions");
+    expect(title.parentElement!.querySelector("p")).toHaveClass("text-pretty");
+  });
 });
