@@ -488,6 +488,7 @@ export function ClassesView() {
                     >
                       <button
                         type="button"
+                        data-class-link
                         onClick={() => router.push(`/admin/classes/${c.id}`)}
                         className="min-w-0 cursor-pointer text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-nevo-navy/40"
                       >

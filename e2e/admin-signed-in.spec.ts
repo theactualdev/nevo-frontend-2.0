@@ -336,3 +336,39 @@ test("a learner's adaptation history reads, or says no access when the role is m
     await expect(page.getByText(/don.t have access to .* adaptation history/i)).toHaveCount(0);
   }
 });
+
+test("a class opens from the Classes list, students and all", async ({ page, request }) => {
+  /*
+   * Olayinka's TO-DO item 5 (24 Nov): "none of the classes in the classes tab
+   * load when clicked on". The class page read its students from the teacher
+   * console's roster, `GET /classes/{id}/students`, which refuses an admin -
+   * and the refusal took the whole page with it. Nothing here opened a class,
+   * so it passed. The class now reads its students from the admin's own list.
+   *
+   * The teacher roster's answer is logged, not asserted: it is the backend's to
+   * decide, and the page must open whichever way it goes.
+   */
+  const auth = { Authorization: `Bearer ${adminToken}` };
+  const classes = await request.get(`${API}/api/v1/classes`, { headers: auth });
+  expect(classes.ok(), `GET /api/v1/classes answered ${classes.status()}`).toBeTruthy();
+  const list = (await classes.json()) as { id: string; archivedAt: string | null }[];
+  test.skip(!list.some((c) => !c.archivedAt), "The E2E tenant has no class to open.");
+  const id = list.find((c) => !c.archivedAt)!.id;
+  const teacherRoster = await request.get(`${API}/api/v1/classes/${id}/students`, { headers: auth });
+  console.log(`GET /api/v1/classes/${id}/students as an admin -> ${teacherRoster.status()}`);
+  const adminList = await request.get(`${API}/api/v1/students?classId=${id}`, { headers: auth });
+  expect(adminList.ok(), `GET /api/v1/students?classId= answered ${adminList.status()}`).toBeTruthy();
+
+  await page.goto("/admin/classes");
+  const first = page.locator("[data-class-link]").first();
+  await expect(first).toBeVisible(LIVE);
+  const name = (await first.locator("span").first().innerText()).trim();
+  await first.click();
+
+  await expect(page).toHaveURL(/\/admin\/classes\/[0-9a-f-]{36}/, LIVE);
+  await expect(page.getByRole("heading", { level: 2, name })).toBeVisible(LIVE);
+  await expect(page.getByText(/Students ·/).first()).toBeVisible(LIVE);
+  await expect(
+    page.getByText(/don.t have access to this class|couldn.t load this class|couldn.t read this class.s students/),
+  ).toHaveCount(0);
+});
