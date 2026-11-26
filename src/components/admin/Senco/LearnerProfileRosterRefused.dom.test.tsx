@@ -20,6 +20,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/admin/senco/s1",
 }));
+// The profile also draws the safeguarding line (d2c77636), which reads the
+// safety events. Nothing is flagged here, so this test sees only the roster's
+// refusal and never that read's own failure line.
+vi.mock("@/lib/api/safety", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/safety")>();
+  return { ...actual, safetyApi: { ...actual.safetyApi, events: async () => [] } };
+});
 vi.mock("@/lib/api/students", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/students")>();
   return {
