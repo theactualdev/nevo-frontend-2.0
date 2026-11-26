@@ -27,6 +27,19 @@ vi.mock("@/lib/api/safety", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/safety")>();
   return { ...actual, safetyApi: { ...actual.safetyApi, events: async () => [] } };
 });
+// The profile also draws "What changed, and when" (2fa78571), which reads the
+// accommodation history. An empty history keeps this test on the roster's
+// refusal, never on that read's own failure line.
+vi.mock("@/lib/api/accommodationHistory", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/accommodationHistory")>();
+  return {
+    ...actual,
+    accommodationHistoryApi: {
+      ...actual.accommodationHistoryApi,
+      forStudent: async (studentId: string) => ({ studentId, changes: [], adaptationsPerWeek: [] }),
+    },
+  };
+});
 vi.mock("@/lib/api/students", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/students")>();
   return {
