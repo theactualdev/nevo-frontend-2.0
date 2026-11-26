@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -256,21 +257,19 @@ export function ClassesView() {
             * back. Introduced by the fix that narrowed `ssoSourced`.
             */}
           {phase === "ready" && activeClasses.length > 0 && !ssoSourced ? (
-            <>
-              {/*
-                * CL-04 sits BESIDE create, behind the same `!ssoSourced` guard.
-                * A school whose classes come from the directory must not be
-                * offered either door (SCRUM-97), and a bulk one would be the
-                * worse of the two to leave standing - it makes a dozen at once.
-                */}
-              <button
-                type="button"
-                onClick={() => setBulking(true)}
-                disabled={writesPaused}
-                className={GHOST_BTN}
-              >
-                Add several
-              </button>
+            /*
+             * CL-04 sits BESIDE create, behind the same `!ssoSourced` guard.
+             * A school whose classes come from the directory must not be
+             * offered either door (SCRUM-97), and a bulk one would be the
+             * worse of the two to leave standing - it makes a dozen at once.
+             *
+             * ONE GROUP, AS D05 DRAWS IT (Olayinka, 23 Nov: "a world of
+             * space" between them). The two buttons were the header's own
+             * flex children, so `justify-between` pushed "Add several" into
+             * the middle of the row. D05: "Add a class" then "Add several",
+             * 10 apart on desktop and 8 on the tablet frame.
+             */
+            <div data-class-actions className="flex flex-none items-center gap-2 xl:gap-2.5">
               <button
                 type="button"
                 onClick={() => setCreating(true)}
@@ -280,7 +279,15 @@ export function ClassesView() {
                 <PlusIcon />
                 Add a class
               </button>
-            </>
+              <button
+                type="button"
+                onClick={() => setBulking(true)}
+                disabled={writesPaused}
+                className={GHOST_BTN}
+              >
+                Add several
+              </button>
+            </div>
           ) : null}
         </div>
 
@@ -362,21 +369,13 @@ export function ClassesView() {
                 />
               </label>
 
-              <label className={cn(FILTER_PILL, "relative")}>
-                <span className="sr-only">Filter by year group</span>
-                <select
-                  value={year}
-                  onChange={(e) => setYear(e.target.value)}
-                  className="cursor-pointer appearance-none bg-transparent pr-1 outline-none"
-                >
-                  <option value="">All years</option>
-                  {yearGroupOptions().map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <NevoSelect
+                aria-label="Filter by year group"
+                value={year}
+                onValueChange={setYear}
+                options={[{ value: "", label: "All years" }, ...yearGroupOptions()]}
+                triggerClassName={FILTER_PILL}
+              />
 
               <button
                 type="button"

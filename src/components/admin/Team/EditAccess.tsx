@@ -2,6 +2,8 @@
 
 import { Fragment, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { teamApi, type TeamMember } from "@/lib/api/team";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
+import { ReadFailed } from "../ReadFailed";
 import { holderFor, type LearningSupportHolders } from "@/lib/api/learningSupport";
 import { getSession } from "@/lib/auth/session";
 import { LearningSupportLine } from "../LearningSupport/LearningSupportLine";
@@ -9,6 +11,13 @@ import { AdminLevelLine } from "./AdminLevelLine";
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
 import { FOUNDING_LOCK_LINE, SCOPE_CATALOGUE } from "./adminScopes";
+
+/**
+ * A refused save the server sent no words for: the sheet's own failure line,
+ * less "try again in a moment" - a refusal is not something a retry changes.
+ */
+const REFUSED_SAVE =
+  "That didn’t save, and nothing changed. The areas you chose are still here.";
 
 /**
  * The areas an admin can hold, one checkbox each. Shared by the invite sheet
@@ -124,6 +133,8 @@ export function EditAccessPanel({
   member,
   name,
   ls = null,
+  lsFailed = false,
+  onLsRetry,
   onLs,
   viewerSenior = false,
   onLevel,
@@ -134,6 +145,13 @@ export function EditAccessPanel({
   name: string;
   /** Who holds Learning Support; null keeps the old senco checkbox. */
   ls?: LearningSupportHolders | null;
+  /**
+   * The holders read failed (backlog 87): Learning Support's place says so,
+   * with a retry, rather than showing the old checkbox as if it were the
+   * answer.
+   */
+  lsFailed?: boolean;
+  onLsRetry?: () => void;
   onLs?: (next: LearningSupportHolders) => void;
   /** Whether the person looking is a senior administrator, as the team read says. */
   viewerSenior?: boolean;
@@ -145,6 +163,12 @@ export function EditAccessPanel({
   const [on, setOn] = useState<Set<PermissionScope>>(() => new Set(member.scopes));
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
+  /**
+   * A refusal a retry cannot change, in the server's words (backlog 87) -
+   * `last_oversight_admin`, `learning_support_grant_active`, any 409. "Try
+   * again in a moment" was untrue of those.
+   */
+  const [refused, setRefused] = useState<string | null>(null);
   const [me] = useState(() => getSession()?.userId ?? null);
   /*
    * D03b: LEARNING SUPPORT IS ONE LINE AMONG THESE, and it stands where the
@@ -168,6 +192,7 @@ export function EditAccessPanel({
     if (none || unchanged || saving) return;
     setSaving(true);
     setFailed(false);
+    setRefused(null);
     // The senco scope follows the role: a toggle in this sheet has already
     // moved it on the server, and Save must not move it back.
     const scopes = new Set(on);
@@ -176,7 +201,23 @@ export function EditAccessPanel({
     teamApi
       .updateScopes(member.userId, [...scopes])
       .then(() => onSaved())
-      .catch(() => setFailed(true))
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 409) {
+          setRefused(apiErrorMessage(err.detail) ?? REFUSED_SAVE);
+          return;
+        }
+        // A coded 400 is refused the same way every time (item 30's pattern).
+        if (
+          err instanceof ApiError &&
+          err.status === 400 &&
+          apiErrorCode(err.detail) &&
+          apiErrorMessage(err.detail)
+        ) {
+          setRefused(apiErrorMessage(err.detail) as string);
+          return;
+        }
+        setFailed(true);
+      })
       .finally(() => setSaving(false));
   };
 
@@ -212,7 +253,18 @@ export function EditAccessPanel({
           locked={member.founding ? ["oversight"] : []}
           lockedReason={FOUNDING_LOCK_LINE}
           replace={
-            asLine && ls
+            lsFailed && !ls && member.status.toLowerCase() !== "invited"
+              ? {
+                  scope: "senco",
+                  line: (
+                    <ReadFailed
+                      className="rounded-[10px] bg-nevo-cream-elevated px-[15px] py-[13px]"
+                      what="who holds Learning Support"
+                      onRetry={() => onLsRetry?.()}
+                    />
+                  ),
+                }
+              : asLine && ls
               ? {
                   scope: "senco",
                   line: (
@@ -264,6 +316,14 @@ export function EditAccessPanel({
           // SCRUM-39's plain line - not a modal, not an error colour.
           <p className="mt-4 text-[13.5px] text-nevo-near-black/62">
             An admin needs at least one area.
+          </p>
+        ) : null}
+        {refused ? (
+          <p
+            role="status"
+            className="mt-4 rounded-[10px] bg-nevo-violet/16 px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-near-black/78"
+          >
+            {refused}
           </p>
         ) : null}
         {failed ? (

@@ -851,3 +851,38 @@ describe("the server's parsed-segments line", () => {
     expect(screen.queryByText(/Parsed 7 lesson segments/)).not.toBeInTheDocument();
   });
 });
+
+// C06b's "Assigned to" card, alone (Lydia, 19 Nov, L18; backlog 14).
+describe("the lesson page's Assigned to card", () => {
+  const withClasses = (classes: unknown[]) =>
+    render(
+      <LiveLessonDetail
+        lesson={LESSON}
+        modules={[]}
+        assignments={[]}
+        classes={classes as never}
+      />,
+    );
+
+  it("names every class the lesson went to", () => {
+    withClasses([
+      { id: "c-1", name: "JSS 2A", yearGroup: null, studentCount: 30 },
+      { id: "c-2", name: "JSS 2B", yearGroup: null, studentCount: 28 },
+    ]);
+
+    const card = document.querySelector("[data-assigned-to]") as HTMLElement;
+    expect(card).toHaveTextContent("Assigned toJSS 2A · JSS 2B");
+  });
+
+  it("draws neither of C06b's other two cards, which have no figures", () => {
+    withClasses([{ id: "c-1", name: "JSS 2A", yearGroup: null, studentCount: 30 }]);
+
+    expect(screen.queryByText("Finished so far")).not.toBeInTheDocument();
+    expect(screen.queryByText("Opened")).not.toBeInTheDocument();
+  });
+
+  it("is not there for a lesson in no class", () => {
+    withClasses([]);
+    expect(document.querySelector("[data-assigned-to]")).toBeNull();
+  });
+});

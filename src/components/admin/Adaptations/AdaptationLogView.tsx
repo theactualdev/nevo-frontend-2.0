@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
@@ -461,34 +462,16 @@ export function AdaptationLogView({ back = null }: { back?: Back | null } = {}) 
             <span className={CHIP_MUTED}>No classes yet</span>
           )}
           {classPhase === "ready" && classes.length > 0 && (
-            <label className="relative inline-flex">
-              <span className="sr-only">Filter by class</span>
-              <select
-                value={classId}
-                onChange={(e) => pickClass(e.target.value)}
-                className={cn(
-                  CHIP,
-                  classId ? CHIP_ON : CHIP_OFF,
-                  "appearance-none pr-[26px]",
-                )}
-              >
-                <option value="">All classes</option>
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "pointer-events-none absolute top-1/2 right-[10px] -translate-y-1/2 text-[9px]",
-                  classId ? "text-nevo-cream" : "text-nevo-near-black/45",
-                )}
-              >
-                &#9660;
-              </span>
-            </label>
+            <NevoSelect
+              aria-label="Filter by class"
+              value={classId}
+              onValueChange={pickClass}
+              options={[
+                { value: "", label: "All classes" },
+                ...classes.map((c) => ({ value: c.id, label: c.name })),
+              ]}
+              triggerClassName={cn(CHIP, classId ? CHIP_ON : CHIP_OFF, "gap-1.5")}
+            />
           )}
 
           {/* D21's reset for the whole bar - type, class and range together.

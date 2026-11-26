@@ -635,7 +635,7 @@ export function sendHeldAnswers(
  *
  * Deliberately not per-lesson: a child who gave up on a lesson offline may
  * never open that lesson again, and their position should still reach Home's
- * "Pick up where you left off" list. Mounting any student screen is enough,
+ * in-progress card. Mounting any student screen is enough,
  * and so is the connection coming back.
  *
  * Only ever the signed-in child's own shelf. Anything belonging to another

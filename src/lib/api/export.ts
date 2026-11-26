@@ -86,4 +86,47 @@ export const exportApi = {
    */
   listShares: (exportId: string) =>
     api.get<IepExportShare[]>(`/api/v1/exports/iep/${exportId}/shares`),
+
+  /**
+   * The document split by who wrote each part (backlog 43): Nevo's text, and
+   * each member of staff's note with its author and time - stamped by the
+   * server, never stated by the client. Staff only.
+   */
+  composition: (exportId: string) =>
+    api.get<ExportComposition>(`/api/v1/exports/iep/${exportId}/composition`),
+
+  /**
+   * A member of staff adds their own note. Draft only: a final document
+   * answers 409 `export_already_final`, in words written for the reader.
+   * No edit or delete route - a note, once added, stands.
+   */
+  annotate: (exportId: string, body: string) =>
+    api.post<StaffNote>(`/api/v1/exports/iep/${exportId}/annotations`, { body }),
 };
+
+/** One staff note on a report (`AnnotationResponse`). */
+export interface StaffNote {
+  id: string;
+  exportId: string;
+  body: string;
+  authorUserId: string;
+  authorName: string;
+  authorRole: string;
+  createdAt: string;
+  origin?: string;
+}
+
+/** `ExportComposition`: the report in blocks that each say who wrote them. */
+export interface ExportComposition {
+  exportId: string;
+  studentId: string;
+  status: string;
+  nevoText: string;
+  annotations: StaffNote[];
+  reviewNote: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+}
+
+/** The longest note the server takes (`AnnotationWrite.body`). */
+export const STAFF_NOTE_MAX = 4000;

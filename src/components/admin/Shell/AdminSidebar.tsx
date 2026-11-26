@@ -578,7 +578,11 @@ export function AdminSidebar() {
                       : "text-sm font-semibold text-nevo-near-black",
                   )}
                 >
-                  {scopesFailed ? "Couldn't load your access" : scopeSummary(scopes)}
+                  {/* Nothing until the access read answers: an empty list
+                      before then is "not known yet", and `scopeSummary` would
+                      call it "No access yet" - under every admin's name, on
+                      every load (24 Nov QA). */}
+                  {scopesFailed ? "Couldn't load your access" : resolved ? scopeSummary(scopes) : null}
                 </span>
               </span>
             ) : null}

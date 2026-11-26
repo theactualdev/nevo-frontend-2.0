@@ -101,9 +101,30 @@ export interface TextHeldBack {
  * beside it where the note has them (10 Nov, item 2: "this part of your file"
  * asks a teacher to search for what we already know). One note comes per
  * part; the same pages are said once, and parts with no pages share one line.
- * Only `pageNumbers` is read: never the `message`, `chunkNumber` or
- * `textRetained`, and never which rule fired or what matched (Lydia, item 6).
+ * Only `pageNumbers` and which check held it are read: never the
+ * `message`, `chunkNumber`, `reasonCategory` or `safetyEventId`, and never
+ * which rule fired or what matched (Lydia, item 6).
+ *
+ * ONLY WHERE NEVO'S OWN TEXT WAS HELD (T12 / SCRUM-354, backend, 20 Nov:
+ * `heldAtCheck`). Lydia's line is true of one of the two holds: the file
+ * passed and the lesson Nevo wrote from it was refused
+ * (`"generated_content"`). Under safety policy v2 a part of the teacher's
+ * own file can be held at the first check too (`"lesson_source"`); that part
+ * reads "This section is held for safety review." in the lesson, and "it came
+ * through as plain text" and "Your file passed its own check" would both be
+ * untrue. No words are ruled for it yet (raised to the Hub, 23 Nov), so it is
+ * not said here rather than said wrongly (Lydia, 4 Nov: an untrue state is
+ * worse than a missing one). The held section still says so in the lesson.
+ *
+ * An older server sends no `heldAtCheck`. There, `textRetained: false` is the
+ * same source hold, and any other note is Nevo's text - under policy v1 a held
+ * file fails the whole upload and never becomes a note.
  */
+export function heldNevosText(note: Record<string, unknown>): boolean {
+  if (note.heldAtCheck === undefined || note.heldAtCheck === null) return note.textRetained !== false;
+  return note.heldAtCheck === "generated_content";
+}
+
 export function textHeldBack(notes: readonly unknown[] | null | undefined): TextHeldBack[] {
   if (!Array.isArray(notes)) return [];
   const out: TextHeldBack[] = [];
@@ -112,6 +133,7 @@ export function textHeldBack(notes: readonly unknown[] | null | undefined): Text
     if (!note || typeof note !== "object") continue;
     const n = note as Record<string, unknown>;
     if (n.code !== "lesson_text_blocked_by_safety") continue;
+    if (!heldNevosText(n)) continue;
     const pages = Array.isArray(n.pageNumbers)
       ? n.pageNumbers.filter((p): p is number => Number.isInteger(p))
       : [];

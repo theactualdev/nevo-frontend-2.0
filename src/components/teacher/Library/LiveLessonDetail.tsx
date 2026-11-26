@@ -588,6 +588,28 @@ export function LiveLessonDetail({
           )}
         </div>
 
+        {/*
+          * C06b'S "ASSIGNED TO" CARD, ALONE (Lydia, 19 Nov, L18; backlog 14):
+          * "Two empty cards teach a teacher the product is broken." C06b draws
+          * three - Assigned to, Finished so far, Opened - and only the first
+          * has a source (`lesson.classes`). The other two wait for the
+          * server's fields. On C06b's own grid, so the card keeps the
+          * frame's size. No classes, no card: absence, not "nowhere".
+          */}
+        {classes.length > 0 ? (
+          <div className="mt-[18px] grid grid-cols-2 gap-2.5 xl:mt-6 xl:grid-cols-3 xl:gap-3.5">
+            <div
+              data-assigned-to
+              className="min-w-0 rounded-[12px] bg-nevo-cream-elevated px-4 py-3.5 shadow-elevation-1 xl:px-5 xl:py-[18px]"
+            >
+              <span className="text-[12px] text-nevo-near-black/55 xl:text-[13px]">Assigned to</span>
+              <div className="mt-1 text-[14.5px] font-semibold text-nevo-near-black xl:mt-[5px] xl:text-[16px]">
+                {classes.map((c) => c.name).join(" · ")}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {/* BEFORE the review, because it changes what the review IS. A
             teacher checking key points drawn from their own pasted text is
             doing something different from checking Nevo's reading of it. */}

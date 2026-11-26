@@ -288,3 +288,41 @@ describe("ClassDetailView's teacher rows (8 Oct)", () => {
     expect(visibleText(container).match(/Teaches /g)).toHaveLength(1);
   });
 });
+
+/**
+ * BACKLOG 79: removing a class's last teacher says SCRUM-40's fixed line, not
+ * our own clause folded into the sentence before it.
+ */
+describe("removing the class's last teacher", () => {
+  const openConfirm = async () => {
+    const view = render(<ClassDetailView classId="c1" />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Remove Folake Adeyemi from this class/i }),
+    );
+    await screen.findByRole("button", { name: "Remove from this class" });
+    return view;
+  };
+
+  it("says SCRUM-40's line when they are the only teacher", async () => {
+    current = klass();
+    classTeachers.mockResolvedValue([teacher]);
+    const { container } = await openConfirm();
+
+    expect(visibleText(container)).toMatch(
+      /This will leave JSS2 Blue without a teacher\. You can assign someone whenever you.re ready\./,
+    );
+    expect(visibleText(container)).not.toMatch(/no teacher until you assign one/);
+  });
+
+  it("says nothing of it while another teacher stays", async () => {
+    current = klass();
+    classTeachers.mockResolvedValue([
+      teacher,
+      { ...teacher, assignmentId: "as2", teacherId: "t2", firstName: "Bisi", lastName: "Bello", role: "co_teacher" as const },
+    ]);
+    const { container } = await openConfirm();
+
+    expect(visibleText(container)).toMatch(/will no longer see JSS2 Blue in their console/);
+    expect(visibleText(container)).not.toMatch(/without a teacher/);
+  });
+});

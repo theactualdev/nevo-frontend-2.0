@@ -106,7 +106,7 @@ describe("the rights go to the signed-in routes", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "  Too much screen time  " } });
     fireEvent.click(screen.getByRole("button", { name: /Object to processing/i }));
 
-    expect(await screen.findByText(/within 48 hours/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Your request has been recorded and sent to the school\. They will reply to you directly\./)).toBeInTheDocument();
     expect(myObjection).toHaveBeenCalledWith("s-2", "Too much screen time");
     expect(exerciseRight).not.toHaveBeenCalled();
   });
@@ -115,7 +115,8 @@ describe("the rights go to the signed-in routes", () => {
     render(<ParentMyData />);
     fireEvent.click(await screen.findByRole("button", { name: /Request Amara[’']s data/i }));
 
-    expect(await screen.findByText(/Request submitted/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Your request has been recorded and sent to the school\. They will reply to you directly\./)).toBeInTheDocument();
+    expect(screen.queryByText(/within 5 working days/i)).toBeNull();
     expect(myDataRequest).toHaveBeenCalledWith("s-1");
   });
 

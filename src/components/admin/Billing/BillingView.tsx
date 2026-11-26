@@ -24,6 +24,7 @@ import { BillingContacts } from "./BillingContacts";
 import { CostSheet } from "./CostSheet";
 import { PlanOptions } from "./PlanOptions";
 import { HowToPayPanel } from "./HowToPayPanel";
+import { YourArrangement } from "./YourArrangement";
 import { InvoicePdfLink } from "./InvoicePdfLink";
 import { NoAccess, failureKind } from "../NoAccess";
 
@@ -472,6 +473,10 @@ export function BillingView() {
             }
           />
           ) : null}
+
+          {/* D11b's "Your arrangement" (backlog 106): always, not only
+              when something is owed - it is a fact about the account. */}
+          <YourArrangement pricing={subscription.pricing} className="mt-8" />
 
           {/* D11d's plans (Lydia, 7 Oct: "D11d wins. The plan choice
               exists."). This was a line naming the hole: "Plan options and

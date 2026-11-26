@@ -2,7 +2,12 @@
 
 import { ReportsViews } from "./ReportsViews";
 import { useCallback, useEffect, useState } from "react";
-import { analyticsApi, type CohortIndicator, type CohortTransformation } from "@/lib/api/analytics";
+import {
+  analyticsApi,
+  type CohortFlexibility,
+  type CohortIndicator,
+  type CohortTransformation,
+} from "@/lib/api/analytics";
 import { schoolApi } from "@/lib/api/school";
 import { cn } from "@/lib/utils";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -145,34 +150,7 @@ function Figures({ data }: { data: CohortTransformation }) {
           />
         ) : null}
         {data.flexibility && flexibility.length > 0 ? (
-          <div className={cn(CARD, "px-[26px] py-6")}>
-            <span className="text-[12px] font-semibold tracking-[0.05em] text-nevo-violet-text uppercase">
-              Changing format
-            </span>
-            {flexibility.map((series, i) => (
-              <ul
-                key={i}
-                aria-label="Changing format"
-                className="m-0 mt-3 flex list-none flex-col gap-2 p-0"
-              >
-                {series.labels.map((label, j) => (
-                  <li key={label} className="flex items-baseline justify-between gap-4 text-[14.5px]">
-                    <span className="text-nevo-near-black/72">{label}</span>
-                    <span className="font-semibold text-nevo-navy tabular-nums">
-                      {series.values[j] !== undefined ? figure(series.values[j]) : ""}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ))}
-            <p className="m-0 mt-3.5 text-[14px] leading-[1.55] text-nevo-near-black/66">
-              Times in the last four weeks a student changed how a lesson was
-              shown, or kept it as it was.
-            </p>
-            <p className="m-0 mt-2 text-[12.5px] text-nevo-near-black/50">
-              {acrossLine(data.flexibility.learnerCount)}
-            </p>
-          </div>
+          <FlexibilityTile flexibility={data.flexibility} />
         ) : null}
       </div>
       <p className="m-0 mt-5 max-w-[66ch] text-[13px] leading-[1.6] text-nevo-near-black/55">
@@ -184,7 +162,38 @@ function Figures({ data }: { data: CohortTransformation }) {
   );
 }
 
-function IndicatorTile({
+/** D26's "Changing format" card - shared with the year-group row (T17). */
+export function FlexibilityTile({ flexibility }: { flexibility: CohortFlexibility }) {
+  const series = flexibility.dimensions.filter((d) => d.labels.length > 0);
+  return (
+    <div className={cn(CARD, "px-[26px] py-6")}>
+      <span className="text-[12px] font-semibold tracking-[0.05em] text-nevo-violet-text uppercase">
+        Changing format
+      </span>
+      {series.map((s, i) => (
+        <ul key={i} aria-label="Changing format" className="m-0 mt-3 flex list-none flex-col gap-2 p-0">
+          {s.labels.map((label, j) => (
+            <li key={label} className="flex items-baseline justify-between gap-4 text-[14.5px]">
+              <span className="text-nevo-near-black/72">{label}</span>
+              <span className="font-semibold text-nevo-navy tabular-nums">
+                {s.values[j] !== undefined ? figure(s.values[j]) : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ))}
+      <p className="m-0 mt-3.5 text-[14px] leading-[1.55] text-nevo-near-black/66">
+        Times in the last four weeks a student changed how a lesson was
+        shown, or kept it as it was.
+      </p>
+      <p className="m-0 mt-2 text-[12.5px] text-nevo-near-black/50">
+        {acrossLine(flexibility.learnerCount)}
+      </p>
+    </div>
+  );
+}
+
+export function IndicatorTile({
   label,
   indicator,
   unit,

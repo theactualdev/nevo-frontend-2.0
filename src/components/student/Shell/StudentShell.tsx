@@ -18,6 +18,8 @@ import { useSessionLapse } from "@/hooks/useSessionLapse";
 import { useSessionRefresh } from "@/hooks/useSessionRefresh";
 import { flushPendingProgress } from "@/lib/lessons/pendingProgress";
 import { flushPendingBaseline } from "@/lib/profiling/pendingBaseline";
+import { forgetChecks } from "@/lib/offline/savedLessons";
+import { checkShelf } from "@/lib/offline/shelfCheck";
 import { arrivedWithoutSession, getSession } from "@/lib/auth/session";
 import {
   WAITING_ROUTE,
@@ -92,7 +94,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
    *
    * Here rather than only in the player, because a child who gave up on a
    * lesson while offline may never open that lesson again - and their position
-   * still belongs in Home's "Pick up where you left off" list. Any student
+   * still belongs in Home's in-progress card. Any student
    * screen is enough.
    */
   useEffect(() => {
@@ -125,6 +127,26 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     const flush = () => void flushPendingProgress();
     window.addEventListener("online", flush);
     return () => window.removeEventListener("online", flush);
+  }, []);
+  /*
+   * EVERY SAVED LESSON IS CHECKED ON EACH CONNECTION (safety v2, Teslim 18
+   * Nov): at sign-in, and whenever the connection comes back. A copy held for
+   * safety is deleted, an expired one downloaded afresh, and none is read
+   * before its check - see `lib/offline/shelfCheck`. A connection forgets the
+   * last one's checks: each speaks for one connection. `onLine` false is
+   * certain, so nothing is asked then; true proves nothing, and a request
+   * with no response changes nothing.
+   */
+  useEffect(() => {
+    const check = () => {
+      const owner = getSession()?.userId;
+      if (!owner || navigator.onLine === false) return;
+      forgetChecks();
+      void checkShelf(owner);
+    };
+    check();
+    window.addEventListener("online", check);
+    return () => window.removeEventListener("online", check);
   }, []);
   // The chrome calls the student by their own name, not the fixture's.
   const student = useDisplayName();
@@ -343,8 +365,8 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
           docked: the launcher is `fixed` over the bottom of the screen, which
           is where that keyboard is, so it sat on the keys a child was typing
           with. Its sheet portals out of here, so an open one is unaffected.
-          `invisible`, not `hidden`: the launcher keeps its box, so a resize
-          while it is away clamps a dragged one against where it really is. */}
+          `invisible`, not `hidden`: the launcher keeps its box while it is
+          away. */}
       {pathname !== PROFILE_HREF && (
         <div className="not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:invisible">
           <AskNevo />

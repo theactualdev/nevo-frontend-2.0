@@ -5,6 +5,7 @@ import {
   readAcademic,
   readContact,
   schoolApi,
+  termStartDates,
   type AcademicConfig,
   type School,
   type SchoolTerm,
@@ -17,12 +18,16 @@ import {
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { SENIOR_ADMIN_REQUIRED, type AdminAccessLevel } from "@/lib/api/permissions";
 import { cn } from "@/lib/utils";
+import { timeAgo } from "@/lib/relativeTime";
 import { CARD, PRIMARY_BTN } from "../Roster/primitives";
 import {
+  nowIndex,
+  termHasEnded,
   termIssues,
   TERM_STARTS_STORED,
   termStartDatesFrom,
   unresolvedLine,
+  yearLabel,
 } from "./academicCalendar";
 import {
   PRESETS,
@@ -98,6 +103,10 @@ export function SchoolSettings({
   const [calendar, setCalendar] = useState<Phase>("idle");
   /** The server's own 422 wording, when it gave one. See `SaveRow`. */
   const [calendarNote, setCalendarNote] = useState<string | null>(null);
+  /** The term row waiting on its inline Remove confirm (SCRUM-99). */
+  const [removingTerm, setRemovingTerm] = useState<string | null>(null);
+  /** Today, taken once when the page opens - for the Now pill and past terms. */
+  const [today] = useState(() => Date.now());
 
   const [labels, setLabels] = useState<Record<string, string>>({});
   /** A preset chosen over custom labels, waiting on the inline confirm. */
@@ -304,6 +313,9 @@ export function SchoolSettings({
    * period figure in the product resolves through.
    */
   const issues = termIssues(terms);
+  // Displayed, never sent: the year's label, which row is now, which have ended.
+  const nowAt = nowIndex(terms, today);
+  const yearText = yearLabel(academic.yearStart, academic.yearEnd);
   const issueFor = (i: number) => issues.find((x) => x.index === i) ?? null;
   const unresolved = unresolvedLine(issues);
 
@@ -349,8 +361,31 @@ export function SchoolSettings({
     (yg) => shown(labels, yg) !== shown(savedAcademic.yearGroupLabels ?? {}, yg),
   );
 
+  /*
+   * "LAST SAVED", ONCE, AT THE TOP (backlog 68; T19; the Hub, 23 Nov: once at
+   * the top until L42 settles whether each section carries its own). D12 and
+   * SCRUM-99: "a 'Saved just now' line that otherwise reads 'Last saved 3 days
+   * ago' ... the timestamp stays visible so an admin can tell whether their
+   * last visit stuck". Each section's Save keeps its own "Saved" moment; this
+   * is the standing line, and every save here refreshes it from the record
+   * the server answers with.
+   *
+   * NOTHING WHEN THERE IS NO INSTANT. A null or unreadable `updatedAt` shows
+   * no line - never "Last saved never", which would claim the school has
+   * never been saved.
+   */
+  const lastSaved =
+    school.updatedAt && !Number.isNaN(Date.parse(school.updatedAt))
+      ? timeAgo(school.updatedAt)
+      : null;
+
   return (
     <>
+      {lastSaved ? (
+        <p data-last-saved className="m-0 mt-2 text-[13px] text-nevo-near-black/55">
+          {`Last saved ${lastSaved}`}
+        </p>
+      ) : null}
       {readOnly ? (
         <p
           id="settings-senior-only"
@@ -436,8 +471,27 @@ export function SchoolSettings({
         title="Academic year"
         note="Your terms decide what 'this half-term' means everywhere in Nevo."
       >
-        <div className="flex gap-4 max-xl:flex-col">
-          <div className="flex-1">
+        {/* One row at every width: D12b's tablet frame keeps Year, Starts
+            and Ends side by side (Year 120 there, 150 on desktop). */}
+        <div className="flex gap-3 xl:gap-4">
+          {/* D12.3's year label, read-only: made from the two dates beside
+              it, so it can never disagree with them. Absent until both are
+              there - never a label for a year that isn't set. */}
+          {yearText ? (
+            <div className="w-[120px] flex-none xl:w-[150px]">
+              <label htmlFor="set-year" className={S_LABEL}>
+                Year
+              </label>
+              <input
+                id="set-year"
+                readOnly
+                tabIndex={-1}
+                value={yearText}
+                className={cn(S_FIELD, "bg-nevo-near-black/[0.04] font-semibold")}
+              />
+            </div>
+          ) : null}
+          <div className="min-w-0 flex-1">
             <label htmlFor="set-ystart" className={S_LABEL}>
               Year starts
             </label>
@@ -451,7 +505,7 @@ export function SchoolSettings({
               className={S_FIELD}
             />
           </div>
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <label htmlFor="set-yend" className={S_LABEL}>
               Year ends
             </label>
@@ -473,11 +527,35 @@ export function SchoolSettings({
 
         <div className="mt-6">
           <p className={S_LABEL}>Terms</p>
+          {/*
+            * SCRUM-99's NOT SET UP line (backlog 69), in its words. True as
+            * long as the SAVED record holds no term starts - the one field
+            * Nevo reads - because the parent portal then dates its cards
+            * "Since setup" (the server's `since_setup` window). Driven by the
+            * saved record, not the draft: terms typed and not yet saved have
+            * told Nevo nothing.
+            *
+            * BUILT WITHOUT "a prefilled suggestion for the Nigerian academic
+            * year": nothing in the frames or the spec gives its dates, and
+            * dates made up here would become a school's calendar on one
+            * Save. Raised.
+            */}
+          {termStartDates(readAcademic(school)).length === 0 ? (
+            <p data-terms-not-set className="m-0 mb-3 max-w-[60ch] text-[13.5px] leading-[1.55] text-nevo-navy">
+              Until you set your terms, Nevo says &lsquo;since setup&rsquo; instead of naming a term.
+            </p>
+          ) : null}
           <div className="flex flex-col gap-3">
             {terms.map((t, i) => (
               <div
                 key={t.id}
-                className="rounded-[10px] border border-nevo-near-black/12 px-4 py-3.5"
+                data-term-row
+                className={cn(
+                  "rounded-[10px] border border-nevo-near-black/12 px-4 py-3.5",
+                  // SCRUM-99's mid-term state: "past terms rendered at 0.6
+                  // opacity but still editable".
+                  termHasEnded(t, today) && "opacity-60",
+                )}
               >
                 <div className="flex items-center gap-3">
                   <input
@@ -492,41 +570,98 @@ export function SchoolSettings({
                     aria-label={`Term ${i + 1} name`}
                     className={cn(S_FIELD, "flex-1")}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setTerms(terms.filter((_, j) => j !== i))}
-                    className="flex-none cursor-pointer text-[13px] font-semibold text-nevo-navy hover:opacity-75"
-                  >
-                    Remove
-                  </button>
+                  {/* SCRUM-99: "current one marked with a violet 'Now' pill". */}
+                  {i === nowAt ? (
+                    <span className="inline-flex flex-none items-center rounded-full bg-nevo-violet/24 px-[11px] py-1 text-[11.5px] font-semibold text-nevo-navy">
+                      Now
+                    </span>
+                  ) : null}
+                  {/* D12b offers Remove only while there's more than one. */}
+                  {terms.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setRemovingTerm(removingTerm === t.id ? null : t.id)}
+                      aria-expanded={removingTerm === t.id}
+                      className="flex-none cursor-pointer text-[13px] font-semibold text-nevo-navy hover:opacity-75"
+                    >
+                      Remove
+                    </button>
+                  ) : null}
                 </div>
-                <div className="mt-3 flex gap-3 max-xl:flex-col">
-                  <input
-                    type="date"
-                    value={t.start}
-                    onChange={(e) =>
-                      setTerms(
-                        terms.map((x, j) =>
-                          j === i ? { ...x, start: e.target.value } : x,
-                        ),
-                      )
-                    }
-                    aria-label={`Term ${i + 1} starts`}
-                    className={cn(S_FIELD, "flex-1")}
-                  />
-                  <input
-                    type="date"
-                    value={t.end}
-                    onChange={(e) =>
-                      setTerms(
-                        terms.map((x, j) =>
-                          j === i ? { ...x, end: e.target.value } : x,
-                        ),
-                      )
-                    }
-                    aria-label={`Term ${i + 1} ends`}
-                    className={cn(S_FIELD, "flex-1")}
-                  />
+
+                {/*
+                  * SCRUM-99: "Removing one is inline-confirmed". The pattern
+                  * is SCRUM-40's and SCRUM-98's: on the row, one line - what
+                  * ends and what is kept - and two actions, no modal. It
+                  * comes off the draft; nothing is stored until Save.
+                  */}
+                {removingTerm === t.id ? (
+                  <div data-remove-term className="mt-3 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3">
+                    <p className="m-0 text-[13.5px] leading-[1.5] text-nevo-navy">
+                      {`${t.name.trim() || `Term ${i + 1}`} comes off your calendar when you save. The other terms stay as they are.`}
+                    </p>
+                    <div className="mt-3 flex gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTerms(terms.filter((_, j) => j !== i));
+                          setRemovingTerm(null);
+                        }}
+                        className="cursor-pointer rounded-lg bg-nevo-navy px-4 py-2 text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110"
+                      >
+                        Remove this term
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRemovingTerm(null)}
+                        className="cursor-pointer rounded-lg px-4 py-2 text-[13.5px] font-semibold text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.06]"
+                      >
+                        Keep it
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                {/* D12b draws "Starts" and "Ends" over a term's dates, side by
+                    side on the tablet frame as on desktop (24 Nov QA). The
+                    words sit above the fields for the eye; each field keeps
+                    its full name - "Term 2 starts" - for a screen reader. */}
+                <div className="mt-3 flex gap-3">
+                  <div className="min-w-0 flex-1">
+                    <span aria-hidden className="mb-1 block text-[12.5px] text-nevo-near-black/55">
+                      Starts
+                    </span>
+                    <input
+                      type="date"
+                      value={t.start}
+                      onChange={(e) =>
+                        setTerms(
+                          terms.map((x, j) =>
+                            j === i ? { ...x, start: e.target.value } : x,
+                          ),
+                        )
+                      }
+                      aria-label={`Term ${i + 1} starts`}
+                      className={cn(S_FIELD, "w-full")}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span aria-hidden className="mb-1 block text-[12.5px] text-nevo-near-black/55">
+                      Ends
+                    </span>
+                    <input
+                      type="date"
+                      value={t.end}
+                      onChange={(e) =>
+                        setTerms(
+                          terms.map((x, j) =>
+                            j === i ? { ...x, end: e.target.value } : x,
+                          ),
+                        )
+                      }
+                      aria-label={`Term ${i + 1} ends`}
+                      className={cn(S_FIELD, "w-full")}
+                    />
+                  </div>
                 </div>
 
                 {/* SCRUM-99's term row is "term name, start date, end date,
@@ -535,7 +670,7 @@ export function SchoolSettings({
                     `halfTermBreak?: boolean` that nothing wrote and nothing
                     read, so a school could say a break existed but never
                     when, on the screen whose whole job is to say when. */}
-                <div className="mt-3 flex gap-3 max-xl:flex-col">
+                <div className="mt-3 flex gap-3">
                   <div className="flex-1">
                     <label
                       htmlFor={`half-start-${t.id}`}
@@ -781,7 +916,14 @@ export function SchoolSettings({
           several classes at once.
         </p>
 
-        <SaveRow phase={taxonomy} onSave={saveTaxonomy} dirty={taxonomyDirty} />
+        {/* SCRUM-99, D12.4: "plus a line noting the change is now live on
+            every screen" - the labels are read through one lookup. */}
+        <SaveRow
+          phase={taxonomy}
+          onSave={saveTaxonomy}
+          dirty={taxonomyDirty}
+          savedNote="Now live on every screen."
+        />
       </SettingsSection>
 
       {/* ---------------------------------------------------------- PROMOTION */}

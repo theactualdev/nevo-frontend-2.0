@@ -23,7 +23,10 @@ import { ReviewCard } from "./ReviewCard";
 import { LessonPreviewSheet } from "@/components/student/Lessons/LessonPreviewSheet";
 import type { LessonSummary } from "@/components/student/Lessons/lessonCatalog";
 
-/** One unfinished lesson on "Pick up where you left off" (SCRUM-146). */
+/**
+ * The unfinished lesson on Home's in-progress card, "Here when you're ready"
+ * (Nevo Home Frame, `homeState` inprogress; Lydia, 19 Nov, L1).
+ */
 interface PickUp {
   /**
    * React key - the assignment it came from, the lesson for one started from
@@ -88,38 +91,25 @@ const TODAY: TodayLesson[] = [
   fixtureToday("shapes-around-us", "Shapes Around Us", "About 8 min", Shapes),
 ];
 
-// The frame's rings, from positions like a real row's, and no phrase: the
-// walkthrough is what a real child's card looks like, and it must not model
-// the pattern D19 retired.
-const fixturePlace = (segmentPosition: number, segmentCount: number) =>
-  segmentPlace({ segmentPosition, segmentCount }) ?? undefined;
+// The frame's card, its ring from a position like a real row's, and no
+// phrase: the walkthrough is what a real child's card looks like, and it must
+// not model the pattern D19 retired.
+const IN_PROGRESS: PickUp = {
+  key: "adding-fractions",
+  title: "Adding Fractions",
+  subject: "Mathematics",
+  place: segmentPlace({ segmentPosition: 5, segmentCount: 9 }) ?? undefined,
+  href: MOCK_HREF,
+};
 
-const PICKUP: PickUp[] = [
-  {
-    key: "adding-fractions",
-    title: "Adding Fractions",
-    subject: "Mathematics",
-    place: fixturePlace(5, 9),
-    href: MOCK_HREF,
-  },
-  {
-    key: "the-water-cycle",
-    title: "The Water Cycle",
-    subject: "Science",
-    place: fixturePlace(2, 11),
-    href: MOCK_HREF,
-  },
-  {
-    key: "punctuation-marks",
-    title: "Punctuation Marks",
-    subject: "English",
-    place: fixturePlace(6, 7),
-    href: MOCK_HREF,
-  },
-];
-
-/** At most five on "Pick up where you left off", by design (SCRUM-146). */
-const PICKUP_MAX = 5;
+/*
+ * The frame's in-progress card, its heading and its line (Lydia, 19 Nov, L1:
+ * "already built" in Nevo Home Frame, and settled). It replaced the three-card
+ * "Pick up where you left off" list, which is retired - one lesson, the one
+ * the child was just doing.
+ */
+const IN_PROGRESS_HEADING = "Here when you’re ready";
+const IN_PROGRESS_LINE = "It’s right where you left it. There’s no rush.";
 
 /**
  * Nevo Home Frame's scroll padding - 8, 20 and 24 round a phone's, 44 on a
@@ -163,11 +153,11 @@ function timeEstimate(lesson: {
 }
 
 /**
- * Home Dashboard (screen 19, SCRUM-146). Today's lessons first, then up to five
- * unfinished lessons under "Pick up where you left off" - each with its subject,
- * never a date. When nothing is outstanding that section is absent entirely,
- * and a quiet note says so. Reduced-motion aware; a settled empty state
- * when nothing has been set yet.
+ * Home Dashboard (screen 19, SCRUM-146). A lesson part-way first, on the
+ * frame's one in-progress card - the most recently worked on, with its
+ * subject, never a date - then Today's lessons. When nothing is part-way the
+ * card is absent entirely. Reduced-motion aware; a settled empty state when
+ * nothing has been set yet.
  */
 export function HomeDashboard() {
   const { name: displayName } = useDisplayName();
@@ -177,8 +167,8 @@ export function HomeDashboard() {
   /*
    * READ AGAIN WHEN HELD PROGRESS LANDS. The shell sends what this device
    * held at the same moment this screen first reads, so a completion landing
-   * a beat later left its finished lesson under "Pick up where you left off"
-   * until Home was next opened (24 Oct production run). See
+   * a beat later left its finished lesson on the in-progress card until Home
+   * was next opened (24 Oct production run). See
    * `onHeldProgressLanded`.
    */
   useEffect(() => onHeldProgressLanded(refresh), [refresh]);
@@ -189,7 +179,7 @@ export function HomeDashboard() {
   const [previewOpen, setPreviewOpen] = useState(false);
 
   let today: TodayLesson[] = TODAY;
-  let pickup: PickUp[] = PICKUP;
+  let inProgress: PickUp | null = IN_PROGRESS;
   /** Something has been set for this child, even if it is all done now. */
   let everSet = true;
 
@@ -286,11 +276,16 @@ export function HomeDashboard() {
           ];
         });
 
-      // Most recently touched first, whichever door the lesson came in by.
-      pickup = [...assigned, ...library]
-        .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-        .slice(0, PICKUP_MAX)
-        .map((p) => p.item);
+      /*
+       * THE MOST RECENTLY WORKED ON, whichever door it came in by (Lydia,
+       * 19 Nov, L1): "A child's mental model is the thing they were just
+       * doing, not the oldest and not the nearest to finishing." By the
+       * server's own `updatedAt` on the row; nothing here ranks them.
+       */
+      inProgress =
+        [...assigned, ...library].sort(
+          (a, b) => Date.parse(b.at) - Date.parse(a.at),
+        )[0]?.item ?? null;
 
       /*
        * TODAY'S LESSONS CARRIES ONLY WORK NOT YET STARTED (SCRUM-146).
@@ -334,7 +329,7 @@ export function HomeDashboard() {
        */
       everSet =
         today.length > 0 ||
-        pickup.length > 0 ||
+        inProgress !== null ||
         live.assignments.some(
           (a) =>
             unavailableReason(a) === null &&
@@ -345,7 +340,7 @@ export function HomeDashboard() {
         [...latest.values()].some((row) => isFinishedRow(row));
     } else {
       today = [];
-      pickup = [];
+      inProgress = null;
       everSet = false;
     }
   }
@@ -446,7 +441,7 @@ export function HomeDashboard() {
     );
   }
 
-  // ONE BODY, TWO MEANINGS. Everything above fills `today` and `pickup` from
+  // ONE BODY, TWO MEANINGS. Everything above fills `today` and `inProgress` from
   // the live read when there is a session, and from the fixtures when there is
   // not, so this markup is the child's own dashboard OR the designed
   // walkthrough depending only on who is looking. The mark has to go on the
@@ -484,14 +479,36 @@ export function HomeDashboard() {
           {dueReview && <ReviewCard review={dueReview} />}
 
           {/*
+            THE FRAME'S IN-PROGRESS CARD, before Today's lessons as Nevo Home
+            Frame draws it (`homeState` inprogress; Lydia, 19 Nov, L1). One
+            lesson, the most recently worked on - see `inProgress`. Absent,
+            heading and all, when nothing is part-way.
+          */}
+          {inProgress && (
+            <section
+              aria-labelledby="home-in-progress"
+              className="mt-[26px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:120ms]"
+            >
+              <h2
+                id="home-in-progress"
+                className="text-[17px] font-semibold tracking-[-0.01em] text-nevo-near-black"
+              >
+                {IN_PROGRESS_HEADING}
+              </h2>
+              <InProgressCard item={inProgress} />
+            </section>
+          )}
+
+          {/*
             NOTHING NEW TODAY, AND THE ONLY LESSON IS PART-WAY (design D99,
             6 Oct). "Today" means open from today - `isOpenToStudent` reads
             `availableFrom`, never `dueAt` - and the heading and grid give way
             rather than draw with nothing in them (D20). The slot used to hold
             an empty state ("Your lessons will show up here soon"), which told
             a child with a lesson underway they had nothing. Design: "the
-            part-way lesson appears in continue-where-you-left-off". The
-            caught-up state D99 put below it waits on SCRUM-146 (see above).
+            part-way lesson appears in continue-where-you-left-off" - the
+            in-progress card above. The caught-up state D99 put below it waits
+            on SCRUM-146 (see above).
 
             Absent rather than an empty heading when nothing new is set - the
             frame never draws Today's lessons with nothing under it.
@@ -526,25 +543,6 @@ export function HomeDashboard() {
               </div>
             </section>
           )}
-
-          {pickup.length > 0 && (
-            <section
-              aria-labelledby="home-pickup"
-              className="mt-[34px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:260ms]"
-            >
-              <h2
-                id="home-pickup"
-                className="text-[17px] font-semibold tracking-[-0.01em] text-nevo-near-black"
-              >
-                Pick up where you left off
-              </h2>
-              <div className="mt-3.5 flex flex-col gap-3">
-                {pickup.map((item) => (
-                  <PickUpCard key={item.key} item={item} />
-                ))}
-              </div>
-            </section>
-          )}
         </>
       )}
 
@@ -566,16 +564,20 @@ export function HomeDashboard() {
   return <SampleRegion kind="student:home">{body}</SampleRegion>;
 }
 
-/** One unfinished lesson - straight back in, no preview in the way. */
-function PickUpCard({ item }: { item: PickUp }) {
+/**
+ * The frame's in-progress card - straight back in, no preview in the way: the
+ * ring (or the plain mark), the lesson and its subject, the frame's line, and
+ * the chevron, 18 by 20 inside, 14 under the heading.
+ */
+function InProgressCard({ item }: { item: PickUp }) {
   return (
     <Link
       href={item.href}
-      className="flex cursor-pointer items-center gap-4 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-elevation-1 transition-transform active:scale-[0.98]"
+      className="mt-3.5 flex cursor-pointer items-start gap-4 rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px] shadow-elevation-1 transition-transform active:scale-[0.98]"
     >
       {item.place ? <PickUpRing place={item.place} /> : <PickUpMark />}
       <span className="min-w-0 flex-1">
-        <span className="block text-base font-semibold tracking-[-0.005em] text-nevo-near-black">
+        <span className="block text-[17px] font-semibold tracking-[-0.005em] text-nevo-near-black">
           {item.title}
         </span>
         {item.subject && (
@@ -583,9 +585,12 @@ function PickUpCard({ item }: { item: PickUp }) {
             {item.subject}
           </span>
         )}
+        <span className="mt-2 block text-[14px] leading-[1.5] text-nevo-near-black/72">
+          {IN_PROGRESS_LINE}
+        </span>
       </span>
       <ChevronRight
-        className="size-5 shrink-0 text-nevo-navy"
+        className="size-[22px] shrink-0 self-center text-nevo-navy"
         strokeWidth={2.2}
         aria-hidden
       />
@@ -598,7 +603,7 @@ const RING_LENGTH = 2 * Math.PI * 24;
 
 /**
  * The frame's ring, run to the child's own fraction (backend B51), with the
- * play glyph in the middle.
+ * play glyph in the middle: a 54 ring in the card's 60 box, centred.
  *
  * Read aloud as the position in words, never as a number (rule 9). The arc is
  * left off entirely at the very start rather than drawn as zero, because a
@@ -609,12 +614,12 @@ function PickUpRing({ place }: { place: SegmentPlace }) {
     <span
       role="img"
       aria-label={place.words}
-      className="relative flex size-[54px] shrink-0 items-center justify-center text-nevo-navy"
+      className="relative flex size-[60px] shrink-0 items-center justify-center text-nevo-navy"
       data-pickup-ring
     >
       <svg
         viewBox="0 0 54 54"
-        className="absolute inset-0 size-full -rotate-90"
+        className="absolute inset-[3px] size-[54px] -rotate-90"
         aria-hidden
       >
         <circle
@@ -640,7 +645,7 @@ function PickUpRing({ place }: { place: SegmentPlace }) {
         )}
       </svg>
       <Play
-        className="relative size-[17px]"
+        className="relative size-[19px]"
         fill="currentColor"
         strokeWidth={0}
         aria-hidden
@@ -660,11 +665,11 @@ function PickUpRing({ place }: { place: SegmentPlace }) {
 function PickUpMark() {
   return (
     <span
-      className="flex size-[54px] shrink-0 items-center justify-center rounded-full bg-nevo-violet/18 text-nevo-navy"
+      className="flex size-[60px] shrink-0 items-center justify-center rounded-full bg-nevo-violet/18 text-nevo-navy"
       aria-hidden
       data-pickup-mark
     >
-      <Play className="size-[17px]" fill="currentColor" strokeWidth={0} />
+      <Play className="size-[19px]" fill="currentColor" strokeWidth={0} />
     </span>
   );
 }

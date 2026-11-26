@@ -133,7 +133,7 @@ import { openBusyWindow } from "@/lib/signals/busy";
 import { useAttentionReports } from "@/hooks/useAttentionReports";
 import { useLessonProgress } from "@/hooks/useLessonProgress";
 import { AudioSegment } from "./AudioSegment";
-import { BreakOfferPill } from "./BreakOfferPill";
+import { BreakOfferCard } from "./BreakOfferCard";
 import { BreakScreen } from "./BreakScreen";
 import {
   CalculationBreakCard,
@@ -245,6 +245,17 @@ const REROUTED = {
   title: "That version didn't work.",
   body: "Nevo is taking you through this lesson again, a simpler way.",
   action: "Let's try it another way",
+} as const;
+
+/**
+ * A SAVED LESSON WITHDRAWN FOR SAFETY WHILE OPEN (Lydia, 19 Nov, L14): the
+ * child finishes the part they are in, and the lesson closes after it - "not
+ * mid-segment, and not run to the end". Her words, settled. School-route
+ * copy: it names the teacher, so it does not travel to a route with none.
+ */
+const WITHDRAWN_ENDING = {
+  heading: "That's the end of this one for now.",
+  note: "Your teacher is having another look at it.",
 } as const;
 
 /** Design's ending for a partial offline copy (D142, 8 Oct), verbatim. */
@@ -391,6 +402,7 @@ export function LessonPlayer({
   live = false,
   finished: finishedOnOpen = false,
   partial = false,
+  withdrawn = false,
   assignmentId,
   startAt = 0,
   placeUnknown = false,
@@ -436,6 +448,12 @@ export function LessonPlayer({
    * `markComplete`. A package copy carrying all three is not partial.
    */
   partial?: boolean;
+  /**
+   * The saved copy this lesson is open from was withdrawn for safety since it
+   * opened (L14) - see `useWithdrawnForSafety`. The child finishes the part
+   * they are in; any move off it closes the lesson.
+   */
+  withdrawn?: boolean;
   /**
    * Segment to open on, from saved progress. Clamped by the caller; a review
    * session always opens at the top regardless.
@@ -852,17 +870,24 @@ export function LessonPlayer({
    * for each hand-off, so a second one arrives open as the first did.
    * `answeredRight` is read where the reply lands, which state is not: a
    * hand-off for an earlier miss arriving after a right answer is moot.
-   * `handedOff` is the checks the server moved the child past - every
-   * hand-off moves them past (B128) - never counted as passed.
+   *
+   * A HAND-OFF MOVES NO ONE PAST THE CHECK (Lydia's gate, 23 Oct: no advance
+   * on a wrong check, and the break is the only valve). It used to: taking
+   * it marked the check moved past, and the panel's Keep going - or Next
+   * under it - went on into the next part with the check still failed (the
+   * hub, 14 Nov, as Chidi on Osmosis). The panel now ends back at the check,
+   * asked afresh (`backToCheckAfterHandoff`).
    */
   const [handoff, setHandoff] = useState<{
     segmentId: string;
     run: number;
     prompts: PanelPrompt[];
   } | null>(null);
-  const [handedOff, setHandedOff] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
+  /**
+   * Bumped to ask the check on screen afresh: its sheet remounts with nothing
+   * picked, as Next opens a check after a tap out.
+   */
+  const [askedAfresh, setAskedAfresh] = useState(0);
   /**
    * A HAND-OFF ON OFFER, NOT OPENED (Lydia, 7 Nov, her 12: "The box offers,
    * the child takes it"). The server's hand-off at the third miss is kept
@@ -1178,8 +1203,18 @@ export function LessonPlayer({
   // "offer" returns to the same segment. A module boundary offers none (D91).
   // Trigger travels into `break_start`.
   const breakOrigin = useRef<
-    "advance" | "offer" | "check" | "assessment" | "leave"
+    "advance" | "offer" | "check" | "assessment" | "leave" | "reading"
   >("advance");
+  /**
+   * Where a break taken from the reading's pause card (L7) comes back to: the
+   * group after the pause, on the part it was taken on. The break screen takes
+   * the lesson's place, so the reading would otherwise start again at its
+   * first group. Let go of with any move to another part.
+   */
+  const [readingResume, setReadingResume] = useState<{
+    segmentId: string;
+    at: number;
+  } | null>(null);
   /**
    * Where the child tapped out of the end-of-lesson check (Lydia, 16 Nov):
    * the next question to ask, for when they move on into it again this visit.
@@ -2146,12 +2181,33 @@ export function LessonPlayer({
     // The system-owned wait closes with it (SCRUM-94.9).
     trackBusy(BUSY_REASON.MODALITY_SWITCH, BUSY_PHASE.END);
   };
+  /*
+   * L14: THE LESSON CLOSES AFTER THE PART THE CHILD IS IN. Its copy was
+   * withdrawn for safety while it was open, so no move reads another part -
+   * forward, back, into the after-lesson check, or past a break. Written as
+   * leaving is, at the part they finished: nothing about it was completed.
+   */
+  const [closedForSafety, setClosedForSafety] = useState(false);
+  const closeForSafety = () => {
+    if (!review && !finished) {
+      endFocusEvents();
+      reportProgress(LESSON_STATUS.EXITED, { segment: index });
+    }
+    setEnding({ completionStatus: "exited", exitPosition: segment.id });
+    setClosedForSafety(true);
+  };
+
   const go = (next: number) => {
     if (next < 0 || next >= total) return;
+    if (withdrawn && next !== index) {
+      closeForSafety();
+      return;
+    }
     // A switch still on its way stays with the segment it was made on: the
     // write goes on, and what it lands as is kept for a return visit.
     if (pendingSwitch.current !== null) endSwitchWait();
     setObserved((o) => ({ ...o, replays: 0 }));
+    setReadingResume(null);
     const nextSegment = asEntered(lesson.segments[next]);
     const nextPlan = livePlanFor(nextSegment.id);
     setIndex(next);
@@ -2208,6 +2264,10 @@ export function LessonPlayer({
 
   /** The forward move itself — next segment, then assessment, then done. */
   const continueAdvance = () => {
+    if (withdrawn) {
+      closeForSafety();
+      return;
+    }
     if (index < total - 1) {
       // Crossing into a later module lands on the boundary screen first
       // (SCRUM-101). Backward moves never re-show it.
@@ -2237,6 +2297,11 @@ export function LessonPlayer({
     if (hintOnScreen && !usedHints.current.has(hintKey)) {
       usedHints.current.add(hintKey);
       trackEvent(SIGNAL_EVENT_TYPES.HINT_USED, { segmentId: segment.id });
+    }
+    // L14: closed now, not after a break between parts it no longer has.
+    if (withdrawn) {
+      closeForSafety();
+      return;
     }
     const plannedBreak = livePlanFor(segment.id)?.breakAfter ?? null;
     if (plannedBreak && !breaksTaken.current.has(segment.id)) {
@@ -2280,17 +2345,13 @@ export function LessonPlayer({
 
   /** Next chevron — an unpassed Quick Check intercepts the advance. */
   const handleNext = () => {
-    // Next past a hand-off is Keep going by another way: the panel goes
-    // with the segment, as it does there.
+    // Next under a hand-off panel is its Keep going by another way: the
+    // panel goes, and the check is asked again - never on past it.
     if (handoffHere) {
-      keepGoingAfterHandoff();
+      backToCheckAfterHandoff();
       return;
     }
-    if (
-      segment.quickCheck &&
-      !passedChecks.has(segment.id) &&
-      !handedOff.has(segment.id)
-    ) {
+    if (segment.quickCheck && !passedChecks.has(segment.id)) {
       /*
        * A CHECK THAT DOES NOT HOLD IS ASKED, AND THEN THE CHILD GOES ON
        * (`shownHolds`). Once the sheet has opened on it, whatever happened
@@ -2326,10 +2387,12 @@ export function LessonPlayer({
    * to accept or decline. Prompts with no id or no words are not drawn; a
    * hand-off with none left draws nothing (rule 5), and the check stays.
    *
-   * B128 (13 Oct): "advanceAfterHandoff is true whenever a Socratic handoff
-   * exists. False means there is no handoff." So a reply without it is no
-   * hand-off at all, whatever else it carries: no panel, and the check stays
-   * the way on. There is no panel that ends nowhere.
+   * `advanceAfterHandoff` IS NOT READ (T9, live since ~20 Nov; Lydia, 19 Nov,
+   * L13). B128 once said it was true whenever there was a hand-off, and this
+   * opened no panel without it. It is now "Always false. Panel completion
+   * never unlocks the section; retry the original check." - so the gate
+   * would have opened no hand-off at all. The hand-off is `handoffTo` with
+   * prompts, and the panel ends back at the check (`backToCheckAfterHandoff`).
    *
    * AND NONE ON A CALCULATION (Lydia, 26 Oct #1), whatever the server sends:
    * Teslim's 4c5706a stopped the three-miss hand-off there, and one still
@@ -2337,7 +2400,6 @@ export function LessonPlayer({
    */
   const openHandoff = (segmentId: string, stored: LessonQuestionAttempt) => {
     if (stored.handoffTo !== "socratic_panel") return;
-    if (stored.advanceAfterHandoff !== true) return;
     const on = lesson.segments.find((s) => s.id === segmentId);
     if (on && isCalculation(asEntered(on))) return;
     if (answeredRight.current.has(stored.questionId ?? segmentId)) return;
@@ -2352,10 +2414,10 @@ export function LessonPlayer({
 
   /*
    * "TALK IT THROUGH", TAKEN: the panel opens with the server's prompts, and
-   * the sheet goes. "FORWARD, NEVER BACK TO THE QUESTION" (38a §2) holds
-   * from here: a child who closes the panel and taps Next goes forward too,
-   * never into the check and its old wrong pick. Still not passed, and the
-   * misses still stand.
+   * the sheet goes. Still not passed, and the misses still stand. 38a §2's
+   * "forward, never back to the question" no longer holds from here (Lydia's
+   * gate, 23 Oct): the panel ends back at the check, never past it - but
+   * asked afresh, never into its old wrong pick (`backToCheckAfterHandoff`).
    */
   const takeHandoff = (segmentId: string) => {
     const offer =
@@ -2363,7 +2425,6 @@ export function LessonPlayer({
     if (!offer) return;
     setOfferedHandoff(null);
     setCheckOpen(false);
-    setHandedOff((prev) => new Set(prev).add(segmentId));
     setHandoff((prev) => ({
       segmentId,
       run: (prev?.run ?? 0) + 1,
@@ -2423,8 +2484,7 @@ export function LessonPlayer({
   const unresolvedCheck =
     phase === "segments" &&
     (checkOpen || gaveWayOn === segment.id) &&
-    !passedChecks.has(segment.id) &&
-    !handedOff.has(segment.id)
+    !passedChecks.has(segment.id)
       ? segment.id
       : null;
   const openCheck = useRef<string | null>(null);
@@ -2474,15 +2534,28 @@ export function LessonPlayer({
   };
 
   /*
-   * 38a's return: "forward, never back to the question". Moving on is not
-   * passing: the check is never marked passed, its misses stand for the
-   * review, and the panel on screen already made a right answer later
-   * `after_hint` - so nothing records this as known first time.
+   * THE HAND-OFF PANEL ENDS BACK AT THE CHECK (Lydia's gate, 23 Oct; the hub,
+   * 14 Nov). Its Keep going - and Next, or the panel closed and Next - closes
+   * it and asks the check again, as the panel the child opened themselves
+   * already did with its Try again. Asked afresh: the sheet remounts with
+   * nothing picked, so the old wrong pick and its box are not put back in
+   * front of the child. The way on is a right answer, as on every check; the
+   * way out is the break, or Exit lesson.
+   *
+   * This replaces 38a's "forward, never back to the question". Lydia, 19 Nov
+   * (L13): "Back, not forward ... Sending them back lets the child demonstrate
+   * the step, which both confirms the hand-off worked and corrects the
+   * estimate." And the server agrees (T9): `advanceAfterHandoff` is always
+   * false - "retry the original check" - and with its comprehension gate off
+   * nothing on the server holds the child there, so this does. The misses
+   * still stand for the review, and the panel already made a right answer
+   * after it `after_hint` - nothing records it as known first time.
    */
-  const keepGoingAfterHandoff = () => {
-    setHandedOff((prev) => new Set(prev).add(segment.id));
+  const backToCheckAfterHandoff = () => {
     setHandoff(null);
-    advancePastSegment();
+    setGaveWayOn(null);
+    setAskedAfresh((n) => n + 1);
+    setCheckOpen(true);
   };
   // The hand-off on this segment, if one arrived for it.
   const handoffHere = handoff?.segmentId === segment.id ? handoff : null;
@@ -2577,6 +2650,18 @@ export function LessonPlayer({
   const takeBreakFromLeave = () => {
     setLeaveOpen(false);
     breakOrigin.current = "leave";
+    breakTrigger.current = "student_request";
+    breakOnSitting.current = startSittingBreak();
+    setBreakActive(BREAK_TYPES.MICRO);
+  };
+  /**
+   * "TAKE A BREAK" ON THE READING'S PAUSE CARD (17e; Lydia, 19 Nov, L7): the
+   * same child's own break, and back to the part it was taken on, at the
+   * group after the pause.
+   */
+  const takeBreakFromReading = (at: number) => {
+    setReadingResume({ segmentId: segment.id, at });
+    breakOrigin.current = "reading";
     breakTrigger.current = "student_request";
     breakOnSitting.current = startSittingBreak();
     setBreakActive(BREAK_TYPES.MICRO);
@@ -3467,6 +3552,17 @@ export function LessonPlayer({
     return <LessonNotOpened onBack={() => exitTo(LESSONS_HREF)} />;
   }
 
+  // L14: the part is finished and the lesson closes - see `closeForSafety`.
+  if (closedForSafety) {
+    return (
+      <LessonComplete
+        onDone={() => exitTo(LESSONS_HREF)}
+        heading={WITHDRAWN_ENDING.heading}
+        note={WITHDRAWN_ENDING.note}
+      />
+    );
+  }
+
   /*
    * SCRUM-181: "THAT VERSION DIDN'T WORK." - when the completion write comes
    * back saying nothing landed and the server has rerouted the lesson (B98,
@@ -3521,7 +3617,8 @@ export function LessonPlayer({
   const serverRecordsBreak = () =>
     (breakOrigin.current === "check" ||
       breakOrigin.current === "assessment" ||
-      breakOrigin.current === "leave") &&
+      breakOrigin.current === "leave" ||
+      breakOrigin.current === "reading") &&
     breakOnSitting.current !== null;
   const breakScreen = breakActive ? (
     <BreakScreen
@@ -3560,8 +3657,13 @@ export function LessonPlayer({
           setCheckOpen(true);
         }
         if (breakOrigin.current === "assessment") returnFromBreak();
-        // From the leave dialog: back to the part it was taken on.
-        if (breakOrigin.current === "leave") returnFromBreak();
+        // From the leave dialog: back to the part it was taken on. From the
+        // reading's pause card: the same, at the group after the pause.
+        if (
+          breakOrigin.current === "leave" ||
+          breakOrigin.current === "reading"
+        )
+          returnFromBreak();
       }}
     />
   ) : null;
@@ -4091,9 +4193,10 @@ export function LessonPlayer({
                   prompts={handoffHere ? handoffHere.prompts : guidedPrompts}
                   /*
                    * SCRUM-241: TWO WAYS IN, AND THE PANEL IS TOLD WHICH. The
-                   * server's hand-off (B94, `handOffFrom`) arrives open and ends
-                   * on Keep going, on into the next segment. Otherwise it is
-                   * the engine's `show_socratic_panel`, opened by the child from
+                   * server's hand-off (B94, `handOffFrom`), taken from "Talk it
+                   * through", ends on Keep going - back to the check, asked
+                   * afresh (Lydia's gate, 23 Oct). Otherwise it is the
+                   * engine's `show_socratic_panel`, opened by the child from
                    * the confusion prompt, and ends on the way back to the
                    * question - the check, while it is still to pass. One panel
                    * at a time: a hand-off is the one on screen.
@@ -4108,10 +4211,11 @@ export function LessonPlayer({
                   }
                   /*
                    * Keep going is on the panel from the moment it opens
-                   * (SCRUM-275). After a hand-off it goes on, as Next does
-                   * there; on a panel the child opened it only closes it.
+                   * (SCRUM-275). After a hand-off it goes back to the check,
+                   * as Next does there; on a panel the child opened it only
+                   * closes it.
                    */
-                  onKeepGoing={handoffHere ? keepGoingAfterHandoff : undefined}
+                  onKeepGoing={handoffHere ? backToCheckAfterHandoff : undefined}
                   dock={panelDock}
                   onShown={(promptIds) => {
                     // Reached through the panel is not reached first time: a
@@ -4218,6 +4322,12 @@ export function LessonPlayer({
                 reading={readingOn}
                 attention={attentionOn}
                 onReadProgress={noteReadProgress}
+                readingResumeAt={
+                  readingResume?.segmentId === segment.id
+                    ? readingResume.at
+                    : undefined
+                }
+                onReadingBreak={takeBreakFromReading}
                 onChunkSeen={(chunkId, action) =>
                   trackEvent(SIGNAL_EVENT_TYPES.READING_CHUNK_VIEWED, {
                     segmentId: segment.id,
@@ -4379,8 +4489,9 @@ export function LessonPlayer({
 
       {checkShown && (
         <QuickCheckSheet
-          // Remounted per check, so each is asked with nothing picked.
-          key={`check-${segment.id}-${checkShown.at}`}
+          // Remounted per check, so each is asked with nothing picked - and
+          // again when a hand-off panel ends back at it (`askedAfresh`).
+          key={`check-${segment.id}-${checkShown.at}-${askedAfresh}`}
           check={checkShown.check}
           position={
             checksHere.length > 1
@@ -4539,11 +4650,10 @@ export function LessonPlayer({
         }}
       />
 
-      {/* The break offer (B.7), at the foot of the lesson and above the
-          chevrons (frame 38 §3): a row of its own, below the column that
-          scrolls, so a long segment still shows it. */}
+      {/* The break offer (B.7), 17d S5's card along the foot of the lesson
+          (Lydia, 25 Oct and 19 Nov, L2) - see `BreakOfferCard`. */}
       {showBreakOffer && (
-        <BreakOfferPill
+        <BreakOfferCard
           key={`break-offer-${segment.id}`}
           kind={breakOffered}
           onShown={() =>
@@ -4712,6 +4822,8 @@ function SegmentBody({
   reading,
   attention,
   onReadProgress,
+  readingResumeAt,
+  onReadingBreak,
   onChunkSeen,
   onReplay,
   onNarrationPlayed,
@@ -4753,6 +4865,10 @@ function SegmentBody({
   reading: boolean;
   attention: boolean;
   onReadProgress: (pct: number) => void;
+  /** The reading group to open on after a pause card's break (L7). */
+  readingResumeAt?: number;
+  /** 17e's pause card's Take a break (L7). */
+  onReadingBreak: (resumeAt: number) => void;
   onChunkSeen: OnChunkSeen;
   onReplay: () => void;
   onNarrationPlayed: () => void;
@@ -4789,6 +4905,8 @@ function SegmentBody({
       attention={attention}
       onReadProgress={onReadProgress}
       onChunkSeen={onChunkSeen}
+      readingResumeAt={readingResumeAt}
+      onReadingBreak={onReadingBreak}
     />
   ) : null;
   if (modality === MODALITY.TEXT && text) return text;

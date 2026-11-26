@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { ThrottleNote, pauseLength } from "./Auth/ThrottledPause";
-import { BreakOfferPill } from "./Lesson/BreakOfferPill";
+import { BreakOfferCard } from "./Lesson/BreakOfferCard";
 import { SEVERAL_CHECKS_LINES, severalChecksLine } from "./Lesson/QuickCheckSheet";
 
 /**
@@ -66,7 +66,7 @@ describe("several checks in one section, without a count", () => {
 describe("the break offer, for the server's other kinds", () => {
   const offered = (kind: string) => {
     vi.useFakeTimers();
-    render(<BreakOfferPill kind={kind} onAccept={() => {}} onDismiss={() => {}} />);
+    render(<BreakOfferCard kind={kind} onAccept={() => {}} onDismiss={() => {}} />);
     act(() => {
       vi.advanceTimersByTime(2_000);
     });
@@ -82,8 +82,11 @@ describe("the break offer, for the server's other kinds", () => {
     expect(screen.getByText("Let's go back over what you just did.")).toBeInTheDocument();
   });
 
-  it("keeps the pill's own line for the rest", () => {
+  it("keeps 17d's own line for the rest (L2)", () => {
     offered("micro");
-    expect(screen.getByText("Want a break?")).toBeInTheDocument();
+    expect(screen.getByText("Want to pause for a moment?")).toBeInTheDocument();
+    expect(
+      screen.getByText("A slow breath, then straight back to where you are."),
+    ).toBeInTheDocument();
   });
 });

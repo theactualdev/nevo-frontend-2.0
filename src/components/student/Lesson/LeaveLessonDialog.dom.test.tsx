@@ -68,6 +68,15 @@ describe("the Leave dialog's words and choices", () => {
     );
   });
 
+  // On-screen QA, 24 Nov: the shared button's 15px, under the frame's 16.
+  it("draws Keep learning at the frame's 16px", () => {
+    show();
+
+    const keep = screen.getByRole("button", { name: "Keep learning" });
+    expect(keep.className.split(/\s+/)).toContain("text-base");
+    expect(keep.className).not.toMatch(/text-\[15px\]/);
+  });
+
   it("offers Keep learning, Take a break and Leave for now, in that order", () => {
     const props = show();
 

@@ -143,11 +143,23 @@ describe("the access sheet, the person's record", () => {
     expect(new Set(updateScopes.mock.calls[0][1])).toEqual(new Set(["roster", "billing", "senco"]));
   });
 
-  it("keeps the old checkbox when who holds it can't be read", async () => {
-    holders.mockRejectedValue(new Error("down"));
+  /*
+   * BACKLOG 87: it kept the old SENCo checkbox, as if that were the answer.
+   * A failed read says so in Learning Support's place, and asks again.
+   */
+  it("says who holds it couldn't be read, in its place, and asks again", async () => {
+    holders.mockRejectedValueOnce(new Error("down"));
     const sheet = await openSheet("Gbenga Adebayo");
-    expect(within(sheet).getByText("SENCo / Learning Support")).toBeInTheDocument();
+
+    expect(
+      within(sheet).getByText(/We couldn.t read who holds Learning Support just now/),
+    ).toBeInTheDocument();
+    expect(within(sheet).queryByText("SENCo / Learning Support")).toBeNull();
     expect(within(sheet).queryByRole("switch")).toBeNull();
+
+    fireEvent.click(within(sheet).getByRole("button", { name: "Try again" }));
+
+    await waitFor(() => expect(within(sheet).getByRole("switch")).toBeInTheDocument());
   });
 });
 

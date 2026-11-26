@@ -131,6 +131,29 @@ describe("SentenceDotModule — P1-3 is actually asked something", () => {
     expect(spoken).toEqual(["The bus is full of people."]);
   });
 
+  /*
+   * L4 (Lydia, 19 Nov; generated, Olayinka 23 Nov): the frame's listening
+   * head - the speaker mark and "Listen carefully" - where the play button
+   * was. Not its caption: P1-3 has nothing to read (D81).
+   */
+  it("shows the frame's speaker mark and Listen carefully, and never the sentence in writing", () => {
+    giveJsdomAVoice();
+    const { container } = render(
+      <SentenceDotModule
+        band="p13"
+        capture={undefined}
+        onComplete={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("Listen carefully")).toBeVisible();
+    expect(document.body.textContent).not.toMatch(/The bus is full of people/);
+    const mark = screen.getByLabelText("Play the sentence again");
+    expect(mark.querySelector("path")?.getAttribute("d")).toBe("M4 9v6h4l5 4V5L8 9z");
+    // The navy play disc is gone.
+    expect(container.querySelector(".bg-nevo-navy")).toBeNull();
+  });
+
   it("says it again when a child presses play", () => {
     giveJsdomAVoice();
     render(

@@ -137,6 +137,12 @@ export interface UploadStructure {
    * the rest are technical notes and stay off the page.
    */
   reviewNotes?: unknown[];
+  /**
+   * How many pages the source file has (Teslim T11, live 21 Nov). NULL for
+   * pasted text - "a source that was never paginated has no page count, and
+   * '1 of 1' would be a fiction". Absent on an older deployment.
+   */
+  pageTotal?: number | null;
 }
 
 /**

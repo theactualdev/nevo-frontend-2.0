@@ -437,4 +437,19 @@ describe("an expired link opened signed out (AC-03c)", () => {
       /Confirmation links last 48 hours\. We can send a fresh one to f\.adebayo@brightgate\.edu\.ng\./,
     );
   });
+  /*
+   * BACKLOG 95: signed in, it drew a navy Sign in above the navy Send a new
+   * link - two primaries where Lydia rules one (22 Oct), and a sign-in for
+   * somebody already signed in. D01b's AC-03 has no Sign in.
+   */
+  it("signed in, offers no Sign in: Send a new link is the one primary", async () => {
+    signedIn();
+    verify.mockResolvedValue(
+      state({ status: "expired", email: "f.adebayo@brightgate.edu.ng", message: "Ran out." }),
+    );
+    render(<ConfirmEmail token="t1" />);
+
+    expect(await screen.findByRole("button", { name: /Send a new link/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
+  });
 });

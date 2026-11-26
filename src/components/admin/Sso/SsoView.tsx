@@ -485,7 +485,7 @@ export function SsoView() {
             {needsAttention && (
               <div className={cn(CARD, "mt-4 px-[26px] py-6")}>
                 <p className="max-w-[60ch] text-sm leading-[1.6] text-nevo-near-black/70">
-                  Our access to {PROVIDER_LABELS[status.provider]} has expired.
+                  Our access to {PROVIDER_LABELS[status.provider]}{" "}has expired.
                   Everyone can still sign in; new accounts and roster updates
                   are paused until it&rsquo;s reconnected.
                 </p>

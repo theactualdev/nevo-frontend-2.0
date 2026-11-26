@@ -869,3 +869,91 @@ describe("an authored callout, under a view with or without its own", () => {
     }
   });
 });
+
+/**
+ * L7 (Lydia, 19 Nov; 17e, kept): UNDER THE ATTENTION ACCOMMODATION A PART IS
+ * ONE OF THE SERVER'S READING GROUPS, with a pause card only after a group it
+ * marks `pauseAfter`. Slower stays one chunk at a time.
+ */
+describe("the attention accommodation's reading groups", () => {
+  const GROUPS = [
+    { id: "g1", chunkIds: ["c1", "c2"], pauseAfter: true },
+    { id: "g2", chunkIds: ["c3"], pauseAfter: false },
+  ];
+  const grouped = (over: Partial<TextContent> = {}) =>
+    content({ readingChunks: CHUNKS, readingGroups: GROUPS, ...over });
+
+  it("shows a whole group as one part, its chunks together", () => {
+    render(<TextSegment content={grouped()} density={null} attention />);
+
+    expect(screen.getByText("Plants make their own food.")).toBeInTheDocument();
+    expect(screen.getByText("They use sunlight to do it.")).toBeInTheDocument();
+    expect(screen.queryByText("Oxygen is what they give out.")).toBeNull();
+  });
+
+  it("pauses with 17e's card after a group marked pauseAfter, with no body", () => {
+    render(<TextSegment content={grouped()} density={null} attention onReadingBreak={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tap to continue" }));
+
+    expect(screen.getByRole("heading", { name: "A good place to pause" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Keep going" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Take a break" })).toBeInTheDocument();
+    // 17e's body is about its own example lesson; none is drawn.
+    expect(screen.queryByText(/You've read/)).toBeNull();
+    // Not the chunk flow's breathing pause.
+    expect(screen.queryByText(/Take a breath/)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+
+    expect(screen.getByText("Oxygen is what they give out.")).toBeInTheDocument();
+  });
+
+  it("goes straight on where the group is not marked", () => {
+    render(
+      <TextSegment
+        content={grouped({
+          readingGroups: [
+            { id: "g1", chunkIds: ["c1"], pauseAfter: false },
+            { id: "g2", chunkIds: ["c2", "c3"], pauseAfter: false },
+          ],
+        })}
+        density={null}
+        attention
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Tap to continue" }));
+
+    expect(screen.queryByRole("heading", { name: "A good place to pause" })).toBeNull();
+    expect(screen.getByText("Oxygen is what they give out.")).toBeInTheDocument();
+  });
+
+  it("takes the break at the child's word, to come back after the pause", () => {
+    const onReadingBreak = vi.fn();
+    render(<TextSegment content={grouped()} density={null} attention onReadingBreak={onReadingBreak} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tap to continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take a break" }));
+
+    expect(onReadingBreak).toHaveBeenCalledWith(1);
+  });
+
+  it("opens on the group a break came back to", () => {
+    render(<TextSegment content={grouped()} density={null} attention readingResumeAt={1} />);
+
+    expect(screen.getByText("Oxygen is what they give out.")).toBeInTheDocument();
+    expect(screen.queryByText("Plants make their own food.")).toBeNull();
+  });
+
+  it("keeps Slower one chunk at a time, whatever the groups (L7)", () => {
+    render(<TextSegment content={grouped()} density={DENSITY.SLOWER} attention />);
+
+    expect(screen.getByText("Plants make their own food.")).toBeInTheDocument();
+    expect(screen.queryByText("They use sunlight to do it.")).toBeNull();
+  });
+
+  it("leaves a child without the accommodation the one passage", () => {
+    render(<TextSegment content={grouped()} density={null} />);
+
+    expect(screen.getByText("Oxygen is what they give out.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tap to continue" })).toBeNull();
+  });
+});

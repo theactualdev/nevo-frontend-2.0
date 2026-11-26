@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   classesApi,
@@ -372,9 +373,22 @@ export function AssignTeachingSheet({
   const anyDone = Object.values(outcomes).some((o) => o.state === "done");
   const someFailed = phase === "settled" && !allDone;
   const n = tickedClasses.length;
-  const cta = subject
-    ? `Assign ${subject.displayName} to ${n} ${n === 1 ? "class" : "classes"}`
-    : "Assign teacher";
+  /*
+   * SCRUM-40's "Primary conflict" state: "the commit label becomes 'Assign and
+   * make Primary'" (backlog 81) - whenever the notice below shows, for any
+   * ticked class.
+   */
+  const primaryConflict =
+    role === "primary" &&
+    tickedClasses.some((c) => {
+      const incumbent = incumbentOf(c.id);
+      return Boolean(incumbent && incumbent.teacherId !== teacherId);
+    });
+  const cta = primaryConflict
+    ? "Assign and make Primary"
+    : subject
+      ? `Assign ${subject.displayName} to ${n} ${n === 1 ? "class" : "classes"}`
+      : "Assign teacher";
   const roleLegend =
     n === 1 ? `Role in ${tickedClasses[0].name}` : n > 1 ? "Role in these classes" : "Role";
   const subtitle =
@@ -457,25 +471,25 @@ export function AssignTeachingSheet({
           <p className="m-0 text-[15px] font-semibold text-nevo-near-black">{door.teacher.name}</p>
         ) : (
           <>
-            <select
+            <NevoSelect
               aria-label="Teacher"
               value={teacherId}
-              onChange={(e) => chooseTeacher(e.target.value)}
+              onValueChange={chooseTeacher}
               disabled={phase !== "idle"}
-              className={ASSIGN_SELECT}
-            >
-              <option value="">Choose a teacher</option>
-              {teachers.state === "ready"
-                ? teachers.value
-                    // A removed teacher has no console to teach in.
-                    .filter((t) => t.status !== "deactivated")
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.status === "invited" ? `${t.name} (invited)` : t.name}
-                      </option>
-                    ))
-                : null}
-            </select>
+              placeholder="Choose a teacher"
+              options={
+                teachers.state === "ready"
+                  ? teachers.value
+                      // A removed teacher has no console to teach in.
+                      .filter((t) => t.status !== "deactivated")
+                      .map((t) => ({
+                        value: t.id,
+                        label: t.status === "invited" ? `${t.name} (invited)` : t.name,
+                      }))
+                  : []
+              }
+              triggerClassName={ASSIGN_SELECT}
+            />
             {teachers.state === "loading" ? (
               <p className="mt-2 text-[12.5px] leading-[1.5] text-nevo-near-black/45">
                 Looking up your staff&hellip;
@@ -488,7 +502,7 @@ export function AssignTeachingSheet({
               </p>
             ) : teachers.value.find((t) => t.id === teacherId)?.status === "invited" ? (
               <p className={ASSIGN_HINT}>
-                {teacherName ?? "This teacher"} hasn&rsquo;t joined yet. This assignment takes
+                {teacherName ?? "This teacher"}{" "}hasn&rsquo;t joined yet. This assignment takes
                 effect when they join.
               </p>
             ) : null}
@@ -530,25 +544,22 @@ export function AssignTeachingSheet({
             })}
           </div>
         ) : (
-          <select
+          <NevoSelect
             id="assign-subject"
             value={subjectId}
-            onChange={(e) => {
-              setSubjectId(e.target.value);
+            onValueChange={(v) => {
+              setSubjectId(v);
               setTeacherAdd(null);
             }}
             disabled={phase !== "idle" || subjects.state !== "ready"}
-            className={ASSIGN_SELECT}
-          >
-            <option value="">Choose a subject</option>
-            {subjects.state === "ready"
-              ? subjects.value.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.displayName}
-                  </option>
-                ))
-              : null}
-          </select>
+            placeholder="Choose a subject"
+            options={
+              subjects.state === "ready"
+                ? subjects.value.map((s) => ({ value: s.id, label: s.displayName }))
+                : []
+            }
+            triggerClassName={ASSIGN_SELECT}
+          />
         )}
         {subjects.state === "failed" ? (
           <ReadFailed className="mt-2" what="your school's subject list" onRetry={loadSubjects} />
@@ -584,7 +595,7 @@ export function AssignTeachingSheet({
           ) : (
             <div className="mt-2">
               <p className="m-0 text-[13px] leading-[1.5] text-nevo-near-black/62">
-                {who} doesn&rsquo;t teach {subject.displayName} yet, so it can&rsquo;t be
+                {who} doesn&rsquo;t teach {subject.displayName}{" "}yet, so it can&rsquo;t be
                 assigned. Add {subject.displayName} to {who}&rsquo;s subjects and it&rsquo;s ready.
               </p>
               {teacherAdd?.phase === "failed" ? (
