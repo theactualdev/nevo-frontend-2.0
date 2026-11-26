@@ -8,8 +8,9 @@ import {
   type LearnerObservation,
 } from "@/lib/api/classes";
 import {
+  DECLARED_OBSERVATION_WINDOW_DAYS,
   OBSERVATION_COPY,
-  observationCount,
+  observationCountWithin,
 } from "@/lib/constants/observations";
 import {
   conversationEvidenceApi,
@@ -535,7 +536,12 @@ export function LearnerProfileView({
                   // than rendered as its raw key - `revisited_content` on a SENCo
                   // screen reads as a judgement nobody wrote.
                   if (!copy) return null;
-                  const times = observationCount(o.pattern, o.count);
+                  // The count only with a declared window - none yet (S22).
+                  const times = observationCountWithin(
+                    o.pattern,
+                    o.count,
+                    DECLARED_OBSERVATION_WINDOW_DAYS,
+                  );
                   return (
                     <li key={o.pattern} className="flex items-start gap-2.5">
                       <span

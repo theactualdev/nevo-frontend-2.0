@@ -160,9 +160,14 @@ describe("SencoView class filter", () => {
  * D8b's lessons-finished figure, which was deferred for months on the claim
  * that it needed a request per learner. It rides the per-class roster read the
  * screen already makes.
+ *
+ * LEFT OUT UNTIL ITS WINDOW IS DECLARED (S22, Hub 25 Nov). The server counts
+ * the last 30 days and the contract does not say so, so "12 lessons finished"
+ * read as a total - an untrue state about a child. When the window arrives the
+ * figure returns with it (`observations.test.ts` pins the phrasing).
  */
 describe("lessons finished on the profile row", () => {
-  it("shows the count the roster reported", async () => {
+  it("leaves out the count the roster reported, whose window is not declared", async () => {
     classList.mockResolvedValue([klass("c1", "JSS 2A")]);
     perClass.mockResolvedValue([
       onRoster("s1", [{ pattern: "completed_lessons", count: 12 }]),
@@ -171,12 +176,12 @@ describe("lessons finished on the profile row", () => {
     const { container } = render(<SencoView />);
     fireEvent.click(await screen.findByRole("tab", { name: "Learner profiles" }));
 
-    await waitFor(() =>
-      expect(visibleText(container)).toMatch(/12 lessons finished/),
-    );
+    // The roster has landed: the row names the child's class from it.
+    await waitFor(() => expect(visibleText(container)).toMatch(/JSS 2A/));
+    expect(visibleText(container)).not.toMatch(/12 lessons|lessons? finished/);
   });
 
-  it("reads naturally at one", async () => {
+  it("leaves it out at one as well", async () => {
     classList.mockResolvedValue([klass("c1", "JSS 2A")]);
     perClass.mockResolvedValue([
       onRoster("s1", [{ pattern: "completed_lessons", count: 1 }]),
@@ -185,7 +190,8 @@ describe("lessons finished on the profile row", () => {
     const { container } = render(<SencoView />);
     fireEvent.click(await screen.findByRole("tab", { name: "Learner profiles" }));
 
-    await waitFor(() => expect(visibleText(container)).toMatch(/1 lesson finished/));
+    await waitFor(() => expect(visibleText(container)).toMatch(/JSS 2A/));
+    expect(visibleText(container)).not.toMatch(/lessons? finished/);
   });
 
   it("shows NOTHING when the roster read failed - never a zero", async () => {
@@ -276,7 +282,9 @@ describe("for an admin the roster route refuses", () => {
     const { container } = render(<SencoView />);
     await openProfilesAndFilter(container, "JSS 2A");
 
-    await waitFor(() => expect(visibleText(container)).toMatch(/3 lessons finished/));
-    expect(visibleText(container)).toMatch(/Amara Okafor/);
+    // Filtered to her class, the row carries the class line the roster gave.
+    await waitFor(() => expect(visibleText(container)).toMatch(/Amara Okafor/));
+    expect(visibleText(container)).toMatch(/JSS 2A · /);
+    expect(visibleText(container)).not.toMatch(/No profiles match|Still reading/);
   });
 });

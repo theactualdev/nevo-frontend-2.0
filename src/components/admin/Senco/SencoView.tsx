@@ -20,6 +20,7 @@ import {
   type AdminStudentRow,
 } from "@/lib/api/students";
 import { accommodationCopy } from "@/lib/constants/accommodations";
+import { DECLARED_OBSERVATION_WINDOW_DAYS, inTheLast } from "@/lib/constants/observations";
 import { ReadFailed } from "../ReadFailed";
 import { YEAR_GROUPS, yearGroupLabel } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
@@ -872,10 +873,15 @@ export function SencoView() {
                     {/* ABSENT, NOT ZERO. A learner whose class roster has not
                         answered - or failed - is simply not in `lessonsDone`,
                         and gets no figure at all. Rendering "0" or a dash here
-                        would attribute the silence to the child. */}
-                    {typeof lessonsDone[s.id] === "number" ? (
+                        would attribute the silence to the child.
+
+                        AND NEVER WITHOUT ITS WINDOW (S22, Hub 25 Nov): the
+                        server counts the last 30 days and the contract does
+                        not say so, so "12 lessons finished" read as a total.
+                        Left out until a window is declared, then said with it. */}
+                    {typeof lessonsDone[s.id] === "number" && inTheLast(DECLARED_OBSERVATION_WINDOW_DAYS) ? (
                       <span className="flex-none text-[13px] text-nevo-near-black/55">
-                        {`${lessonsDone[s.id]} ${lessonsDone[s.id] === 1 ? "lesson" : "lessons"} finished`}
+                        {`${lessonsDone[s.id]} ${lessonsDone[s.id] === 1 ? "lesson" : "lessons"} finished ${inTheLast(DECLARED_OBSERVATION_WINDOW_DAYS)}`}
                       </span>
                     ) : null}
                     {/* Only once the WHOLE week has been read. A zero here is
