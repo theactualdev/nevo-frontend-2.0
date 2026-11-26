@@ -139,7 +139,7 @@ describe("the subject is part of every assignment", () => {
     fromClass();
     await choose();
     fireEvent.click(screen.getByRole("button", { name: /^Co-teacher/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Assign Mathematics to 1 class" }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign Bisi Bello to Mathematics in 1 class" }));
     await waitFor(() =>
       expect(createAssignment).toHaveBeenCalledWith({
         teacherId: "t-bello",
@@ -155,7 +155,7 @@ describe("the subject is part of every assignment", () => {
     await choose();
     fireEvent.click(within(row("JSS 2B")).getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: /^Co-teacher/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Assign Mathematics to 2 classes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign Bisi Bello to Mathematics in 2 classes" }));
     await waitFor(() => expect(createAssignment).toHaveBeenCalledTimes(2));
     expect(createAssignment.mock.calls.map((c) => (c[0] as { classId: string }).classId)).toEqual([
       "c-2a",
@@ -196,7 +196,7 @@ describe("a class that doesn't take the subject", () => {
       ),
     );
     expect(within(row("JSS 2C")).getByRole("checkbox")).toBeChecked();
-    expect(screen.getByRole("button", { name: "Assign Mathematics to 2 classes" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Assign Bisi Bello to Mathematics in 2 classes" })).toBeInTheDocument();
   });
 
   it("says so in the server's words when the subject can't be added", async () => {
@@ -230,7 +230,7 @@ describe("each class's outcome is its own", () => {
     await choose();
     fireEvent.click(within(row("JSS 2B")).getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: /^Co-teacher/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Assign Mathematics to 2 classes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign Bisi Bello to Mathematics in 2 classes" }));
 
     await waitFor(() =>
       expect(visibleText(row("JSS 2B"))).toMatch(/That subject is not on this teacher's list\./),
@@ -256,7 +256,7 @@ describe("making somebody primary where the class has one", () => {
     expect(said(container)).toMatch(
       /Folake Adeyemi is Primary for JSS 2A right now\. Making Bisi Bello Primary moves Folake Adeyemi to Co-teacher; they keep the class and their notes\./,
     );
-    expect(screen.queryByRole("button", { name: "Assign Mathematics to 1 class" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Assign Bisi Bello to Mathematics in 1 class" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Assign and make Primary" }));
 
     await waitFor(() => expect(createAssignment).toHaveBeenCalled());
@@ -328,6 +328,23 @@ describe("from the teacher's page", () => {
     expect(screen.getByText("JSS 2A", { selector: "span" })).toBeInTheDocument();
     expect(screen.queryByText("JSS 2B", { selector: "span" })).toBeNull();
   });
+
+  // L83 (Lydia, 25 Nov): the button names who is being assigned.
+  it("names the teacher on the button: Assign {teacher} to {subject} in {n} classes", async () => {
+    render(
+      <AssignTeachingSheet
+        door={{ kind: "teacher", teacher: { id: "t-bello", name: "Bisi Bello" }, held: [] }}
+        classes={CLASSES}
+        onClose={vi.fn()}
+        onAssigned={onAssigned}
+      />,
+    );
+    await chooseOption(screen.getByRole("combobox", { name: "2 · Subject" }), "Mathematics");
+    fireEvent.click(screen.getByText("JSS 2A", { selector: "span" }));
+    expect(screen.getByRole("button", { name: "Assign Bisi Bello to Mathematics in 1 class" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("JSS 2B", { selector: "span" }));
+    expect(screen.getByRole("button", { name: "Assign Bisi Bello to Mathematics in 2 classes" })).toBeInTheDocument();
+  });
 });
 
 describe("D05's Teaches, from the teacher's record (8 Oct)", () => {
@@ -342,7 +359,7 @@ describe("D05's Teaches, from the teacher's record (8 Oct)", () => {
     expect(screen.queryByRole("combobox", { name: "2 · Subject" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /^Co-teacher/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Assign Mathematics to 1 class" }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign Bisi Bello to Mathematics in 1 class" }));
     await waitFor(() =>
       expect(createAssignment).toHaveBeenCalledWith(
         expect.objectContaining({ teacherId: "t-bello", schoolSubjectId: "sub-maths" }),
@@ -385,7 +402,7 @@ describe("D05's Teaches, from the teacher's record (8 Oct)", () => {
     expect(said(container)).toMatch(
       /Bisi Bello doesn't teach Mathematics yet, so it can't be assigned\. Add Mathematics to Bisi Bello's subjects and it's ready\./,
     );
-    expect(screen.getByRole("button", { name: "Assign Mathematics to 1 class" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Assign Bisi Bello to Mathematics in 1 class" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Add Mathematics to Bisi Bello’s subjects" }));
     expect(said(container)).toMatch(/It joins the subjects they teach\. Nothing else about them changes\./);
@@ -397,7 +414,7 @@ describe("D05's Teaches, from the teacher's record (8 Oct)", () => {
     );
     // Their one subject now: D05's "Teaches Mathematics", already the pick.
     expect(said(container)).toMatch(/Teaches Mathematics/);
-    fireEvent.click(screen.getByRole("button", { name: "Assign Mathematics to 1 class" }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign Bisi Bello to Mathematics in 1 class" }));
     await waitFor(() =>
       expect(createAssignment).toHaveBeenCalledWith(
         expect.objectContaining({ teacherId: "t-bello", schoolSubjectId: "sub-maths" }),
@@ -452,7 +469,7 @@ describe("a teacher who hasn't joined yet (L11, 26 Oct; backend 4c5706a)", () =>
     );
     await waitFor(() => expect(said(container)).toMatch(/Teaches Mathematics/));
     fireEvent.click(screen.getByRole("button", { name: /^Co-teacher/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Assign Mathematics to 1 class" }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign Invited Teacher to Mathematics in 1 class" }));
     await waitFor(() =>
       expect(createAssignment).toHaveBeenCalledWith(
         expect.objectContaining({ teacherId: "t-new", classId: "c-2a", schoolSubjectId: "sub-maths" }),

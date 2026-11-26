@@ -192,3 +192,19 @@ describe("invitedClasses", () => {
     ]);
   });
 });
+
+/*
+ * THE CLASS PICKER IS NEVO'S, not the browser's (Olayinka's TO-DO item 2,
+ * 9038d67c). That fix was to the single picker D19's "Classes and subjects"
+ * has since replaced; each class row's picker is the same dropdown, so this
+ * holds it there. (Its "No class yet" cases went with the single picker.)
+ */
+describe("Invite a teacher's class picker", () => {
+  it("is Nevo's dropdown, still labelled Class", () => {
+    open();
+    const picker = screen.getByLabelText("Class");
+    expect(picker.tagName).not.toBe("SELECT");
+    expect(picker).toHaveAttribute("role", "combobox");
+    expect(document.querySelector("select")).toBeNull();
+  });
+});

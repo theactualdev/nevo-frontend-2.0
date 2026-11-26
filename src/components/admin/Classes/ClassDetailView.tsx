@@ -6,8 +6,9 @@ import {
   classesApi,
   type AdminClass,
   type AssignedTeacher,
-  type ClassStudent,
 } from "@/lib/api/classes";
+import { studentsApi, type AdminStudentRow } from "@/lib/api/students";
+import { ReadFailed } from "../ReadFailed";
 import { yearGroupLabel } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
 import { longDate } from "@/lib/dates";
@@ -61,6 +62,16 @@ import { untaughtSubjects } from "./untaught";
  * had simply never declared it, so the field arrived on every response and was
  * discarded. `ConsentPill` renders it on every row below.
  *
+ * THE STUDENTS ARE THE ADMIN'S OWN LIST, `GET /students?classId=` (Olayinka's
+ * TO-DO item 5, 24 Nov: "none of the classes load when clicked on"). This read
+ * `GET /classes/{id}/students`, which is the TEACHER console's: it needs the
+ * teacher scope, which no admin holds, and since backend 6b5d4968 (29 Oct) an
+ * assignment to the class as well. Every admin got a refusal, and because the
+ * three reads were one `Promise.all`, the refusal took the whole class down -
+ * every class, for every admin. The admin list carries all this section draws
+ * (name, consent, the child's look), and it fails on its own now: a lost
+ * student list is said in its section, never as a class that can't be opened.
+ *
  * The concern behind that marker was right and still governs: an absent consent
  * object reads as "Unknown", never as "Not sent", and `status` is never dressed
  * up as consent. Getting that wrong misstates a legal fact about a child.
@@ -94,7 +105,9 @@ export function ClassDetailView({
   const [phase, setPhase] = useState<Phase>("loading");
   const [klass, setKlass] = useState<AdminClass | null>(null);
   const [teachers, setTeachers] = useState<AssignedTeacher[]>([]);
-  const [students, setStudents] = useState<ClassStudent[]>([]);
+  const [students, setStudents] = useState<AdminStudentRow[]>([]);
+  /** The students' own read - its failure is the section's, not the class's. */
+  const [studentsPhase, setStudentsPhase] = useState<"loading" | "ready" | "failed">("loading");
   const [assigning, setAssigning] = useState(false);
   const [editing, setEditing] = useState(false);
   /** D24 / D01b: every change to a class pauses while setup is unfinished. */
@@ -137,6 +150,18 @@ export function ClassDetailView({
    * the guard was added to close, still open, and a refused duplicate then
    * printed "nothing has changed" about a class that HAD been restored.
    */
+  const loadStudents = useCallback(
+    () =>
+      studentsApi
+        .list({ classId })
+        .then((s) => {
+          setStudents(s);
+          setStudentsPhase("ready");
+        })
+        .catch(() => setStudentsPhase("failed")),
+    [classId],
+  );
+
   const load = useCallback(() => {
     // Only the class's own 404 says the record is gone (D28).
     let gone = false;
@@ -144,19 +169,16 @@ export function ClassDetailView({
       gone = isRecordGone(err);
       throw err;
     });
-    return Promise.all([
-      record,
-      classesApi.classTeachers(classId),
-      classesApi.classStudents(classId),
-    ])
-      .then(([c, t, s]) => {
+    const page = Promise.all([record, classesApi.classTeachers(classId)])
+      .then(([c, t]) => {
         setKlass(c);
         setTeachers(t);
-        setStudents(s);
         setPhase("ready");
       })
       .catch((err: unknown) => setPhase(gone ? "gone" : failureKind(err)));
-  }, [classId]);
+    // Settles either way, so the chain still waits for every read.
+    return Promise.all([page, loadStudents()]).then(() => undefined);
+  }, [classId, loadStudents]);
 
   useEffect(() => {
     load();
@@ -327,7 +349,9 @@ export function ClassDetailView({
       <div className="mt-[30px]">
         <SectionHeading>Subjects this class takes</SectionHeading>
       </div>
-      <div className={cn(CARD, "mt-3.5 px-[22px] py-5")}>
+      {/* overflow-visible: the subject list opens out over this card, and the
+          house CARD clips for its corners - it cut the list off (TO-DO 6). */}
+      <div className={cn(CARD, "mt-3.5 overflow-visible px-[22px] py-5")}>
         <ClassSubjects
           key={klass.subjects.join("\u0000")}
           klass={klass}
@@ -555,7 +579,18 @@ export function ClassDetailView({
       </div>
 
       <div className={cn(CARD, "mt-3.5")}>
-        {students.length === 0 ? (
+        {studentsPhase === "loading" ? (
+          <div aria-busy="true" className="h-[68px] animate-pulse" />
+        ) : studentsPhase === "failed" ? (
+          <ReadFailed
+            className="px-[22px] py-6"
+            what="this class’s students"
+            onRetry={() => {
+              setStudentsPhase("loading");
+              void loadStudents();
+            }}
+          />
+        ) : students.length === 0 ? (
           <div className="px-[22px] py-6">
             <p className="m-0 text-sm text-nevo-near-black/62">
               Nobody is enrolled in this class yet.
@@ -576,9 +611,9 @@ export function ClassDetailView({
         ) : (
           students.map((s, i) => (
             <Link
-              key={s.studentId}
+              key={s.id}
               // Back on the student's page returns here, as the admin left it.
-              href={withBack(`/admin/students/${s.studentId}`, {
+              href={withBack(`/admin/students/${s.id}`, {
                 href: back ? withBack(`/admin/classes/${classId}`, back) : `/admin/classes/${classId}`,
                 label: klass.name,
               })}
@@ -589,10 +624,9 @@ export function ClassDetailView({
             >
               <ChildAvatar look={lookOfChild(s)} size={32} />
               <span className="flex-1 truncate text-[14.5px] font-semibold text-nevo-near-black">
-                {s.displayName}
+                {s.name}
               </span>
-              {/* The same pill the roster shows, from a field that was on the
-                  wire all along - see `ClassStudent.consent`. */}
+              {/* The same pill the Students list shows, from the same row. */}
               <ConsentPill consent={s.consent} />
             </Link>
           ))

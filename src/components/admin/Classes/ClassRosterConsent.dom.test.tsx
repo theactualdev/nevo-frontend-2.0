@@ -4,18 +4,13 @@ import { visibleText } from "@/test/visibleText";
 import { ClassDetailView } from "./ClassDetailView";
 
 /**
- * `ClassStudentResponse.consent` is REQUIRED in the contract, and the client's
- * `ClassStudent` interface did not declare it - so the field arrived on every
- * class roster read and was discarded, while this screen's own marker called
- * the missing consent column "the single biggest gap" on it.
- *
- * The response-shape check cannot catch this direction: it gates on properties
- * the CLIENT declares that the response lacks, and a required field the client
- * ignores only reaches check 2's advisory list when NOTHING in the client names
- * it. `consent` is named all over the students lane, so it never surfaced.
+ * The consent pill on each of a class's students, from the admin's own student
+ * list (`GET /students?classId=`), whose `consent` is REQUIRED - the same row
+ * and the same pill as the Students screen. (It came from the teacher console's
+ * class roster until 25 Nov, which no admin may read; see `ClassOpens`.)
  */
 
-const classStudents = vi.fn();
+const list = vi.fn();
 
 vi.mock("@/lib/api/classes", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/classes")>();
@@ -28,32 +23,32 @@ vi.mock("@/lib/api/classes", async (importOriginal) => {
         source: null, subjects: [], studentCount: 2, archivedAt: null,
       }),
       classTeachers: async () => [],
-      classStudents: () => classStudents(),
     },
   };
+});
+vi.mock("@/lib/api/students", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/students")>();
+  return { ...actual, studentsApi: { ...actual.studentsApi, list: (o: unknown) => list(o) } };
 });
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 
 const student = (id: string, name: string, status: string | null) => ({
-  studentId: id,
-  firstName: name,
-  lastName: "Eze",
-  displayName: `${name} Eze`,
+  id,
+  name: `${name} Eze`,
   loginIdentifier: name.toLowerCase(),
+  admissionNumber: null,
   status: "active",
-  profileStatus: "ready",
-  latestSessionAt: null,
-  seatContext: "included",
+  ageBand: null,
   consent: status
     ? { status, actorId: null, actorName: null, timestamp: null, channel: null }
     : null,
 });
 
 describe("class roster consent", () => {
-  it("shows the consent the response was already carrying", async () => {
-    classStudents.mockResolvedValue([
+  it("shows each student's consent", async () => {
+    list.mockResolvedValue([
       student("s1", "Chisom", "confirmed"),
       student("s2", "Amara", "pending"),
     ]);
@@ -68,7 +63,7 @@ describe("class roster consent", () => {
   it("renders Unknown rather than Not sent when a row carries none", async () => {
     // The roster's rule, applied here too: an absent consent is not a record
     // that nobody asked.
-    classStudents.mockResolvedValue([student("s1", "Chisom", null)]);
+    list.mockResolvedValue([student("s1", "Chisom", null)]);
 
     const { container } = render(<ClassDetailView classId="c1" />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Chisom Eze/));

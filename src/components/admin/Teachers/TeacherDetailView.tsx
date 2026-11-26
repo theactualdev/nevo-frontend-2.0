@@ -355,7 +355,9 @@ export function TeacherDetailView({
       <div className="mt-[30px]">
         <SectionHeading>Subjects they teach</SectionHeading>
       </div>
-      <div className={cn(CARD, "mt-3.5 px-[22px] py-5")}>
+      {/* overflow-visible: the subject list opens out over this card, and the
+          house CARD clips for its corners - it cut the list off (TO-DO 6). */}
+      <div className={cn(CARD, "mt-3.5 overflow-visible px-[22px] py-5")}>
         <TeacherSubjects
           key={(teacher.subjects ?? []).join("\u0000")}
           teacher={teacher}

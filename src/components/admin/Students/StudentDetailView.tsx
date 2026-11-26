@@ -125,6 +125,17 @@ export function StudentDetailView({
    * (SCRUM-327, 12 Nov dry run - a cold server takes seconds to answer).
    */
   const [guardiansAnswered, setGuardiansAnswered] = useState(false);
+  /**
+   * NO GUARDIANS CARD FOR THIS CHILD (Olayinka's TO-DO item 8, 24 Nov). The
+   * server keeps a removed child's guardians to itself: `parent-links` answers
+   * 404 for a deactivated student (`_require_student` skips them), so straight
+   * after Remove the card said "We couldn't read Binta's guardians just now"
+   * about a read that had not failed - it had been refused on purpose. D07c's
+   * deactivated record draws no guardians card at all, so it isn't drawn, and
+   * it isn't asked for. Any other 404 from that read means the same: this is
+   * not a child whose guardians the server will give - never a lost read.
+   */
+  const [guardiansWithheld, setGuardiansWithheld] = useState(false);
   const { stateFor: consentStateFor, send: sendConsent } = useConsentRequests();
   /**
    * Whether the last press was a REMINDER - a request already awaiting an
@@ -263,6 +274,13 @@ export function StudentDetailView({
         // exists to be shown to a parent, and the card below states real
         // absences in almost the same shape.
         setGuardiansFailed(false);
+        if (studentStatus(s.status) === "deactivated") {
+          setGuardians([]);
+          setGuardiansWithheld(true);
+          setGuardiansAnswered(true);
+          return;
+        }
+        setGuardiansWithheld(false);
         studentsApi
           .parentLinks(studentId)
           .then((links) => {
@@ -270,9 +288,10 @@ export function StudentDetailView({
             setGuardiansFailed(false);
             setGuardiansAnswered(true);
           })
-          .catch(() => {
+          .catch((err: unknown) => {
             setGuardians([]);
-            setGuardiansFailed(true);
+            if (isRecordGone(err)) setGuardiansWithheld(true);
+            else setGuardiansFailed(true);
             setGuardiansAnswered(true);
           });
       })
@@ -519,282 +538,294 @@ export function StudentDetailView({
         </div>
       </div>
 
-      {/* D07b's consent card. The actor and date are the point: SCRUM-40 wants
-          "Mrs. Eze withdrew consent on 14 July" rather than a bare state, and a
-          withdrawal must be legible as a withdrawal rather than as an absence. */}
-      <SectionLabel>Consent</SectionLabel>
-      <div className={cn(CARD, "mt-2.5 px-6 py-[22px]")}>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-0">
-            {/* NAMING A CHILD AS BLOCKED IS THE WORST PLACE TO GET THIS
-                WRONG. The line says what is recorded, which is true in every
-                state. (The consent gate is the product - Hub, 2 Nov - so an
-                unconfirmed consent does stop the child; the Overview's row
-                says so.) */}
-            <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
-              {student.consent?.status === "confirmed"
-                ? `Consent is recorded for ${firstName}`
-                : student.consent?.status === "withdrawn"
-                  ? `A parent has withdrawn consent for ${firstName}`
-                  : student.consent?.status === "pending"
-                    ? // D07b's card title for a request out and unanswered.
-                      "Awaiting parent consent"
-                    : `No consent is recorded for ${firstName} yet`}
-            </p>
-            {student.consent?.status === "withdrawn" ? (
-              /*
-               * WHAT WITHDRAWN ACTUALLY MEANS, which this card never said.
-               *
-               * It named the fact and stopped. Since 15 September the backend
-               * enforces withdrawal on the four processing endpoints with a
-               * 403 `consent_withdrawn`, so the child genuinely cannot start a
-               * lesson - and this is the screen an admin opens when a parent
-               * rings to ask why. Saying only "a parent has withdrawn consent"
-               * leaves them with no answer and no route.
-               *
-               * It states the three things the reader needs: that access is
-               * paused, that nothing of the child's is lost, and that only the
-               * parent can lift it - because SCRUM-80 makes withdrawal the
-               * parent's decision and nothing in this console may override it.
-               */
-              <p className="m-0 mt-1.5 max-w-[62ch] text-[13.5px] leading-[1.55] text-nevo-near-black/70">
-                {firstName}&rsquo;s lessons are paused while this stands, and
-                everything they have done is kept. Only the parent who
-                withdrew can restore it &ndash; there is nothing to change
-                here.
-              </p>
-            ) : null}
-            {student.consent ? (
-              (() => {
-                const line = consentDetailLine(student.consent);
-                return line ? (
-                  <p className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-                    {line}
+      {/* D07c: nor a consent card. A removed child's record is its
+          enrolment and its two ways on - Restore, Erase (the Hub, 25 Nov). */}
+      {deactivated ? null : (
+        <>
+          {/* D07b's consent card. The actor and date are the point: SCRUM-40 wants
+              "Mrs. Eze withdrew consent on 14 July" rather than a bare state, and a
+              withdrawal must be legible as a withdrawal rather than as an absence. */}
+          <SectionLabel>Consent</SectionLabel>
+          <div className={cn(CARD, "mt-2.5 px-6 py-[22px]")}>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="min-w-0">
+                {/* NAMING A CHILD AS BLOCKED IS THE WORST PLACE TO GET THIS
+                    WRONG. The line says what is recorded, which is true in every
+                    state. (The consent gate is the product - Hub, 2 Nov - so an
+                    unconfirmed consent does stop the child; the Overview's row
+                    says so.) */}
+                <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
+                  {student.consent?.status === "confirmed"
+                    ? `Consent is recorded for ${firstName}`
+                    : student.consent?.status === "withdrawn"
+                      ? `A parent has withdrawn consent for ${firstName}`
+                      : student.consent?.status === "pending"
+                        ? // D07b's card title for a request out and unanswered.
+                          "Awaiting parent consent"
+                        : `No consent is recorded for ${firstName} yet`}
+                </p>
+                {student.consent?.status === "withdrawn" ? (
+                  /*
+                   * WHAT WITHDRAWN ACTUALLY MEANS, which this card never said.
+                   *
+                   * It named the fact and stopped. Since 15 September the backend
+                   * enforces withdrawal on the four processing endpoints with a
+                   * 403 `consent_withdrawn`, so the child genuinely cannot start a
+                   * lesson - and this is the screen an admin opens when a parent
+                   * rings to ask why. Saying only "a parent has withdrawn consent"
+                   * leaves them with no answer and no route.
+                   *
+                   * It states the three things the reader needs: that access is
+                   * paused, that nothing of the child's is lost, and that only the
+                   * parent can lift it - because SCRUM-80 makes withdrawal the
+                   * parent's decision and nothing in this console may override it.
+                   */
+                  <p className="m-0 mt-1.5 max-w-[62ch] text-[13.5px] leading-[1.55] text-nevo-near-black/70">
+                    {firstName}&rsquo;s lessons are paused while this stands, and
+                    everything they have done is kept. Only the parent who
+                    withdrew can restore it &ndash; there is nothing to change
+                    here.
                   </p>
-                ) : (
-                  <p className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-                    Nevo does not hold a confirmation from a parent yet.
-                  </p>
-                );
-              })()
-            ) : null}
-          </div>
-          <ConsentPill consent={student.consent} place="record" />
-        </div>
-
-        {/*
-          * D07b's card action, and the reason this whole surface existed on
-          * paper only: `consentsApi.requestParentConsent` was typed with no
-          * caller anywhere, so nothing in Nevo could send a family the link -
-          * and the finished parent console had no way to be reached.
-          *
-          * Offered only where consent is not already confirmed. The frame's
-          * own words for the two cases, and it never claims delivery it has
-          * not been told about - the receipt's `deliveryStatus` decides.
-          */}
-        {mayRequestConsent(student.consent) && !maySend ? (
-          <p className="m-0 mt-4 max-w-[54ch] border-t border-nevo-near-black/8 pt-4 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-            {CANNOT_SEND_LINE}
-          </p>
-        ) : null}
-        {mayRequestConsent(student.consent) && maySend ? (
-          <div className="mt-4 border-t border-nevo-near-black/8 pt-4">
-            <button
-              type="button"
-              onClick={() => {
-                setReminding(student.consent?.status === "pending");
-                sendConsent(student.id);
-              }}
-              disabled={consentState.kind === "sending"}
-              className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:cursor-wait disabled:opacity-55"
-            >
-              {/*
-                * ONE ACTION, NOT D07b'S TWO. The frame also draws "Resend
-                * request" beside the reminder, but the server has one route
-                * for both: every send issues a new link and revokes the one
-                * before it (backend consent/repositories.py). Two buttons
-                * would offer a choice that does not exist (raised, rule 10,
-                * 24 Nov).
-                */}
-              {consentState.kind === "sending"
-                ? reminding
-                  ? "Sending reminder…"
-                  : "Sending…"
-                : student.consent?.status === "pending"
-                  ? "Send a gentle reminder"
-                  : "Send the consent request"}
-            </button>
-            {consentLine ? (
-              <p
-                role="status"
-                className="m-0 mt-2 max-w-[54ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62"
-              >
-                {consentLine}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
-        {/*
-          * D25's written route, beside the emailed one: some parents never
-          * reply to a link, and a signed paper form is consent too. Not for a
-          * withdrawn child - only the parent who withdrew can lift that - nor
-          * once consent is recorded. Any admin may record a form; the backend
-          * takes it from any school role.
-          */}
-        {mayRequestConsent(student.consent) ? (
-          <div className="mt-4 flex flex-wrap items-start gap-x-6 gap-y-2 border-t border-nevo-near-black/8 pt-4">
-            <Link
-              href={withBack(`/admin/students/${student.id}/consent`, { href: here, label: name })}
-              className="text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75"
-            >
-              Record a signed paper form
-            </Link>
-            <ConsentFormDownload studentId={student.id} />
-          </div>
-        ) : null}
-      </div>
-
-      <SectionLabel>Parent / guardian accounts</SectionLabel>
-      {guardianAdded ? (
-        <p
-          role="status"
-          className="m-0 mt-2 max-w-[60ch] text-[13.5px] leading-[1.55] text-nevo-navy"
-        >
-          {guardianAdded}
-        </p>
-      ) : null}
-      <div className={cn(CARD, "mt-2.5")}>
-        {guardiansFailed ? (
-          <ReadFailed
-            className="px-6 py-[22px]"
-            what={`${firstName}’s guardians`}
-            onRetry={load}
-          />
-        ) : !guardiansAnswered ? (
-          // Still asking. Nothing is claimed either way until it answers.
-          <div className="px-6 py-[22px]" aria-busy="true">
-            <div className="h-4 w-52 animate-pulse rounded bg-nevo-near-black/[0.07]" />
-            <div className="mt-2.5 h-3.5 w-72 max-w-full animate-pulse rounded bg-nevo-near-black/[0.05]" />
-          </div>
-        ) : guardians.length === 0 ? (
-          /*
-           * WAS A DEAD END: "No guardian on the record. A parent account is
-           * created automatically once a guardian confirms consent." - with
-           * nothing to press. Consent is a gate, so a child with nobody on
-           * record could never start. See `AddGuardianForm`.
-           */
-          <div className="px-6 py-[22px]">
-            <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
-              No guardian on the record
-            </p>
-            {/*
-              * "CAN'T START" ONLY WHERE IT IS TRUE (12 Nov dry run): it sat
-              * beside "Consent is recorded… Confirmed" on a child who learned
-              * all morning. A guardian row and a consent record are separate
-              * things on the server, so a confirmed child can have no row
-              * here. Said only while consent is outstanding (pending or not
-              * sent); a withdrawal has its own words on the consent card, and
-              * an unread consent claims nothing. One string, so text readers
-              * keep the space after the name.
-              */}
-            <p className="m-0 mt-1.5 max-w-[56ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-              {mayRequestConsent(student.consent)
-                ? `${firstName} can’t start until a parent or guardian gives permission. `
-                : null}
-              {maySend ? "Add one and we’ll send them the request." : CANNOT_SEND_LINE}
-            </p>
-            {/* No other route writes a guardian onto an existing student: the
-                request is the write. So the form follows the request's role. */}
-            {!maySend ? null : addingGuardian ? (
-              <div className="mt-4">
-                <AddGuardianForm
-                  studentId={student.id}
-                  studentFirstName={firstName}
-                  onCancel={() => setAddingGuardian(false)}
-                  onAdded={(receipt, name) => {
-                    setAddingGuardian(false);
-                    setGuardianAdded(
-                      consentRequestLine(
-                        { kind: "done", parentName: name, delivery: receipt.deliveryStatus },
-                        firstName,
-                      ),
+                ) : null}
+                {student.consent ? (
+                  (() => {
+                    const line = consentDetailLine(student.consent);
+                    return line ? (
+                      <p className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+                        {line}
+                      </p>
+                    ) : (
+                      <p className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+                        Nevo does not hold a confirmation from a parent yet.
+                      </p>
                     );
-                    load();
+                  })()
+                ) : null}
+              </div>
+              <ConsentPill consent={student.consent} place="record" />
+            </div>
+
+            {/*
+              * D07b's card action, and the reason this whole surface existed on
+              * paper only: `consentsApi.requestParentConsent` was typed with no
+              * caller anywhere, so nothing in Nevo could send a family the link -
+              * and the finished parent console had no way to be reached.
+              *
+              * Offered only where consent is not already confirmed. The frame's
+              * own words for the two cases, and it never claims delivery it has
+              * not been told about - the receipt's `deliveryStatus` decides.
+              */}
+            {mayRequestConsent(student.consent) && !maySend ? (
+              <p className="m-0 mt-4 max-w-[54ch] border-t border-nevo-near-black/8 pt-4 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+                {CANNOT_SEND_LINE}
+              </p>
+            ) : null}
+            {mayRequestConsent(student.consent) && maySend ? (
+              <div className="mt-4 border-t border-nevo-near-black/8 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReminding(student.consent?.status === "pending");
+                    sendConsent(student.id);
                   }}
-                />
+                  disabled={consentState.kind === "sending"}
+                  className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:cursor-wait disabled:opacity-55"
+                >
+                  {/*
+                    * ONE ACTION, NOT D07b'S TWO. The frame also draws "Resend
+                    * request" beside the reminder, but the server has one route
+                    * for both: every send issues a new link and revokes the one
+                    * before it (backend consent/repositories.py). Two buttons
+                    * would offer a choice that does not exist (raised, rule 10,
+                    * 24 Nov).
+                    */}
+                  {consentState.kind === "sending"
+                    ? reminding
+                      ? "Sending reminder…"
+                      : "Sending…"
+                    : student.consent?.status === "pending"
+                      ? "Send a gentle reminder"
+                      : "Send the consent request"}
+                </button>
+                {consentLine ? (
+                  <p
+                    role="status"
+                    className="m-0 mt-2 max-w-[54ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62"
+                  >
+                    {consentLine}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/*
+              * D25's written route, beside the emailed one: some parents never
+              * reply to a link, and a signed paper form is consent too. Not for a
+              * withdrawn child - only the parent who withdrew can lift that - nor
+              * once consent is recorded. Any admin may record a form; the backend
+              * takes it from any school role.
+              */}
+            {mayRequestConsent(student.consent) ? (
+              <div className="mt-4 flex flex-wrap items-start gap-x-6 gap-y-2 border-t border-nevo-near-black/8 pt-4">
+                <Link
+                  href={withBack(`/admin/students/${student.id}/consent`, { href: here, label: name })}
+                  className="text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75"
+                >
+                  Record a signed paper form
+                </Link>
+                <ConsentFormDownload studentId={student.id} />
+              </div>
+            ) : null}
+          </div>
+        </>
+      )}
+
+      {/* D07c: a removed child's record has no guardians card (see
+          `guardiansWithheld`). */}
+      {guardiansWithheld ? null : (
+        <>
+          <SectionLabel>Parent / guardian accounts</SectionLabel>
+          {guardianAdded ? (
+            <p
+              role="status"
+              className="m-0 mt-2 max-w-[60ch] text-[13.5px] leading-[1.55] text-nevo-navy"
+            >
+              {guardianAdded}
+            </p>
+          ) : null}
+          <div className={cn(CARD, "mt-2.5")}>
+            {guardiansFailed ? (
+              <ReadFailed
+                className="px-6 py-[22px]"
+                what={`${firstName}’s guardians`}
+                onRetry={load}
+              />
+            ) : !guardiansAnswered ? (
+              // Still asking. Nothing is claimed either way until it answers.
+              <div className="px-6 py-[22px]" aria-busy="true">
+                <div className="h-4 w-52 animate-pulse rounded bg-nevo-near-black/[0.07]" />
+                <div className="mt-2.5 h-3.5 w-72 max-w-full animate-pulse rounded bg-nevo-near-black/[0.05]" />
+              </div>
+            ) : guardians.length === 0 ? (
+              /*
+               * WAS A DEAD END: "No guardian on the record. A parent account is
+               * created automatically once a guardian confirms consent." - with
+               * nothing to press. Consent is a gate, so a child with nobody on
+               * record could never start. See `AddGuardianForm`.
+               */
+              <div className="px-6 py-[22px]">
+                <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
+                  No guardian on the record
+                </p>
+                {/*
+                  * "CAN'T START" ONLY WHERE IT IS TRUE (12 Nov dry run): it sat
+                  * beside "Consent is recorded… Confirmed" on a child who learned
+                  * all morning. A guardian row and a consent record are separate
+                  * things on the server, so a confirmed child can have no row
+                  * here. Said only while consent is outstanding (pending or not
+                  * sent); a withdrawal has its own words on the consent card, and
+                  * an unread consent claims nothing. One string, so text readers
+                  * keep the space after the name.
+                  */}
+                <p className="m-0 mt-1.5 max-w-[56ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+                  {mayRequestConsent(student.consent)
+                    ? `${firstName} can’t start until a parent or guardian gives permission. `
+                    : null}
+                  {maySend ? "Add one and we’ll send them the request." : CANNOT_SEND_LINE}
+                </p>
+                {/* No other route writes a guardian onto an existing student: the
+                    request is the write. So the form follows the request's role. */}
+                {!maySend ? null : addingGuardian ? (
+                  <div className="mt-4">
+                    <AddGuardianForm
+                      studentId={student.id}
+                      studentFirstName={firstName}
+                      onCancel={() => setAddingGuardian(false)}
+                      onAdded={(receipt, name) => {
+                        setAddingGuardian(false);
+                        setGuardianAdded(
+                          consentRequestLine(
+                            { kind: "done", parentName: name, delivery: receipt.deliveryStatus },
+                            firstName,
+                          ),
+                        );
+                        load();
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAddingGuardian(true)}
+                    disabled={writesPaused}
+                    className={cn(TEXT_ACTION, "mt-3")}
+                  >
+                    Add a parent or guardian
+                  </button>
+                )}
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => setAddingGuardian(true)}
-                disabled={writesPaused}
-                className={cn(TEXT_ACTION, "mt-3")}
-              >
-                Add a parent or guardian
-              </button>
+              guardians.map((g, i) => {
+                /*
+                  * D07b's line under a guardian with no account yet, while the
+                  * request is still out: the account is made when they consent,
+                  * so there is nothing for the school to do on this row. Never
+                  * where consent is recorded or withdrawn - there it would be
+                  * untrue - and never once the account exists.
+                  */
+                const accountComing = !g.accountCreated && mayRequestConsent(student.consent);
+                const who = g.parentName.trim();
+                return (
+                <div
+                  key={g.id}
+                  className={cn(
+                    "flex gap-3.5 px-6 py-[18px]",
+                    accountComing ? "items-start" : "items-center",
+                    i < guardians.length - 1 && ROW_DIVIDER,
+                  )}
+                >
+                  {/*
+                    * A GUARDIAN RECORDED AT ENROLMENT HAS NO NAME YET, on purpose:
+                    * enrolment stores the email alone and the parent gives their
+                    * own name at consent. So the address stands in for the name
+                    * rather than the row rendering blank.
+                    */}
+                  <Avatar name={g.parentName.trim() || g.parentContact} size={44} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-base font-semibold text-nevo-near-black">
+                      {g.parentName.trim() || g.parentContact}
+                    </div>
+                    <div className="truncate text-[13.5px] text-nevo-near-black/62">
+                      {g.parentName.trim()
+                        ? g.parentContact
+                        : "They’ll give their own name when they answer the request"}
+                    </div>
+                    {accountComing ? (
+                      <p className="m-0 mt-1 max-w-[60ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+                        {`A parent account${who ? ` for ${who}` : ""} is created automatically the moment consent is confirmed. Nothing to do here in the meantime – ${firstName}’s progress is safe.`}
+                      </p>
+                    ) : null}
+                  </div>
+                  <span
+                    className={cn(
+                      "inline-flex flex-none items-center gap-2 rounded-full px-3 py-1 text-[12.5px] font-semibold",
+                      g.accountCreated
+                        ? "bg-nevo-navy/12 text-nevo-navy"
+                        : "bg-nevo-near-black/[0.07] text-nevo-near-black/60",
+                    )}
+                  >
+                    {g.accountCreated ? (
+                      <span aria-hidden="true" className="size-[7px] rounded-full bg-nevo-navy" />
+                    ) : null}
+                    {g.accountCreated ? "Account active" : "No account yet"}
+                  </span>
+                </div>
+                );
+              })
             )}
           </div>
-        ) : (
-          guardians.map((g, i) => {
-            /*
-              * D07b's line under a guardian with no account yet, while the
-              * request is still out: the account is made when they consent,
-              * so there is nothing for the school to do on this row. Never
-              * where consent is recorded or withdrawn - there it would be
-              * untrue - and never once the account exists.
-              */
-            const accountComing = !g.accountCreated && mayRequestConsent(student.consent);
-            const who = g.parentName.trim();
-            return (
-            <div
-              key={g.id}
-              className={cn(
-                "flex gap-3.5 px-6 py-[18px]",
-                accountComing ? "items-start" : "items-center",
-                i < guardians.length - 1 && ROW_DIVIDER,
-              )}
-            >
-              {/*
-                * A GUARDIAN RECORDED AT ENROLMENT HAS NO NAME YET, on purpose:
-                * enrolment stores the email alone and the parent gives their
-                * own name at consent. So the address stands in for the name
-                * rather than the row rendering blank.
-                */}
-              <Avatar name={g.parentName.trim() || g.parentContact} size={44} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-base font-semibold text-nevo-near-black">
-                  {g.parentName.trim() || g.parentContact}
-                </div>
-                <div className="truncate text-[13.5px] text-nevo-near-black/62">
-                  {g.parentName.trim()
-                    ? g.parentContact
-                    : "They’ll give their own name when they answer the request"}
-                </div>
-                {accountComing ? (
-                  <p className="m-0 mt-1 max-w-[60ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-                    {`A parent account${who ? ` for ${who}` : ""} is created automatically the moment consent is confirmed. Nothing to do here in the meantime – ${firstName}’s progress is safe.`}
-                  </p>
-                ) : null}
-              </div>
-              <span
-                className={cn(
-                  "inline-flex flex-none items-center gap-2 rounded-full px-3 py-1 text-[12.5px] font-semibold",
-                  g.accountCreated
-                    ? "bg-nevo-navy/12 text-nevo-navy"
-                    : "bg-nevo-near-black/[0.07] text-nevo-near-black/60",
-                )}
-              >
-                {g.accountCreated ? (
-                  <span aria-hidden="true" className="size-[7px] rounded-full bg-nevo-navy" />
-                ) : null}
-                {g.accountCreated ? "Account active" : "No account yet"}
-              </span>
-            </div>
-            );
-          })
-        )}
-      </div>
+        </>
+      )}
 
       {/* THE ACTIONS FOOT. Deactivate is the only action on an active student;
           erase only appears once they are already deactivated. */}
