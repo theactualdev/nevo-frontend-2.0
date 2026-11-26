@@ -11,11 +11,11 @@ import { CURRENCY_SYMBOL } from "@/lib/money";
  * finance confirms (#738); naming a processor here would misstate how a
  * school's money arrives.
  *
- * NOT YET SCRUM-98's change controls. Its rule is set ("present and pressable
- * and explain themselves in place ... naming the constraint and offering
- * 'Contact your relationship manager'"), but neither D11b nor the spec gives
- * the sentence that names each constraint, so the controls wait for those
- * words rather than this screen writing them.
+ * NOT SCRUM-98's change controls ("Contact your relationship manager").
+ * Neither D11b nor the spec gives the sentence that names each constraint,
+ * and nothing gives a route to contact anyone; Lydia dropped them for now
+ * (L50, 25 Nov). The plan cards' "Ask to switch" below is not one of them:
+ * it is a request with a route.
  */
 
 /** The frame's "Naira (₦)", and the same shape for the other two. */
