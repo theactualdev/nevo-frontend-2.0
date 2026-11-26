@@ -11,6 +11,7 @@ import {
   type Invitation,
 } from "@/lib/api/invites";
 import { reissueRefusal, reissuedLine } from "./reissueCopy";
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import { cn } from "@/lib/utils";
 import { deliveryLine } from "./deliveryCopy";
 import {
@@ -424,21 +425,21 @@ export function NewInviteModal({
           <label htmlFor="invite-class" className={LABEL}>
             Class
           </label>
-          <select
+          {/* Nevo's own dropdown, not the browser's (Olayinka's TO-DO item 2).
+              "No class yet" is a choice here, not a prompt, so it is listed as
+              the "" option and chosen like any other. */}
+          <NevoSelect
             id="invite-class"
             value={classId}
-            onChange={(e) => setClassId(e.target.value)}
-            className={cn(FIELD, "cursor-pointer")}
-          >
-            <option value="">No class yet</option>
-            {classes
-              .filter((c) => !c.archivedAt)
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-          </select>
+            onValueChange={setClassId}
+            options={[
+              { value: "", label: "No class yet" },
+              ...classes
+                .filter((c) => !c.archivedAt)
+                .map((c) => ({ value: c.id, label: c.name })),
+            ]}
+            triggerClassName={FIELD}
+          />
         </div>
 
         <div>
