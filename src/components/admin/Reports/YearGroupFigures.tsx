@@ -1,7 +1,7 @@
 "use client";
 
 import { NevoSelect } from "@/components/shared/NevoSelect";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { analyticsApi, type CohortTransformation } from "@/lib/api/analytics";
 import { classesApi } from "@/lib/api/classes";
 import { yearGroupLabel, yearGroupOrder } from "@/lib/constants/yearGroups";
@@ -42,10 +42,22 @@ export function YearGroupFigures() {
 
   /* Results only: a retry sets "loading" itself, never an effect (React's
      set-state-in-effect rule). */
+  /* A read can settle after the figures unmount (a test's teardown, or the
+     admin leaving the page). Setting state then is a no-op at best, and in a
+     torn-down test environment it throws. */
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   const readGroups = useCallback(() => {
     classesApi
       .list()
       .then((classes) => {
+        if (!mounted.current) return;
         const seen = new Map<string, string>();
         for (const c of classes) {
           const raw = c.yearGroup?.trim();
@@ -55,7 +67,9 @@ export function YearGroupFigures() {
         setGroups({ kind: "ready", data: values });
         setChosen((c) => (c && values.includes(c) ? c : (values[0] ?? null)));
       })
-      .catch((err: unknown) => setGroups({ kind: failureKind(err) }));
+      .catch((err: unknown) => {
+        if (mounted.current) setGroups({ kind: failureKind(err) });
+      });
   }, []);
 
   useEffect(() => {

@@ -207,10 +207,25 @@ export function ClassesView() {
     activeClasses.length > 0 &&
     activeClasses.every((c) => c.source === "roster_sync");
 
+  /*
+   * THE SCHOOL'S OWN YEAR GROUPS, NEVER ALL SEVENTEEN (Hub, 24 Nov; whether
+   * the filter stays at all is L78 - D05 draws none). It offered every year
+   * group Nevo knows, so a school running two could pick fifteen that only
+   * ever returned nothing. Now: the year groups the classes on this list use,
+   * in the enum's order - the same source as Learning Support's filter, and
+   * like it, no filter at all with only one to choose.
+   */
+  const years = useMemo(() => {
+    const seen = new Set(classes.map((c) => c.yearGroup).filter((y): y is string => Boolean(y)));
+    return yearGroupOptions().filter((o) => seen.has(o.value));
+  }, [classes]);
+  /** A chosen year the list no longer holds (archived hidden again) is all years. */
+  const yearFilter = years.some((o) => o.value === year) ? year : "";
+
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return classes
-      .filter((c) => (year ? c.yearGroup === year : true))
+      .filter((c) => (yearFilter ? c.yearGroup === yearFilter : true))
       .filter((c) =>
         needle
           ? c.name.toLowerCase().includes(needle) ||
@@ -222,9 +237,9 @@ export function ClassesView() {
           yearGroupOrder(a.yearGroup) - yearGroupOrder(b.yearGroup) ||
           a.name.localeCompare(b.name),
       );
-  }, [classes, search, year]);
+  }, [classes, search, yearFilter]);
 
-  const filtering = Boolean(search.trim() || year);
+  const filtering = Boolean(search.trim() || yearFilter);
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
@@ -369,13 +384,15 @@ export function ClassesView() {
                 />
               </label>
 
-              <NevoSelect
-                aria-label="Filter by year group"
-                value={year}
-                onValueChange={setYear}
-                options={[{ value: "", label: "All years" }, ...yearGroupOptions()]}
-                triggerClassName={FILTER_PILL}
-              />
+              {years.length > 1 ? (
+                <NevoSelect
+                  aria-label="Filter by year group"
+                  value={yearFilter}
+                  onValueChange={setYear}
+                  options={[{ value: "", label: "All years" }, ...years]}
+                  triggerClassName={FILTER_PILL}
+                />
+              ) : null}
 
               <button
                 type="button"
@@ -471,6 +488,7 @@ export function ClassesView() {
                     >
                       <button
                         type="button"
+                        data-class-link
                         onClick={() => router.push(`/admin/classes/${c.id}`)}
                         className="min-w-0 cursor-pointer text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-nevo-navy/40"
                       >

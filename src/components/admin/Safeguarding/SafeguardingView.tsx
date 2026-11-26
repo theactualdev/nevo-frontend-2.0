@@ -7,6 +7,7 @@ import { getSession } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 import { useLearningSupport } from "../LearningSupport/useLearningSupport";
 import { NoAccess, failureKind } from "../NoAccess";
+import { ReadFailed } from "../ReadFailed";
 import { withBack } from "../back";
 
 /**
@@ -56,6 +57,12 @@ export function SafeguardingView() {
   /** More entries may sit behind the last one read. */
   const [more, setMore] = useState(false);
   const [paging, setPaging] = useState(false);
+  /**
+   * The last "Show earlier entries" did not answer. Said under the list, with
+   * the entries already shown kept (Hub, 25 Nov) - it used to be swallowed, so
+   * the list simply stopped, as if there were nothing earlier.
+   */
+  const [earlierFailed, setEarlierFailed] = useState(false);
   const [acking, setAcking] = useState<string | null>(null);
   const [ackFailed, setAckFailed] = useState<string | null>(null);
   const [me] = useState(() => getSession()?.userId ?? null);
@@ -84,13 +91,14 @@ export function SafeguardingView() {
     const last = events[events.length - 1];
     if (!last || paging) return;
     setPaging(true);
+    setEarlierFailed(false);
     safetyApi
       .events({ limit: PAGE, before: last.createdAt })
       .then((rows) => {
         setEvents((prev) => [...prev, ...rows.filter((r) => !prev.some((p) => p.id === r.id))]);
         setMore(rows.length >= PAGE);
       })
-      .catch(() => undefined)
+      .catch(() => setEarlierFailed(true))
       .finally(() => setPaging(false));
   };
 
@@ -282,7 +290,9 @@ export function SafeguardingView() {
             })}
           </ul>
 
-          {more ? (
+          {more && earlierFailed && !paging ? (
+            <ReadFailed className="mt-5 text-center" what="the earlier entries" onRetry={earlier} />
+          ) : more ? (
             <div className="mt-5 flex justify-center">
               <button
                 type="button"

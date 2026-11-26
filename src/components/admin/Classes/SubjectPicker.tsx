@@ -91,6 +91,7 @@ export function SubjectPicker({
   const sm = size === "sm";
   const root = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -117,6 +118,16 @@ export function SubjectPicker({
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  /*
+   * Opened low on the screen, the list starts below the fold (TO-DO 6), so it
+   * is brought into view once, as it opens - the nearest scroll that shows it
+   * whole, and none when it already shows. Not again while it's open, so
+   * typing never moves the page.
+   */
+  useEffect(() => {
+    if (open) panel.current?.scrollIntoView?.({ block: "nearest" });
   }, [open]);
 
   /** The school's own first, then Nevo's the school does not hold yet. */
@@ -276,6 +287,7 @@ export function SubjectPicker({
 
       {open && subjects ? (
         <div
+          ref={panel}
           id={panelId}
           className="absolute top-full right-0 left-0 z-20 mt-1.5 min-w-[260px] overflow-hidden rounded-xl bg-nevo-cream-elevated shadow-[0_8px_32px_rgba(0,0,0,0.16)]"
         >

@@ -913,6 +913,18 @@ describe("where a unit's reading is drawn", () => {
     expect(scroll).toContainElement(screen.getByDisplayValue("Rivers"));
   });
 
+  // C07f's PARTIAL card as drawn (Hub, 25 Nov): its page icon, no rule down the side, 600 at most.
+  it("draws the card C07f draws", () => {
+    stagedState({ ...READY, failedPages: [3] });
+    startUnitUpload();
+
+    const card = screen.getByRole("button", { name: "Retry page 3" }).closest("[class*='rounded-[12px]']")!;
+
+    expect(card).toHaveClass("max-w-[600px]", "bg-nevo-violet/14");
+    expect(card.className).not.toMatch(/border-l/);
+    expect(card.querySelector("svg[aria-hidden='true']")).not.toBeNull();
+  });
+
   // Backlog item 38: C07f's words, where the contract can make them true.
   it("says it in C07f's words, without claiming how much of the file was read", () => {
     stagedState({ ...READY, failedPages: [15, 16] });
@@ -924,6 +936,43 @@ describe("where a unit's reading is drawn", () => {
     expect(screen.getByRole("button", { name: "Retry pages 15 and 16" })).toBeInTheDocument();
     // No page total is sent, so neither "most of this" nor a clean range is.
     expect(screen.queryByText(/most of this|parsed cleanly|too faint/)).not.toBeInTheDocument();
+  });
+
+  /*
+   * Hub ruling, 25 Nov (Lydia, 4 Nov): the clean line never vouches for a
+   * page of the teacher's own file a safety check held.
+   */
+  const withHold = (hold: Record<string, unknown>) => ({
+    ...READY,
+    failedPages: [15, 16],
+    structure: {
+      ...READY.structure,
+      pageTotal: 16,
+      reviewNotes: [{ code: "lesson_text_blocked_by_safety", ...hold }],
+    },
+  });
+
+  it("leaves a page held at the file's own check out of the clean pages", () => {
+    stagedState(withHold({ heldAtCheck: "lesson_source", pageNumbers: [5] }));
+    startUnitUpload();
+
+    expect(screen.getByText(/Pages 1 to 4 and 6 to 14 parsed cleanly\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Pages 1 to 14 parsed cleanly/)).not.toBeInTheDocument();
+  });
+
+  it("says no clean pages at all where the hold names none", () => {
+    stagedState(withHold({ heldAtCheck: "lesson_source" }));
+    startUnitUpload();
+
+    expect(screen.queryByText(/parsed cleanly/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry pages 15 and 16" })).toBeInTheDocument();
+  });
+
+  it("still counts the page where only the lesson Nevo wrote was held", () => {
+    stagedState(withHold({ heldAtCheck: "generated_content", pageNumbers: [5] }));
+    startUnitUpload();
+
+    expect(screen.getByText(/Pages 1 to 14 parsed cleanly\./)).toBeInTheDocument();
   });
 
   it("says Retrying… while the pages are read again", () => {

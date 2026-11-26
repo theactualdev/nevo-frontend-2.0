@@ -382,3 +382,30 @@ describe("which check held the part", () => {
     );
   });
 });
+
+/**
+ * THE LOOK (Hub, 25 Nov). No frame draws these notes, and they sit right
+ * above C07f's partly-read notice, so they take its card: 14% violet with no
+ * rule down the side, 15/17, the body at 13.5px and .7, no wider than 600.
+ */
+describe("the look", () => {
+  const notes = [
+    { code: "lesson_text_blocked_by_safety", textRetained: true, heldAtCheck: "generated_content", pageNumbers: [5], message: "x" },
+    { code: "source_read_by_backup_reader", pageNumbers: [4], message: "x" },
+    { code: "visual_blocked_by_safety", segment: "k-2", message: "x" },
+    { code: "question_unusable", questions: ["Why do metals feel cold?"], message: "x" },
+  ];
+
+  it("draws every note as C07f draws its notice, with no rule down the side", () => {
+    const { container } = render(<QuestionsLeftOut notes={notes} segmentName={() => "Segment 2"} />);
+    const cards = Array.from(container.firstElementChild!.children);
+
+    expect(cards).toHaveLength(4);
+    for (const card of cards) {
+      expect(card).toHaveClass("max-w-[600px]", "rounded-[12px]", "bg-nevo-violet/14", "px-[17px]", "py-[15px]");
+      expect(card.className).not.toMatch(/border-l/);
+      const body = card.tagName === "P" ? card : card.querySelector("p")!;
+      expect(body).toHaveClass("text-[13.5px]", "text-nevo-near-black/70");
+    }
+  });
+});

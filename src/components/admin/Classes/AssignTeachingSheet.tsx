@@ -384,10 +384,18 @@ export function AssignTeachingSheet({
       const incumbent = incumbentOf(c.id);
       return Boolean(incumbent && incumbent.teacherId !== teacherId);
     });
+  /*
+   * L83 (Lydia, 25 Nov): name the teacher - "Assign {teacher} to Mathematics
+   * in 2 classes." Before a teacher's name is known (their read still out, or
+   * failed) it keeps the words it had, rather than naming nobody.
+   */
+  const classCount = `${n} ${n === 1 ? "class" : "classes"}`;
   const cta = primaryConflict
     ? "Assign and make Primary"
     : subject
-      ? `Assign ${subject.displayName} to ${n} ${n === 1 ? "class" : "classes"}`
+      ? teacherName
+        ? `Assign ${teacherName} to ${subject.displayName} in ${classCount}`
+        : `Assign ${subject.displayName} to ${classCount}`
       : "Assign teacher";
   const roleLegend =
     n === 1 ? `Role in ${tickedClasses[0].name}` : n > 1 ? "Role in these classes" : "Role";

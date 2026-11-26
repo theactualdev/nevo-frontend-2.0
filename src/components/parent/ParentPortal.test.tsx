@@ -109,7 +109,7 @@ describe("which screen a parent lands on", () => {
     getInvitation.mockResolvedValue(inv({ status: "confirmed" }));
     render(<ParentPortal token={TOKEN} />);
 
-    expect(await screen.findByText(/Amara[’']s data on Nevo/)).toBeInTheDocument();
+    expect(await screen.findByText(/Amara[’']s Data on Nevo/)).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Yes, I give my consent/ }),
     ).not.toBeInTheDocument();
@@ -193,7 +193,7 @@ describe("a returning parent whose child is held", () => {
   it("lands on the data page with no held card, sign-in or account setup", async () => {
     getInvitation.mockResolvedValue(inv({ status: "confirmed", ageCheck: "mismatch", parentAccountReady: false }));
     render(<ParentPortal token={TOKEN} />);
-    expect(await screen.findByRole("heading", { name: /Amara.s data on Nevo/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Amara.s Data on Nevo/ })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Welcome back." })).toBeNull();
     expect(screen.queryByText(/can.t start yet|confirm once more/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
@@ -202,7 +202,7 @@ describe("a returning parent whose child is held", () => {
   it("with an account already, still no Sign in card", async () => {
     getInvitation.mockResolvedValue(inv({ status: "confirmed", ageCheck: "mismatch", parentAccountReady: true }));
     render(<ParentPortal token={TOKEN} />);
-    expect(await screen.findByRole("heading", { name: /Amara.s data on Nevo/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Amara.s Data on Nevo/ })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
   });
 });

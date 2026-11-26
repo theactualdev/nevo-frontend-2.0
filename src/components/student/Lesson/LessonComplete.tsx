@@ -39,6 +39,7 @@ export function LessonComplete({
   note,
   saving = false,
   doneLabel = "Back to lessons",
+  askNevo = true,
 }: {
   onDone: () => void;
   onSeeSummary?: () => void;
@@ -58,6 +59,11 @@ export function LessonComplete({
    */
   saving?: boolean;
   doneLabel?: string;
+  /**
+   * Whether Ask Nevo may sit over this ending. Off for a lesson closed because
+   * its copy was withdrawn for safety (L14): see the effect below.
+   */
+  askNevo?: boolean;
 }) {
   const { slow } = useMarkWait(saving && !note ? 0 : null, null);
   const said = note ?? (saving && slow ? SAVING_LESSON_LINE : undefined);
@@ -70,12 +76,21 @@ export function LessonComplete({
    * A tolerant read, like Ask Nevo's own: the player's own tests render this
    * with no provider at all, and there is then no drawer to allow.
    */
+  /*
+   * NOT OVER A LESSON WITHDRAWN FOR SAFETY (Hub, 24 Nov, on-screen QA). L14's
+   * close is the lesson stopped, not ended - written `exited` - and Ask
+   * Nevo's place after a lesson (Lydia, 17 Oct, item 29) is for one that
+   * ended. The drawer here is scoped to this lesson, and the server's lesson
+   * overview answers a child with every section's title, held ones included
+   * (raised as S11). Her 12 Nov ruling is that held content is revoked before
+   * any more of it is read; a launcher over this screen could read it back.
+   */
   const allowAskNevo = useContext(LessonContext)?.setAskNevoAllowed;
   useEffect(() => {
-    if (!allowAskNevo) return;
+    if (!allowAskNevo || !askNevo) return;
     allowAskNevo(true);
     return () => allowAskNevo(false);
-  }, [allowAskNevo]);
+  }, [allowAskNevo, askNevo]);
 
   /*
    * NO BROKEN BOX. The player fetched this picture while it had a connection

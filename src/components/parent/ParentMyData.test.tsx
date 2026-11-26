@@ -293,8 +293,20 @@ describe("restoring from the account (SCRUM-321)", () => {
     );
     expect(screen.queryByText("What you are agreeing to again")).toBeNull();
     expect(container.textContent).not.toMatch(/You withdrew/);
+    // D01c's line under Request is the withdrawing parent's; it told this one
+    // they had withdrawn. The right itself stays.
+    expect(container.textContent).not.toMatch(/after withdrawing consent/);
+    expect(screen.getByRole("button", { name: /Request Amara.s data/i })).toBeInTheDocument();
     expect(screen.queryByText(LINE)).toBeNull();
     expect(screen.queryByRole("button", { name: "Restore consent" })).toBeNull();
+  });
+
+  it("the guardian who withdrew is told they keep the right of access", async () => {
+    myConsents.mockResolvedValue([withdrawn()]);
+    render(<ParentMyData />);
+    expect(
+      await screen.findByText("You keep this right even after withdrawing consent."),
+    ).toBeInTheDocument();
   });
 
   it("a refusal says whose it is, in the server's words, and takes the button away", async () => {
