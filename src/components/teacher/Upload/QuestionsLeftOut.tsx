@@ -125,6 +125,39 @@ export function heldNevosText(note: Record<string, unknown>): boolean {
   return note.heldAtCheck === "generated_content";
 }
 
+export interface SourceHolds {
+  /** The pages of the teacher's own file a safety check held, as sent. */
+  pages: number[];
+  /** A hold on the teacher's file came without its pages. */
+  unknown: boolean;
+}
+
+/**
+ * THE TEACHER'S OWN PAGES A SAFETY CHECK HELD (`"lesson_source"`, or
+ * `textRetained: false` on an older server - see `heldNevosText`), so that no
+ * line vouches for them. "Pages 1 to 14 parsed cleanly." beside a page held
+ * for safety review is an untrue state (Hub ruling, 25 Nov, under Lydia's 4
+ * Nov rule). `unknown` where such a hold came without its pages: then no page
+ * of the file can be vouched for. Only `pageNumbers` and which check held it
+ * are read, as above.
+ */
+export function sourceHeldPages(notes: readonly unknown[] | null | undefined): SourceHolds {
+  const out: SourceHolds = { pages: [], unknown: false };
+  if (!Array.isArray(notes)) return out;
+  for (const note of notes) {
+    if (!note || typeof note !== "object") continue;
+    const n = note as Record<string, unknown>;
+    if (n.code !== "lesson_text_blocked_by_safety") continue;
+    if (heldNevosText(n)) continue;
+    const pages = Array.isArray(n.pageNumbers)
+      ? n.pageNumbers.filter((p): p is number => Number.isInteger(p))
+      : [];
+    if (pages.length === 0) out.unknown = true;
+    for (const p of pages) if (!out.pages.includes(p)) out.pages.push(p);
+  }
+  return out;
+}
+
 export function textHeldBack(notes: readonly unknown[] | null | undefined): TextHeldBack[] {
   if (!Array.isArray(notes)) return [];
   const out: TextHeldBack[] = [];

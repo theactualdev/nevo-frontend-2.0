@@ -29,6 +29,7 @@ import { LONGEST_STAGE, ProcessingStages, stageOf } from "./ProcessingStages";
 import { SectionReview } from "./SectionReview";
 import { LiveStructureTree } from "./LiveStructureTree";
 import { pageList } from "./pageList";
+import { sourceHeldPages, type SourceHolds } from "./QuestionsLeftOut";
 import { StructureTree } from "./StructureTree";
 import { UploadResult } from "./UploadResult";
 import { MaybeSample, SampleRegion } from "@/components/shared/SampleRegion";
@@ -106,10 +107,20 @@ export function faintPagesLine(pages: number[]): string {
  * every page of the file the server did not list as failed - its two facts,
  * set side by side, nothing judged. No total (pasted text, an older server)
  * or no clean page: no line.
+ *
+ * NEVER VOUCHING FOR A HELD PAGE (Hub ruling, 25 Nov, under Lydia's 4 Nov
+ * rule): a page of the teacher's own file a safety check held is left out of
+ * the clean pages, and where a hold did not say which pages, there is no line
+ * at all. The hold's own words wait on the 23 Nov ask, so none are added.
  */
-export function cleanPagesLine(pageTotal: number | null | undefined, failed: number[]): string | null {
+export function cleanPagesLine(
+  pageTotal: number | null | undefined,
+  failed: number[],
+  held: SourceHolds = { pages: [], unknown: false },
+): string | null {
   if (!pageTotal || !Number.isInteger(pageTotal)) return null;
-  const missed = new Set(failed);
+  if (held.unknown) return null;
+  const missed = new Set([...failed, ...held.pages]);
   const clean = Array.from({ length: pageTotal }, (_, i) => i + 1).filter((p) => !missed.has(p));
   if (!clean.length) return null;
   return `${clean.length > 1 ? "Pages" : "Page"} ${pageList(clean)} parsed cleanly.`;
@@ -165,16 +176,19 @@ function ReuploadNotice() {
 function PartialReadNotice({
   pages,
   pageTotal,
+  notes,
   retrying,
   onRetry,
 }: {
   pages: number[];
   /** The file's page count, when the server sends one. */
   pageTotal?: number | null;
+  /** The upload's review notes, for the pages a safety check held. */
+  notes?: readonly unknown[] | null;
   retrying: boolean;
   onRetry: () => void;
 }) {
-  const clean = cleanPagesLine(pageTotal, pages);
+  const clean = cleanPagesLine(pageTotal, pages, sourceHeldPages(notes));
   return (
     <div className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
       <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
@@ -791,6 +805,7 @@ export function UploadWizard() {
                 <PartialReadNotice
                   pages={staged.failedPages}
                   pageTotal={staged.structure?.pageTotal}
+                  notes={staged.structure?.reviewNotes}
                   retrying={staged.retrying}
                   onRetry={staged.retryFailedPages}
                 />
@@ -858,6 +873,7 @@ export function UploadWizard() {
                 <PartialReadNotice
                   pages={staged.failedPages}
                   pageTotal={staged.structure?.pageTotal}
+                  notes={staged.structure?.reviewNotes}
                   retrying={staged.retrying}
                   onRetry={staged.retryFailedPages}
                 />
