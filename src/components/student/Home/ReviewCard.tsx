@@ -2,6 +2,7 @@ import Link from "next/link";
 import { RotateCcw } from "lucide-react";
 import type { LearningWork } from "@/lib/api/students";
 import { reviewSessionHref } from "@/lib/lessons/reviewHref";
+import { cn } from "@/lib/utils";
 
 /**
  * THE REVIEW CARD ON HOME (design 19b, 5 Nov; Lydia, 31 Oct Q1 and 2 Nov Q7).
@@ -28,20 +29,45 @@ import { reviewSessionHref } from "@/lib/lessons/reviewHref";
  *
  * Start a review opens the review session, whose entry screen still lets the
  * child say "Not now"; ending it comes back Home, where it was opened.
+ *
+ * SUBJECT DETAIL DRAWS THE SAME CARD, one per concept that is due (Lydia,
+ * 25 Nov, L61: "Home's review card as it is"; 19 Nov, L11: "a card each").
+ * The props below are only what a second page needs to place it: where the
+ * review comes back to, its own heading id, a link name that says which
+ * concept (several "Start a review" links side by side), and its spacing.
+ * Nothing it draws changes.
  */
-export function ReviewCard({ review }: { review: LearningWork }) {
+export function ReviewCard({
+  review,
+  back,
+  headingId = "home-review",
+  linkLabel,
+  className = "mt-7",
+}: {
+  review: Pick<LearningWork, "conceptName" | "lessonId" | "conceptId">;
+  /** Where the review's ways out return to; Home when not given. */
+  back?: string;
+  /** Unique per card where a page draws several. */
+  headingId?: string;
+  /** The link's accessible name, where several cards share its words. */
+  linkLabel?: string;
+  className?: string;
+}) {
   const name = review.conceptName.trim();
   return (
     <section
-      aria-labelledby="home-review"
-      className="mt-7 rounded-[14px] bg-nevo-cream p-[22px] shadow-[0_2px_10px_rgba(0,0,0,0.06)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:140ms]"
+      aria-labelledby={headingId}
+      className={cn(
+        "rounded-[14px] bg-nevo-cream p-[22px] shadow-[0_2px_10px_rgba(0,0,0,0.06)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:140ms]",
+        className,
+      )}
     >
       <span className="inline-flex items-center gap-[7px] text-xs font-semibold tracking-[0.04em] text-nevo-violet uppercase">
         <RotateCcw className="size-[15px]" strokeWidth={2} aria-hidden />
         Review
       </span>
       <h2
-        id="home-review"
+        id={headingId}
         className="mt-2.5 text-[19px] font-semibold text-nevo-near-black"
       >
         A quick look back
@@ -55,7 +81,8 @@ export function ReviewCard({ review }: { review: LearningWork }) {
         </li>
       </ul>
       <Link
-        href={reviewSessionHref(review.lessonId, review.conceptId)}
+        href={reviewSessionHref(review.lessonId, review.conceptId, back)}
+        aria-label={linkLabel}
         className="mt-[18px] flex h-[50px] cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy text-[15px] font-semibold text-nevo-cream transition-colors hover:bg-nevo-navy/90 active:scale-[0.99]"
       >
         Start a review

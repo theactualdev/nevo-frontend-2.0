@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
@@ -14,8 +14,7 @@ import {
   useStudentProgress,
 } from "@/hooks/useStudentProgress";
 import { useSubjectProgress } from "@/hooks/useSubjectProgress";
-import { reviewSessionHref } from "@/lib/lessons/reviewHref";
-import { DUE_CHIP, DUE_CHIP_LINK } from "./dueChip";
+import { ReviewCard } from "@/components/student/Home/ReviewCard";
 import type {
   SessionRow,
   SubjectDetail as SubjectDetailData,
@@ -23,6 +22,9 @@ import type {
 import { SubjectTexture } from "./ProgressTab";
 import { EmptyArt } from "@/components/student/Shell/TabPage";
 import { SessionDetailSheet } from "./SessionDetailSheet";
+
+/** At most this many review cards at once (Lydia, 19 Nov, L11; 23b). */
+const REVIEW_CARDS_SHOWN = 3;
 
 /**
  * Subject Detail (screen 23) — a deeper, still-calm look at one subject, reached
@@ -308,12 +310,30 @@ function LiveSubjectDetail({
   // still-running read simply leaves every concept where it was: the grouping
   // is an addition to this screen, never a precondition for rendering it.
   const review = useDueReviews();
+  /*
+   * A CARD FOR EACH CONCEPT THAT CAN BE STARTED (Lydia, 19 Nov, L11, and
+   * 25 Nov, L61; frame 23b): Home's review card as it is, at most three, the
+   * rest behind "See the rest" - "so a child with eight due does not face a
+   * wall". No count anywhere: a number of what is waiting is a queue length,
+   * and reads as a debt (23b).
+   *
+   * `playable` is the hook's own answer to which due concepts can be opened.
+   * One whose schedule row carries no lesson is due but cannot be started, so
+   * it is not offered as a card with a button to nowhere: it stays in the
+   * list below, named, as it was.
+   */
   const ready = review.due.size
-    ? concepts.filter((c) => review.due.has(c.conceptId))
+    ? concepts.filter((c) => review.due.has(c.conceptId) && review.playable.has(c.conceptId))
     : [];
-  const rest = ready.length
-    ? concepts.filter((c) => !review.due.has(c.conceptId))
-    : concepts;
+  const readyIds = new Set(ready.map((c) => c.conceptId));
+  const rest = concepts.filter((c) => !readyIds.has(c.conceptId));
+  const [allShown, setAllShown] = useState(false);
+  const shown = allShown ? ready : ready.slice(0, REVIEW_CARDS_SHOWN);
+  /** The first card the control was hiding: focus goes there once pressed. */
+  const firstRevealed = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (allShown) firstRevealed.current?.focus();
+  }, [allShown]);
 
   if (failed) {
     return (
@@ -355,39 +375,42 @@ function LiveSubjectDetail({
           <h2 className="mt-7 text-base font-semibold text-nevo-near-black">
             Ready for another look
           </h2>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {ready.map((c) => {
-              // THE ENTRANCE TO THE SPACED-RETRIEVAL LOOP. The route, the
-              // player variant and the schedule read all existed; nothing
-              // linked them, so a child was told a concept was ready for
-              // another look and given no way to take one.
-              //
-              // `playable` is the hook's own answer to "which of these can
-              // actually be opened" - a due concept whose schedule row carries
-              // no lesson is due but not openable, and stays a plain chip
-              // rather than becoming a link to nowhere.
-              const lessonId = review.playable.get(c.conceptId);
-              return lessonId ? (
-                <Link
-                  key={c.conceptId}
-                  // The concept travels with the link. Without it the review
-                  // session cannot tell the scheduler which concept it was for,
-                  // and the outcome of every review was being discarded. So
-                  // does this page, which is where the review ends (Olayinka,
-                  // 14 Oct: back returns to where you came from).
-                  href={reviewSessionHref(lessonId, c.conceptId, here)}
-                  aria-label={`Take another look at ${c.name}`}
-                  className={DUE_CHIP_LINK}
-                >
-                  {c.name}
-                </Link>
-              ) : (
-                <span key={c.conceptId} className={DUE_CHIP}>
-                  {c.name}
-                </span>
-              );
-            })}
+          <div className="mt-3 flex flex-col gap-3.5">
+            {shown.map((c, i) => (
+              // THE ENTRANCE TO THE SPACED-RETRIEVAL LOOP. The concept
+              // travels with the link, so the scheduler is told which concept
+              // the review was for; and back comes to this page, where it was
+              // opened (Olayinka, 14 Oct).
+              <div
+                key={c.conceptId}
+                ref={i === REVIEW_CARDS_SHOWN ? firstRevealed : undefined}
+                tabIndex={i === REVIEW_CARDS_SHOWN ? -1 : undefined}
+                className="outline-none"
+              >
+                <ReviewCard
+                  review={{
+                    conceptName: c.name,
+                    conceptId: c.conceptId,
+                    lessonId: review.playable.get(c.conceptId)!,
+                  }}
+                  back={here}
+                  headingId={`review-${c.conceptId}`}
+                  linkLabel={`Take another look at ${c.name}`}
+                  className=""
+                />
+              </div>
+            ))}
           </div>
+          {!allShown && ready.length > REVIEW_CARDS_SHOWN && (
+            // 23b's control, its words Lydia's (25 Nov, L61). No count.
+            <button
+              type="button"
+              onClick={() => setAllShown(true)}
+              className="mt-3.5 flex min-h-12 w-full cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-navy/30 bg-transparent px-4 py-3 text-[15px] font-semibold text-nevo-navy transition-transform active:scale-[0.98]"
+            >
+              See the rest
+            </button>
+          )}
         </>
       )}
 
