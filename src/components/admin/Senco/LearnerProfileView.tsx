@@ -21,6 +21,7 @@ import {
   type StudentAdaptation,
 } from "@/lib/api/students";
 import { helpSeekingLine } from "@/hooks/useStudentProfile";
+import { helpTopics, helpTopicsLead } from "./helpTopics";
 import { yearGroupLabel } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
 import { accommodationCopy } from "@/lib/constants/accommodations";
@@ -468,12 +469,13 @@ export function LearnerProfileView({
         * `withheld_below_minimum`, and the section is not drawn at all - not
         * "not enough yet", which would itself say something.
         *
-        * BUILT WITHOUT D08b's ranked topic list and its "A topic appears only
-        * once {name} has asked about it enough times to be worth showing."
-        * The server floors the whole fortnight at 3 but sends every category,
-        * so a topic asked about once would be listed under a sentence saying
-        * it couldn't be. A floor of our own would be a threshold computed on
-        * the device. Raised (rule 10): a per-topic floor on the server.
+        * D08b's RANKED TOPICS, since the server floors each topic (S10, 25
+        * Nov) - see `helpTopics`. Two or more, and the line ends in the
+        * frame's "most often about these topics." over the list, with its
+        * "A topic appears only once {name} has asked about it enough times to
+        * be worth showing." One topic is already named by the line, so no
+        * list. Names only: the frame's count and bar beside each are not
+        * drawn, so nothing reads as a score.
         */}
       {helpPhase === "failed" || helpPhase === "denied" ? (
         <>
@@ -491,15 +493,33 @@ export function LearnerProfileView({
         <>
           <SectionLabel>Help-seeking</SectionLabel>
           <div data-help-seeking className={cn(CARD, "mt-2.5 px-6 py-[22px]")}>
-            <p className="m-0 text-[15px] leading-[1.55] text-nevo-near-black">
-              {(() => {
-                const line = helpSeekingLine(help);
-                return `${firstName} ${line.charAt(0).toLowerCase()}${line.slice(1)}`;
-              })()}
-            </p>
-            <p className="m-0 mt-4 border-t border-nevo-near-black/8 pt-3.5 text-[13px] leading-[1.55] text-nevo-near-black/60">
-              {`What ${firstName} and Nevo said to each other is never shown here.`}
-            </p>
+            {(() => {
+              const topics = helpTopics(help);
+              const listed = topics.length > 1;
+              const line = listed ? helpTopicsLead(help) : helpSeekingLine(help);
+              return (
+                <>
+                  <p className="m-0 text-[15px] leading-[1.55] text-nevo-near-black">
+                    {`${firstName} ${line.charAt(0).toLowerCase()}${line.slice(1)}`}
+                  </p>
+                  {listed ? (
+                    <ol data-help-topics className="m-0 mt-4 flex list-none flex-col gap-[11px] p-0">
+                      {topics.map((t) => (
+                        <li key={t} className="text-[14px] leading-[1.45] text-nevo-near-black">
+                          {t}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                  <p className="m-0 mt-4 border-t border-nevo-near-black/8 pt-3.5 text-[13px] leading-[1.55] text-nevo-near-black/60">
+                    {listed
+                      ? `A topic appears only once ${firstName} has asked about it enough times to be worth showing. `
+                      : ""}
+                    {`What ${firstName} and Nevo said to each other is never shown here.`}
+                  </p>
+                </>
+              );
+            })()}
           </div>
         </>
       ) : null}
