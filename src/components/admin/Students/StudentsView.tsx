@@ -289,6 +289,10 @@ export function StudentsView() {
          * row - a filter that always returns nothing, which is worse than no
          * filter, because it reads as a school with nothing in that state.
          */
+        // L24 (Lydia, 25 Nov): how a CONFIRMED consent was given - the
+        // tallies' own rule, so the list and its count agree.
+        if (consent === "written" || consent === "digital")
+          return s.consent.status === "confirmed" && consentGiven(s.consent.channel ?? null) === consent;
         return s.consent.status === consent;
       })
       .filter((s) =>
@@ -502,6 +506,9 @@ export function StudentsView() {
                   { value: "pending", label: "Pending" },
                   { value: "not_sent", label: "Not sent" },
                   { value: "withdrawn", label: "Withdrawn" },
+                  // L24 (25 Nov): the tallies' "how it was given", as filters.
+                  { value: "written", label: "Written" },
+                  { value: "digital", label: "Digital" },
                 ]}
                 triggerClassName={FILTER_PILL}
               />
