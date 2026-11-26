@@ -4,8 +4,9 @@ import { visibleText } from "@/test/visibleText";
 import { ApiError } from "@/lib/api/client";
 import type { ParentChild } from "@/lib/api/parent";
 
-const { myChildren, me, logout, replace, submit } = vi.hoisted(() => ({
+const { myChildren, myConsents, me, logout, replace, submit } = vi.hoisted(() => ({
   myChildren: vi.fn(),
+  myConsents: vi.fn(),
   me: vi.fn(),
   logout: vi.fn(),
   replace: vi.fn(),
@@ -14,7 +15,7 @@ const { myChildren, me, logout, replace, submit } = vi.hoisted(() => ({
 
 // Replaced wholesale - see ParentDataManagement.test.tsx for why importOriginal
 // deadlocks the jsdom worker on the parent module.
-vi.mock("@/lib/api/parent", () => ({ parentApi: { myChildren } }));
+vi.mock("@/lib/api/parent", () => ({ parentApi: { myChildren, myConsents } }));
 vi.mock("@/lib/api/users", () => ({ usersApi: { me } }));
 vi.mock("@/lib/api/auth", () => ({ authApi: { logout } }));
 vi.mock("@/lib/api/feedback", () => ({ feedbackApi: { submit } }));
@@ -55,8 +56,22 @@ beforeEach(() => {
     school: null,
   });
   myChildren.mockResolvedValue([AMARA]);
+  myConsents.mockResolvedValue(consentsFor(true));
   logout.mockResolvedValue(undefined);
 });
+
+/** Amara's consents, given by this parent (`canWithdraw`) or by another. */
+function consentsFor(canWithdraw: boolean) {
+  return [
+    {
+      studentId: "s-1",
+      studentFirstName: "Amara",
+      consents: [
+        { consentType: "data_processing", status: "confirmed", decidedAt: "2026-09-01T09:00:00Z", stopsAccess: true, canWithdraw },
+      ],
+    },
+  ];
+}
 
 describe("parent settings", () => {
   it("shows the account, the child with their school, and the way to consent and data", async () => {
@@ -69,6 +84,29 @@ describe("parent settings", () => {
       "/parent-portal/data?child=s-1",
     );
     expect(container.textContent).toMatch(/Signed in as Ada Okoro · Corona Secondary School\./);
+  });
+
+  /*
+   * D01g: the withdrawal route is the consenting guardian's alone. Anyone else
+   * gets "{child}'s data" in that row - no consent as a permission, and the
+   * word withdraw nowhere - opening the same page. Reduced: the frame's "and
+   * her account status" is left off, as the page it opens shows none.
+   */
+  it("a second guardian gets D01g's row, with no withdrawing in it", async () => {
+    myConsents.mockResolvedValue(consentsFor(false));
+    const { container } = render(<ParentSettings />);
+    const row = await screen.findByRole("link", { name: /Amara’s data/ });
+    expect(row).toHaveAttribute("href", "/parent-portal/data?child=s-1");
+    expect(row).toHaveTextContent("What Nevo holds about Amara");
+    expect(visibleText(container)).not.toMatch(/withdraw|Consent & data|account status/i);
+  });
+
+  it("a failed consents read still draws the page, with the row that claims nothing", async () => {
+    myConsents.mockRejectedValue(new Error("down"));
+    const { container } = render(<ParentSettings />);
+    expect(await screen.findByRole("link", { name: /Amara’s data/ })).toBeInTheDocument();
+    expect(screen.queryByText("Try again")).toBeNull();
+    expect(visibleText(container)).not.toMatch(/withdraw/i);
   });
 
   it("offers no control a server doesn't stand behind", async () => {

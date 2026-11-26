@@ -406,10 +406,15 @@ export function ParentDataManagement({
         <div className={`${CARD} mt-3.5`}>
           <h3 className={H3}>Request {child}&rsquo;s Data</h3>
           {/* Kept deliberately: the right of access SURVIVES withdrawal of
-              consent, and the frame says so in as many words. */}
-          <p className={BODY}>
-            You keep this right even after withdrawing consent.
-          </p>
+              consent, and the frame says so in as many words - to the parent
+              who withdrew. A guardian who didn't (`notTheirsToRestore`, as the
+              heading above) is told they withdrew by it, so for them it says
+              nothing: no frame draws their words, and none are invented. */}
+          {notTheirsToRestore ? null : (
+            <p className={BODY}>
+              You keep this right even after withdrawing consent.
+            </p>
+          )}
           {outcome?.right === "request_data" && phase === "done" ? (
             <p className={NOTE}>
               {/* Lydia, 19 Nov (L35): what actually happens - the server
