@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { IllustrationWrapper } from "@/components/shared/IllustrationWrapper";
 import { MasteryDualTrack } from "@/components/teacher/Student/MasteryDualTrack";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
-import { getClassInsights, hasGap } from "@/lib/mocks/teacherInsights";
+import { getClassInsights } from "@/lib/mocks/teacherInsights";
 import { MaybeSample, SampleRegion } from "@/components/shared/SampleRegion";
 import { ReadFailed } from "@/components/teacher/shared/ReadFailed";
 import { LiveClassInsights } from "./LiveClassInsights";
@@ -344,9 +344,11 @@ export function InsightsView() {
                         reading={c.r}
                         flag="none"
                       />
-                      {hasGap(c) && (
+                      {/* Fixture text, rendered as given - never worked
+                          out from the two tracks (rule 3). */}
+                      {c.readingNote && (
                         <div className="mt-[9px] text-[12.5px] text-nevo-violet xl:mt-2.5 xl:text-[13px]">
-                          {`Reading may be affecting results in ${c.name}`}
+                          {c.readingNote}
                         </div>
                       )}
                     </div>

@@ -63,7 +63,11 @@ export interface ConceptMastery {
   u: number;
   /** 0-100. */
   r: number;
-  /** Overrides the component's auto label; "none" suppresses it. */
+  /**
+   * Fixture text for the pill, rendered as given; "none" suppresses it. The
+   * component computes no label of its own (since 17 Sep), and nothing here
+   * may work one out from `u` and `r` either (rule 3).
+   */
   flag?: string;
 }
 
@@ -224,8 +228,9 @@ const AMARA: Omit<StudentProfileData, "classId" | "className"> = {
     "revisited_content",
   ],
   observationCounts: { completed_lessons: 12 },
-  // None of these four trip the component's auto-flag thresholds, so no flag
-  // pill renders on this data - that is the frame's intent, not a gap.
+  // No `flag` on any of these four, so no pill renders on this data - the
+  // frame's intent, not a gap. (The component's auto-flag thresholds this
+  // comment once relied on were removed on 17 Sep.)
   concepts: [
     { name: "Solving linear equations", u: 84, r: 66 },
     { name: "Simplifying expressions", u: 79, r: 63 },

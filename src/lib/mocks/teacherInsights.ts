@@ -41,6 +41,13 @@ export interface ClassConcept {
   name: string;
   u: number;
   r: number;
+  /**
+   * The frame's violet line under a concept, as fixture TEXT - written here as
+   * the server would send it, never worked out from `u` and `r`. It used to be
+   * `u - r > 20` on the device: a threshold, which rule 3 forbids even on a
+   * walkthrough (Hub, 25 Nov). Present on the one row the frame draws it on.
+   */
+  readingNote?: string;
 }
 
 export interface Recommendation {
@@ -65,10 +72,6 @@ export interface ClassInsights {
   /** C14 A2 - the forward look that appears on a quiet week. */
   lookingAhead?: { desktop: string; tablet: string };
 }
-
-/** Reading is dragging on the result when the tracks pull this far apart. */
-export const GAP_THRESHOLD = 20;
-export const hasGap = (c: ClassConcept) => c.u - c.r > GAP_THRESHOLD;
 
 const INSIGHTS: ClassInsights[] = [
   {
@@ -109,7 +112,12 @@ const INSIGHTS: ClassInsights[] = [
     ],
     concepts: [
       { name: "Solving linear equations", u: 81, r: 76 },
-      { name: "Word problems: rates & ratio", u: 74, r: 49 },
+      {
+        name: "Word problems: rates & ratio",
+        u: 74,
+        r: 49,
+        readingNote: "Reading may be affecting results in Word problems: rates & ratio",
+      },
       { name: "Algebraic fractions", u: 62, r: 58 },
       { name: "Simplifying expressions", u: 84, r: 80 },
     ],
