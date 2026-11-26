@@ -3,7 +3,8 @@
 import Link from "next/link";
 import {
   OBSERVATION_COPY,
-  observationCount,
+  DECLARED_OBSERVATION_WINDOW_DAYS,
+  observationCountWithin,
 } from "@/lib/constants/observations";
 import { accountStatus, rosterMarker } from "@/lib/constants/accountStatus";
 import { useTeacherFlags } from "@/hooks/useTeacherFlags";
@@ -375,15 +376,21 @@ export function LiveClassDetail({
                         {student.observations.map((o) => {
                           const copy = OBSERVATION_COPY[o.pattern];
                           if (!copy) return null;
-                          const times = observationCount(o.pattern, o.count);
+                          // Only with a declared window - none yet (S22): the
+                          // server counts 30 days and the contract doesn't say.
+                          const times = observationCountWithin(
+                            o.pattern,
+                            o.count,
+                            DECLARED_OBSERVATION_WINDOW_DAYS,
+                          );
                           return (
                             /*
                              * The count is its own chip BESIDE the observation,
                              * never folded into its label. Design's ruling, and
                              * the reason is that "Went back over something · 7
                              * times" reads as a finding about the child even
-                             * though neither half says so. `observationCount`
-                             * now only answers for `completed_lessons`, so the
+                             * though neither half says so. `observationCountWithin`
+                             * only answers for `completed_lessons`, so the
                              * second chip is good news or nothing.
                              */
                             <span key={o.pattern} className="contents">

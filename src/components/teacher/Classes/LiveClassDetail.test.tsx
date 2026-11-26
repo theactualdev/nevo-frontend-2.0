@@ -97,7 +97,10 @@ describe("observation chips", () => {
     expect(screen.queryByText(/revisited_content/)).not.toBeInTheDocument();
   });
 
-  it("says how many times, when it was told", async () => {
+  it("leaves the count out until the roster declares its window (S22)", async () => {
+    // The server counts the last 30 days and the contract does not say so, so
+    // "3 lessons" beside a child read as a total (Hub, 25 Nov). The title
+    // stays; the count returns with its window once one is declared.
     useClassRoster.mockReturnValue({
       students: [seg({ observations: [{ pattern: "completed_lessons", count: 3 }] })],
       loading: false,
@@ -106,7 +109,10 @@ describe("observation chips", () => {
 
     render(<LiveClassDetail klass={klass} />);
 
-    expect(screen.getByText(/3 lessons/)).toBeInTheDocument();
+    expect(
+      screen.getByText(new RegExp(OBSERVATION_COPY.completed_lessons.title, "i")),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/3 lessons/)).not.toBeInTheDocument();
   });
 
   it("says nothing about a count it was not given", () => {

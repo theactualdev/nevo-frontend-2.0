@@ -17,7 +17,8 @@ import { useStudentDirectory } from "@/hooks/useStudentDirectory";
 import { StudentAvatar } from "@/components/shared/StudentAvatar";
 import {
   OBSERVATION_COPY,
-  observationCount,
+  DECLARED_OBSERVATION_WINDOW_DAYS,
+  observationCountWithin,
 } from "@/lib/constants/observations";
 import { LiveSessionPanel } from "./LiveSessionPanel";
 import { LiveRecommendSheet } from "./LiveRecommendSheet";
@@ -483,7 +484,13 @@ export function LiveStudentProfile({
               )}
             >
               {observations.map((o) => {
-                const chip = observationCount(o.pattern, o.count);
+                // Only with a declared window - none yet (S22): the server
+                // counts 30 days and the contract doesn't say.
+                const chip = observationCountWithin(
+                  o.pattern,
+                  o.count,
+                  DECLARED_OBSERVATION_WINDOW_DAYS,
+                );
                 return (
                   <div
                     key={o.pattern}
