@@ -153,3 +153,33 @@ describe("who can open it", () => {
     expect(await screen.findByText(/the safeguarding list/)).toBeInTheDocument();
   });
 });
+
+/**
+ * TO-DO 13 (Hub, 25 Nov): a failed "Show earlier entries" was swallowed, so
+ * the list simply stopped, as if there were nothing earlier.
+ */
+describe("earlier entries", () => {
+  const page = Array.from({ length: 100 }, (_, i) =>
+    event({ id: `e${i}`, createdAt: new Date(Date.UTC(2026, 9, 30) - i * 3_600_000).toISOString() }),
+  );
+
+  it("says a failed page under the list, keeps what is shown, and reads again", async () => {
+    events
+      .mockResolvedValueOnce(page)
+      .mockRejectedValueOnce(new ApiError(500, "down"))
+      .mockResolvedValueOnce([event({ id: "older", studentName: "Chidi Obi", createdAt: "2026-09-01T09:00:00Z" })]);
+    const { container } = render(<SafeguardingView />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Show earlier entries" }));
+    await waitFor(() =>
+      expect(container.textContent).toMatch(/couldn.t read the earlier entries just now/),
+    );
+    // The hundred already shown stay.
+    expect(screen.getAllByText("Adaeze Okonkwo")).toHaveLength(100);
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Chidi Obi")).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/couldn.t read the earlier entries/);
+    expect(events).toHaveBeenLastCalledWith({ limit: 100, before: page[99].createdAt });
+  });
+});

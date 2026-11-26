@@ -282,11 +282,20 @@ export function AdminSidebar() {
 
   const active = activeNavLabel(pathname);
   /** Whether this admin holds Learning Support - Safeguarding is theirs alone. */
-  const { holders: ls } = useLearningSupport();
+  const { holders: ls, failed: lsFailed } = useLearningSupport();
+  /*
+   * A FAILED HOLDERS READ IS NOT "YOU DON'T HOLD IT" (Hub, 25 Nov, TO-DO 13).
+   * Safeguarding used to vanish from the rail whenever that read failed, even
+   * for a holder - a failure dressed as an answer about them. Unanswered,
+   * the item stays, and the page answers from its own read: the list for a
+   * holder, the server's refusal for anyone else. Only a read that ANSWERED
+   * "not a holder" takes it away.
+   */
+  const lsItem = ls ? ls.viewerHoldsIt === true : lsFailed;
   // Until scopes land there is nothing truthful to filter by, so the rail
   // shows its chrome and no rows rather than a nav that rearranges itself
   // under the reader a moment later.
-  const items = resolved ? navForScopes(scopes, ls?.viewerHoldsIt === true) : [];
+  const items = resolved ? navForScopes(scopes, lsItem) : [];
   // A failed read is not an answer about this admin's access, so the footer
   // offers a retry instead of `scopeSummary`'s "No access yet" - which was a
   // claim about them produced by a broken GET.

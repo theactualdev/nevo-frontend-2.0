@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { LearningSupportHolders } from "@/lib/api/learningSupport";
 import { safetyApi, type SafetyEvent } from "@/lib/api/safety";
 import { getSession } from "@/lib/auth/session";
 import { longDay } from "./SafeguardingView";
+import { failureKind } from "../NoAccess";
+import { ReadFailed } from "../ReadFailed";
 
 /**
  * D08b's safeguarding line on a learner's profile (design 96cd4b4, 20 Oct).
@@ -16,8 +18,14 @@ import { longDay } from "./SafeguardingView";
  * list routes back here (design's reachability rule).
  *
  * ONLY FOR A LEARNING SUPPORT HOLDER, as the list is, and ONLY WHEN THERE IS
- * SOMETHING TO SAY: no entry for this child, or a read that fails or is
- * refused, draws nothing at all - the profile looks as it always did.
+ * SOMETHING TO SAY: no entry for this child, or a read the server refuses
+ * (the record is not this viewer's), draws nothing at all.
+ *
+ * A READ THAT FAILS IS SAID, NEVER SILENT (Hub, 25 Nov, TO-DO 13). It used to
+ * draw nothing, and on this line nothing reads as "not flagged" - an untrue
+ * state about a child, on the page a SENCo opens before a meeting. It is
+ * asked whenever the viewer is not KNOWN to lack the role, so a holders read
+ * that failed doesn't silence it either; the server's refusal still does.
  *
  * The child's own words are never on it, and there is no place for them.
  */
@@ -30,26 +38,51 @@ export function SafeguardingRecord({
   firstName: string;
   holders: LearningSupportHolders | null;
 }) {
-  const holds = holders?.viewerHoldsIt === true;
+  const mayRead = holders?.viewerHoldsIt !== false;
   const [latest, setLatest] = useState<SafetyEvent | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [asked, setAsked] = useState(0);
   const [me] = useState(() => getSession()?.userId ?? null);
 
   useEffect(() => {
-    if (!holds) return;
+    if (!mayRead) return;
     let alive = true;
     safetyApi
       .events({ limit: 200 })
       // Newest first, so the first of this child's is the latest.
       .then((rows) => {
-        if (alive) setLatest(rows.find((e) => e.studentId === studentId) ?? null);
+        if (!alive) return;
+        setLatest(rows.find((e) => e.studentId === studentId) ?? null);
+        setFailed(false);
       })
-      .catch(() => undefined);
+      .catch((err: unknown) => {
+        // Refused is the role's answer: not this viewer's record, so silent.
+        if (alive) setFailed(failureKind(err) !== "denied");
+      });
     return () => {
       alive = false;
     };
-  }, [holds, studentId]);
+  }, [mayRead, studentId, asked]);
 
-  if (!holds || !latest) return null;
+  const retry = useCallback(() => {
+    setFailed(false);
+    setAsked((n) => n + 1);
+  }, []);
+
+  if (mayRead && failed) {
+    return (
+      <>
+        <h3 className="mb-0 mt-7 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-nevo-near-black/45">
+          Safeguarding
+        </h3>
+        <div className="mt-2.5 rounded-xl bg-nevo-cream-elevated px-[22px] py-5 max-xl:px-[18px] max-xl:py-4">
+          <ReadFailed what={`${firstName}’s safeguarding record`} onRetry={retry} />
+        </div>
+      </>
+    );
+  }
+
+  if (!mayRead || !latest) return null;
 
   const recorded = longDay(latest.createdAt);
   const seenOn = longDay(latest.acknowledgedAt);
