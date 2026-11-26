@@ -101,6 +101,7 @@ describe("observation chips", () => {
     // The server counts the last 30 days and the contract does not say so, so
     // "3 lessons" beside a child read as a total (Hub, 25 Nov). The title
     // stays; the count returns with its window once one is declared.
+    const { OBSERVATION_COPY } = await import("@/lib/constants/observations");
     useClassRoster.mockReturnValue({
       students: [seg({ observations: [{ pattern: "completed_lessons", count: 3 }] })],
       loading: false,
