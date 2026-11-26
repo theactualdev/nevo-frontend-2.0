@@ -147,6 +147,13 @@ export function NotificationRow({
     >
       <IconTile accent={unread} size={compact ? 34 : 38} />
 
+      {/*
+        * The {" "} between these lines is a space nobody sees - white space
+        * between blocks collapses - that keeps them apart as TEXT. Drawn on
+        * separate lines, they still ran together wherever the row's raw text
+        * is read or copied: "PlatformRoster sync could not run", and the
+        * title into its description (TO-DO 14).
+        */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-[7px]">
           {/* The category's name (backend B34, 1 Oct), or nothing - never
@@ -162,8 +169,7 @@ export function NotificationRow({
               className="size-[7px] flex-none rounded-full bg-nevo-violet"
             />
           ) : null}
-        </div>
-
+        </div>{" "}
         <p
           className={cn(
             "m-0 mt-[3px] text-nevo-near-black",
@@ -171,11 +177,13 @@ export function NotificationRow({
           )}
         >
           {notification.title}
-        </p>
+        </p>{" "}
         {notification.description && notification.description !== notification.title ? (
-          <p className="m-0 mt-1 text-[13px] leading-[1.5] text-nevo-near-black/62">
-            {notification.description}
-          </p>
+          <>
+            <p className="m-0 mt-1 text-[13px] leading-[1.5] text-nevo-near-black/62">
+              {notification.description}
+            </p>{" "}
+          </>
         ) : null}
         <p className="m-0 mt-1 text-xs text-nevo-near-black/50">
           {relative(notification.createdAt, now ?? Date.parse(notification.createdAt))}
