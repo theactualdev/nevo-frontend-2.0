@@ -229,9 +229,13 @@ describe("objecting", () => {
     openObjection();
 
     expect(screen.getByRole("textbox")).toHaveFocus();
-    // The words inside are counsel's, and unchanged.
     expect(screen.getByLabelText(/Describe your concern/)).toBeInTheDocument();
-    expect(screen.getByText("Tell us your concern. We will review it within 48 hours.")).toBeInTheDocument();
+    // Lydia, 25 Nov (L43): what happens, in L35's words - no review window.
+    expect(
+      screen.getByText(
+        "Tell us your concern. Your request will be recorded and sent to the school. They will reply to you directly.",
+      ),
+    ).toBeInTheDocument();
   });
 
   // A screen reader hears a name, not its capitals: "Object to Processing"
@@ -279,7 +283,32 @@ describe("objecting", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "a concern" } });
     fireEvent.click(screen.getByRole("button", { name: /Object to processing/i }));
 
-    expect(await screen.findByText(/could not attach your note/i)).toBeInTheDocument();
+    // Lydia, 25 Nov (L44): the school replies, so "when they reply".
+    expect(
+      await screen.findByText(/We could not attach your note to this request, so please repeat it when they reply\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/when we contact you/)).toBeNull();
+  });
+
+  /*
+   * L43 (Lydia, 25 Nov): both cards carry L35's approved wording - the request
+   * is recorded and sent to the school, and the school replies directly. No
+   * copy promised to an address, no review window; and once sent, the
+   * confirmation replaces the card's line, so it never says both.
+   */
+  it("says on both cards what happens, before and after, with no address and no window", async () => {
+    exerciseRight.mockResolvedValue(receipt());
+    const { container } = render(<ParentDataManagement token={TOKEN} invitation={inv()} />);
+    const text = () => container.textContent ?? "";
+    expect(text()).not.toMatch(/We will prepare a copy|email address your school has|48 hours/);
+    expect(
+      screen.getByText("Your request will be recorded and sent to the school. They will reply to you directly."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Request .*data$/i }));
+    expect(
+      await screen.findByText(/Your request has been recorded and sent to the school\. They will reply to you directly\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Your request will be recorded and sent to the school. They will reply to you directly.")).toBeNull();
   });
 
   it("does not claim a note failed when none was written", async () => {
