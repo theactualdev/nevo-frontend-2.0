@@ -120,10 +120,16 @@ const intoCheck = async () => {
 };
 const takeBreak = (dialog: HTMLElement) =>
   fireEvent.click(within(dialog).getByRole("button", { name: "Take a break" }));
+/*
+ * The break is taken in place now (18b; Lydia, 25 Nov, L12), and one control
+ * ends it: "Keep going". It no longer ends on its hold - a child is given as
+ * long as they like, and the hold passing changes nothing.
+ */
 const breathe = async () => {
   await act(async () => {
     vi.advanceTimersByTime(MICRO_HOLD_MS + 100);
   });
+  fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
   // The return waits on the start's answer.
   await act(async () => {});
 };

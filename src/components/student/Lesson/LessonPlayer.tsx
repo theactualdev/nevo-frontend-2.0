@@ -134,7 +134,7 @@ import { useAttentionReports } from "@/hooks/useAttentionReports";
 import { useLessonProgress } from "@/hooks/useLessonProgress";
 import { AudioSegment } from "./AudioSegment";
 import { BreakOfferCard } from "./BreakOfferCard";
-import { BreakScreen } from "./BreakScreen";
+import { BreakScreen, InPlaceBreak, breakTakenInPlace } from "./BreakScreen";
 import {
   CalculationBreakCard,
   CalculationBreakPill,
@@ -3620,8 +3620,16 @@ export function LessonPlayer({
       breakOrigin.current === "leave" ||
       breakOrigin.current === "reading") &&
     breakOnSitting.current !== null;
+  /*
+   * 18b: THE MICRO AND CONSOLIDATION BREAKS ARE TAKEN IN PLACE among the
+   * segments - a card under the segment, the lesson still on screen (Lydia,
+   * 25 Nov, L12). The end-of-lesson check's break keeps the takeover: the
+   * check stays mounted, unseen, under it, and 18b draws the segment.
+   */
+  const breakInPlace = phase === "segments" && breakTakenInPlace(breakActive);
+  const BreakView = breakInPlace ? InPlaceBreak : BreakScreen;
   const breakScreen = breakActive ? (
-    <BreakScreen
+    <BreakView
       type={breakActive}
       // The catalogue's keys and no others: the break's type (B89, 8 Oct),
       // `trigger`, and how long it lasted. The segment is not among them.
@@ -3888,7 +3896,7 @@ export function LessonPlayer({
     );
   }
 
-  if (breakScreen) return breakScreen;
+  if (breakScreen && !breakInPlace) return breakScreen;
 
   // Module boundary landing (SCRUM-101) — a full player screen between modules,
   // never a modal. Its one action, Continue, completes the move (D91).
@@ -4483,6 +4491,8 @@ export function LessonPlayer({
             </div>
             {/* §4 `offer_hint`: under the content, while no check is open. */}
             {!calcShowing && !hintInSheet && hintCard}
+            {/* 18b: the micro or consolidation break, under the segment. */}
+            {breakInPlace && breakScreen}
           </div>
         </div>
       </div>
@@ -4694,8 +4704,10 @@ export function LessonPlayer({
       */}
       <div ref={setPanelDock} data-panel-dock className="flex min-h-0 flex-col" />
       <nav
-        aria-hidden={partsLeft || undefined}
-        inert={partsLeft}
+        // A break in place has one way on, its own control (18b): the
+        // arrows wait under it, as the segment does.
+        aria-hidden={partsLeft || breakInPlace || undefined}
+        inert={partsLeft || breakInPlace}
         className={cn(
           "flex shrink-0 items-center justify-center gap-8 px-3.5 pt-2 pb-6",
           // Over the docked pad the row is not at the screen's foot, so it
