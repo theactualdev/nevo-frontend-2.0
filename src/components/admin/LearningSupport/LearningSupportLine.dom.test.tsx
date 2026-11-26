@@ -184,3 +184,43 @@ describe("a self-grant the server refuses", () => {
     ).toBeInTheDocument();
   });
 });
+
+/*
+ * L86 (Lydia, 25 Nov): at least one ADMINISTRATOR holds Learning Support. With
+ * teachers holding it too, the server would let the last admin go - so the
+ * console refuses it first, in D03b's calm words for an administrator, and
+ * sends nothing.
+ */
+describe("the school's only administrator holding it (L86)", () => {
+  const TEACHER_HOLDS = {
+    userId: "u-tunde",
+    name: "Tunde Bello",
+    role: "teacher",
+    grantedAt: `${THIS_YEAR}-10-12T09:00:00Z`,
+    grantedBy: "u-folake",
+  };
+
+  it("is refused calmly before anything is sent, while a teacher holds it too", async () => {
+    const both = held();
+    both.holders.push(TEACHER_HOLDS);
+    show({ holders: both });
+    fireEvent.click(screen.getByRole("switch", { name: "Learning Support for Grace Eze" }));
+    expect(await screen.findByText("An administrator needs to hold Learning Support")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Grace Eze is the only administrator in your school with Learning Support right now. Give it to another administrator first, then you can remove it here.",
+      ),
+    ).toBeInTheDocument();
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("goes ahead when another administrator holds it", async () => {
+    const two = held();
+    two.holders.push({ ...TEACHER_HOLDS, userId: "u-ada", name: "Ada Obi", role: "senco_admin" });
+    remove.mockResolvedValue({ holders: [two.holders[1]], viewerHoldsIt: true });
+    show({ holders: two });
+    fireEvent.click(screen.getByRole("switch", { name: "Learning Support for Grace Eze" }));
+    await waitFor(() => expect(remove).toHaveBeenCalledWith("u-grace"));
+    expect(screen.queryByText("An administrator needs to hold Learning Support")).toBeNull();
+  });
+});
