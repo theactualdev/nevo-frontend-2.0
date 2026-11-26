@@ -190,22 +190,51 @@ function PartialReadNotice({
 }) {
   const clean = cleanPagesLine(pageTotal, pages, sourceHeldPages(notes));
   return (
-    <div className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
-      <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
-        {clean ? `${clean} ` : ""}
-        {faintPagesLine(pages)}{" "}
-        {pages.length > 1
-          ? "Nothing you did is lost - you can retry just those pages."
-          : "Nothing you did is lost - you can retry just that page."}
-      </p>
-      <button
-        type="button"
-        onClick={onRetry}
-        disabled={retrying}
-        className="mt-3 inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 bg-nevo-cream-elevated px-[18px] text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
+    /*
+      C07f's PARTIAL card, as drawn (Hub, 25 Nov): 14% violet, no rule down
+      the side, 15/17, the frame's page icon, the body at 13.5px and .7, no
+      wider than 600. One size: C07f draws this card once, for every width.
+    */
+    <div className="mb-5 flex w-full max-w-[600px] items-start gap-3 rounded-[12px] bg-nevo-violet/14 px-[17px] py-[15px]">
+      <svg
+        aria-hidden="true"
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="mt-px shrink-0 text-nevo-navy"
       >
-        {retrying ? "Retrying…" : retryPagesLabel(pages)}
-      </button>
+        <path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+        <path d="M14 3v6h6" />
+      </svg>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13.5px] leading-[1.55] text-pretty text-nevo-near-black/70">
+          {clean ? `${clean} ` : ""}
+          {faintPagesLine(pages)}{" "}
+          {pages.length > 1
+            ? "Nothing you did is lost - you can retry just those pages."
+            : "Nothing you did is lost - you can retry just that page."}
+        </p>
+        {/*
+          A GHOST, NOT C07f's NAVY primaryBtnSm (Hub, 25 Nov, on Lydia's
+          one-navy-primary rule). This notice only ever shows on the live
+          review, whose commit bar holds the screen's navy primary - "Looks
+          right, continue" or "Looks right - add to my library" - on screen
+          beside it at every width.
+        */}
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={retrying}
+          className="mt-3 inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 bg-nevo-cream-elevated px-[18px] text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
+        >
+          {retrying ? "Retrying…" : retryPagesLabel(pages)}
+        </button>
+      </div>
     </div>
   );
 }
