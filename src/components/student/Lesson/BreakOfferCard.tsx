@@ -14,11 +14,12 @@ interface CardCopy {
 }
 
 /*
- * 17d S5's two cards that a break can be (Nevo Lesson Player Frame, `boCopy`),
- * verbatim: a short pause, straight back to the same place, and a proper
- * break. The third, "It's okay to stop here for today.", is for a kind this
- * player does not take yet - and its "right where you are - nothing is lost"
- * is the claim D88 ruled out - so it is raised, not drawn.
+ * 17d S5's three cards (Nevo Lesson Player Frame, `boCopy`): a short pause,
+ * straight back to the same place; a proper break; and stopping for today.
+ * The first two verbatim. The third's body is Lydia's (25 Nov, L60), not the
+ * frame's "We'll pick it up next time, right where you are - nothing is
+ * lost", which is the claim D88 ruled out: what is kept is the last point
+ * that was saved.
  */
 const PAUSE: CardCopy = {
   title: "Want to pause for a moment?",
@@ -31,6 +32,12 @@ const BREAK: CardCopy = {
   body: "Step away and come back when you're ready. Your place is kept for you.",
   take: "Take a break",
   later: "Not just now",
+};
+const STOP_FOR_TODAY: CardCopy = {
+  title: "It's okay to stop here for today.",
+  body: "Your last saved point is kept, and this lesson will be here when you come back.",
+  take: "Stop for today",
+  later: "Stay a little longer",
 };
 
 /**
@@ -50,6 +57,8 @@ export function breakCardCopy(kind: string | null | undefined): CardCopy | null 
       return { ...BREAK, body: "Stand up and stretch for a moment." };
     case BREAK_TYPES.FULL:
       return BREAK;
+    case BREAK_TYPES.STOP_FOR_DAY:
+      return STOP_FOR_TODAY;
     default:
       return null;
   }

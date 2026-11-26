@@ -2314,10 +2314,45 @@ export function LessonPlayer({
     continueAdvance();
   };
 
+  /*
+   * STOPPING FOR TODAY (Lydia, 25 Nov, L60): the offer's third card, taken.
+   * Home, as leaving goes - "It takes the child to Home. The claim is the
+   * last saved point only, per D88." On the sitting where there is one, the
+   * server's own `stop_for_day`: it records the break itself, closes the
+   * sitting and writes the lesson `exited`, so this sends no break signal of
+   * its own. Our position write is the leave's, so the last saved point is the
+   * part the child stopped on.
+   */
+  const stopForToday = () => {
+    const sitting = progress.sessionId;
+    if (choicesHeld && sitting && getToken()) {
+      void lessonsApi.controlBreak(lesson.id, sitting, "stop_for_day").catch(() => {});
+    }
+    if (!review && !finished) {
+      endFocusEvents();
+      reportProgress(LESSON_STATUS.EXITED, { segment: index });
+    }
+    setEnding({ completionStatus: "exited", exitPosition: segment.id });
+    exitTo(HOME_HREF);
+  };
+
+  /*
+   * `stop_for_day` IS NOT IN THE SIGNAL CATALOGUE'S BREAK TYPES (live
+   * catalogue, 26 Nov: `breakType: micro|movement|consolidation|full` on
+   * every break event), though the engine offers it and the break endpoint
+   * records it. So the offer's own suggested, taken and declined events are
+   * not sent for it until the catalogue names it - raised, not guessed.
+   */
+  const offerCatalogued = breakOffered !== BREAK_TYPES.STOP_FOR_DAY;
+
   /** Accept/decline the offered break; either way the offer is spent. */
   const acceptBreakOffer = () => {
     if (!breakOffered) return;
     setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
+    if (breakOffered === BREAK_TYPES.STOP_FOR_DAY) {
+      stopForToday();
+      return;
+    }
     trackEvent(SIGNAL_EVENT_TYPES.BREAK_TAKEN, {
       breakType: breakOffered,
       trigger: offerTrigger,
@@ -2337,6 +2372,7 @@ export function LessonPlayer({
   const dismissBreakOffer = () => {
     if (!breakOffered) return;
     setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
+    if (!offerCatalogued) return;
     trackEvent(SIGNAL_EVENT_TYPES.BREAK_DECLINED, {
       breakType: breakOffered,
       trigger: offerTrigger,
@@ -4656,12 +4692,13 @@ export function LessonPlayer({
         <BreakOfferCard
           key={`break-offer-${segment.id}`}
           kind={breakOffered}
-          onShown={() =>
+          onShown={() => {
+            if (!offerCatalogued) return;
             trackEvent(SIGNAL_EVENT_TYPES.BREAK_SUGGESTED, {
               breakType: breakOffered,
               trigger: offerTrigger,
-            })
-          }
+            });
+          }}
           onAccept={acceptBreakOffer}
           onDismiss={dismissBreakOffer}
         />

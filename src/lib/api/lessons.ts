@@ -1485,7 +1485,9 @@ export const lessonsApi = {
    * (Teslim's gate contract, 23 Oct).
    * POST /api/v1/lessons/{id}/sessions/{session}/break with `{action}`:
    * "start" pauses the sitting - a micro break, the contract's default - and
-   * "return" resumes it.
+   * "return" resumes it. "stop_for_day" ends the sitting for today: the
+   * server records the break, closes the sitting and writes the lesson
+   * `exited` (Lydia, 25 Nov, L60).
    *
    * THE SERVER RECORDS THIS BREAK ITSELF: its `break_start` on start and its
    * `break_end` on return, both with the trigger `student_request`, and the
@@ -1496,7 +1498,7 @@ export const lessonsApi = {
   controlBreak: (
     lessonId: string,
     sessionId: string,
-    action: "start" | "return",
+    action: "start" | "return" | "stop_for_day",
   ) =>
     api.post<BreakControlResponse>(
       `/api/v1/lessons/${lessonId}/sessions/${sessionId}/break`,

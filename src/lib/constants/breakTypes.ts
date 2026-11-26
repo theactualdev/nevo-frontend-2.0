@@ -14,6 +14,13 @@ export const BREAK_TYPES = {
   CONSOLIDATION: "consolidation",
   /** Full break. */
   FULL: "full",
+  /**
+   * Stopping for today: the engine's answer to a child still stuck after two
+   * breaks, or with the re-teaching spent (backend `select_break_type`). Only
+   * ever an OFFER - taken, the lesson ends for today and the child goes Home
+   * (Lydia, 25 Nov, L60). Never a break screen.
+   */
+  STOP_FOR_DAY: "stop_for_day",
 } as const;
 
 export type BreakType = (typeof BREAK_TYPES)[keyof typeof BREAK_TYPES];
