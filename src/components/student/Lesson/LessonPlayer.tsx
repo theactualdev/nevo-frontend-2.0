@@ -4715,7 +4715,10 @@ export function LessonPlayer({
           // a short screen that is the question staying in view.
           "[&:has(+[data-pad-dock]:not(:empty))]:py-0",
           secondaryDim(attentionOn),
-          partsLeft && "invisible",
+          // Held arrows are not drawn live: invisible, their room kept. Under
+          // a break in place too (on-screen pass, 26 Nov) - a navy Next the
+          // child could see and not press; 18b draws none.
+          (partsLeft || breakInPlace) && "invisible",
         )}
       >
         <ChevronButton
