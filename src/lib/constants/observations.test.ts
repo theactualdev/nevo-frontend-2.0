@@ -1,6 +1,46 @@
 import { describe, expect, it } from "vitest";
 import type { ObservationPattern } from "@/lib/api/classes";
-import { OBSERVATION_COPY, observationCount } from "./observations";
+import {
+  DECLARED_OBSERVATION_WINDOW_DAYS,
+  OBSERVATION_COPY,
+  inTheLast,
+  observationCount,
+  observationCountWithin,
+} from "./observations";
+
+/**
+ * S22 (25 Nov): the roster's counts are a 30-day window the contract does not
+ * declare, so a count is shown only WITH a declared window - and none is
+ * declared yet, so none is shown.
+ */
+describe("a count and its window", () => {
+  it("declares no window until the contract does", () => {
+    expect(DECLARED_OBSERVATION_WINDOW_DAYS).toBeNull();
+  });
+
+  it("shows no count without a window", () => {
+    expect(observationCountWithin("completed_lessons", 12, null)).toBeNull();
+    expect(observationCountWithin("completed_lessons", 12, undefined)).toBeNull();
+    expect(observationCountWithin("completed_lessons", 12, DECLARED_OBSERVATION_WINDOW_DAYS)).toBeNull();
+  });
+
+  it("says the window beside the count once one is declared", () => {
+    expect(observationCountWithin("completed_lessons", 12, 30)).toBe("12 lessons in the last 30 days");
+    expect(observationCountWithin("completed_lessons", 1, 30)).toBe("1 lesson in the last 30 days");
+    expect(inTheLast(1)).toBe("in the last day");
+  });
+
+  it("still never counts the other patterns, and never a missing count", () => {
+    expect(observationCountWithin("revisited_content", 7, 30)).toBeNull();
+    expect(observationCountWithin("completed_lessons", null, 30)).toBeNull();
+  });
+
+  it("refuses a window that is not a whole number of days", () => {
+    expect(inTheLast(0)).toBeNull();
+    expect(inTheLast(2.5)).toBeNull();
+    expect(inTheLast(Number.NaN)).toBeNull();
+  });
+});
 
 /**
  * These strings are the only place the five roster patterns are phrased, and
