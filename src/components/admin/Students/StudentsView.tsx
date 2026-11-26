@@ -903,19 +903,17 @@ function EmptyState({ onEnrol, paused }: { onEnrol: () => void; paused: boolean 
           priority
         />
         {/*
-          D07'S WORDS (backlog 63): "No students enrolled yet" and its first
-          sentence. Its second - "Consent requests come after - nothing goes
-          out to families until you're ready." - is held: SCRUM-156 sends
-          parent consent requests at activation, and a parent is notified
-          either way, so "until you're ready" is not plainly the school's to
-          promise. Raised; never invented around.
+          D07's title, and Lydia's line under it (L37, 25 Nov). D07's own -
+          "Consent requests come after - nothing goes out to families until
+          you're ready." - promised what doesn't hold for a child added
+          mid-term: SCRUM-156 sends consent requests at activation.
         */}
         <h3 className="m-0 text-xl font-semibold text-nevo-near-black">
           No students enrolled yet
         </h3>
         <p className="mt-2.5 text-[15px] leading-[1.6] text-nevo-near-black/64">
-          Import a roster from your school system, or add students one at a
-          time.
+          Add your students here. Consent requests go to families when your
+          school is active.
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <button type="button" onClick={onEnrol} disabled={paused} className={PRIMARY_BTN}>
