@@ -834,11 +834,12 @@ describe("the child's date of birth", () => {
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   const yes = () => screen.getByRole("button", { name: /Yes, I give my consent/ });
 
-  it("is asked before consent, in the frame's words, with the child's name for 'her' (R1)", () => {
+  // L80 (Lydia, 25 Nov): the main frames' longer line, not R1's short one.
+  it("is asked before consent, in the main frames' words, with the child's name for 'her'", () => {
     const { container } = render(<ParentConsent token={TOKEN} invitation={inv()} />);
     expect(visibleText(container)).toMatch(/Amara ?'s date of birth/);
     expect(visibleText(container)).toMatch(
-      /Day, month and year\. We ask this so Nevo stays right for Amara's age\./,
+      /Day, month and year\. We ask this so Nevo stays right for Amara's age, and we need it before you give consent\./,
     );
     expect(yes()).toBeDisabled();
   });

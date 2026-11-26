@@ -629,7 +629,9 @@ export function ParentConsent({
             ? `Add ${child}’s year of birth, then you can give your consent.`
             : dobNote === "impossible"
               ? "That date doesn’t look right. Please check the day and month."
-              : `Day, month and year. We ask this so Nevo stays right for ${child}’s age.`}
+              : // L80 (Lydia, 25 Nov): the main frames' longer line, which says why
+                // the date comes first. The frame's "her" is the child's name.
+                `Day, month and year. We ask this so Nevo stays right for ${child}’s age, and we need it before you give consent.`}
         </p>
       </fieldset>
 
