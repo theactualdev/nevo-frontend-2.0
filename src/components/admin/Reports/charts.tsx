@@ -218,11 +218,21 @@ export function TrendLine({
 export interface DualTrackRow {
   key: string;
   label: string;
-  /** 0..1 */
-  concept: number;
-  /** 0..1 */
-  reading: number;
+  /** 0..1, or null when the server has no figure - which is drawn as nothing. */
+  concept: number | null | undefined;
+  /** 0..1, or null when the server has no figure - which is drawn as nothing. */
+  reading: number | null | undefined;
   meta?: string;
+}
+
+/**
+ * A figure to draw. Null, missing or not a number is NOTHING TO DRAW - no bar
+ * and no figure - never "0%" (a null clamped to zero) or "NaN%" (a missing
+ * one). Both said something the server didn't: rule 5, absence is an
+ * instruction. The hub, 25 Nov, from the mastery inventory.
+ */
+function known(v: number | null | undefined): v is number {
+  return typeof v === "number" && Number.isFinite(v);
 }
 
 /**
@@ -240,6 +250,8 @@ export function DualTrackBars({ rows }: { rows: DualTrackRow[] }) {
   const [hover, setHover] = useState<string | null>(null);
 
   const pct = (v: number) => `${Math.round(Math.max(0, Math.min(1, v)) * 100)}%`;
+  /** The table's cell: the figure, or the dash this table uses for none. */
+  const cell = (v: number | null | undefined) => (known(v) ? pct(v) : "—");
 
   return (
     <div>
@@ -285,8 +297,8 @@ export function DualTrackBars({ rows }: { rows: DualTrackRow[] }) {
                 <tr key={r.key} className="border-t border-nevo-near-black/[0.07]">
                   <td className="py-2.5 pr-4 text-nevo-near-black">{r.label}</td>
                   <td className="py-2.5 pr-4 text-nevo-near-black/70">{r.meta ?? "—"}</td>
-                  <td className="py-2.5 pr-4 text-nevo-near-black/70">{pct(r.concept)}</td>
-                  <td className="py-2.5 text-nevo-near-black/70">{pct(r.reading)}</td>
+                  <td className="py-2.5 pr-4 text-nevo-near-black/70">{cell(r.concept)}</td>
+                  <td className="py-2.5 text-nevo-near-black/70">{cell(r.reading)}</td>
                 </tr>
               ))}
             </tbody>
@@ -321,8 +333,12 @@ export function DualTrackBars({ rows }: { rows: DualTrackRow[] }) {
                 {/* 2px surface gap between the two adjacent bars, and the value
                     directly labelled at each tip. */}
                 <div className="mt-2 flex flex-col gap-[2px]">
-                  <Bar value={r.concept} colour={SERIES.navy} display={pct(r.concept)} />
-                  <Bar value={r.reading} colour={SERIES.violet} display={pct(r.reading)} />
+                  {known(r.concept) ? (
+                    <Bar value={r.concept} colour={SERIES.navy} display={pct(r.concept)} />
+                  ) : null}
+                  {known(r.reading) ? (
+                    <Bar value={r.reading} colour={SERIES.violet} display={pct(r.reading)} />
+                  ) : null}
                 </div>
               </div>
             );
