@@ -84,12 +84,17 @@ describe("a notification row's label", () => {
    * line above the title, but as text the two ran into one word - in a raw
    * copy, and to anything that reads the row's text in order.
    */
-  it("stays apart from the title as text, not only on screen", () => {
+  it("stays apart from the title as text, not only on screen - and so do the lines under it", () => {
     const { container } = row(
-      note({ type: "roster_sync_failed", category: "account", title: "Roster sync could not run" }),
+      note({
+        type: "roster_sync_failed",
+        category: "account",
+        title: "Roster sync could not run",
+        description: "Google refused the last sync.",
+      }),
     );
     expect(container.textContent).not.toMatch(/PlatformRoster/);
-    expect(container.textContent).toMatch(/Platform\s+Roster sync could not run/);
+    expect(container.textContent).toMatch(/Platform\s+Roster sync could not run\s+Google refused the last sync\.\s+1d ago/);
     // The look is the same: the label still reads just "Platform".
     expect(screen.getByText("Platform").textContent?.trim()).toBe("Platform");
   });
