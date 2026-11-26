@@ -42,6 +42,17 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
       mastery: async () => [],
       adaptations: async () => [],
     },
+    // Below the server's floor, so help-seeking draws nothing of its own.
+    conversationEvidenceApi: {
+      forStudent: async () => ({
+        studentId: "s1",
+        periodDays: 14,
+        interactionCount: 0,
+        categories: {},
+        privacy: "withheld_below_minimum",
+        minimumInteractions: 3,
+      }),
+    },
   };
 });
 vi.mock("@/lib/api/classes", async (importOriginal) => {
@@ -121,7 +132,8 @@ describe("What Nevo has noticed, for an admin the roster route refuses", () => {
     const { container } = render(<LearnerProfileView studentId="s1" />);
 
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/These are the signals on Amara.s accommodation record\./),
+      // `visibleText` keeps the gap between the name's and the "'s" text nodes.
+      expect(visibleText(container)).toMatch(/These are the signals on Amara ?.s accommodation record\./),
     );
     expect(visibleText(container)).toMatch(/What Nevo has noticed/i);
     expect(visibleText(container)).not.toMatch(/class roster/i);
