@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { exportApi, STAFF_NOTE_MAX, type StaffNote } from "@/lib/api/export";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import { ApiError, apiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { CARD, PRIMARY_BTN } from "../Roster/primitives";
@@ -51,16 +52,20 @@ export function StaffNotes({
   const [body, setBody] = useState("");
   const [adding, setAdding] = useState(false);
   const [addFailed, setAddFailed] = useState<{ message: string | null } | null>(null);
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
   const read = useCallback(() => {
     exportApi
       .composition(exportId)
       .then((c) => {
+        if (!mounted.current) return;
         setNotes(c.annotations);
         setReadFailed(false);
       })
-      .catch(() => setReadFailed(true));
-  }, [exportId]);
+      .catch(() => {
+        if (mounted.current) setReadFailed(true);
+      });
+  }, [exportId, mounted]);
 
   useEffect(() => {
     read();

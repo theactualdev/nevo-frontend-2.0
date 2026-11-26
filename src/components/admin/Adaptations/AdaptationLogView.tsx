@@ -3,6 +3,7 @@
 import { NevoSelect } from "@/components/shared/NevoSelect";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import {
   EVENT_TYPE_OPTIONS,
@@ -167,13 +168,18 @@ export function AdaptationLogView({ back = null }: { back?: Back | null } = {}) 
    * then the footer says nothing rather than asserting a zero we do not have.
    */
   const [labels, setLabels] = useState<number | null>(null);
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
   useEffect(() => {
     schoolIntelligenceApi
       .complianceAudit()
-      .then((a) => setLabels(a.diagnosticLabelsStored))
-      .catch(() => setLabels(null));
-  }, []);
+      .then((a) => {
+        if (mounted.current) setLabels(a.diagnosticLabelsStored);
+      })
+      .catch(() => {
+        if (mounted.current) setLabels(null);
+      });
+  }, [mounted]);
 
   /*
    * Its own effect, and its own failure. `setClassPhase("failed")` never
@@ -184,11 +190,14 @@ export function AdaptationLogView({ back = null }: { back?: Back | null } = {}) 
     classesApi
       .list()
       .then((c) => {
+        if (!mounted.current) return;
         setClasses(c);
         setClassPhase("ready");
       })
-      .catch(() => setClassPhase("failed"));
-  }, []);
+      .catch(() => {
+        if (mounted.current) setClassPhase("failed");
+      });
+  }, [mounted]);
 
   useEffect(() => {
     loadClasses();
@@ -202,14 +211,17 @@ export function AdaptationLogView({ back = null }: { back?: Back | null } = {}) 
   const loadCalendar = useCallback(() => {
     schoolApi
       .get()
-      .then((s) =>
+      .then((s) => {
+        if (!mounted.current) return;
         setCalendar({
           state: "ready",
           halfTerm: currentHalfTerm(readAcademic(s).terms ?? [], Date.now()),
-        }),
-      )
-      .catch(() => setCalendar({ state: "failed" }));
-  }, []);
+        });
+      })
+      .catch(() => {
+        if (mounted.current) setCalendar({ state: "failed" });
+      });
+  }, [mounted]);
 
   useEffect(() => {
     loadCalendar();
@@ -293,6 +305,7 @@ export function AdaptationLogView({ back = null }: { back?: Back | null } = {}) 
       windowRef.current = w;
       query(w, 0)
         .then((log) => {
+          if (!mounted.current) return;
           if (w.generation !== generation.current) return;
           // Reset here, not before the request: an earlier page's failure
           // belongs to the list this one replaces.
@@ -302,11 +315,12 @@ export function AdaptationLogView({ back = null }: { back?: Back | null } = {}) 
           setPhase("ready");
         })
         .catch((err: unknown) => {
+          if (!mounted.current) return;
           if (w.generation !== generation.current) return;
           setPhase(failureKind(err));
         });
     },
-    [],
+    [mounted],
   );
 
   const loadMore = () => {

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { notificationsApi, type Notification } from "@/lib/api/notifications";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import { cn } from "@/lib/utils";
 import { ROW_DIVIDER } from "../Roster/primitives";
 import { NotificationRow } from "./NotificationRow";
@@ -71,6 +72,7 @@ export function NotificationsPanel({
   const [allRead, setAllRead] = useState(false);
   const [now, setNow] = useState(0);
   const panel = useRef<HTMLDivElement>(null);
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
   /*
    * Its own callback so the failure state can offer a retry. It used to live
@@ -82,16 +84,18 @@ export function NotificationsPanel({
     notificationsApi
       .list({ limit: MAX_ROWS, offset: 0 })
       .then((feed) => {
+        if (!mounted.current) return;
         setRows(feed.notifications);
         setAllRead(feed.unreadCount === 0);
         setNow(Date.now());
       })
       .catch(() => {
+        if (!mounted.current) return;
         // "You're all caught up" is a claim; a failed read is not one.
         setRows([]);
         setFailed(true);
       });
-  }, []);
+  }, [mounted]);
 
   useEffect(() => {
     load();

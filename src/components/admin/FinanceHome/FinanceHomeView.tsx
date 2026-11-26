@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import {
   billingApi,
   type Invoice,
@@ -73,26 +74,38 @@ export function FinanceHomeView() {
   const [upcoming, setUpcoming] = useState<UpcomingCharge | null>(null);
   /** Null is "we did not find out", which is NOT "nothing is overdue". */
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback(() => {
     billingApi
       .subscription()
       .then((s) => {
+        if (!mounted.current) return;
         setSubscription(s);
         setPhase("ready");
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(failureKind(err));
+      });
 
     billingApi
       .upcoming()
-      .then(setUpcoming)
-      .catch(() => setUpcoming(null));
+      .then((v) => {
+        if (mounted.current) setUpcoming(v);
+      })
+      .catch(() => {
+        if (mounted.current) setUpcoming(null);
+      });
 
     billingApi
       .invoices()
-      .then(setInvoices)
-      .catch(() => setInvoices(null));
-  }, []);
+      .then((v) => {
+        if (mounted.current) setInvoices(v);
+      })
+      .catch(() => {
+        if (mounted.current) setInvoices(null);
+      });
+  }, [mounted]);
 
   useEffect(() => {
     load();

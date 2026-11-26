@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { NevoSelect } from "@/components/shared/NevoSelect";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
 import { yearGroupOptions } from "@/lib/constants/yearGroups";
@@ -75,12 +76,20 @@ export function ClassFormSheet({
   const [schoolSubjects, setSchoolSubjects] = useState<SchoolSubject[] | null>(null);
   const [subjectsFailed, setSubjectsFailed] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
-  const fetchSubjects = () =>
-    subjectsApi
-      .list()
-      .then(setSchoolSubjects)
-      .catch(() => setSubjectsFailed(true));
+  const fetchSubjects = useCallback(
+    () =>
+      subjectsApi
+        .list()
+        .then((v) => {
+          if (mounted.current) setSchoolSubjects(v);
+        })
+        .catch(() => {
+          if (mounted.current) setSubjectsFailed(true);
+        }),
+    [mounted],
+  );
   const loadSubjects = () => {
     setSubjectsFailed(false);
     fetchSubjects();
@@ -88,7 +97,7 @@ export function ClassFormSheet({
   // Create only - an existing class changes its subjects on its own page.
   useEffect(() => {
     if (!editing) fetchSubjects();
-  }, [editing]);
+  }, [editing, fetchSubjects]);
 
   /*
    * CL-03's duplicate detection, which this sheet did not have: *"matching
@@ -108,9 +117,13 @@ export function ClassFormSheet({
   useEffect(() => {
     classesApi
       .list(true)
-      .then(setSiblings)
-      .catch(() => setSiblings([]));
-  }, []);
+      .then((v) => {
+        if (mounted.current) setSiblings(v);
+      })
+      .catch(() => {
+        if (mounted.current) setSiblings([]);
+      });
+  }, [mounted]);
 
   const collided = useMemo(() => {
     const hit = findCollision(name, siblings);

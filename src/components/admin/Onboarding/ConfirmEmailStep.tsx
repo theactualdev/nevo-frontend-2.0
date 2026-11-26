@@ -6,6 +6,7 @@ import {
   emailConfirmationApi,
   type EmailConfirmationStatus,
 } from "@/lib/api/emailConfirmation";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import { Spinner } from "../Roster/primitives";
 import { StepHeading, WIZARD_PRIMARY, WIZARD_SECONDARY } from "./OnboardingWizard";
 
@@ -79,15 +80,18 @@ export function ConfirmEmailStep({
   /** The address in play - the prop until a change lands, then the new one. */
   const [current, setCurrent] = useState(email);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
   const read = useCallback(() => {
     emailConfirmationApi
       .read()
-      .then((s) => setStatus(s.status))
+      .then((s) => {
+        if (mounted.current) setStatus(s.status);
+      })
       // Deliberately empty. See the header: a failed read says nothing about
       // whether the address is confirmed, so it must not move this screen.
       .catch(() => {});
-  }, []);
+  }, [mounted]);
 
   useEffect(() => {
     read();

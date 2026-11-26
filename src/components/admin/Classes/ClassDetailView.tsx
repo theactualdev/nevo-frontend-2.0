@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import {
   classesApi,
   type AdminClass,
@@ -142,6 +143,7 @@ export function ClassDetailView({
   const [removeBusy, setRemoveBusy] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [restoreFailed, setRestoreFailed] = useState(false);
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
   /*
    * RETURNS ITS CHAIN. It did not, so `.then(load)` on the restore resolved in
@@ -155,11 +157,14 @@ export function ClassDetailView({
       studentsApi
         .list({ classId })
         .then((s) => {
+          if (!mounted.current) return;
           setStudents(s);
           setStudentsPhase("ready");
         })
-        .catch(() => setStudentsPhase("failed")),
-    [classId],
+        .catch(() => {
+          if (mounted.current) setStudentsPhase("failed");
+        }),
+    [classId, mounted],
   );
 
   const load = useCallback(() => {
@@ -171,14 +176,17 @@ export function ClassDetailView({
     });
     const page = Promise.all([record, classesApi.classTeachers(classId)])
       .then(([c, t]) => {
+        if (!mounted.current) return;
         setKlass(c);
         setTeachers(t);
         setPhase("ready");
       })
-      .catch((err: unknown) => setPhase(gone ? "gone" : failureKind(err)));
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(gone ? "gone" : failureKind(err));
+      });
     // Settles either way, so the chain still waits for every read.
     return Promise.all([page, loadStudents()]).then(() => undefined);
-  }, [classId, loadStudents]);
+  }, [classId, loadStudents, mounted]);
 
   useEffect(() => {
     load();

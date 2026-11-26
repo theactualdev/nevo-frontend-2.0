@@ -38,6 +38,7 @@ import {
   ROW_DIVIDER,
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import { SignInDetailsDownload } from "./SignInDetailsDownload";
 import { ERASURE_LINE } from "./EraseRecordModal";
 import { ChildAvatar } from "../Roster/ChildAvatar";
@@ -143,6 +144,7 @@ export function StudentsView() {
    */
   const [lastBulk, setLastBulk] = useState<string[]>([]);
   const [missingEmailOnly, setMissingEmailOnly] = useState(false);
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback((cid: string, inactive: boolean) => {
     Promise.all([
@@ -153,6 +155,7 @@ export function StudentsView() {
       classesApi.list(),
     ])
       .then(([rows, cls]) => {
+        if (!mounted.current) return;
         setStudents(rows);
         setClasses(cls);
         setPhase("ready");
@@ -168,24 +171,28 @@ export function StudentsView() {
           cls.map((c) =>
             studentsApi
               .list({ classId: c.id, includeInactive: inactive })
-              .then((inClass) =>
+              .then((inClass) => {
+                if (!mounted.current) return;
                 setClassOf((prev) => {
                   const next = { ...prev };
                   inClass.forEach((s) => {
                     next[s.id] = c.id;
                   });
                   return next;
-                }),
-              ),
+                });
+              }),
           ),
-        ).then((results) =>
+        ).then((results) => {
+          if (!mounted.current) return;
           setClassReads(
             results.some((r) => r.status === "rejected") ? "partial" : "done",
-          ),
-        );
+          );
+        });
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
-  }, []);
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(failureKind(err));
+      });
+  }, [mounted]);
 
   useEffect(() => {
     load(classId, includeInactive);
@@ -221,16 +228,18 @@ export function StudentsView() {
     ageChecksApi
       .held()
       .then((rows) => {
+        if (!mounted.current) return;
         setDobNotes(new Set(rows.map((r) => r.studentId)));
         setDobDiffers(new Set(rows.filter((r) => r.differs === true).map((r) => r.studentId)));
         setHoldsRead(true);
       })
       .catch(() => {
+        if (!mounted.current) return;
         setDobNotes(new Set());
         setDobDiffers(new Set());
         setHoldsRead(false);
       });
-  }, []);
+  }, [mounted]);
 
   /** Everyone on the roster who is not deactivated - what the header counts. */
   const enrolled = useMemo(

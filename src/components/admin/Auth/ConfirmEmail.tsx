@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import { NevoLockup } from "@/components/shared/NevoLockup";
 import { ApiError } from "@/lib/api/client";
 import { getSession } from "@/lib/auth/session";
@@ -190,6 +191,7 @@ export function ConfirmEmail({ token }: { token: string }) {
    * way proves nothing, so it keeps the frame's part-way line.
    */
   const [signedOut, setSignedOut] = useState(false);
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
   /*
    * The request alone. No synchronous setState, because this runs from an
@@ -202,6 +204,7 @@ export function ConfirmEmail({ token }: { token: string }) {
     emailConfirmationApi
       .verify(token)
       .then((s) => {
+        if (!mounted.current) return;
         setState(s);
         setPhase("done");
         /*
@@ -221,21 +224,24 @@ export function ConfirmEmail({ token }: { token: string }) {
         }
         Promise.all([emailConfirmationApi.read(), schoolApi.get().catch(() => null)])
           .then(([mine, school]) => {
+            if (!mounted.current) return;
             if ((mine.status === "pending" || mine.status === "expired") && mine.email) {
               setOwn({ email: mine.email, school: school?.name?.trim() || null });
             }
           })
           .catch((err: unknown) => {
+            if (!mounted.current) return;
             // The session has ended: signed out after all.
             if (err instanceof ApiError && err.status === 401) setSignedOut(true);
           });
       })
       .catch(() => {
+        if (!mounted.current) return;
         // Deliberately NOT `status: "invalid"`. We do not know that.
         setState(null);
         setPhase("unreachable");
       });
-  }, [token]);
+  }, [token, mounted]);
 
   useEffect(() => {
     run();

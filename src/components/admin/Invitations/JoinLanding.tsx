@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { invitesApi, type JoinLookup } from "@/lib/api/invites";
 import { INVITE_CONFLICT_COPY, isInviteConflict, linkIsDead } from "@/lib/auth/linkAnswer";
@@ -103,11 +104,13 @@ export function JoinLanding({ token }: { token: string }) {
   const [lookup, setLookup] = useState<JoinLookup | null>(null);
 
   const [attempt, setAttempt] = useState(0);
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
   useEffect(() => {
     invitesApi
       .lookupJoin(token)
       .then((res) => {
+        if (!mounted.current) return;
         // A 200 IS the server saying the link is good: the status is a
         // constant on the wire, and expiry was judged where the clock is
         // right. See the docblock above.
@@ -118,6 +121,7 @@ export function JoinLanding({ token }: { token: string }) {
       // "no longer valid" panel below is what it means. Anything else is the
       // lookup failing to answer, which says nothing about the invite.
       .catch((err: unknown) => {
+        if (!mounted.current) return;
         setPhase(
           isInviteConflict(err)
             ? "conflict"
@@ -130,7 +134,7 @@ export function JoinLanding({ token }: { token: string }) {
                   : "unreachable",
         );
       });
-  }, [token, attempt]);
+  }, [token, attempt, mounted]);
 
   const isTeacher = (lookup?.role ?? "").toLowerCase() === "teacher";
   // A good link for a role this page no longer serves - see the docblock.

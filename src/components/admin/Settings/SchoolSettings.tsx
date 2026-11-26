@@ -19,6 +19,7 @@ import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { SENIOR_ADMIN_REQUIRED, type AdminAccessLevel } from "@/lib/api/permissions";
 import { cn } from "@/lib/utils";
 import { timeAgo } from "@/lib/relativeTime";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import { CARD, PRIMARY_BTN } from "../Roster/primitives";
 import {
   nowIndex,
@@ -112,6 +113,7 @@ export function SchoolSettings({
   /** A preset chosen over custom labels, waiting on the inline confirm. */
   const [pendingPreset, setPendingPreset] = useState<PresetId | null>(null);
   const [taxonomy, setTaxonomy] = useState<Phase>("idle");
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
   /*
    * ONE HYDRATOR PER SECTION, AND A SAVE REFRESHES ONLY ITS OWN.
@@ -155,8 +157,15 @@ export function SchoolSettings({
   );
 
   useEffect(() => {
-    schoolApi.get().then(hydrate).catch(() => setLoad("failed"));
-  }, [hydrate, attempt]);
+    schoolApi
+      .get()
+      .then((s) => {
+        if (mounted.current) hydrate(s);
+      })
+      .catch(() => {
+        if (mounted.current) setLoad("failed");
+      });
+  }, [hydrate, attempt, mounted]);
 
   if (load === "loading") {
     return <div className={cn(CARD, "mt-5 h-[420px] animate-pulse")} />;

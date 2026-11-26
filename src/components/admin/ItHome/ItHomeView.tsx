@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import { ApiError } from "@/lib/api/client";
 import { schoolApi, type School } from "@/lib/api/school";
 import {
@@ -73,6 +74,7 @@ export function ItHomeView() {
   const [history, setHistory] = useState<RosterSyncHistory | null>(null);
   /** Distinct from `history === null`, which is also the not-yet-loaded state. */
   const [historyFailed, setHistoryFailed] = useState(false);
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback(() => {
     /*
@@ -82,23 +84,31 @@ export function ItHomeView() {
      */
     schoolApi
       .get()
-      .then(setSchool)
-      .catch(() => setSchool(null));
+      .then((v) => {
+        if (mounted.current) setSchool(v);
+      })
+      .catch(() => {
+        if (mounted.current) setSchool(null);
+      });
 
     ssoApi
       .status()
       .then((s) => {
-        setStatus(s);
-        setPhase("ready");
+        if (mounted.current) setStatus(s);
+        if (mounted.current) setPhase("ready");
         return ssoApi
           .syncHistory()
           .then((h) => {
+            if (!mounted.current) return;
             setHistory(h);
             setHistoryFailed(false);
           })
-          .catch(() => setHistoryFailed(true));
+          .catch(() => {
+            if (mounted.current) setHistoryFailed(true);
+          });
       })
       .catch((err: unknown) => {
+        if (!mounted.current) return;
         // A school that never connected a provider gets a 404. That is the
         // ordinary "nothing connected yet" state, not a failure.
         if (err instanceof ApiError && err.status === 404) {
@@ -108,7 +118,7 @@ export function ItHomeView() {
         }
         setPhase(failureKind(err));
       });
-  }, []);
+  }, [mounted]);
 
   useEffect(() => {
     load();

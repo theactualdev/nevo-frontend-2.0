@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import { billingApi, type Invoice } from "@/lib/api/billing";
 import { longDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -43,11 +44,13 @@ export function InvoiceDetailView({
   const [phase, setPhase] = useState<Phase>("loading");
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [schoolName, setSchoolName] = useState<string | null>(null);
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback(() => {
     billingApi
       .invoices()
       .then((rows) => {
+        if (!mounted.current) return;
         const found = rows.find((r) => r.id === invoiceId) ?? null;
         setInvoice(found);
         // An id that is not among this school's invoices is not a failure to
@@ -55,14 +58,19 @@ export function InvoiceDetailView({
         setPhase(found ? "ready" : "missing");
       })
       .catch((err: unknown) => {
+        if (!mounted.current) return;
         const kind = failureKind(err);
         setPhase(kind === "denied" ? "denied" : "failed");
       });
     billingApi
       .subscription()
-      .then((s) => setSchoolName(s.schoolName?.trim() || null))
-      .catch(() => setSchoolName(null));
-  }, [invoiceId]);
+      .then((s) => {
+        if (mounted.current) setSchoolName(s.schoolName?.trim() || null);
+      })
+      .catch(() => {
+        if (mounted.current) setSchoolName(null);
+      });
+  }, [invoiceId, mounted]);
 
   useEffect(() => {
     load();

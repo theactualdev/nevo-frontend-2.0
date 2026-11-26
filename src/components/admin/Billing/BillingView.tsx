@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import {
   billingApi,
   latestReportByInvoice,
@@ -122,14 +123,17 @@ export function BillingView() {
    * which is never wrong, only less complete.
    */
   const [reports, setReports] = useState<Record<string, TransferReport>>({});
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
   /** Adding or removing a contact can move the primary; read it again. */
   const rereadPrimary = useCallback(() => {
     billingApi
       .subscription()
-      .then((s) => setContact(s.billingContact))
+      .then((s) => {
+        if (mounted.current) setContact(s.billingContact);
+      })
       .catch(() => undefined);
-  }, []);
+  }, [mounted]);
 
   const load = useCallback(() => {
     // The subscription read owns the page - it carries the school name and the
@@ -138,6 +142,7 @@ export function BillingView() {
     billingApi
       .subscription()
       .then((s) => {
+        if (!mounted.current) return;
         setSubscription(s);
         setContact(s.billingContact);
         setPhase("ready");
@@ -146,6 +151,7 @@ export function BillingView() {
         billingApi
           .invoices()
           .then((rows) => {
+            if (!mounted.current) return;
             // Newest first; the endpoint does not promise an order.
             setInvoices(
               [...rows].sort(
@@ -157,6 +163,7 @@ export function BillingView() {
             setInvoicesFailed(false);
           })
           .catch(() => {
+            if (!mounted.current) return;
             setInvoices([]);
             setInvoicesFailed(true);
           });
@@ -165,32 +172,49 @@ export function BillingView() {
         // fails, How to pay says the details aren't available, not "try again".
         billingApi
           .receivingAccount()
-          .then(setAccount)
-          .catch(() => setAccount(null));
+          .then((v) => {
+            if (mounted.current) setAccount(v);
+          })
+          .catch(() => {
+            if (mounted.current) setAccount(null);
+          });
 
         billingApi
           .transferReports()
-          .then((rows) => setReports(latestReportByInvoice(rows)))
-          .catch(() => setReports({}));
+          .then((rows) => {
+            if (mounted.current) setReports(latestReportByInvoice(rows));
+          })
+          .catch(() => {
+            if (mounted.current) setReports({});
+          });
 
         setUpcomingFailed(false);
         billingApi
           .upcoming()
           .then((u) => {
+            if (!mounted.current) return;
             setUpcoming(u);
             setUpcomingFailed(false);
             setPayDetails(null);
             if (u.invoiceId && u.status !== "paid") {
               billingApi
                 .invoiceTransferDetails(u.invoiceId)
-                .then(setPayDetails)
-                .catch(() => setPayDetails(null));
+                .then((v) => {
+                  if (mounted.current) setPayDetails(v);
+                })
+                .catch(() => {
+                  if (mounted.current) setPayDetails(null);
+                });
             }
           })
-          .catch(() => setUpcomingFailed(true));
+          .catch(() => {
+            if (mounted.current) setUpcomingFailed(true);
+          });
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
-  }, []);
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(failureKind(err));
+      });
+  }, [mounted]);
 
   useEffect(() => {
     load();

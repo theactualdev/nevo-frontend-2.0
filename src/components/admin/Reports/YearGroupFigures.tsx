@@ -1,8 +1,9 @@
 "use client";
 
 import { NevoSelect } from "@/components/shared/NevoSelect";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { analyticsApi, type CohortTransformation } from "@/lib/api/analytics";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import { classesApi } from "@/lib/api/classes";
 import { yearGroupLabel, yearGroupOrder } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
@@ -45,13 +46,7 @@ export function YearGroupFigures() {
   /* A read can settle after the figures unmount (a test's teardown, or the
      admin leaving the page). Setting state then is a no-op at best, and in a
      torn-down test environment it throws. */
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
+  const mounted = useMountedRef();
 
   const readGroups = useCallback(() => {
     classesApi
@@ -70,7 +65,7 @@ export function YearGroupFigures() {
       .catch((err: unknown) => {
         if (mounted.current) setGroups({ kind: failureKind(err) });
       });
-  }, []);
+  }, [mounted]);
 
   useEffect(() => {
     readGroups();
@@ -79,9 +74,13 @@ export function YearGroupFigures() {
   const readFigures = useCallback((group: string) => {
     analyticsApi
       .getYearGroupTransformation(group)
-      .then((data) => setFigures({ kind: "ready", data }))
-      .catch((err: unknown) => setFigures({ kind: failureKind(err) }));
-  }, []);
+      .then((data) => {
+        if (mounted.current) setFigures({ kind: "ready", data });
+      })
+      .catch((err: unknown) => {
+        if (mounted.current) setFigures({ kind: failureKind(err) });
+      });
+  }, [mounted]);
 
   useEffect(() => {
     if (chosen) readFigures(chosen);

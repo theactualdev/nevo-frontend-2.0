@@ -23,6 +23,7 @@ import { SetupPausedBanner } from "../SetupPausedBanner";
 import { SchoolCodeCard } from "./SchoolCodeCard";
 import { CardUnread } from "./CardUnread";
 import { useSetupGate } from "@/hooks/useSetupGate";
+import { useMountedRef } from "@/hooks/useMountedRef";
 import {
   readAcademic,
   readOnboarding,
@@ -267,17 +268,21 @@ export function OverviewView() {
       return next;
     });
   }, []);
+  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
 
   const readOverview = useCallback(() => {
     schoolApi
       .overview()
       .then((ov) => {
+        if (!mounted.current) return;
         setCounts(ov.counts);
         setClassActivity(ov.classActivity ?? null);
         mark("overview", false);
       })
-      .catch((err: unknown) => mark("overview", isFault(err)));
-  }, [mark]);
+      .catch((err: unknown) => {
+        if (mounted.current) mark("overview", isFault(err));
+      });
+  }, [mark, mounted]);
 
   // The school record is its own call, so it can never hold the page. It
   // names the school, dates the setup, and holds the terms that decide what
@@ -286,55 +291,68 @@ export function OverviewView() {
     schoolApi
       .get()
       .then((sc) => {
+        if (!mounted.current) return;
         mark("school", false);
         setSchoolName(sc.name?.trim() || null);
         analyticsApi
           .getSchoolTransformation(sc.id)
-          .then((data) => setTransformation({ kind: "ready", data }))
-          .catch((err: unknown) => setTransformation({ kind: failureKind(err) }));
+          .then((data) => {
+            if (mounted.current) setTransformation({ kind: "ready", data });
+          })
+          .catch((err: unknown) => {
+            if (mounted.current) setTransformation({ kind: failureKind(err) });
+          });
         setSetUp(setUpAgo(readOnboarding(sc).completedAt, Date.now()));
         const term = currentTerm(readAcademic(sc).terms ?? [], Date.now());
         const from = term ? startOfDay(term.from) : null;
         if (!term || !from) return;
         schoolIntelligenceApi
           .adaptationLog({ limit: 1, dateFrom: from.toISOString() })
-          .then((log) => setTermAdaptations({ count: log.total, period: termPeriod(term) }))
+          .then((log) => {
+            if (mounted.current) setTermAdaptations({ count: log.total, period: termPeriod(term) });
+          })
           .catch((err: unknown) => {
+            if (!mounted.current) return;
             setTermAdaptations(null);
             mark("school", isFault(err));
           });
       })
       .catch((err: unknown) => {
+        if (!mounted.current) return;
         setSchoolName(null);
         mark("school", isFault(err));
       });
-  }, [mark]);
+  }, [mark, mounted]);
 
   const readRoster = useCallback(() => {
     studentsApi
       .list()
       .then((r) => {
+        if (!mounted.current) return;
         setRoster(r);
         mark("roster", false);
       })
       .catch((err: unknown) => {
+        if (!mounted.current) return;
         setRoster(null);
         mark("roster", isFault(err));
       });
-  }, [mark]);
+  }, [mark, mounted]);
 
   const readHolds = useCallback(() => {
     ageChecksApi
       .held()
       .then((h) => {
+        if (!mounted.current) return;
         setHolds(h);
         mark("holds", false);
       })
       .catch((err: unknown) => {
+        if (!mounted.current) return;
         setHolds(null);
         mark("holds", isFault(err));
       });
-  }, [mark]);
+  }, [mark, mounted]);
 
   const readFlags = useCallback(() => {
     intelligenceApi
@@ -345,14 +363,16 @@ export function OverviewView() {
       // partial read is a floor. Report nothing rather than a floor - and not
       // a failure either, because asking again would read the same partial.
       .then((r) => {
+        if (!mounted.current) return;
         setFlags(r.complete ? r.flags : null);
         mark("flags", false);
       })
       .catch((err: unknown) => {
+        if (!mounted.current) return;
         setFlags(null);
         mark("flags", isFault(err));
       });
-  }, [mark]);
+  }, [mark, mounted]);
 
   /** A card's Try again: only its own reads, and only those that failed. */
   const retry = (reads: CardRead[]) => {
@@ -387,13 +407,14 @@ export function OverviewView() {
       // their own failures - neither should take the page down.
       schoolApi.narrative().catch(() => null),
       schoolApi.overview().catch((err: unknown) => {
-        mark("overview", isFault(err));
+        if (mounted.current) mark("overview", isFault(err));
         return null;
       }),
       // The SSO status read that sat here fed only the checklist's sign-in
       // tick, which went when the row became "Share your school code"
       // (manual-only launch). One request fewer on every Overview load.
     ]).then(([res, log, n, ov]) => {
+      if (!mounted.current) return;
       const a = res.ok ? res.a : null;
       setAudit(a);
       setAuditPhase(
@@ -422,14 +443,22 @@ export function OverviewView() {
     // tile, with the headcount's own words.
     invitesApi
       .list()
-      .then((rows) => setPendingTeachers(pendingTeacherInvites(rows, Date.now())))
-      .catch(() => setPendingTeachers(null));
+      .then((rows) => {
+        if (mounted.current) setPendingTeachers(pendingTeacherInvites(rows, Date.now()));
+      })
+      .catch(() => {
+        if (mounted.current) setPendingTeachers(null);
+      });
     // Whether "with a Nevo account" is true of the headcount: it includes
     // invited teachers who never set up. Its own read and its own failure.
     teachersApi
       .list()
-      .then((rows) => setTeachersSetUp(rows.filter((t) => isActive(t.status)).length))
-      .catch(() => setTeachersSetUp(null));
+      .then((rows) => {
+        if (mounted.current) setTeachersSetUp(rows.filter((t) => isActive(t.status)).length);
+      })
+      .catch(() => {
+        if (mounted.current) setTeachersSetUp(null);
+      });
 
     /*
      * THE ROLL-UP READS DO NOT GATE THE PAGE, and they used to.
@@ -455,7 +484,7 @@ export function OverviewView() {
     readRoster();
     readHolds();
     readFlags();
-  }, [mark, readSchool, readRoster, readHolds, readFlags]);
+  }, [mark, mounted, readSchool, readRoster, readHolds, readFlags]);
 
   useEffect(() => {
     load();
@@ -519,14 +548,17 @@ export function OverviewView() {
     schoolIntelligenceApi
       .complianceAudit()
       .then((a) => {
+        if (!mounted.current) return;
         setAudit(a);
         setAuditPhase("ready");
         // Only as a fallback: a real log total already read is the better
         // figure and must not be overwritten by the audit's lifetime count.
         setAdaptationTotal((t) => t ?? a.adaptationEventsLogged);
       })
-      .catch(() => setAuditPhase("failed"));
-  }, []);
+      .catch(() => {
+        if (mounted.current) setAuditPhase("failed");
+      });
+  }, [mounted]);
 
   /*
    * A school with nothing in the adaptation log has not started teaching yet.
