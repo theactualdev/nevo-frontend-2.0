@@ -34,6 +34,7 @@ import {
 import { earlyGlanceRows, glanceRows, holdsNeedSchool } from "./overviewGlance";
 import { setUpAgo, type SetUpAgo } from "./setUpAgo";
 import { boardPackText } from "./boardPack";
+import { openParentRequests } from "./openParentRequests";
 import {
   SNAPSHOT_HEADING,
   SNAPSHOT_HEADING_EARLY,
@@ -208,6 +209,17 @@ export function OverviewView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [audit, setAudit] = useState<ComplianceAudit | null>(null);
   const [auditPhase, setAuditPhase] = useState<CardPhase>("loading");
+  /** Requests from parents not yet resolved (L51), or null when unknown. */
+  const [openRequests, setOpenRequests] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void openParentRequests().then((n) => {
+      if (alive) setOpenRequests(n);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   const mayOpen = useCanOpen();
   const [adaptationTotal, setAdaptationTotal] = useState<number | null>(null);
   /**
@@ -856,8 +868,11 @@ export function OverviewView() {
                       {onDay(audit.generatedAt)
                         ? `Checked ${onDay(audit.generatedAt)}`
                         : "Checked"}
-                      {audit.findings.length > 0
-                        ? ` · ${audit.findings.length} finding${audit.findings.length === 1 ? "" : "s"} to review`
+                      {/* L51 (Lydia, 25 Nov): requests from parents, as
+                          Compliance lists them - never the internal scan's
+                          findings, which are ruled off-screen. */}
+                      {openRequests !== null && openRequests > 0
+                        ? ` · ${openRequests} finding${openRequests === 1 ? "" : "s"} to review`
                         : ""}
                     </p>
                   </div>
