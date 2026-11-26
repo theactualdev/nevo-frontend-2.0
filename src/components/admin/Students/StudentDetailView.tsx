@@ -613,8 +613,8 @@ export function StudentDetailView({
                 * request" beside the reminder, but the server has one route
                 * for both: every send issues a new link and revokes the one
                 * before it (backend consent/repositories.py). Two buttons
-                * would offer a choice that does not exist (raised, rule 10,
-                * 24 Nov).
+                * would offer a choice that does not exist. Lydia dropped
+                * "Resend request" (L72, 25 Nov).
                 */}
               {consentState.kind === "sending"
                 ? reminding

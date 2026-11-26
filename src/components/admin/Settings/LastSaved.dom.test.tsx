@@ -5,8 +5,9 @@ import { SchoolSettings } from "./SchoolSettings";
 
 /**
  * Backlog 68 (T19): School settings says when the school was last saved -
- * D12's "Last saved 3 days ago" - once, at the top, until L42 rules on a line
- * per section. From the record's `updatedAt`, and nothing at all without one.
+ * D12's "Last saved 3 days ago" - once, at the top, as Lydia ruled (L42, 25
+ * Nov), never a line per section. From the record's `updatedAt`, and nothing
+ * at all without one.
  */
 
 const get = vi.fn();
