@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { Notification } from "@/lib/api/notifications";
-import { categoryLabel } from "./categories";
+import { rowLabel } from "./categories";
 import { useCanOpen } from "../Shell/useCanOpen";
 import { cn } from "@/lib/utils";
 
@@ -151,9 +151,9 @@ export function NotificationRow({
         <div className="flex items-center gap-[7px]">
           {/* The category's name (backend B34, 1 Oct), or nothing - never
               the raw type. See `categoryLabel`. */}
-          {categoryLabel(notification.category) ? (
+          {rowLabel(notification) ? (
             <span className="text-[10.5px] font-semibold uppercase tracking-[0.04em] text-nevo-near-black/45">
-              {categoryLabel(notification.category)}
+              {rowLabel(notification)}
             </span>
           ) : null}
           {unread ? (
