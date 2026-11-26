@@ -257,7 +257,9 @@ export function TeacherDetailView({
         .filter((v): v is string => Boolean(v)),
     ),
   );
-  const firstName = teacher.name.split(" ").filter(Boolean).slice(-1)[0] ?? teacher.name;
+  // L45 (Lydia, 25 Nov): the FIRST name, as "Message {first}" does. This
+  // took the last word, so "Keep Adeyemi's access" for Folake Adeyemi.
+  const firstName = teacher.name.split(" ").filter(Boolean)[0] ?? teacher.name;
   /*
    * D06c's grouping: each subject in the order the server first lists it,
    * with its classes under it. An assignment with no subject recorded (older

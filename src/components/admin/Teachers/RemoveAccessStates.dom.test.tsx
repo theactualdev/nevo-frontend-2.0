@@ -97,7 +97,7 @@ describe("the staff read", () => {
     // Absence of evidence is not evidence of absence: it must not claim the
     // school has nobody else.
     expect(visibleText(container)).not.toMatch(/no one else active/);
-    expect(visibleText(container)).toMatch(/Nothing has changed for Adeyemi/);
+    expect(visibleText(container)).toMatch(/Nothing has changed for Folake/);
 
     fireEvent.click(
       Array.from(container.querySelectorAll("button")).find(
@@ -123,7 +123,7 @@ describe("the staff read", () => {
       expect(visibleText(container)).toMatch(/no one else active/),
     );
     // The way through is still open, and named.
-    expect(visibleText(container)).toMatch(/remove Adeyemi from each class/);
+    expect(visibleText(container)).toMatch(/remove Folake from each class/);
   });
 
   it("never offers a teacher who cannot sign in", async () => {
@@ -168,7 +168,7 @@ describe("a completed removal", () => {
 
     await waitFor(() =>
       expect(visibleText(container)).toMatch(
-        /1 class handed over\. Adeyemi can no longer open their console\./,
+        /1 class handed over\. Folake can no longer open their console\./,
       ),
     );
     // The confirmation is on screen BEFORE the parent is told to close.
@@ -191,7 +191,7 @@ describe("RemoveAccessSheet with nobody else to hand to", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/no one else active/i));
 
     const options = optionNames(screen.getByRole("combobox", { name: /Who takes/ }));
-    expect(options.join("|")).toMatch(/Just remove Adeyemi from this class/);
+    expect(options.join("|")).toMatch(/Just remove Folake from this class/);
   });
 });
 
@@ -257,7 +257,8 @@ describe("removing a teacher with no classes", () => {
     );
     expect(visibleText(container)).not.toMatch(/Their classes and notes stay/);
     const buttons = Array.from(container.querySelectorAll("button")).map((b) => b.textContent ?? "");
-    expect(buttons.some((b) => /^Keep \S+.s access$/.test(b))).toBe(true);
+    // L45 (Lydia, 25 Nov): the first name, never the surname.
+    expect(buttons).toContain("Keep Folake’s access");
     expect(visibleText(container)).not.toMatch(/\b(his|her|he|she)\b/i);
   });
 });
