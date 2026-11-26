@@ -58,10 +58,15 @@ import { RejectedRows } from "./RejectedRows";
  * Each teacher's invitation carries every class with its subject
  * (`classes: [{classId, subjectId}]`), attached when they accept.
  *
- * BUILT WITHOUT step 1's "This file is also how Nevo learns which subjects
- * each class offers." Nothing in the contract does that: an invitation names
- * a class and a subject, and acceptance assigns the teacher without adding the
- * subject to the class's list. Raised (rule 10).
+ * WITHOUT step 1's "This file is also how Nevo learns which subjects each
+ * class offers" - Lydia dropped the sentence (L62, 25 Nov). Nothing in the
+ * contract does that: an invitation names a class and a subject, and
+ * acceptance assigns the teacher without adding the subject to the class.
+ *
+ * Lydia's words (25 Nov): the subtitle's "one invite for each teacher" (L63;
+ * rows join by email, so "each row" was untrue), and two of the staff
+ * import's lines (L64) - "Use this for rows 15 and 23, which say "X" as
+ * well." and the subjects read's failure. The other five stand as drafted.
  *
  * PARTIAL SEND IS CORRECT HERE, and it is worth being explicit because the
  * other spec in this area says the opposite. SCRUM-40 claims CSV import is
@@ -245,7 +250,7 @@ export function BulkImportModal({
         {checkFailed ? (
           <ReadFailed
             className="py-4"
-            what="which subjects in your file Nevo already knows"
+            line="We couldn’t check your file’s subjects against the ones Nevo knows just now."
             onRetry={() => check(rows)}
           />
         ) : (
@@ -596,7 +601,7 @@ export function BulkImportModal({
   return (
     <Modal
       title={TITLE}
-      subtitle="Upload a CSV with your roster. We'll create an invite for each row."
+      subtitle="Upload a CSV with your roster. We'll create one invite for each teacher."
       onClose={onClose}
       footer={
         <button

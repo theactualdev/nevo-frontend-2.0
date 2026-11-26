@@ -90,15 +90,15 @@ describe("what each row's subject became", () => {
     expect(subjectFor(teaching(4, "Maths Dept"), answers, { 4: "Further Mathematics" })).toBe("Further Mathematics");
   });
 
-  it("finds the other rows that typed the same words, for D19's 'Also use it for row'", () => {
+  it("finds the other rows that typed the same words, in Lydia's 'Use this for rows' (L64)", () => {
     const open = [teaching(7, "Maths Dept"), teaching(15, " maths  dept"), teaching(23, "Agric")];
     expect(sameWords(open[0], open).map((t) => t.line)).toEqual([15]);
     expect(sameWords(teaching(9, ""), open)).toEqual([]);
     expect(alsoLine([teaching(15, "Maths Dept")], "Maths Dept")).toBe(
-      "Also use it for row 15, which says “Maths Dept” too",
+      "Use this for row 15, which says “Maths Dept” as well.",
     );
     expect(alsoLine([teaching(15, "x"), teaching(23, "x"), teaching(31, "x")], "x")).toBe(
-      "Also use it for rows 15, 23 and 31, which say “x” too",
+      "Use this for rows 15, 23 and 31, which say “x” as well.",
     );
     expect(andList([3, 18])).toBe("3 and 18");
   });

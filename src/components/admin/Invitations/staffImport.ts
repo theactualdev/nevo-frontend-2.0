@@ -74,12 +74,12 @@ export function andList(items: (string | number)[]): string {
   return s.length <= 1 ? (s[0] ?? "") : `${s.slice(0, -1).join(", ")} and ${s[s.length - 1]}`;
 }
 
-/** D19: `Also use it for row 15, which says "Maths Dept" too`. */
+/** Lydia's words (L64, 25 Nov): `Use this for rows 15 and 23, which say "X" as well.` */
 export function alsoLine(others: Teaching[], typed: string): string {
   const lines = others.map((o) => o.line);
   return lines.length === 1
-    ? `Also use it for row ${lines[0]}, which says “${typed.trim()}” too`
-    : `Also use it for rows ${andList(lines)}, which say “${typed.trim()}” too`;
+    ? `Use this for row ${lines[0]}, which says “${typed.trim()}” as well.`
+    : `Use this for rows ${andList(lines)}, which say “${typed.trim()}” as well.`;
 }
 
 /**

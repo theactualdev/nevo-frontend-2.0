@@ -124,7 +124,7 @@ describe("the staff import, D19 step 2", () => {
   it("settles a subject with the picker, and the other row with the same words too", async () => {
     const { container } = await upload();
     fireEvent.click(screen.getByRole("button", { name: /From file: Maths Dept · JSS 2A/ }));
-    expect(screen.getByRole("checkbox", { name: /Also use it for row 5, which says “Maths Dept” too/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Use this for row 5, which says “Maths Dept” as well\./ })).toBeChecked();
     fireEvent.focus(screen.getByRole("combobox", { name: "Add a subject" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: "Mathematics" }));
     await waitFor(() => expect(visibleText(container)).not.toMatch(/to settle/));
@@ -135,7 +135,7 @@ describe("the staff import, D19 step 2", () => {
   it("settles only its own row when told not to use it for the others", async () => {
     const { container } = await upload();
     fireEvent.click(screen.getByRole("button", { name: /From file: Maths Dept · JSS 2A/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /Also use it for row 5/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Use this for row 5/ }));
     fireEvent.focus(screen.getByRole("combobox", { name: "Add a subject" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: "Mathematics" }));
     await waitFor(() => expect(visibleText(container)).toMatch(/1 subject to settle before saving:/));
@@ -177,9 +177,16 @@ describe("the staff import, D19 step 2", () => {
     Object.defineProperty(input, "files", { value: [new File([FILE], "staff.csv", { type: "text/csv" })] });
     fireEvent.change(input);
     await waitFor(() =>
-      expect(visibleText(view.container)).toMatch(/couldn.t read which subjects in your file Nevo already knows/),
+      expect(visibleText(view.container)).toMatch(/We couldn.t check your file.s subjects against the ones Nevo knows just now\./),
     );
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await screen.findByRole("button", { name: /^Save 4 teachers$/ });
+  });
+
+  // L63 (Lydia, 25 Nov): rows join by email, so it was never "each row".
+  it("promises one invite for each teacher, never one for each row", () => {
+    const view = render(<BulkImportModal classes={CLASSES} onClose={vi.fn()} onSent={vi.fn()} />);
+    expect(visibleText(view.container)).toMatch(/We'll create one invite for each teacher\./);
+    expect(visibleText(view.container)).not.toMatch(/for each row/);
   });
 });
