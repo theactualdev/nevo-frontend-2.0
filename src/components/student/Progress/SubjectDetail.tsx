@@ -406,7 +406,7 @@ function LiveSubjectDetail({
             <button
               type="button"
               onClick={() => setAllShown(true)}
-              className="mt-3.5 flex min-h-12 w-full cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-navy/30 bg-transparent px-4 py-3 text-[15px] font-semibold text-nevo-navy transition-transform active:scale-[0.98]"
+              className="mt-3.5 flex min-h-12 w-full cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-navy/30 bg-transparent px-4 py-3 text-[15px] leading-[1.2] font-semibold text-nevo-navy transition-transform active:scale-[0.98]"
             >
               See the rest
             </button>
