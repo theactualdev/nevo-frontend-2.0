@@ -9,7 +9,13 @@ import {
 } from "@testing-library/react";
 import { SavedLessons } from "./SavedLessons";
 import { clearSession, setSession } from "@/lib/auth/session";
-import { saveLesson, savedLesson } from "@/lib/offline/savedLessons";
+import {
+  holdSavedLesson,
+  saveLesson,
+  savedLesson,
+} from "@/lib/offline/savedLessons";
+import { SHELF_CHANGED } from "@/lib/offline/shelfCheck";
+import { FRESH_DOWNLOAD } from "@/lib/offline/testDownload";
 import { useLessonExit } from "@/components/student/Lesson/LessonExit";
 
 /**
@@ -59,6 +65,7 @@ const packaged = (id: string, title: string) => ({
   detail: lesson(id, title),
   sizeBytes: 1_234_567,
   includesMedia: false,
+  ...FRESH_DOWNLOAD,
 });
 
 beforeEach(() => {
@@ -184,7 +191,7 @@ describe("the bulk control once everything is saved", () => {
     screen.getByRole("button", { name: "All lessons saved for offline" });
 
   it("stays, pressable and not grey", () => {
-    saveLesson("ada", lesson("l1", "Adding fractions") as never);
+    saveLesson("ada", lesson("l1", "Adding fractions") as never, FRESH_DOWNLOAD);
 
     render(<SavedLessons />);
 
@@ -195,7 +202,7 @@ describe("the bulk control once everything is saved", () => {
   });
 
   it("says everything's already saved, in place, when pressed", () => {
-    saveLesson("ada", lesson("l1", "Adding fractions") as never);
+    saveLesson("ada", lesson("l1", "Adding fractions") as never, FRESH_DOWNLOAD);
     render(<SavedLessons />);
 
     fireEvent.click(finished());
@@ -206,7 +213,7 @@ describe("the bulk control once everything is saved", () => {
   });
 
   it("still saves one more lesson after a removal", async () => {
-    saveLesson("ada", lesson("l1", "Adding fractions") as never);
+    saveLesson("ada", lesson("l1", "Adding fractions") as never, FRESH_DOWNLOAD);
     downloadLesson.mockResolvedValue(packaged("l1", "Adding fractions"));
     render(<SavedLessons />);
     fireEvent.click(finished());
@@ -227,7 +234,7 @@ describe("the bulk control once everything is saved", () => {
   });
 
   it("claims nothing while the lesson list is still being read", () => {
-    saveLesson("ada", lesson("l1", "Adding fractions") as never);
+    saveLesson("ada", lesson("l1", "Adding fractions") as never, FRESH_DOWNLOAD);
     lessons.mockReturnValue({ lessons: [], live: false, loading: true, failed: false });
 
     render(<SavedLessons />);
@@ -236,7 +243,7 @@ describe("the bulk control once everything is saved", () => {
   });
 
   it("is not there over a failed read", () => {
-    saveLesson("ada", lesson("l9", "The water cycle") as never);
+    saveLesson("ada", lesson("l9", "The water cycle") as never, FRESH_DOWNLOAD);
     lessons.mockReturnValue({ lessons: [], live: true, loading: false, failed: true });
 
     render(<SavedLessons />);
@@ -252,6 +259,7 @@ describe("with no connection", () => {
     saveLesson("ada", lesson("l9", "The water cycle") as never, {
       sizeBytes: 48_200,
       includesMedia: false,
+      ...FRESH_DOWNLOAD,
     });
     lessons.mockReturnValue({ lessons: [], live: true, loading: false, failed: true });
 
@@ -265,7 +273,7 @@ describe("with no connection", () => {
 
   it("shows no size, and claims nothing about media, that no manifest gave", () => {
     // Saved before the package was read: the lesson, and nothing else.
-    saveLesson("ada", lesson("l9", "The water cycle") as never);
+    saveLesson("ada", lesson("l9", "The water cycle") as never, FRESH_DOWNLOAD);
     lessons.mockReturnValue({ lessons: [], live: true, loading: false, failed: true });
 
     render(<SavedLessons />);
@@ -276,7 +284,7 @@ describe("with no connection", () => {
   });
 
   it("opens a saved lesson here, and comes back here when it is over", async () => {
-    saveLesson("ada", lesson("l1", "Adding fractions") as never);
+    saveLesson("ada", lesson("l1", "Adding fractions") as never, FRESH_DOWNLOAD);
     render(<SavedLessons />);
 
     fireEvent.click(screen.getByText("Open"));
@@ -332,6 +340,7 @@ describe("the size on every row", () => {
   it("shows the kept download's own size, and asks nothing for it", () => {
     saveLesson("ada", lesson("l1", "Adding fractions") as never, {
       sizeBytes: 48_200,
+      ...FRESH_DOWNLOAD,
     });
 
     render(<SavedLessons />);
@@ -416,7 +425,7 @@ describe("the size on every row", () => {
 
 describe("a shared tablet", () => {
   it("does not show one child's saved lessons to another", () => {
-    saveLesson("someone-else", lesson("l9", "The water cycle") as never);
+    saveLesson("someone-else", lesson("l9", "The water cycle") as never, FRESH_DOWNLOAD);
     lessons.mockReturnValue({ lessons: [], live: true, loading: false, failed: true });
 
     render(<SavedLessons />);
@@ -455,5 +464,85 @@ describe("a lesson list that could not be read, with nothing saved", () => {
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
     expect(screen.queryByText(/no lessons to save/i)).toBeNull();
+  });
+});
+
+/**
+ * SAVED MEANS IT CAN OPEN (safety v2, Teslim 18 Nov). A copy past its expiry,
+ * kept before safety v2, or held by its status check is shown as the lesson
+ * with its save button, and the save says what it always says. No new words.
+ */
+describe("a copy the server no longer vouches for", () => {
+  const offline = (on: () => Promise<void> | void) => async () => {
+    const onLine = vi.spyOn(window.navigator, "onLine", "get");
+    onLine.mockReturnValue(false);
+    try {
+      await on();
+    } finally {
+      onLine.mockRestore();
+    }
+  };
+
+  it("keeps the download and its expiry when the child saves", async () => {
+    downloadLesson.mockResolvedValue(packaged("l1", "Adding fractions"));
+    render(<SavedLessons />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save Adding fractions for offline" }),
+    );
+
+    await waitFor(() => expect(screen.getByText("Open")).toBeVisible());
+    expect(savedLesson("ada", "l1")).toMatchObject(FRESH_DOWNLOAD);
+  });
+
+  it(
+    "is not shown as saved past its expiry, and offline the save asks for a connection",
+    offline(async () => {
+      saveLesson("ada", lesson("l9", "The water cycle") as never, {
+        ...FRESH_DOWNLOAD,
+        expiresAt: "2020-01-01T00:00:00Z",
+      });
+      downloadLesson.mockRejectedValue(new TypeError("Failed to fetch"));
+      lessons.mockReturnValue({ lessons: [], live: true, loading: false, failed: true });
+      render(<SavedLessons />);
+
+      expect(screen.getByText("The water cycle")).toBeVisible();
+      expect(screen.queryByText("Open")).toBeNull();
+      fireEvent.click(
+        screen.getByRole("button", { name: "Save The water cycle for offline" }),
+      );
+
+      expect(
+        await screen.findByText(
+          "That lesson couldn't be saved just now. Try again when you're connected.",
+        ),
+      ).toBeVisible();
+    }),
+  );
+
+  it("is not shown as saved when it was kept before safety v2", () => {
+    saveLesson("ada", lesson("l1", "Adding fractions") as never);
+    render(<SavedLessons />);
+
+    expect(screen.queryByText("Open")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Save Adding fractions for offline" }),
+    ).toBeVisible();
+  });
+
+  it("follows the shelf check while the screen is open", async () => {
+    saveLesson("ada", lesson("l1", "Adding fractions") as never, FRESH_DOWNLOAD);
+    render(<SavedLessons />);
+    expect(screen.getByText("Open")).toBeVisible();
+
+    act(() => {
+      holdSavedLesson("ada", "l1", "unchecked");
+      window.dispatchEvent(new Event(SHELF_CHANGED));
+    });
+
+    expect(screen.queryByText("Open")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Save Adding fractions for offline" }),
+    ).toBeVisible();
   });
 });

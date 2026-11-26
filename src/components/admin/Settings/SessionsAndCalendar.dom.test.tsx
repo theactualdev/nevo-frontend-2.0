@@ -125,8 +125,11 @@ describe("a single session", () => {
     sessions.mockResolvedValue([session("s1", true)]);
     const { container } = render(<AccountSettings />);
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/only device signed in as you/),
+      expect(visibleText(container)).toMatch(/You.re only signed in on this device\./),
     );
+    // D12c's words, both lines (backlog 71).
+    expect(visibleText(container)).toMatch(/Anything else you sign in on will appear here\./);
+    expect(visibleText(container)).not.toMatch(/last active/i);
     expect(visibleText(container)).not.toMatch(/This device/);
     expect(button(container, "Sign out everywhere else")).toBeUndefined();
   });
@@ -136,7 +139,7 @@ describe("a single session", () => {
     sessions.mockResolvedValue([session("s1", true), session("s2", false, false)]);
     const { container } = render(<AccountSettings />);
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/only device signed in as you/),
+      expect(visibleText(container)).toMatch(/You.re only signed in on this device\./),
     );
     expect(button(container, "End it")).toBeUndefined();
   });
@@ -145,7 +148,7 @@ describe("a single session", () => {
     sessions.mockResolvedValue([session("s1", true), session("s2", false)]);
     const { container } = render(<AccountSettings />);
     await waitFor(() => expect(visibleText(container)).toMatch(/This device/));
-    expect(visibleText(container)).not.toMatch(/only device signed in as you/);
+    expect(visibleText(container)).not.toMatch(/You.re only signed in on this device\./);
   });
 
   it("does not claim a single session when the read failed", async () => {
@@ -155,7 +158,7 @@ describe("a single session", () => {
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/couldn't read where you're signed in/),
     );
-    expect(visibleText(container)).not.toMatch(/only device signed in as you/);
+    expect(visibleText(container)).not.toMatch(/You.re only signed in on this device\./);
   });
 
   it("offers a retry when the read fails, and says nothing while it is out", async () => {
@@ -169,7 +172,7 @@ describe("a single session", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/couldn't read where you're signed in/));
     sessions.mockResolvedValue([session("s1", true)]);
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    await waitFor(() => expect(visibleText(container)).toMatch(/only device signed in as you/));
+    await waitFor(() => expect(visibleText(container)).toMatch(/You.re only signed in on this device\./));
   });
 });
 

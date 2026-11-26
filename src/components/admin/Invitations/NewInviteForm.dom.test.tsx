@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
+import { chooseOption, optionNames } from "@/test/nevoSelect";
 import { ApiError } from "@/lib/api/client";
 import { NewInviteModal, invitedClasses } from "./NewInviteModal";
 
@@ -61,9 +62,10 @@ describe("Invite a teacher (D19, T15)", () => {
 
   it("offers the subjects the chosen class takes, in D19's words, and never an archived class", async () => {
     const { container } = open();
-    const select = screen.getByLabelText("Class") as HTMLSelectElement;
-    expect([...select.options].map((o) => o.textContent)).toEqual(["Select a class", "JSS 2A", "JSS 2B"]);
-    type("Class", "c1");
+    // "Select a class" is the prompt, never a row (NevoSelect).
+    expect(screen.getByLabelText("Class")).toHaveTextContent("Select a class");
+    expect(optionNames(screen.getByLabelText("Class"))).toEqual(["JSS 2A", "JSS 2B"]);
+    await chooseOption(screen.getByLabelText("Class"), "JSS 2A");
     expect(visibleText(container)).toMatch(/Subjects JSS 2A offers\. Tick the ones they take\./);
     const group = screen.getByRole("group", { name: "Subjects JSS 2A offers" });
     await within(group).findByRole("checkbox", { name: "Mathematics" });
@@ -83,7 +85,7 @@ describe("Invite a teacher (D19, T15)", () => {
     expect(visibleText(container)).toMatch(/2 things still to fill in/);
     type("Email", "f@school.edu.ng");
     expect(visibleText(container)).toMatch(/1 thing still to fill in/);
-    type("Class", "c1");
+    await chooseOption(screen.getByLabelText("Class"), "JSS 2A");
     expect(visibleText(container)).toMatch(/1 thing still to fill in/);
     fireEvent.click(await screen.findByRole("checkbox", { name: "Mathematics" }));
     expect(container.querySelector("[data-missing]")).toBeNull();
@@ -95,15 +97,15 @@ describe("Invite a teacher (D19, T15)", () => {
     type("First name", "Mary Ann");
     type("Last name", "Okafor-Bello");
     type("Email", " m@school.edu.ng ");
-    type("Class", "c1");
+    await chooseOption(screen.getByLabelText("Class"), "JSS 2A");
     fireEvent.click(await screen.findByRole("checkbox", { name: "Mathematics" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Basic Science" }));
     fireEvent.click(screen.getByRole("button", { name: /Add another class/ }));
     const second = rows(container)[1];
     // A class chosen above is not offered again.
-    const select2 = within(second).getByLabelText("Class") as HTMLSelectElement;
-    expect([...select2.options].map((o) => o.textContent)).toEqual(["Select a class", "JSS 2B"]);
-    fireEvent.change(select2, { target: { value: "c2" } });
+    const select2 = within(second).getByLabelText("Class");
+    expect(optionNames(select2)).toEqual(["JSS 2B"]);
+    await chooseOption(select2, "JSS 2B");
     // JSS 2B writes it "mathematics": the same school subject, by any spelling.
     fireEvent.click(await within(second).findByRole("checkbox", { name: "Mathematics" }));
     fireEvent.click(screen.getByRole("button", { name: "Send invite" }));
@@ -142,11 +144,11 @@ describe("Invite a teacher (D19, T15)", () => {
     type("First name", "Folake");
     type("Last name", "Adeyemi");
     type("Email", "f@school.edu.ng");
-    type("Class", "c1");
+    await chooseOption(screen.getByLabelText("Class"), "JSS 2A");
     fireEvent.click(await screen.findByRole("checkbox", { name: "Mathematics" }));
     fireEvent.click(screen.getByRole("button", { name: "Send invite" }));
     await waitFor(() => expect(visibleText(container)).toMatch(/1 thing still to fill in/));
-    expect((screen.getByLabelText("Class") as HTMLSelectElement).value).toBe("");
+    expect(screen.getByLabelText("Class")).toHaveTextContent("Select a class");
     expect(visibleText(container)).not.toMatch(/Class not found/);
   });
 
@@ -158,7 +160,7 @@ describe("Invite a teacher (D19, T15)", () => {
     type("First name", "Folake");
     type("Last name", "Adeyemi");
     type("Email", "f@school.edu.ng");
-    type("Class", "c1");
+    await chooseOption(screen.getByLabelText("Class"), "JSS 2A");
     fireEvent.click(await screen.findByRole("checkbox", { name: "Mathematics" }));
     expect(subjects).toHaveBeenCalledTimes(1);
     subjects.mockResolvedValue([subject("s-sci", "Basic Science")]);

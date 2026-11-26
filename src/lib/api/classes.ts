@@ -240,6 +240,12 @@ export interface AdminClass {
   teachers: ClassTeacher[];
   /** Non-null means archived. Archive is reversible and never deletes. */
   archivedAt: string | null;
+  /**
+   * The term the school is in, as the server words it - "Term 2 · 2026/27"
+   * (Teslim T11, live 21 Nov). Null when the school has set no term dates;
+   * absent on an older deployment. The same on every class: it is the school's.
+   */
+  term?: string | null;
 }
 
 /**

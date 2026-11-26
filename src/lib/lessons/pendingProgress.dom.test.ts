@@ -91,7 +91,7 @@ describe("progress that could not be saved", () => {
 
   it("is sent for a lesson the child never opens again", async () => {
     // A child who gave up offline may never return to that lesson, but their
-    // position still belongs in Home's "Pick up where you left off" list.
+    // position still belongs in Home's in-progress card.
     const save = vi
       .spyOn(lessonsApi, "saveProgress")
       .mockResolvedValue({} as never);

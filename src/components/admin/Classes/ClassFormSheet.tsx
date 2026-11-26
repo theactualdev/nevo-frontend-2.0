@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useEffect, useId, useMemo, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
@@ -7,6 +9,7 @@ import { yearGroupOptions } from "@/lib/constants/yearGroups";
 import { collisionNote, findCollision } from "./duplicateName";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
+import { withBack } from "../back";
 import { SubjectPicker } from "./SubjectPicker";
 import {
   FailureLine,
@@ -15,6 +18,9 @@ import {
   Sheet,
   Spinner,
 } from "../Roster/primitives";
+
+/** D05's way to the class a new name collides with. */
+const OPEN_EXISTING = "open the existing class";
 
 /**
  * Create a class, and - pre-filled and retitled - edit one. SCRUM-40 asks for
@@ -158,8 +164,14 @@ export function ClassFormSheet({
   return (
     <Sheet
       busy={phase === "saving"}
-      title={editing ? "Edit class" : "Create a class"}
-      subtitle={editing ? existing?.name : "It can be renamed later."}
+      // D05's words (backlog 77) in SCRUM-40's sheet: the spec draws a
+      // right-docked sheet where D05 draws a page, and the spec wins.
+      title={editing ? "Edit class" : "Add a class"}
+      subtitle={
+        editing
+          ? existing?.name
+          : "One class at a time. Nevo checks it against the classes you already have before it\u2019s created."
+      }
       onClose={onClose}
       footer={
         phase === "saving" ? (
@@ -226,7 +238,36 @@ export function ClassFormSheet({
              names the class rather than saying "that name is taken", because
              an archived collision has a different remedy from a live one. */
           <p className="mt-2 rounded-[10px] bg-nevo-violet/16 px-3.5 py-2.5 text-[13px] leading-[1.5] text-nevo-near-black/78">
-            {collisionNote(collided)}
+            {(() => {
+              /* D05: "...or open the existing class instead" - a way to it,
+                 not only its name (backlog 77). An archived one is restored,
+                 and its note says so. */
+              const note = collisionNote(collided);
+              const [before, after] = note.split(OPEN_EXISTING);
+              return after === undefined || collided.archivedAt ? (
+                note
+              ) : (
+                <>
+                  {before}
+                  <Link
+                    // Back on that class returns to the one being edited; on
+                    // create, the sheet sits on Classes, the page's own default.
+                    href={
+                      existing
+                        ? withBack(`/admin/classes/${collided.id}`, {
+                            href: `/admin/classes/${existing.id}`,
+                            label: existing.name,
+                          })
+                        : `/admin/classes/${collided.id}`
+                    }
+                    className="font-semibold text-nevo-navy underline-offset-2 hover:underline"
+                  >
+                    {OPEN_EXISTING}
+                  </Link>
+                  {after}
+                </>
+              );
+            })()}
           </p>
         ) : (
           <p className="mt-2 text-[12.5px] leading-[1.5] text-nevo-near-black/55">
@@ -235,73 +276,7 @@ export function ClassFormSheet({
         )}
       </div>
 
-      <div>
-        <label htmlFor="class-year" className={LABEL}>
-          Year group
-        </label>
-        <select
-          id="class-year"
-          value={year}
-          onChange={(e) => setYear(e.target.value)}
-          className={FIELD}
-        >
-          <option value="">Choose a year group</option>
-          {yearGroupOptions().map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* CREATE ONLY. The update route doesn't store these, so on Edit they
-          would be controls that store nothing (Lydia, D1, 14 Oct) - and the
-          sheet would say "saved" over a change that vanished. */}
-      {editing ? null : (
-      <>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label htmlFor="class-section" className={LABEL}>
-            Section <span className="font-normal">(optional)</span>
-          </label>
-          <input
-            id="class-section"
-            value={section}
-            onChange={(e) => setSection(e.target.value)}
-            placeholder="A"
-            className={FIELD}
-          />
-        </div>
-        <div>
-          <label htmlFor="class-capacity" className={LABEL}>
-            Capacity <span className="font-normal">(optional)</span>
-          </label>
-          <input
-            id="class-capacity"
-            inputMode="numeric"
-            value={capacity}
-            onChange={(e) => setCapacity(e.target.value)}
-            placeholder="35"
-            className={FIELD}
-          />
-        </div>
-      </div>
-
-      <div>
-        <label htmlFor="class-session" className={LABEL}>
-          Academic session <span className="font-normal">(optional)</span>
-        </label>
-        <input
-          id="class-session"
-          value={session}
-          onChange={(e) => setSession(e.target.value)}
-          placeholder="2026/27"
-          className={FIELD}
-        />
-      </div>
-      </>
-      )}
-
+      {/* D05's order: the subjects come straight after the name. */}
       {!editing ? (
         <div>
           <label htmlFor="class-subjects" className={LABEL}>
@@ -324,6 +299,72 @@ export function ClassFormSheet({
           )}
         </div>
       ) : null}
+
+      <div>
+        <label htmlFor="class-year" className={LABEL}>
+          Year group
+        </label>
+        <NevoSelect
+          id="class-year"
+          value={year}
+          onValueChange={setYear}
+          placeholder="Choose a year group"
+          options={yearGroupOptions()}
+          triggerClassName={FIELD}
+        />
+      </div>
+
+      {/* CREATE ONLY. The update route doesn't store these, so on Edit they
+          would be controls that store nothing (Lydia, D1, 14 Oct) - and the
+          sheet would say "saved" over a change that vanished. */}
+      {editing ? null : (
+      <>
+      {/* D05's order: Section, Academic session, then Capacity. D05 draws
+          the first two as selects; nothing gives their options yet, so they
+          stay typed rather than offer a list we made up (backlog 77). */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="class-section" className={LABEL}>
+            Section <span className="font-normal">(optional)</span>
+          </label>
+          <input
+            id="class-section"
+            value={section}
+            onChange={(e) => setSection(e.target.value)}
+            placeholder="A"
+            className={FIELD}
+          />
+        </div>
+        <div>
+          <label htmlFor="class-session" className={LABEL}>
+            Academic session <span className="font-normal">(optional)</span>
+          </label>
+          <input
+            id="class-session"
+            value={session}
+            onChange={(e) => setSession(e.target.value)}
+            placeholder="2026/27"
+            className={FIELD}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="class-capacity" className={LABEL}>
+          Capacity <span className="font-normal">(optional)</span>
+        </label>
+        <input
+          id="class-capacity"
+          inputMode="numeric"
+          value={capacity}
+          onChange={(e) => setCapacity(e.target.value)}
+          placeholder="35"
+          className={FIELD}
+        />
+      </div>
+      </>
+      )}
+
     </Sheet>
   );
 }

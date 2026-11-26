@@ -67,12 +67,22 @@ export interface DownloadedLesson {
   sizeBytes: number | null;
   /** The manifest's word on media. Absent when it did not say. */
   includesMedia: boolean | undefined;
+  /**
+   * The download, kept with the copy for its status check (safety v2,
+   * Teslim 9f4d763, 18 Nov) - see `shelfCheck.ts`.
+   */
+  downloadId: string;
+  /**
+   * The manifest's expiry, which the status check counts from. Null from a
+   * backend before safety v2: such a copy never opens offline.
+   */
+  expiresAt: string | null;
 }
 
 export async function downloadLesson(
   lessonId: string,
 ): Promise<DownloadedLesson> {
-  const { manifest } = await lessonsApi.download(lessonId);
+  const { id: downloadId, manifest } = await lessonsApi.download(lessonId);
   const archive = await lessonsApi.offlinePackage(lessonId);
   const bytes = new Uint8Array(await archive.arrayBuffer());
   let packaged: LessonDetailResponse | null;
@@ -95,6 +105,8 @@ export async function downloadLesson(
     sizeBytes:
       manifest.sizeBytes && manifest.sizeBytes > 0 ? manifest.sizeBytes : null,
     includesMedia: manifest.includesMedia,
+    downloadId,
+    expiresAt: manifest.expiresAt ?? null,
   };
 }
 

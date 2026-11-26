@@ -1,5 +1,6 @@
+import { chooseOption } from "@/test/nevoSelect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import type { Invitation } from "@/lib/api/invites";
 import { InvitationsView } from "./InvitationsView";
@@ -70,7 +71,7 @@ describe("D19's Class and Invited columns", () => {
     ]);
     const { container } = render(<InvitationsView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/In 3B/));
-    fireEvent.change(screen.getByLabelText("Filter by class"), { target: { value: "c-2a" } });
+    await chooseOption(screen.getByLabelText("Filter by class"), "JSS 2A");
     await waitFor(() => expect(visibleText(container)).not.toMatch(/In 3B/));
     expect(visibleText(container)).toMatch(/In 2A/);
   });
@@ -102,7 +103,7 @@ describe("D19's Class and Invited columns", () => {
     ]);
     const { container } = render(<InvitationsView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/In 2A only/));
-    fireEvent.change(screen.getByLabelText("Filter by class"), { target: { value: "c-3b" } });
+    await chooseOption(screen.getByLabelText("Filter by class"), "JSS 3B");
     await waitFor(() => expect(visibleText(container)).not.toMatch(/In 2A only/));
     expect(visibleText(container)).toMatch(/In 2A and 3B/);
   });

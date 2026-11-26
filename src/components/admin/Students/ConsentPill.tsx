@@ -32,6 +32,16 @@ const LABEL: Record<ConsentState, string> = {
   withdrawn: "Withdrawn",
 };
 
+/**
+ * ON A CHILD'S OWN RECORD, "Awaiting consent" (D07b's header pill, and
+ * SCRUM-40's done-when) - the same state, in the words of the page that is
+ * about this one child. The roster's rows and its filter keep D07's
+ * "Pending", the word the column and its menu share.
+ */
+const RECORD_LABEL: Partial<Record<ConsentState, string>> = {
+  pending: "Awaiting consent",
+};
+
 const TONE: Record<ConsentState, string> = {
   confirmed: "bg-nevo-navy/10 text-nevo-navy",
   pending: "bg-nevo-violet/25 text-nevo-navy",
@@ -42,9 +52,12 @@ const TONE: Record<ConsentState, string> = {
 export function ConsentPill({
   consent,
   className,
+  place = "row",
 }: {
   consent: StudentConsent | null | undefined;
   className?: string;
+  /** "record" on the student's own page (D07b); "row" in a list (D07). */
+  place?: "row" | "record";
 }) {
   if (!consent) {
     return (
@@ -67,7 +80,7 @@ export function ConsentPill({
         className,
       )}
     >
-      {LABEL[consent.status]}
+      {(place === "record" && RECORD_LABEL[consent.status]) || LABEL[consent.status]}
     </span>
   );
 }
@@ -153,6 +166,27 @@ function channelWords(channel: string | null): string {
       return " on a signed paper form";
     default:
       return "";
+  }
+}
+
+/**
+ * HOW A CONFIRMED CONSENT WAS GIVEN, for the roster's D25 tally ("218 digital
+ * · 78 written · how it was given"; Lydia 19 Nov, L24). The same reading as
+ * `channelWords`: the parent's own confirmation - through the emailed link,
+ * by email, or restored in their account - is digital; a signed paper form is
+ * written. Anything else counts as neither, so the two never claim a child
+ * they can't place.
+ */
+export function consentGiven(channel: string | null): "digital" | "written" | null {
+  switch (channel) {
+    case "email":
+    case "digital":
+    case "parent_portal":
+      return "digital";
+    case "written":
+      return "written";
+    default:
+      return null;
   }
 }
 

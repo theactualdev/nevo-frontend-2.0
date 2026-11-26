@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
@@ -415,8 +416,15 @@ export function InvitationsView() {
                 they were three numbers nobody could press. The first of them
                 counted the whole list, which is not a subset anything can
                 select - so the set is now the frame's own Pending / Joined /
-                Expired, and pressing the active one clears back to all. */}
-            <div className="mt-6 flex gap-3.5 max-xl:flex-col">
+                Expired, and pressing the active one clears back to all.
+
+                D19'S SIZE AND ROW (24 Nov QA). The frame draws compact pills,
+                not tiles: one row at every width - sharing it on the tablet
+                frame (10 apart, padding 10/14, figure 15), their own width
+                on desktop (12 apart, min 74, padding 12/16, figure 16). They
+                were 34px figures, stacked one per row below 1280. The label
+                is the frame's violet in its readable shade. */}
+            <div className="mt-6 flex gap-2.5 xl:mt-[18px] xl:gap-3">
               {stats.map((s) => {
                 const on = status === s.key;
                 return (
@@ -426,19 +434,19 @@ export function InvitationsView() {
                     aria-pressed={on}
                     onClick={() => filterBy(on ? "" : s.key)}
                     className={cn(
-                      "flex-1 cursor-pointer rounded-xl border-[1.5px] px-[22px] py-5 text-left transition-colors",
+                      "min-w-[74px] flex-1 cursor-pointer rounded-lg border-[1.5px] px-3.5 py-2.5 text-left transition-colors xl:flex-none xl:px-4 xl:py-3",
                       on
                         ? "border-nevo-violet bg-nevo-cream-elevated"
                         : "border-transparent bg-nevo-cream-inset hover:border-nevo-violet/40 hover:bg-nevo-cream-elevated",
                     )}
                   >
-                    <span className="block text-[34px] leading-none font-semibold tracking-[-0.02em] text-nevo-navy">
+                    <span className="block text-[15px] leading-tight font-semibold text-nevo-near-black xl:text-[16px]">
                       {s.n}
                     </span>
                     <span
                       className={cn(
-                        "mt-2.5 block text-sm font-semibold",
-                        on ? "text-nevo-navy" : "text-nevo-near-black",
+                        "mt-0.5 block text-[11.5px] xl:text-[12px]",
+                        on ? "font-semibold text-nevo-navy" : "text-nevo-violet-text",
                       )}
                     >
                       {s.label}
@@ -460,39 +468,27 @@ export function InvitationsView() {
                   className="min-w-0 flex-1 border-none bg-transparent outline-none"
                 />
               </label>
-              <label className={FILTER_PILL}>
-                <span className="sr-only">Filter by status</span>
-                <select
-                  value={status}
-                  onChange={(e) => filterBy(e.target.value)}
-                  className="cursor-pointer appearance-none bg-transparent outline-none"
-                >
-                  {STATUS_FILTERS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <NevoSelect
+                aria-label="Filter by status"
+                value={status}
+                onValueChange={filterBy}
+                options={STATUS_FILTERS}
+                triggerClassName={FILTER_PILL}
+              />
               {classes.length > 0 ? (
-                <label className={FILTER_PILL}>
-                  <span className="sr-only">Filter by class</span>
-                  <select
-                    value={classFilter}
-                    onChange={(e) => {
-                      setClassFilter(e.target.value);
-                      setPage(1);
-                    }}
-                    className="cursor-pointer appearance-none bg-transparent outline-none"
-                  >
-                    <option value="">All classes</option>
-                    {classes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <NevoSelect
+                  aria-label="Filter by class"
+                  value={classFilter}
+                  onValueChange={(v) => {
+                    setClassFilter(v);
+                    setPage(1);
+                  }}
+                  options={[
+                    { value: "", label: "All classes" },
+                    ...classes.map((c) => ({ value: c.id, label: c.name })),
+                  ]}
+                  triggerClassName={FILTER_PILL}
+                />
               ) : null}
             </div>
 

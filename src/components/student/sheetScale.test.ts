@@ -22,11 +22,15 @@ const SURFACES = [
 ];
 
 /**
- * Not a sheet or a card: the floating Ask Nevo pill, drawn at this value by
- * frame 26. Its 0.22 is darker than Level 3's 0.16, and is raised with design
- * rather than changed here.
+ * Not a sheet or a card: the floating Ask Nevo pill, drawn at these values by
+ * frame 26 - the tablet pill, and the desktop corner pill. Their 0.22 and
+ * 0.20 are darker than Level 3's 0.16, and are raised with design rather than
+ * changed here.
  */
-const PILL = "shadow-[0_6px_20px_rgba(43,43,47,0.22)]";
+const PILLS = new Set([
+  "shadow-[0_6px_20px_rgba(43,43,47,0.22)]",
+  "shadow-[0_8px_32px_rgba(43,43,47,0.20)]",
+]);
 
 const source = (file: string) =>
   readFileSync(join(process.cwd(), "src", "components", "student", file), "utf8");
@@ -44,7 +48,7 @@ function oversizedRadii(text: string): string[] {
 /** Every shadow past Level 3: further, softer-spread or darker. */
 function heavyShadows(text: string): string[] {
   const arbitrary = [...text.matchAll(/shadow-\[([^\]]+)\]/g)].filter((m) => {
-    if (m[0] === PILL) return false;
+    if (PILLS.has(m[0])) return false;
     const [x = "0", y = "0", blur = "0"] = m[1].split("_");
     const alpha = Number(/rgba\([^)]*,\s*([\d.]+)\)/.exec(m[1])?.[1] ?? 0);
     const n = (v: string) => Math.abs(parseFloat(v) || 0);

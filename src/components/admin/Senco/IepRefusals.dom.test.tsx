@@ -1,3 +1,4 @@
+import { chooseOption } from "@/test/nevoSelect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
@@ -80,11 +81,9 @@ const guardian: ParentLink = {
   accountCreated: true,
 };
 
-async function generate(container: HTMLElement) {
+async function generate() {
   await screen.findByRole("button", { name: "Generate draft" });
-  const select = container.querySelector("select")!;
-  select.value = "s1";
-  select.dispatchEvent(new Event("change", { bubbles: true }));
+  await chooseOption(screen.getByRole("combobox", { name: "Student" }), "Amara Okafor");
   await waitFor(() => expect(screen.getByRole("button", { name: "Generate draft" })).toBeEnabled());
   screen.getByRole("button", { name: "Generate draft" }).click();
 }
@@ -101,7 +100,7 @@ describe("finalising, which is the SENCo's", () => {
   it("tells an admin who is not the SENCo before they press it", async () => {
     role = "other_admin";
     const { container } = render(<IepExporterView />);
-    await generate(container);
+    await generate();
     const finalise = await screen.findByRole("button", { name: "Finalise report" });
     expect(finalise).toBeDisabled();
     expect(visibleText(container)).toMatch(/Only your school.s SENCo can finalise a report/);
@@ -120,7 +119,7 @@ describe("finalising, which is the SENCo's", () => {
       }),
     );
     const { container } = render(<IepExporterView />);
-    await generate(container);
+    await generate();
     (await screen.findByRole("button", { name: "Finalise report" })).click();
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/Only your school.s SENCo can finalise a report/),
@@ -132,7 +131,7 @@ describe("finalising, which is the SENCo's", () => {
   it("lets the SENCo finalise", async () => {
     role = "senco_admin";
     const { container } = render(<IepExporterView />);
-    await generate(container);
+    await generate();
     expect(await screen.findByRole("button", { name: "Finalise report" })).toBeEnabled();
     expect(visibleText(container)).not.toMatch(/Only your school.s SENCo/);
   });
@@ -150,7 +149,7 @@ describe("a share the server refuses", () => {
       }),
     );
     const { container } = render(<IepExporterView />);
-    await generate(container);
+    await generate();
     (await screen.findByRole("button", { name: "Share" })).click();
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/not linked to this student/),

@@ -571,10 +571,12 @@ describe("Classes Nevo derived: rename and drop", () => {
     await waitFor(() => expect(screen.queryByText("JSS 1A")).toBeNull());
   });
 
-  it("keeps the class when the admin cancels", async () => {
+  // Lydia 19 Nov (L29), approved by Olayinka: the positive action, not "Cancel".
+  it("keeps the class when the admin says Keep these classes", async () => {
     await reachFound();
     fireEvent.click(within(row()).getByRole("button", { name: "Drop" }));
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Keep these classes" }));
     expect(screen.queryByRole("button", { name: "Drop JSS 1A" })).toBeNull();
     expect(correctClasses).not.toHaveBeenCalled();
   });
@@ -635,5 +637,54 @@ describe("OB-01's panels", () => {
     const grid = screen.getByText("Teacher file").closest("div.grid") as HTMLElement;
     expect(grid.className).toMatch(/(^|\s)xl:grid-cols-2(\s|$)/);
     expect(grid.className).not.toMatch(/md:grid-cols-2/);
+  });
+});
+
+/**
+ * OB-01's FILE LINE, FROM THE BROWSER, STORED NOWHERE (Lydia 19 Nov, L23):
+ * once a file goes in, its panel reads "{file} · N rows" with Replace - the
+ * name and count are the browser's own, nothing is sent or kept, and after a
+ * reload the line is gone.
+ */
+describe("OB-01's file line", () => {
+  const roster = () =>
+    new File(["first_name,last_name,class\nAda,Obi,JSS 1A\nTunde,Bello,JSS 1A\n"], "brightgate-students.csv", {
+      type: "text/csv",
+    });
+
+  it("names the file that went in, with its rows, and offers Replace", async () => {
+    const { container } = render(<RosterImportView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Add your roster/));
+    fireEvent.change(screen.getByLabelText(/Upload student file/i), { target: { files: [roster()] } });
+    await waitFor(() =>
+      expect(container.querySelector("[data-attached]")).not.toBeNull(),
+    );
+    const line = container.querySelector("[data-attached]") as HTMLElement;
+    expect(visibleText(line)).toMatch(/brightgate-students\.csv · 2 rows/);
+    expect(within(line).getByRole("button", { name: "Replace" })).toBeInTheDocument();
+    // Only the panel that took the file.
+    expect(container.querySelectorAll("[data-attached]")).toHaveLength(1);
+  });
+
+  it("shows nothing for a file the server refused", async () => {
+    stageImport.mockRejectedValue(new Error("500"));
+    const { container } = render(<RosterImportView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Add your roster/));
+    fireEvent.change(screen.getByLabelText(/Upload student file/i), { target: { files: [roster()] } });
+    await waitFor(() => expect(stageImport).toHaveBeenCalled());
+    await waitFor(() => expect(visibleText(container)).toMatch(/Nothing has changed/));
+    expect(container.querySelector("[data-attached]")).toBeNull();
+  });
+
+  it("is gone after a reload - nothing was kept", async () => {
+    const first = render(<RosterImportView />);
+    await waitFor(() => expect(visibleText(first.container)).toMatch(/Add your roster/));
+    fireEvent.change(screen.getByLabelText(/Upload student file/i), { target: { files: [roster()] } });
+    await waitFor(() => expect(first.container.querySelector("[data-attached]")).not.toBeNull());
+    first.unmount();
+
+    const again = render(<RosterImportView />);
+    await waitFor(() => expect(visibleText(again.container)).toMatch(/Add your roster/));
+    expect(again.container.querySelector("[data-attached]")).toBeNull();
   });
 });

@@ -167,3 +167,27 @@ describe("a school whose classes are all archived", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/Class old/));
   });
 });
+
+describe("the header's two create buttons (Olayinka, 23 Nov; D05)", () => {
+  it("sit together in one group, Add a class first, 8 apart and 10 from xl - not spread across the row", async () => {
+    list.mockResolvedValue(ACTIVE);
+    const { container } = render(<ClassesView />);
+    await screen.findByRole("button", { name: "Add several" });
+    const group = container.querySelector("[data-class-actions]")!;
+    expect([...group.querySelectorAll("button")].map((b) => b.textContent)).toEqual([
+      "Add a class",
+      "Add several",
+    ]);
+    expect(group.className).toMatch(/\bgap-2\b/);
+    expect(group.className).toMatch(/\bxl:gap-2\.5\b/);
+  });
+
+  it("pulses the dot beside Assign a teacher in the Teacher column", async () => {
+    list.mockResolvedValue(ACTIVE);
+    const { container } = render(<ClassesView />);
+    await screen.findAllByRole("button", { name: "Assign a teacher" });
+    const dots = container.querySelectorAll("[data-assign-dot]");
+    expect(dots.length).toBe(2);
+    dots.forEach((d) => expect(d.className).toMatch(/\bmotion-safe:animate-nevo-dot-pulse\b/));
+  });
+});

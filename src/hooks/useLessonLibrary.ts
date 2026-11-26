@@ -204,12 +204,21 @@ function addedLine(lesson: LessonSummary): string {
  *
  * The review signal moved to the badge, so it no longer competes for this
  * line - which is what let the card contradict itself before.
+ *
+ * THE CLASSES, AS C06 DRAWS THEM (backlog item 13; Teslim T11, 21 Nov): "JSS
+ * 2A, JSS 2B". The footer said "Assigned to 28 students" because the summary
+ * named no classes. Where the server names none - an older deployment, or a
+ * lesson given to children outside a class - the count stands as before.
  */
 function footerOf(lesson: LessonSummary): string {
   if (lesson.status === "failed") return "We couldn’t read this file";
   if (lesson.status === "pending" || lesson.status === "processing") {
     return "Nevo is reading it now";
   }
+  const names = Array.isArray(lesson.classNames)
+    ? lesson.classNames.map((c) => c.trim()).filter(Boolean)
+    : [];
+  if (names.length) return names.join(", ");
   const n = lesson.assignmentCount;
   if (typeof n !== "number") return addedLine(lesson);
   if (n === 0) return "Not yet assigned";

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useStudentLesson } from "@/hooks/useStudentLesson";
+import { useWithdrawnForSafety } from "@/hooks/useWithdrawnForSafety";
 import { LessonError } from "./LessonError";
 import { LessonLoadingSkeleton } from "./LessonLoadingSkeleton";
 import { LessonMessage } from "./LessonMessage";
@@ -90,6 +91,8 @@ export function LessonRoute({
     partial,
     finished,
   } = useStudentLesson(lessonId);
+  // Its saved copy withdrawn for safety while open (L14) - see the player.
+  const withdrawn = useWithdrawnForSafety(lessonId, fromShelf);
   const hydrated = useHydrated();
   /*
    * SCRUM-178: START AGAIN, AFTER THE SERVER REROUTED THE LESSON. A new
@@ -190,6 +193,7 @@ export function LessonRoute({
         live={live}
         finished={finished}
         partial={partial}
+        withdrawn={withdrawn}
         review={review}
         reviewConceptId={reviewConceptId}
         reviewBack={reviewBack}

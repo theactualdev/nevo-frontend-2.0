@@ -75,6 +75,18 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
   return {
     ...actual,
     studentsApi: { ...actual.studentsApi, list: () => Promise.resolve(students) },
+    accommodationsApi: { listActive: async () => [] },
+  };
+});
+// The per-child count is a Learning Support holder's (SCRUM-247, backlog 40).
+vi.mock("@/lib/api/learningSupport", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/learningSupport")>();
+  return {
+    ...actual,
+    learningSupportApi: {
+      ...actual.learningSupportApi,
+      holders: async () => ({ holders: [], viewerHoldsIt: true }),
+    },
   };
 });
 

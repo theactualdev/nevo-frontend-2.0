@@ -247,3 +247,17 @@ describe("telling Ask Nevo which class this is", () => {
     expect(screen.getByTestId("scope")).toHaveTextContent("none");
   });
 });
+
+// Lydia, 19 Nov, L19: no "View students" on the misconception card.
+describe("the walkthrough's misconception card", () => {
+  it("says the shared mistake and offers no list of names", async () => {
+    useTeacherClasses.mockReturnValue(state());
+    render(<InsightsView />);
+
+    fireEvent.click(screen.getByRole("button", { name: FIXTURE_CLASS }));
+
+    expect(await screen.findByText("Common misconception in algebraic fractions")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View students" })).not.toBeInTheDocument();
+    expect(screen.queryByText("View students")).not.toBeInTheDocument();
+  });
+});

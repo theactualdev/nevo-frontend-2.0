@@ -169,7 +169,8 @@ const rowFor = (a: Attempt) => {
     guidedPrompts: handing
       ? [{ id: `${a.questionId}-guided-1`, prompt: PROMPT[a.questionId] }]
       : [],
-    advanceAfterHandoff: handing,
+    // T9: always false live, a hand-off or not.
+    advanceAfterHandoff: false,
     handoffAvailableAt: deadline === null ? null : iso(deadline),
   };
 };
@@ -248,8 +249,9 @@ const talkThrough = async () => {
 
 /**
  * The first section's check: three misses, the panel at its deadline from
- * the one read, and on with Keep going - what every case below is measured
- * against, so a player that never reads fails them all.
+ * the one read, and Keep going back to the check (Lydia's gate, 23 Oct: a
+ * hand-off moves no one past it), answered right and on - what every case
+ * below is measured against, so a player that never reads fails them all.
  */
 const handedOffAtDeadline = async () => {
   next();
@@ -261,6 +263,10 @@ const handedOffAtDeadline = async () => {
   await talkThrough();
   expect(panelFor("cp-a")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+  await flush();
+  await right();
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  await flush();
   expect(screen.getByText("Body of Denominators.")).toBeTruthy();
 };
 

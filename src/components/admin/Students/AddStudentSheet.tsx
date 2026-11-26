@@ -1,5 +1,6 @@
 "use client";
 
+import { NevoSelect } from "@/components/shared/NevoSelect";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
@@ -336,19 +337,14 @@ export function AddStudentSheet({
         <label htmlFor="student-class" className={LABEL}>
           Class
         </label>
-        <select
+        <NevoSelect
           id="student-class"
           value={classId}
-          onChange={(e) => setClassId(e.target.value)}
-          className={cn(FIELD, "cursor-pointer")}
-        >
-          <option value="">Choose a class</option>
-          {classes.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          onValueChange={setClassId}
+          placeholder="Choose a class"
+          options={classes.map((c) => ({ value: c.id, label: c.name }))}
+          triggerClassName={FIELD}
+        />
         {classesFailed ? (
           <ReadFailed
             className="mt-2"
@@ -376,7 +372,7 @@ export function AddStudentSheet({
           Parent or guardian <span className="font-normal text-nevo-near-black/55">(optional)</span>
         </p>
         <p className="m-0 mt-1 text-[12.5px] leading-[1.5] text-nevo-near-black/55">
-          {first || "They"} can&rsquo;t start until a parent or guardian gives
+          {first || "They"}{" "}can&rsquo;t start until a parent or guardian gives
           permission.{" "}
           {maySend
             ? `Add one now and we’ll send them the request, or add one later from ${first ? `${first}’s` : "the student’s"} page.`

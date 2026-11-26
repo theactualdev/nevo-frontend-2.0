@@ -67,7 +67,7 @@ describe("Settings sections", () => {
     fireEvent.click(saveButtons()[1]);
     await waitFor(() => expect(saveAcademic).toHaveBeenCalled());
 
-    await waitFor(() => expect(screen.getAllByText("Saved").length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText("Saved just now").length).toBeGreaterThan(0));
     expect(screen.getByLabelText("School name")).toHaveValue("Brightgate College");
   });
 

@@ -178,9 +178,10 @@ export function SignUpStep({
 
   return (
     <>
+      {/* D01's step 1 words (backlog 92). */}
       <StepHeading
         title="Let's set up your school"
-        sub="A few details to create your Nevo workspace. You can come back to anything except how everyone signs in."
+        sub="A few details to create your Nevo workspace. You can change any of this later."
       />
 
       <div className="mt-8 flex flex-col gap-5">
@@ -201,9 +202,11 @@ export function SignUpStep({
         </div>
 
         {/*
-          * D01 draws "School type" beside this. It is not built: nothing in
-          * the contract takes it and nothing in the product reads it, and a
-          * question whose answer goes nowhere is worse than no question.
+          * D01 draws "School type" beside this, and "Role" under the contact.
+          * Neither is built: `POST /schools/register` takes neither (checked
+          * 24 Nov: schoolName, adminName, email, password) and nothing in the
+          * product reads them, and a question whose answer goes nowhere is
+          * worse than no question (backlog 92).
           * Location has a home - the school's contact, which Settings edits.
           *
           * Not locked once the school is registered, unlike the fields above:
@@ -262,6 +265,14 @@ export function SignUpStep({
           {touched.email && state.email.trim() && !emailValid ? (
             <FieldNote>This needs to be a full email address.</FieldNote>
           ) : null}
+          {/* D01's email helper, where nothing else is said about it. */}
+          {!(touched.email && state.email.trim() && !emailValid) &&
+          phase !== "duplicate" ? (
+            <p className={FIELD_HELP}>
+              We&rsquo;ll send a confirmation link here. This becomes the first
+              admin account, so it needs to be one you own.
+            </p>
+          ) : null}
           {phase === "duplicate" ? (
             <FieldNote>
               This email is already set up with a school.{" "}
@@ -293,7 +304,7 @@ export function SignUpStep({
             </FieldNote>
           ) : (
             <p className={FIELD_HELP}>
-              At least {MIN_PASSWORD} characters. A phrase you&rsquo;ll remember
+              At least {MIN_PASSWORD}{" "}characters. A phrase you&rsquo;ll remember
               is stronger than a short jumble.
             </p>
           )}
@@ -376,7 +387,8 @@ export function SignUpStep({
         ) : registered ? (
           "Try signing in"
         ) : (
-          "Continue"
+          // D01's button (backlog 92).
+          "Create account"
         )}
       </button>
     </>

@@ -6,6 +6,8 @@ import { feedbackApi } from "@/lib/api/feedback";
 import { formatMoney, formatVatRate } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { CheckIcon } from "../Roster/primitives";
+import { failureKind } from "../NoAccess";
+import { ReadFailed } from "../ReadFailed";
 import { WINDOW } from "./CostSheet";
 
 /**
@@ -30,8 +32,11 @@ import { WINDOW } from "./CostSheet";
  * changes take effect at the start of your next billing cycle" is not stated:
  * nothing sends it.
  *
- * ITS OWN READ AND ITS OWN ABSENCE. A plan list that could not be read costs
- * this section, never the billing page above it.
+ * ITS OWN READ AND ITS OWN FAILURE. A plan list that could not be read costs
+ * this section, never the billing page above it - and SAYS so (backlog 107):
+ * it used to hide the section, so a school could not tell "no plans to show"
+ * from "couldn't ask". A refusal (403) is still absent: there is nothing this
+ * admin could do with the plans.
  */
 
 type Asked = "idle" | "sending" | "sent" | "failed";
@@ -44,6 +49,9 @@ export function PlanOptions({
   vatRate: string | null | undefined;
 }) {
   const [plans, setPlans] = useState<PlanOption[] | null>(null);
+  const [readFailed, setReadFailed] = useState(false);
+  /** Bumped by Try again, to read the plans again. */
+  const [attempt, setAttempt] = useState(0);
   const [asked, setAsked] = useState<Asked>("idle");
   /*
    * GONE MEANS GONE. An answer that lands after this section has left the
@@ -59,15 +67,41 @@ export function PlanOptions({
     billingApi
       .planOptions()
       .then((rows) => {
-        if (here.current) setPlans(Array.isArray(rows) ? rows : []);
+        if (!here.current) return;
+        setPlans(Array.isArray(rows) ? rows : []);
+        setReadFailed(false);
       })
-      .catch(() => {
-        if (here.current) setPlans([]);
+      .catch((err: unknown) => {
+        if (!here.current) return;
+        setPlans([]);
+        setReadFailed(failureKind(err) === "failed");
       });
     return () => {
       here.current = false;
     };
-  }, []);
+  }, [attempt]);
+
+  if (readFailed) {
+    return (
+      <section aria-labelledby="plans-heading" className="mt-10">
+        <h2
+          id="plans-heading"
+          className="text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase"
+        >
+          Your plan
+        </h2>
+        <ReadFailed
+          className="mt-2"
+          what="Nevo's plans"
+          onRetry={() => {
+            setReadFailed(false);
+            setPlans(null);
+            setAttempt((a) => a + 1);
+          }}
+        />
+      </section>
+    );
+  }
 
   if (!plans || plans.length === 0) return null;
 

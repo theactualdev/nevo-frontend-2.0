@@ -157,4 +157,34 @@ describe("the server's reading chunks (SCRUM-234)", () => {
 
     expect(text).not.toHaveProperty("readingChunks");
   });
+  /*
+   * L7: the server's groups over those chunks, for the attention
+   * accommodation - kept only where they are the chunks, in order.
+   */
+  it("carries the groups that cover the chunks in order, pauseAfter false unless said", () => {
+    const text = textOf({
+      readingChunks: [FIRST, SECOND],
+      readingGroups: [
+        { id: "g1", chunkIds: ["c1"], wordCount: 5, pauseAfter: true },
+        { id: "g2", chunkIds: ["c2"], wordCount: 12 },
+      ],
+    });
+
+    expect(text.readingGroups).toEqual([
+      { id: "g1", chunkIds: ["c1"], pauseAfter: true },
+      { id: "g2", chunkIds: ["c2"], pauseAfter: false },
+    ]);
+  });
+
+  it.each([
+    ["out of order", [{ id: "g1", chunkIds: ["c2", "c1"] }]],
+    ["missing a chunk", [{ id: "g1", chunkIds: ["c1"] }]],
+    ["naming a chunk the body lacks", [{ id: "g1", chunkIds: ["c1", "c2", "c9"] }]],
+    ["an empty group", [{ id: "g1", chunkIds: ["c1", "c2"] }, { id: "g2", chunkIds: [] }]],
+  ])("drops groups %s", (_, readingGroups) => {
+    const text = textOf({ readingChunks: [FIRST, SECOND], readingGroups });
+
+    expect(text).not.toHaveProperty("readingGroups");
+    expect(text.readingChunks).toHaveLength(2);
+  });
 });

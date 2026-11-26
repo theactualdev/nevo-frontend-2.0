@@ -189,7 +189,7 @@ describe("breaks are the engine's to offer", () => {
     render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
 
-    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Not just now" }));
 
     expect(sent("break_declined")).toEqual([
       { breakType: "movement", trigger: "engine_offer" },
@@ -222,19 +222,26 @@ describe("breaks are the engine's to offer", () => {
     expect(sent("break_suggested")).toEqual([
       { breakType: "movement", trigger: "affect_offer" },
     ]);
-    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Not just now" }));
     expect(sent("break_declined")).toEqual([
       { breakType: "movement", trigger: "affect_offer" },
     ]);
   });
 
-  it("asks at the foot of the lesson, Not now before Take a break", () => {
+  /*
+   * 17d S5's card in place of frame 38's pill (Lydia, 25 Oct and 19 Nov, L2):
+   * its title and line, then the way to take it, then the way to carry on.
+   */
+  it("asks at the foot of the lesson, 17d's card: Take a break, then Not just now", () => {
     runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-1" };
     render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
 
+    expect(
+      screen.getByText("This might be a good moment for a break."),
+    ).toBeInTheDocument();
     const ask = screen.getByText("Stand up and stretch for a moment.");
-    const notNow = screen.getByRole("button", { name: "Not now" });
+    const notNow = screen.getByRole("button", { name: "Not just now" });
     const take = screen.getByRole("button", { name: "Take a break" });
     const after = (a: Node, b: Node) =>
       Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -242,8 +249,8 @@ describe("breaks are the engine's to offer", () => {
     // Below the lesson's content, above the chevrons - not under the top bar.
     expect(after(screen.getByText("Body of seg-1."), ask)).toBe(true);
     expect(after(take, screen.getByRole("button", { name: "Next" }))).toBe(true);
-    expect(after(notNow, take)).toBe(true);
-    // Design dropped every line but the question (frame 38, 6 Oct).
+    expect(after(take, notNow)).toBe(true);
+    // None of the lines design dropped from the old offer comes back.
     for (const gone of [
       /short break/i,
       /tricky/i,
@@ -258,7 +265,7 @@ describe("breaks are the engine's to offer", () => {
     runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-1" };
     const { rerender } = render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
-    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Not just now" }));
 
     next();
     runtime.value = { ...runtime.value, offeredBreak: "micro", forSegmentId: "seg-2" };
@@ -266,9 +273,8 @@ describe("breaks are the engine's to offer", () => {
     beat();
 
     // It used to be spent for the rest of the lesson after one offer. A
-    // micro break keeps the pill's own line (Lydia, 7 Nov: only movement and
-    // consolidation have their own).
-    expect(screen.getByText("Want a break?")).toBeInTheDocument();
+    // micro break is 17d's short pause, in place (Lydia, 26 Oct).
+    expect(screen.getByText("Want to pause for a moment?")).toBeInTheDocument();
   });
 
   it("does not carry an answer about the last segment onto this one", () => {
@@ -307,7 +313,7 @@ describe("every break event, against the catalogue", () => {
     runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-1" };
     const { rerender } = render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
-    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Not just now" }));
     next();
     runtime.value = { ...runtime.value, offeredBreak: "full", forSegmentId: "seg-2" };
     rerender(<LessonPlayer lesson={THREE} plan={null} live />);

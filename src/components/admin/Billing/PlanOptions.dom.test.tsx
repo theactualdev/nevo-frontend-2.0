@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import type { PlanOption } from "@/lib/api/billing";
+import { ApiError } from "@/lib/api/client";
 import { PlanOptions } from "./PlanOptions";
 
 /**
@@ -92,10 +93,35 @@ describe("the plans", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/didn.t send\. Nothing has changed/));
   });
 
-  it("costs only itself when the plans cannot be read", async () => {
-    planOptions.mockRejectedValue(new Error("500"));
+  /*
+   * THIS TEST ASSERTED THE DEFECT until backlog 107: it pinned an empty
+   * section over a failed read, so a school could not tell "no plans" from
+   * "couldn't ask". It costs only itself still - and says so, with Try again.
+   */
+  it("says when the plans cannot be read, and reads them again on Try again", async () => {
+    planOptions.mockRejectedValueOnce(new Error("500"));
     const { container } = render(<PlanOptions current="annual" vatRate="7.50" />);
+
+    expect(await screen.findByRole("heading", { name: "Your plan" })).toBeInTheDocument();
+    expect(visibleText(container)).toMatch(
+      /We couldn't read Nevo's plans just now, so there's nothing to show here yet/,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    await waitFor(() => expect(planOptions).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("Your current plan")).toBeInTheDocument();
+  });
+
+  it("stays absent when the server has no plans, or refuses this admin", async () => {
+    planOptions.mockResolvedValue([]);
+    const first = render(<PlanOptions current="annual" vatRate="7.50" />);
     await waitFor(() => expect(planOptions).toHaveBeenCalled());
-    expect(container).toBeEmptyDOMElement();
+    expect(first.container).toBeEmptyDOMElement();
+    first.unmount();
+
+    planOptions.mockRejectedValue(new ApiError(403, "no", {}));
+    const second = render(<PlanOptions current="annual" vatRate="7.50" />);
+    await waitFor(() => expect(planOptions).toHaveBeenCalledTimes(2));
+    expect(second.container).toBeEmptyDOMElement();
   });
 });
