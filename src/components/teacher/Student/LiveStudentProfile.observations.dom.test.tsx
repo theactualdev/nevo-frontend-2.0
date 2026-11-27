@@ -90,11 +90,16 @@ describe("what Nevo has noticed", () => {
     expect(screen.queryByText(/7 (times|lessons)/)).not.toBeInTheDocument();
   });
 
-  it("puts the count beside finished lessons, the one place it may go", async () => {
+  it("leaves the count out beside finished lessons until the roster declares its window (S22)", async () => {
+    // The server counts the last 30 days and the contract does not say so, so
+    // "12 lessons" read as a total (Hub, 25 Nov). It returns with its window.
     classStudents.mockResolvedValue([row("s-1", [{ pattern: "completed_lessons", count: 12 }])]);
     render(<LiveStudentProfile studentId="s-1" classId="c-1" state={STATE} />);
 
-    expect(await screen.findByText("12 lessons")).toBeInTheDocument();
+    expect(
+      await screen.findByText(OBSERVATION_COPY.completed_lessons.body("Amara")),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/12 lessons/)).not.toBeInTheDocument();
   });
 
   it("reads only this child's row from the roster", async () => {
