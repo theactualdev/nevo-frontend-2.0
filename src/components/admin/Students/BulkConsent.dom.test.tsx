@@ -330,18 +330,18 @@ describe("the students a bulk send could not reach", () => {
 });
 
 /**
- * BACKLOG 63: D07's empty roster - "No students enrolled yet" and its first
- * sentence. Its consent sentence is held against SCRUM-156 (activation sends
- * the requests), so nothing here promises when families hear.
+ * BACKLOG 63: D07's empty roster - "No students enrolled yet" - with Lydia's
+ * line under it (L37, 25 Nov). D07's own consent sentence promised what
+ * doesn't hold for a child added mid-term, so it's gone.
  */
 describe("an empty roster", () => {
-  it("says D07's heading and first sentence, and no promise about consent", async () => {
+  it("says D07's heading and Lydia's line, and no promise about when families hear", async () => {
     list.mockResolvedValue([]);
     const { container } = render(<StudentsView />);
 
     expect(await screen.findByText("No students enrolled yet")).toBeInTheDocument();
     expect(visibleText(container)).toMatch(
-      /Import a roster from your school system, or add students one at a time\./,
+      /Add your students here\. Consent requests go to families when your school is active\./,
     );
     expect(visibleText(container)).not.toMatch(/until you.re ready|Consent requests come after/);
   });
