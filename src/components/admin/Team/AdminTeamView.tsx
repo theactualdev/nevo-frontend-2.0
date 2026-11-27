@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { feedbackApi } from "@/lib/api/feedback";
 import { CheckIcon, CloseIcon, PausedNote } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
+import { useStillHere } from "@/hooks/useStillHere";
 import { schoolApi } from "@/lib/api/school";
 import { NoAccess, failureKind } from "../NoAccess";
 import { getSession } from "@/lib/auth/session";
@@ -142,13 +143,18 @@ export function AdminTeamView() {
     retry: retryLs,
   } = useLearningSupport();
   const [me] = useState(() => getSession()?.userId ?? null);
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   useEffect(() => {
     schoolApi
       .get()
-      .then((sc) => setSchool(sc.name?.trim() || null))
-      .catch(() => setSchool(null));
-  }, []);
+      .then((sc) => {
+        if (mounted.current) setSchool(sc.name?.trim() || null);
+      })
+      .catch(() => {
+        if (mounted.current) setSchool(null);
+      });
+  }, [mounted]);
 
   // No synchronous setState in the effect body (react-hooks/set-state-in-effect):
   // "loading" is already the initial state, so only a retry has to reset it.
@@ -156,12 +162,15 @@ export function AdminTeamView() {
     teamApi
       .list()
       .then(({ members, ...seats }) => {
+        if (!mounted.current) return;
         setTeam(members);
         setSeatInfo(seats);
         setPhase("ready");
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
-  }, []);
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(failureKind(err));
+      });
+  }, [mounted]);
 
   useEffect(() => {
     fetchTeam();

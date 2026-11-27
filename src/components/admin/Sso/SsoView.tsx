@@ -19,6 +19,7 @@ import { withBack } from "../back";
 import { WriteFailed } from "../WriteFailed";
 import { SupportEmailLink } from "../SupportEmail";
 import { usePermissions } from "@/hooks";
+import { useStillHere } from "@/hooks/useStillHere";
 import {
   dataFlowHeading,
   isDisconnected,
@@ -159,6 +160,7 @@ export function SsoView() {
   const [asked, setAsked] = useState<SsoProvider | null>(null);
   const [school, setSchool] = useState<School | null>(null);
   const { hasScope } = usePermissions();
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   /*
    * THE COPY CONFIRMATION IS THE COPY BUTTON'S, not the page's.
@@ -208,29 +210,37 @@ export function SsoView() {
   useEffect(() => {
     schoolApi
       .get()
-      .then(setSchool)
-      .catch(() => setSchool(null));
-  }, []);
+      .then((v) => {
+        if (mounted.current) setSchool(v);
+      })
+      .catch(() => {
+        if (mounted.current) setSchool(null);
+      });
+  }, [mounted]);
 
   const load = useCallback(() => {
     ssoApi
       .status()
       .then((s) => {
-        setStatus(s);
-        setPhase("ready");
+        if (mounted.current) setStatus(s);
+        if (mounted.current) setPhase("ready");
         // `history?.failedRuns ?? 0` coalesces a FAILED read into the
         // healthy branch below, so a school whose sync history did not answer
         // was told its sync was fine. Track the failure separately.
-        setHistoryFailed(false);
+        if (mounted.current) setHistoryFailed(false);
         return ssoApi
           .syncHistory()
           .then((h) => {
+            if (!mounted.current) return;
             setHistory(h);
             setHistoryFailed(false);
           })
-          .catch(() => setHistoryFailed(true));
+          .catch(() => {
+            if (mounted.current) setHistoryFailed(true);
+          });
       })
       .catch((err: unknown) => {
+        if (!mounted.current) return;
         // A school that never connected one gets a 404. That is the ordinary
         // "nothing connected yet" state, not a failure.
         if (err instanceof ApiError && err.status === 404) {
@@ -242,7 +252,7 @@ export function SsoView() {
         // `it_sso`, so an admin without it lands here by deep link routinely.
         setPhase(failureKind(err));
       });
-  }, []);
+  }, [mounted]);
 
   useEffect(() => {
     load();

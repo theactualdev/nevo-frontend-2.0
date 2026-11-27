@@ -15,6 +15,7 @@ import {
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { useSetupGate } from "@/hooks";
+import { useStillHere } from "@/hooks/useStillHere";
 import {
   countCsvRows,
   foundCounts,
@@ -168,6 +169,7 @@ export function RosterImportView() {
    * the Overview would still say "Upload your staff" after the staff were in.
    */
   const { refresh: refreshGate } = useSetupGate();
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   /*
    * Both templates, read once the upload panels are what this screen shows -
@@ -206,12 +208,15 @@ export function RosterImportView() {
     onboardingApi
       .get()
       .then((s) => {
+        if (!mounted.current) return;
         setState(s);
         setPhase("ready");
       })
       // A 403 is this admin's scope, not a failure: no retry can grant it.
-      .catch((err) => setPhase(failureKind(err) === "denied" ? "denied" : "failed"));
-  }, []);
+      .catch((err) => {
+        if (mounted.current) setPhase(failureKind(err) === "denied" ? "denied" : "failed");
+      });
+  }, [mounted]);
 
   useEffect(() => {
     load();

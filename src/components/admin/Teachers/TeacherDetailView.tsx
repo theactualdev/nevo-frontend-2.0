@@ -25,6 +25,7 @@ import {
   TEXT_ACTION,
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
+import { useStillHere } from "@/hooks/useStillHere";
 import { AssignTeachingSheet } from "../Classes/AssignTeachingSheet";
 import { RemoveAccessSheet } from "./RemoveAccessSheet";
 import { InviteActions } from "./InviteActions";
@@ -138,6 +139,7 @@ export function TeacherDetailView({
   const [now] = useState(() => Date.now());
   const [me] = useState(() => getSession()?.userId ?? null);
   const { holders: ls, setHolders: setLs } = useLearningSupport();
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
   /*
    * THE ONLY HOLDER KEEPS THEIR ACCESS (SCRUM-248). Said before the sheet
    * opens, because the sheet hands classes over first and revokes last: a
@@ -169,13 +171,16 @@ export function TeacherDetailView({
       classesApi.list(true),
     ])
       .then(([t, h, all]) => {
+        if (!mounted.current) return;
         setTeacher(t);
         setHeld(h);
         setAllClasses(all);
         setPhase("ready");
       })
-      .catch((err: unknown) => setPhase(gone ? "gone" : failureKind(err)));
-  }, [teacherId]);
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(gone ? "gone" : failureKind(err));
+      });
+  }, [teacherId, mounted]);
 
   useEffect(() => {
     load();

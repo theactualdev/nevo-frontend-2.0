@@ -5,6 +5,7 @@ import { authApi, type AuthSession } from "@/lib/api/auth";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { permissionsApi } from "@/lib/api/permissions";
 import { usersApi, type CurrentUser } from "@/lib/api/users";
+import { useStillHere } from "@/hooks/useStillHere";
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
 import { Avatar, CARD, PRIMARY_BTN } from "../Roster/primitives";
@@ -106,19 +107,24 @@ export function AccountSettings() {
    * unanswered one said the same thing while the request was still out.
    */
   const [sessionsRead, setSessionsRead] = useState<"loading" | "ready" | "failed">("loading");
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
   const loadSessions = useCallback(() => {
     authApi
       .sessions()
       .then((s) => {
+        if (!mounted.current) return;
         setSessions(s);
         setSessionsRead("ready");
       })
-      .catch(() => setSessionsRead("failed"));
-  }, []);
+      .catch(() => {
+        if (mounted.current) setSessionsRead("failed");
+      });
+  }, [mounted]);
 
   useEffect(() => {
     Promise.all([usersApi.me(), permissionsApi.me()])
       .then(([u, p]) => {
+        if (!mounted.current) return;
         setMe(u);
         setFirstName(u.firstName ?? "");
         setLastName(u.lastName ?? "");
@@ -126,8 +132,10 @@ export function AccountSettings() {
         setLoad("ready");
         loadSessions();
       })
-      .catch(() => setLoad("failed"));
-  }, [loadSessions, attempt]);
+      .catch(() => {
+        if (mounted.current) setLoad("failed");
+      });
+  }, [loadSessions, attempt, mounted]);
 
   if (load === "loading") {
     return <div className={cn(CARD, "mt-5 h-[380px] animate-pulse")} />;

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSetupGate } from "@/hooks";
+import { useStillHere } from "@/hooks/useStillHere";
 import { classesApi } from "@/lib/api/classes";
 import { invitesApi, type Invitation } from "@/lib/api/invites";
 import { teachersApi, type TeacherSummary } from "@/lib/api/teachers";
@@ -116,6 +117,7 @@ export function TeachersView() {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   /** D24 / D01b: resending pauses while setup is unfinished, as it does on D19. */
   const { writesPaused } = useSetupGate();
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   useEffect(() => {
     const pending = timers.current;
@@ -171,6 +173,7 @@ export function TeachersView() {
     teachersApi
       .list(term.trim() || undefined)
       .then((rows) => {
+        if (!mounted.current) return;
         setTeachers(rows);
         setPhase("ready");
         setCountFailed(new Set());
@@ -184,6 +187,7 @@ export function TeachersView() {
           invitesApi
             .list()
             .then((all) => {
+              if (!mounted.current) return;
               const now = Date.now();
               const found: Record<string, Invitation> = {};
               invited.forEach((t) => {
@@ -194,6 +198,7 @@ export function TeachersView() {
               setInvitesJudgedAt(now);
             })
             .catch(() => {
+              if (!mounted.current) return;
               setInvites({});
               setInvitesJudgedAt(null);
             });
@@ -209,16 +214,20 @@ export function TeachersView() {
         rows.filter((t) => typeof t.classCount !== "number").forEach((t) => {
           classesApi
             .teacherClasses(t.id)
-            .then((list) => setCounts((prev) => ({ ...prev, [t.id]: list.length })))
+            .then((list) => {
+              if (mounted.current) setCounts((prev) => ({ ...prev, [t.id]: list.length }));
+            })
             // Was `.catch(() => undefined)`, which left that row's Classes
             // cell as a loading bar for as long as the page was open.
-            .catch(() =>
-              setCountFailed((prev) => new Set(prev).add(t.id)),
-            );
+            .catch(() => {
+              if (mounted.current) setCountFailed((prev) => new Set(prev).add(t.id));
+            });
         });
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
-  }, []);
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(failureKind(err));
+      });
+  }, [mounted]);
 
   useEffect(() => {
     const id = setTimeout(() => load(search), search ? 300 : 0);

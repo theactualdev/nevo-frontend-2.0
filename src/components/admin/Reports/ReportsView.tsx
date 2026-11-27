@@ -9,6 +9,7 @@ import {
   type SchoolHealth,
   type TransformationMetrics,
 } from "@/lib/api/analytics";
+import { useStillHere } from "@/hooks/useStillHere";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
 import { CARD, PRIMARY_BTN } from "../Roster/primitives";
@@ -146,6 +147,7 @@ export function ReportsView() {
    */
   const [masteryFailed, setMasteryFailed] = useState(false);
   const [transformationFailed, setTransformationFailed] = useState(false);
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback(() => {
     // School health answers first because it carries the schoolId the other
@@ -153,33 +155,45 @@ export function ReportsView() {
     analyticsApi
       .getSchoolHealth()
       .then((h) => {
+        if (!mounted.current) return;
         setHealth(h);
         setPhase("ready");
         setOutcomesFailed(false);
         analyticsApi
           .getOutcomes({ schoolId: h.schoolId })
           .then((o) => {
+            if (!mounted.current) return;
             setOutcomes(o.outcomes);
             setOutcomesFailed(false);
           })
-          .catch(() => setOutcomesFailed(true));
+          .catch(() => {
+            if (mounted.current) setOutcomesFailed(true);
+          });
         analyticsApi
           .getSchoolMastery(h.schoolId)
           .then((m) => {
+            if (!mounted.current) return;
             setMastery(m);
             setMasteryFailed(false);
           })
-          .catch(() => setMasteryFailed(true));
+          .catch(() => {
+            if (mounted.current) setMasteryFailed(true);
+          });
         analyticsApi
           .getTransformationMetrics()
           .then((t) => {
+            if (!mounted.current) return;
             setTransformation(t);
             setTransformationFailed(false);
           })
-          .catch(() => setTransformationFailed(true));
+          .catch(() => {
+            if (mounted.current) setTransformationFailed(true);
+          });
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
-  }, []);
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(failureKind(err));
+      });
+  }, [mounted]);
 
   useEffect(() => {
     load();

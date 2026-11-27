@@ -8,6 +8,7 @@ import {
   type IepExportShare,
 } from "@/lib/api/export";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useStillHere } from "@/hooks/useStillHere";
 import { ApiError, apiErrorCode, apiErrorMessage, incidentId } from "@/lib/api/client";
 import { IncidentLine } from "@/components/teacher/Upload/ParseFallback";
 import { studentsApi, type AdminStudentRow, type ParentLink } from "@/lib/api/students";
@@ -257,6 +258,7 @@ export function IepExporterView({
   const [shares, setShares] = useState<IepExportShare[] | null>(null);
   const [sharesFailed, setSharesFailed] = useState(false);
   const [savedAt, setSavedAt] = useState(false);
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   // The clock is read in an effect, never during render. Default period is the
   // last four months, which is about a Nigerian half-term.
@@ -289,6 +291,7 @@ export function IepExporterView({
     studentsApi
       .list()
       .then((rows) => {
+        if (!mounted.current) return;
         setStudents(rows);
         setStudentsFailed(false);
         // An id from the address that is not on this school's roster is not
@@ -296,13 +299,16 @@ export function IepExporterView({
         setStudentId((cur) => (rows.some((r) => r.id === cur) ? cur : ""));
       })
       .catch((err: unknown) => {
+        if (!mounted.current) return;
         if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setRoleRefused(true);
         if (failureKind(err) === "denied") setDenied(true);
         setStudents([]);
         setStudentsFailed(true);
       })
-      .finally(() => setStudentsLoading(false));
-  }, []);
+      .finally(() => {
+        if (mounted.current) setStudentsLoading(false);
+      });
+  }, [mounted]);
 
   /*
    * The retry mutated no state when it failed a second time - `studentsFailed`
@@ -366,11 +372,14 @@ export function IepExporterView({
     studentsApi
       .parentLinks(id)
       .then((rows) => {
+        if (!mounted.current) return;
         setGuardians(rows);
         setGuardiansFailed(false);
       })
-      .catch(() => setGuardiansFailed(true));
-  }, []);
+      .catch(() => {
+        if (mounted.current) setGuardiansFailed(true);
+      });
+  }, [mounted]);
 
   const generate = () => {
     if (!studentId || !periodStart || !periodEnd) return;
@@ -464,16 +473,18 @@ export function IepExporterView({
     exportApi
       .listShares(exportId)
       .then((s) => {
+        if (!mounted.current) return;
         setShares(s);
         setSharesFailed(false);
       })
       .catch(() => {
+        if (!mounted.current) return;
         // Left as null rather than [], so nothing downstream can read this as
         // "shared with nobody".
         setShares(null);
         setSharesFailed(true);
       });
-  }, []);
+  }, [mounted]);
 
   useEffect(() => {
     if (draft?.id) loadShares(draft.id);

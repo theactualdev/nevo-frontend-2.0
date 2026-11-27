@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import {
   classesApi,
   type AdminClass,
@@ -136,11 +137,13 @@ export function ClassesView() {
    * - which is most of them. It must never hold the list.
    */
   const [sso, setSso] = useState<SsoStatus | null>(null);
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback((includeArchived: boolean) => {
     classesApi
       .list(includeArchived)
       .then((rows) => {
+        if (!mounted.current) return;
         setClasses(rows);
         setPhase("ready");
         /*
@@ -153,8 +156,10 @@ export function ClassesView() {
          * produces the count.
          */
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
-  }, []);
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(failureKind(err));
+      });
+  }, [mounted]);
 
   useEffect(() => {
     load(showArchived);
@@ -163,9 +168,13 @@ export function ClassesView() {
   useEffect(() => {
     ssoApi
       .status()
-      .then(setSso)
-      .catch(() => setSso(null));
-  }, []);
+      .then((v) => {
+        if (mounted.current) setSso(v);
+      })
+      .catch(() => {
+        if (mounted.current) setSso(null);
+      });
+  }, [mounted]);
 
   /** The check badge is a one-shot, per SCRUM-40's "then rest". */
   useEffect(() => {

@@ -20,6 +20,7 @@ import { schoolApi, type School } from "@/lib/api/school";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { useSetupGate } from "@/hooks";
+import { useStillHere } from "@/hooks/useStillHere";
 import { billingCurrency, mayActivate, screenFor } from "./activation";
 import { SignInDetailsDownload } from "../Students/SignInDetailsDownload";
 import { ConsentFormDownload } from "../Students/ConsentFormDownload";
@@ -79,6 +80,7 @@ export function ActivationView() {
    * school is not active.
    */
   const { refresh: refreshGate } = useSetupGate();
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback(() => {
     /*
@@ -90,20 +92,48 @@ export function ActivationView() {
     onboardingApi
       .get()
       .then((s) => {
+        if (!mounted.current) return;
         setState(s);
         setPhase("ready");
       })
       // A 403 is this admin's scope, not a failure: no retry can grant it.
-      .catch((err) => setPhase(failureKind(err) === "denied" ? "denied" : "failed"));
+      .catch((err) => {
+        if (mounted.current) setPhase(failureKind(err) === "denied" ? "denied" : "failed");
+      });
 
-    billingApi.subscription().then(setSub).catch(() => setSub(null));
-    billingApi.receivingAccount().then(setAccount).catch(() => setAccount(null));
-    schoolApi.get().then(setSchool).catch(() => setSchool(null));
+    billingApi
+      .subscription()
+      .then((v) => {
+        if (mounted.current) setSub(v);
+      })
+      .catch(() => {
+        if (mounted.current) setSub(null);
+      });
+    billingApi
+      .receivingAccount()
+      .then((v) => {
+        if (mounted.current) setAccount(v);
+      })
+      .catch(() => {
+        if (mounted.current) setAccount(null);
+      });
+    schoolApi
+      .get()
+      .then((v) => {
+        if (mounted.current) setSchool(v);
+      })
+      .catch(() => {
+        if (mounted.current) setSchool(null);
+      });
     billingApi
       .invoices()
-      .then((rows) => setInvoices(rows))
-      .catch(() => setInvoices(null));
-  }, []);
+      .then((rows) => {
+        if (mounted.current) setInvoices(rows);
+      })
+      .catch(() => {
+        if (mounted.current) setInvoices(null);
+      });
+  }, [mounted]);
 
   useEffect(() => {
     load();
@@ -122,14 +152,14 @@ export function ActivationView() {
       onboardingApi
         .get()
         .then((s) => {
-          setState(s);
+          if (mounted.current) setState(s);
           refreshGate();
         })
         .catch(() => {});
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [refreshGate]);
+  }, [mounted, refreshGate]);
 
   const recheck = () => {
     setRechecking(true);

@@ -11,6 +11,7 @@ import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { LEARNING_SUPPORT_REQUIRED } from "@/lib/api/learningSupport";
 import { accommodationCopy } from "@/lib/constants/accommodations";
 import { failureKind } from "../NoAccess";
+import { useStillHere } from "@/hooks/useStillHere";
 
 /**
  * D08b's "What changed, and when" (admin backlog 42), read on its own so the
@@ -29,19 +30,23 @@ export type HistoryState =
 
 export function useAccommodationHistory(studentId: string, skip: boolean) {
   const [state, setState] = useState<HistoryState>({ phase: "loading" });
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
   const read = useCallback(() => {
     accommodationHistoryApi
       .forStudent(studentId)
-      .then((history) => setState({ phase: "ready", history, readAt: Date.now() }))
-      .catch((err: unknown) =>
+      .then((history) => {
+        if (mounted.current) setState({ phase: "ready", history, readAt: Date.now() });
+      })
+      .catch((err: unknown) => {
+        if (!mounted.current) return;
         setState({
           phase: "failed",
           denied: failureKind(err) === "denied",
           needsLearningSupport:
             err instanceof ApiError && apiErrorCode(err.detail) === LEARNING_SUPPORT_REQUIRED,
-        }),
-      );
-  }, [studentId]);
+        });
+      });
+  }, [studentId, mounted]);
   // Not asked at all where the viewer is known to lack Learning Support: the
   // route is the role's, and the section already says so.
   useEffect(() => {

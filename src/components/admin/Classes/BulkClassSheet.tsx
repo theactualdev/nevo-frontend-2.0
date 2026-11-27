@@ -2,6 +2,7 @@
 
 import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import { sessionLabel } from "./groupByYear";
 import {
   classesApi,
@@ -150,13 +151,18 @@ export function BulkClassSheet({
   const [schoolSubjects, setSchoolSubjects] = useState<SchoolSubject[] | null>(null);
   const [subjectsFailed, setSubjectsFailed] = useState(false);
   const [copied, setCopied] = useState<Copied | null>(null);
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const fetchSubjects = useCallback(() => {
     subjectsApi
       .list()
-      .then(setSchoolSubjects)
-      .catch(() => setSubjectsFailed(true));
-  }, []);
+      .then((v) => {
+        if (mounted.current) setSchoolSubjects(v);
+      })
+      .catch(() => {
+        if (mounted.current) setSubjectsFailed(true);
+      });
+  }, [mounted]);
   const loadSubjects = () => {
     setSubjectsFailed(false);
     fetchSubjects();
@@ -169,6 +175,7 @@ export function BulkClassSheet({
     classesApi
       .list(true)
       .then((list) => {
+        if (!mounted.current) return;
         setExisting(list);
         setReadFailed(false);
         // The year groups the school already runs, from its LIVE classes.
@@ -186,8 +193,10 @@ export function BulkClassSheet({
           return years.map(newRow);
         });
       })
-      .catch(() => setReadFailed(true));
-  }, []);
+      .catch(() => {
+        if (mounted.current) setReadFailed(true);
+      });
+  }, [mounted]);
 
   useEffect(() => {
     loadExisting();

@@ -8,6 +8,7 @@ import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { onboardingApi, type AdditionQuote } from "@/lib/api/onboarding";
 import { consentsApi } from "@/lib/api/consents";
 import { studentsApi } from "@/lib/api/students";
+import { useStillHere } from "@/hooks/useStillHere";
 import { formatMoney, formatVatRate } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { billingCurrency } from "../Roster/activation";
@@ -111,16 +112,20 @@ export function AddStudentSheet({
   const maySend = useMaySendConsent();
   /** The server's words when it refused because this parent already said no. */
   const [refusedNote, setRefusedNote] = useState<string | null>(null);
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   useEffect(() => {
     classesApi
       .list()
       .then((list) => {
+        if (!mounted.current) return;
         setClasses(list);
         setClassesFailed(false);
       })
-      .catch(() => setClassesFailed(true));
-  }, [classesAttempt]);
+      .catch(() => {
+        if (mounted.current) setClassesFailed(true);
+      });
+  }, [classesAttempt, mounted]);
 
   useEffect(() => {
     /*
@@ -131,9 +136,13 @@ export function AddStudentSheet({
      */
     onboardingApi
       .quoteAddition({ students: 1 })
-      .then(setQuote)
-      .catch(() => setQuoteFailed(true));
-  }, []);
+      .then((v) => {
+        if (mounted.current) setQuote(v);
+      })
+      .catch(() => {
+        if (mounted.current) setQuoteFailed(true);
+      });
+  }, [mounted]);
 
   const currency = billingCurrency(quote?.currency);
   const total = useMemo(

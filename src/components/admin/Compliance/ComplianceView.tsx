@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import { api } from "@/lib/api/client";
 import {
   schoolIntelligenceApi,
@@ -95,21 +96,29 @@ export function ComplianceView({ back = null }: { back?: Back | null } = {}) {
    * call that can set `phase`.
    */
   const [consent, setConsent] = useState<ConsentInput>("unreadable");
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback(() => {
     schoolIntelligenceApi
       .complianceAudit()
       .then((a) => {
+        if (!mounted.current) return;
         setAudit(a);
         setPhase("ready");
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(failureKind(err));
+      });
 
     studentsApi
       .list()
-      .then((rows) => setConsent(consentCoverage(rows)))
-      .catch(() => setConsent("unreadable"));
-  }, []);
+      .then((rows) => {
+        if (mounted.current) setConsent(consentCoverage(rows));
+      })
+      .catch(() => {
+        if (mounted.current) setConsent("unreadable");
+      });
+  }, [mounted]);
 
   useEffect(() => {
     load();

@@ -9,6 +9,7 @@ import {
   type CohortTransformation,
 } from "@/lib/api/analytics";
 import { schoolApi } from "@/lib/api/school";
+import { useStillHere } from "@/hooks/useStillHere";
 import { cn } from "@/lib/utils";
 import { NoAccess, failureKind } from "../NoAccess";
 import { ReadFailed } from "../ReadFailed";
@@ -51,6 +52,7 @@ type Phase = "loading" | "ready" | "failed" | "denied";
 export function SchoolTransformationView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [data, setData] = useState<CohortTransformation | null>(null);
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const fetchAll = useCallback(
     () =>
@@ -58,11 +60,14 @@ export function SchoolTransformationView() {
         .get()
         .then((school) => analyticsApi.getSchoolTransformation(school.id))
         .then((t) => {
+          if (!mounted.current) return;
           setData(t);
           setPhase("ready");
         })
-        .catch((err: unknown) => setPhase(failureKind(err))),
-    [],
+        .catch((err: unknown) => {
+          if (mounted.current) setPhase(failureKind(err));
+        }),
+    [mounted],
   );
 
   useEffect(() => {

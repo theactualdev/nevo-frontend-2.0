@@ -3,6 +3,7 @@
 import { NevoSelect } from "@/components/shared/NevoSelect";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { invitedClassIds, invitesApi, type Invitation } from "@/lib/api/invites";
 import { cn } from "@/lib/utils";
@@ -164,6 +165,7 @@ export function InvitationsView() {
   /** The instant every row's expiry is judged against - see `normaliseStatus`. */
   const [now, setNow] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   useEffect(
     () => () => {
@@ -181,13 +183,16 @@ export function InvitationsView() {
   const load = useCallback(() => {
     Promise.all([invitesApi.list(), classesApi.list()])
       .then(([rows, cls]) => {
+        if (!mounted.current) return;
         setInvites(rows);
         setClasses(cls);
         setNow(Date.now());
         setPhase("ready");
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
-  }, []);
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(failureKind(err));
+      });
+  }, [mounted]);
 
   useEffect(() => {
     load();

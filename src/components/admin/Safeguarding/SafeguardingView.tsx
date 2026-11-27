@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { aboutAChild, categoryLabel, safetyApi, type SafetyEvent } from "@/lib/api/safety";
 import { getSession } from "@/lib/auth/session";
+import { useStillHere } from "@/hooks/useStillHere";
 import { cn } from "@/lib/utils";
 import { useLearningSupport } from "../LearningSupport/useLearningSupport";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -66,17 +67,21 @@ export function SafeguardingView() {
   const [acking, setAcking] = useState<string | null>(null);
   const [ackFailed, setAckFailed] = useState<string | null>(null);
   const [me] = useState(() => getSession()?.userId ?? null);
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const read = useCallback(() => {
     safetyApi
       .events({ limit: PAGE })
       .then((rows) => {
+        if (!mounted.current) return;
         setEvents(rows);
         setMore(rows.length >= PAGE);
         setPhase("ready");
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
-  }, []);
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(failureKind(err));
+      });
+  }, [mounted]);
 
   useEffect(() => {
     read();

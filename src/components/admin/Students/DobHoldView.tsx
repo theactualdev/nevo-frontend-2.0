@@ -14,6 +14,7 @@ import {
 } from "@/lib/api/ageChecks";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { studentsApi, type AdminStudentDetail } from "@/lib/api/students";
+import { useStillHere } from "@/hooks/useStillHere";
 import { cn } from "@/lib/utils";
 import { BackLink } from "../BackLink";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -137,11 +138,13 @@ export function DobHoldView({ back = null }: { back?: Back | null }) {
   const [held, setHeld] = useState<AgeCheck[]>([]);
   const [people, setPeople] = useState<Map<string, Person>>(() => new Map());
   const [done, setDone] = useState<Record<string, Done>>({});
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const read = useCallback(() => {
     ageChecksApi
       .held()
       .then((rows) => {
+        if (!mounted.current) return;
         setHeld(rows);
         setPhase("ready");
         // Who each child is: names and class from the reads the roster
@@ -151,6 +154,7 @@ export function DobHoldView({ back = null }: { back?: Back | null }) {
           classesApi.list(true).catch(() => [] as AdminClass[]),
           ...rows.map((r) => studentsApi.get(r.studentId).catch(() => null)),
         ]).then(([classes, ...students]) => {
+          if (!mounted.current) return;
           const byId = new Map<string, Person>();
           (students as (AdminStudentDetail | null)[]).forEach((s, i) => {
             if (!s) return;
@@ -165,8 +169,10 @@ export function DobHoldView({ back = null }: { back?: Back | null }) {
           setPeople(byId);
         });
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
-  }, []);
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(failureKind(err));
+      });
+  }, [mounted]);
 
   useEffect(() => {
     read();
