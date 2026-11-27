@@ -206,7 +206,9 @@ export function SignUpStep({
           * Neither is built: `POST /schools/register` takes neither (checked
           * 24 Nov: schoolName, adminName, email, password) and nothing in the
           * product reads them, and a question whose answer goes nowhere is
-          * worse than no question (backlog 92).
+          * worse than no question (backlog 92). Lydia ruled the same (L71, 25
+          * Nov): "Drop them from sign-up"; either is added where it is used,
+          * if it is ever wanted.
           * Location has a home - the school's contact, which Settings edits.
           *
           * Not locked once the school is registered, unlike the fields above:

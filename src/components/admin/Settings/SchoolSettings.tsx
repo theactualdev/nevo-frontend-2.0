@@ -362,8 +362,8 @@ export function SchoolSettings({
   );
 
   /*
-   * "LAST SAVED", ONCE, AT THE TOP (backlog 68; T19; the Hub, 23 Nov: once at
-   * the top until L42 settles whether each section carries its own). D12 and
+   * "LAST SAVED", ONCE, AT THE TOP (backlog 68; T19). Lydia ruled it (L42,
+   * 25 Nov): "One stamp at the top of School settings", not one a section. D12 and
    * SCRUM-99: "a 'Saved just now' line that otherwise reads 'Last saved 3 days
    * ago' ... the timestamp stays visible so an admin can tell whether their
    * last visit stuck". Each section's Save keeps its own "Saved" moment; this
