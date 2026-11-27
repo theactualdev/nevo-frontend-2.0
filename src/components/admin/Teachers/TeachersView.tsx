@@ -38,9 +38,11 @@ import { NoAccess, failureKind } from "../NoAccess";
  * that boundary structural, and the frame puts it in writing on the detail page
  * rather than leaving it implied.
  *
- * Three columns only - Teacher, Classes, Status - and deliberately no
- * last-active column: recency lives on the detail page, so the list cannot be
- * read as a league table.
+ * D06's four columns - Teacher, Teaches, Classes, Status - and deliberately
+ * no last-active column: recency lives on the detail page, so the list cannot
+ * be read as a league table. Teaches is the subjects, by name, on the list
+ * since S7 (backend v44, 25 Nov); below 1280 it rides under the name, as the
+ * frame draws it: "{teaches} · {classes}".
  *
  * Invites are not built here. "Invite a teacher" routes to D19 School
  * Invitations, which owns single and bulk invite, the pending pipeline, resend
@@ -246,7 +248,9 @@ export function TeachersView() {
    * included - whenever any row carries the button, and the columns stay in
    * line. Two literal strings, so Tailwind sees both.
    */
-  const cols = anyResend ? "grid-cols-[1.6fr_120px_220px]" : "grid-cols-[1.6fr_120px_120px]";
+  const cols = anyResend
+    ? "grid-cols-[1.3fr_1.2fr_100px_220px]"
+    : "grid-cols-[1.3fr_1.2fr_100px_120px]";
   const countLine = [
     `${teachers.length} ${teachers.length === 1 ? "teacher" : "teachers"}`,
     pending > 0
@@ -328,6 +332,7 @@ export function TeachersView() {
                 )}
               >
                 <span>Teacher</span>
+                <span>Teaches</span>
                 <span>Classes</span>
                 <span className="text-right">Status</span>
               </div>
@@ -348,6 +353,13 @@ export function TeachersView() {
               ) : (
                 teachers.map((t, i) => {
                   const held = counts[t.id];
+                  /*
+                   * What they teach: the list's own `subjects` (S7). None is
+                   * the Classes column's dash; absent - an older answer - is
+                   * unknown, so nothing is drawn rather than "none".
+                   */
+                  const teaches =
+                    t.subjects === undefined ? null : t.subjects.length > 0 ? t.subjects.join(", ") : "";
                   return (
                     <div key={t.id} className={cn(i < teachers.length - 1 && ROW_DIVIDER)}>
                       {/*
@@ -391,11 +403,17 @@ export function TeachersView() {
                             <span className="mt-0.5 hidden truncate text-[12.5px] text-nevo-near-black/55 max-xl:block">
                               {held === undefined
                                 ? t.email ?? ""
-                                : held === 0
-                                  ? "No classes yet"
-                                  : `${held} ${held === 1 ? "class" : "classes"}`}
+                                : [
+                                    teaches || null,
+                                    held === 0 ? "No classes yet" : `${held} ${held === 1 ? "class" : "classes"}`,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
                             </span>
                           </span>
+                        </span>
+                        <span data-teaches className="text-sm leading-[1.45] text-nevo-near-black max-xl:hidden">
+                          {teaches === null ? null : teaches || "—"}
                         </span>
                         <span className="text-sm text-nevo-near-black/66 max-xl:hidden">
                           {held === undefined && countFailed.has(t.id) ? (

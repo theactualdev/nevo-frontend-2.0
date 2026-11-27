@@ -29,6 +29,13 @@ export interface TeacherSummary {
   status: UserStatus;
   /** How many classes they hold - on the list since 8 Oct, so no per-row read. */
   classCount?: number;
+  /**
+   * The subjects they teach, by name - D06's "Teaches" column (S7, backend
+   * v44, 25 Nov: the same source as the detail's `subjects`). Absent from an
+   * older answer, which is unknown, not none. The list's `teaches` is the
+   * class names, so it is not this.
+   */
+  subjects?: string[];
   /** When they were last seen - D06b's "Last active" and "Active today". */
   lastActiveAt?: string | null;
 }
