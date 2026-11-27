@@ -17,9 +17,9 @@ import { cn } from "@/lib/utils";
  *    anything already on those rows. Nothing is removed."
  *  - Copied: a tick on violet.
  *
- * BUILT REDUCED: the frame's third choice, "Choose rows…", is left out. No
- * frame draws what it opens (which rows, how they are ticked, what confirms),
- * so building it would mean inventing that screen - raised to design.
+ * TWO CHOICES, NOT THE FRAME'S THREE: "Choose rows…" is left out, as Lydia
+ * ruled (L22, 25 Nov: "Two choices are enough"). No frame draws what it
+ * would open, and row-by-row selection is scope on a bulk-add flow.
  */
 
 export type CopyTarget = "below" | "sameYear";

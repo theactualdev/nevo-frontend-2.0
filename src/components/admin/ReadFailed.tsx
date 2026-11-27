@@ -27,10 +27,17 @@ import { cn } from "@/lib/utils";
 export function ReadFailed({
   /** What could not be read, in the admin's words: "this student's guardians". */
   what,
+  /**
+   * A sentence ruled for one place, said in place of the general one - the
+   * staff import's (Lydia, 25 Nov, L64). The retry is the same.
+   */
+  line,
   onRetry,
   className,
-}: {
-  what: string;
+}: (
+  | { what: string; line?: never }
+  | { line: string; what?: never }
+) & {
   onRetry: () => void;
   className?: string;
 }) {
@@ -44,8 +51,12 @@ export function ReadFailed({
   return (
     <div className={cn("text-sm text-nevo-near-black/62", className)}>
       <p id={messageId} className="m-0">
-        We couldn&rsquo;t read {what}{" "}just now, so there&rsquo;s nothing to show
-        here yet &ndash; this is not a record that it&rsquo;s empty.
+        {line ?? (
+          <>
+            We couldn&rsquo;t read {what}{" "}just now, so there&rsquo;s nothing to show
+            here yet &ndash; this is not a record that it&rsquo;s empty.
+          </>
+        )}
       </p>
       <button
         type="button"

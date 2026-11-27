@@ -63,6 +63,50 @@ export interface Invitation {
    * Students.
    */
   consentStatus: ConsentStatus | null;
+  /**
+   * The classes the invited teacher will hold, each with the subject they
+   * take to it (T15, live 21 Nov). Attached in the activation transaction
+   * when the teacher accepts. Absent on an older answer.
+   */
+  classes?: InvitedClass[];
+}
+
+/**
+ * One class on an invitation and its subject (T15). `subjectId` is a SCHOOL
+ * subject id and is required per class: SCRUM-194 means a teacher can't be
+ * assigned without one, so the server refuses a class with none when the
+ * invitation is written rather than at acceptance.
+ */
+export interface InvitedClassDraft {
+  classId: string;
+  subjectId: string;
+}
+
+/** What the server answers for each, with the names it resolved. */
+export interface InvitedClass extends InvitedClassDraft {
+  className?: string | null;
+  subjectName?: string | null;
+}
+
+/**
+ * The refusals T15 added, each naming the id it refused. Mapped by code;
+ * the message is never shown.
+ *  - 422 `classes_are_for_teachers`: classes on a non-teacher invitation.
+ *  - 404 `class_not_found` (`classId`) and `subject_not_found` (`subjectId`).
+ */
+export const CLASS_NOT_FOUND = "class_not_found";
+export const SUBJECT_NOT_FOUND = "subject_not_found";
+
+/**
+ * The classes an invitation is for, by id, each once: T15's `classes` when it
+ * carries any, else the single `classId` an invite sent before T15 carries.
+ * An invite sent since T15 has no `classId`, so reading that alone would show
+ * it as sent for no class.
+ */
+export function invitedClassIds(invite: Pick<Invitation, "classId" | "classes">): string[] {
+  const ids = (invite.classes ?? []).map((c) => c.classId).filter(Boolean);
+  if (ids.length > 0) return [...new Set(ids)];
+  return invite.classId ? [invite.classId] : [];
 }
 
 /**
@@ -76,7 +120,13 @@ export interface InviteDraft {
   firstName?: string | null;
   lastName?: string | null;
   email?: string | null;
+  /**
+   * The legacy single class. Since T15 it is recorded and, for a teacher,
+   * NOT applied on acceptance - send `classes` instead.
+   */
   classId?: string | null;
+  /** T15: the classes and their subjects, up to 40. */
+  classes?: InvitedClassDraft[];
 }
 
 /**

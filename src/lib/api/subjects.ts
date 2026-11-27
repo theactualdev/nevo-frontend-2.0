@@ -69,7 +69,38 @@ export const subjectsApi = {
       `/api/v1/subjects/spelling-questions/${encodeURIComponent(questionId)}`,
       { same },
     ),
+
+  /**
+   * GET /api/v1/subjects/resolve - what each typed name would become, writing
+   * nothing. The server's own words: "The import confirmation step reads
+   * this so an administrator settles the unresolved ones before anything is
+   * saved." Up to 50 names a call; `name` repeats in the query.
+   */
+  resolve: (names: string[]) =>
+    api.get<ResolvedName[]>("/api/v1/subjects/resolve", { params: { name: names } }),
+
+  /**
+   * POST /api/v1/subjects - put a subject on the school's list. One of Nevo's
+   * becomes that subject; anything else the school's own, pending review.
+   * Answers with the school subject, whose id an invitation can carry.
+   */
+  add: (name: string) => api.post<SchoolSubject>("/api/v1/subjects", { name }),
 };
+
+/**
+ * One typed name, resolved (`ResolvePreview`). `resolved` is true only when
+ * the school already holds it (`schoolSubjectId`). One of Nevo's the school
+ * doesn't hold yet comes back unresolved but named (`displayName`, origin
+ * `canonical`) - adding it is a write, so the server leaves that to Save.
+ * Nothing recognised: no name and no origin.
+ */
+export interface ResolvedName {
+  typed: string;
+  resolved: boolean;
+  displayName?: string | null;
+  schoolSubjectId?: string | null;
+  origin?: string | null;
+}
 
 /**
  * The school subject a class's subject name refers to.

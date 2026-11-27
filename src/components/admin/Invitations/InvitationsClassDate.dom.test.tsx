@@ -75,6 +75,38 @@ describe("D19's Class and Invited columns", () => {
     await waitFor(() => expect(visibleText(container)).not.toMatch(/In 3B/));
     expect(visibleText(container)).toMatch(/In 2A/);
   });
+
+  // T15: an invite sent since carries `classes` and no `classId`.
+  it("shows every class on an invite sent with T15's classes, each once, never a dash", async () => {
+    list.mockResolvedValue([
+      invite({
+        name: "Two classes",
+        classId: null,
+        classes: [
+          { classId: "c-2a", subjectId: "s1", className: "JSS 2A", subjectName: "Mathematics" },
+          { classId: "c-2a", subjectId: "s2", className: "JSS 2A", subjectName: "Basic Science" },
+          { classId: "c-gone", subjectId: "s1", className: "SS 1C", subjectName: "Mathematics" },
+        ],
+      }),
+    ]);
+    const { container } = render(<InvitationsView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Two classes/));
+    // The class's own name where the school still lists it, else the server's.
+    expect(visibleText(container)).toMatch(/JSS 2A, SS 1C/);
+    expect(visibleText(container)).not.toMatch(/JSS 2A, JSS 2A/);
+  });
+
+  it("finds a T15 invite under any of its classes in the filter", async () => {
+    list.mockResolvedValue([
+      invite({ name: "In 2A and 3B", classes: [{ classId: "c-2a", subjectId: "s1" }, { classId: "c-3b", subjectId: "s1" }] }),
+      invite({ name: "In 2A only", classes: [{ classId: "c-2a", subjectId: "s1" }] }),
+    ]);
+    const { container } = render(<InvitationsView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/In 2A only/));
+    await chooseOption(screen.getByLabelText("Filter by class"), "JSS 3B");
+    await waitFor(() => expect(visibleText(container)).not.toMatch(/In 2A only/));
+    expect(visibleText(container)).toMatch(/In 2A and 3B/);
+  });
 });
 
 describe("inviting teachers", () => {

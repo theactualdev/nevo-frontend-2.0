@@ -23,6 +23,7 @@ const brokenRow = (over: Partial<ParsedRow> = {}): ParsedRow => ({
   name: "Chisom Eze",
   email: "chisom.e@school.edu.ng",
   className: "JSS 2A",
+  subject: "",
   error: "No class called \"JSS 2A\".",
   classId: null,
   ...over,
