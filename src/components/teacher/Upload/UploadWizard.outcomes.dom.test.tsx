@@ -895,6 +895,27 @@ describe("where a unit's reading is drawn", () => {
     ).toBeInTheDocument();
   });
 
+  // Hub, 26 Nov: no frame draws it, so it takes C07f's card, as its
+  // neighbours in the banner do.
+  it("draws it on C07f's card, with no rule down the side", () => {
+    stagedState({ ...READY, reused: true });
+    startUnitUpload();
+
+    const notice = screen.getByText(
+      "You have uploaded this file before, so Nevo has brought back what it made of it.",
+    );
+    expect(notice).toHaveClass(
+      "max-w-[600px]",
+      "rounded-[12px]",
+      "bg-nevo-violet/14",
+      "px-[17px]",
+      "py-[15px]",
+      "text-[13.5px]",
+      "text-nevo-near-black/70",
+    );
+    expect(notice.className).not.toMatch(/border-l/);
+  });
+
   it("says nothing of the sort for a file read fresh", () => {
     stagedState({ ...READY, reused: false });
     startUnitUpload();

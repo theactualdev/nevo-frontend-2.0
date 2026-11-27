@@ -145,9 +145,17 @@ export function retryPagesLabel(pages: number[]): string {
 export const REUPLOAD_LINE =
   "You have uploaded this file before, so Nevo has brought back what it made of it.";
 
+/*
+  C07f'S CARD (Hub ruling, 26 Nov). No frame draws this notice, and it sits
+  in the review's banner beside the partly-read notice and the held-back
+  notes, which both take C07f's card - so it does too, and the banner reads
+  as one kind of thing: 14% violet with no rule down the side, 15/17, the
+  words at 13.5px and .7, no wider than 600. No icon: C07f's page glyph
+  speaks for the partly-read notice alone.
+*/
 function ReuploadNotice() {
   return (
-    <p className="mb-4 w-full rounded-[12px] border-l-[3px] border-nevo-navy/40 bg-nevo-cream-elevated px-[18px] py-3.5 text-[14.5px] leading-[1.55] text-nevo-near-black/80">
+    <p className="mb-5 w-full max-w-[600px] rounded-[12px] bg-nevo-violet/14 px-[17px] py-[15px] text-[13.5px] leading-[1.55] text-pretty text-nevo-near-black/70">
       {REUPLOAD_LINE}
     </p>
   );
