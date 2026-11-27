@@ -11,7 +11,7 @@ import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { LEARNING_SUPPORT_REQUIRED } from "@/lib/api/learningSupport";
 import { accommodationCopy } from "@/lib/constants/accommodations";
 import { failureKind } from "../NoAccess";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 
 /**
  * D08b's "What changed, and when" (admin backlog 42), read on its own so the
@@ -30,7 +30,7 @@ export type HistoryState =
 
 export function useAccommodationHistory(studentId: string, skip: boolean) {
   const [state, setState] = useState<HistoryState>({ phase: "loading" });
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
   const read = useCallback(() => {
     accommodationHistoryApi
       .forStudent(studentId)

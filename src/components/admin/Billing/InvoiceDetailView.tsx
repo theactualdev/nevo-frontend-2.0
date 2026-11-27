@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { billingApi, type Invoice } from "@/lib/api/billing";
 import { longDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -44,7 +44,7 @@ export function InvoiceDetailView({
   const [phase, setPhase] = useState<Phase>("loading");
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [schoolName, setSchoolName] = useState<string | null>(null);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback(() => {
     billingApi

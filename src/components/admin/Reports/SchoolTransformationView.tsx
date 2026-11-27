@@ -9,7 +9,7 @@ import {
   type CohortTransformation,
 } from "@/lib/api/analytics";
 import { schoolApi } from "@/lib/api/school";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { cn } from "@/lib/utils";
 import { NoAccess, failureKind } from "../NoAccess";
 import { ReadFailed } from "../ReadFailed";
@@ -52,7 +52,7 @@ type Phase = "loading" | "ready" | "failed" | "denied";
 export function SchoolTransformationView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [data, setData] = useState<CohortTransformation | null>(null);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const fetchAll = useCallback(
     () =>

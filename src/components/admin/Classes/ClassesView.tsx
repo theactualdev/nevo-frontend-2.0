@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import {
   classesApi,
   type AdminClass,
@@ -137,7 +137,7 @@ export function ClassesView() {
    * - which is most of them. It must never hold the list.
    */
   const [sso, setSso] = useState<SsoStatus | null>(null);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback((includeArchived: boolean) => {
     classesApi

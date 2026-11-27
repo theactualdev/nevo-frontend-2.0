@@ -16,6 +16,13 @@ import { useEffect, useRef } from "react";
  * Read it in the callback, right before navigating or scheduling a
  * navigation - never during render. Imported by path, not from
  * `@/hooks`, so a test that mocks the hooks index still gets it.
+ *
+ * AND A SCREEN THAT HAS GONE SETS NO STATE (check 21, 27 Nov). An admin read
+ * whose `.then` or `.catch` set state after its screen had gone threw "window
+ * is not defined" in a torn-down test (check 19's YearGroupFigures), and the
+ * sweep found 67 like it. Every one now checks this first:
+ * `if (!here.current) return;`. In Strict Mode the effect runs, cleans up and
+ * runs again, so after the remount it is true again.
  */
 export function useStillHere() {
   const here = useRef(false);

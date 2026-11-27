@@ -3,7 +3,7 @@
 import { NevoSelect } from "@/components/shared/NevoSelect";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { invitesApi, type Invitation } from "@/lib/api/invites";
 import { cn } from "@/lib/utils";
@@ -164,7 +164,7 @@ export function InvitationsView() {
   /** The instant every row's expiry is judged against - see `normaliseStatus`. */
   const [now, setNow] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   useEffect(
     () => () => {

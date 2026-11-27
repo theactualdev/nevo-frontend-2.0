@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { classesApi, type AdminClass, type AssignedClass } from "@/lib/api/classes";
 import { yearGroupLabel } from "@/lib/constants/yearGroups";
 import { teachersApi, type TeacherDetail, type TeacherSummary } from "@/lib/api/teachers";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { cn } from "@/lib/utils";
 import { isActive } from "./status";
 import { LAST_LEARNING_SUPPORT_HOLDER, refusedWith } from "@/lib/api/learningSupport";
@@ -113,7 +113,7 @@ export function RemoveAccessSheet({
   /** Every way out of the sheet says whether anything moved on the way. */
   const close = () => onClose(applied > 0);
   const [read, setRead] = useState<StaffRead>("loading");
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const loadStaff = useCallback(() => {
     /*

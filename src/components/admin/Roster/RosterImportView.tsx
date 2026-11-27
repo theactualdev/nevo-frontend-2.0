@@ -15,7 +15,7 @@ import {
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { useSetupGate } from "@/hooks";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import {
   countCsvRows,
   foundCounts,
@@ -169,7 +169,7 @@ export function RosterImportView() {
    * the Overview would still say "Upload your staff" after the staff were in.
    */
   const { refresh: refreshGate } = useSetupGate();
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   /*
    * Both templates, read once the upload panels are what this screen shows -

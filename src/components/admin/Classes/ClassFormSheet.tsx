@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
 import { yearGroupOptions } from "@/lib/constants/yearGroups";
@@ -76,7 +76,7 @@ export function ClassFormSheet({
   const [schoolSubjects, setSchoolSubjects] = useState<SchoolSubject[] | null>(null);
   const [subjectsFailed, setSubjectsFailed] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const fetchSubjects = useCallback(
     () =>

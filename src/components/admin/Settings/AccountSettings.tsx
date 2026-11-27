@@ -5,7 +5,7 @@ import { authApi, type AuthSession } from "@/lib/api/auth";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { permissionsApi } from "@/lib/api/permissions";
 import { usersApi, type CurrentUser } from "@/lib/api/users";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
 import { Avatar, CARD, PRIMARY_BTN } from "../Roster/primitives";
@@ -107,7 +107,7 @@ export function AccountSettings() {
    * unanswered one said the same thing while the request was still out.
    */
   const [sessionsRead, setSessionsRead] = useState<"loading" | "ready" | "failed">("loading");
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
   const loadSessions = useCallback(() => {
     authApi
       .sessions()

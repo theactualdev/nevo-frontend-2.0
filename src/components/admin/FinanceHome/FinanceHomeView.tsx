@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import {
   billingApi,
   type Invoice,
@@ -74,7 +74,7 @@ export function FinanceHomeView() {
   const [upcoming, setUpcoming] = useState<UpcomingCharge | null>(null);
   /** Null is "we did not find out", which is NOT "nothing is overdue". */
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback(() => {
     billingApi

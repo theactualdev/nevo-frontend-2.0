@@ -3,7 +3,7 @@
 import { NevoSelect } from "@/components/shared/NevoSelect";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import {
   EVENT_TYPE_OPTIONS,
@@ -168,7 +168,7 @@ export function AdaptationLogView({ back = null }: { back?: Back | null } = {}) 
    * then the footer says nothing rather than asserting a zero we do not have.
    */
   const [labels, setLabels] = useState<number | null>(null);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   useEffect(() => {
     schoolIntelligenceApi

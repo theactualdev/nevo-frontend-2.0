@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { schoolApi, type School } from "@/lib/api/school";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { cn } from "@/lib/utils";
 import { CARD } from "../Roster/primitives";
 import { failureKind } from "../NoAccess";
@@ -41,7 +41,7 @@ export function SchoolCodeCard() {
   const [failed, setFailed] = useState(false);
   /** Bumped by Try again, to read the school again. */
   const [attempt, setAttempt] = useState(0);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   useEffect(() => {
     schoolApi

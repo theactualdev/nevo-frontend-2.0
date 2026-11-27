@@ -1,10 +1,11 @@
 import { StrictMode, useEffect, useState } from "react";
 import { describe, expect, it } from "vitest";
 import { act, render, screen } from "@testing-library/react";
-import { useMountedRef } from "./useMountedRef";
+import { useStillHere } from "./useStillHere";
 
 /**
- * The shared unmount guard (check 21): true while the component is on screen,
+ * The shared unmount guard (8 Nov; check 21's admin reads): true while the
+ * component is on screen,
  * false once it has gone - including through Strict Mode's mount, cleanup and
  * mount again, after which it must be true.
  */
@@ -12,7 +13,7 @@ import { useMountedRef } from "./useMountedRef";
 let seen: { readonly current: boolean } | null = null;
 
 function Probe() {
-  const mounted = useMountedRef();
+  const mounted = useStillHere();
   // Handed out from an effect, not during render.
   useEffect(() => {
     seen = mounted;
@@ -20,7 +21,7 @@ function Probe() {
   return <p>probe</p>;
 }
 
-describe("useMountedRef", () => {
+describe("useStillHere", () => {
   it("is true while mounted and false once unmounted", () => {
     const view = render(<Probe />);
     expect(seen?.current).toBe(true);
@@ -45,7 +46,7 @@ describe("useMountedRef", () => {
     let answer: (v: string) => void = () => {};
     let setAfter = false;
     function Reader() {
-      const mounted = useMountedRef();
+      const mounted = useStillHere();
       const [text, setText] = useState("waiting");
       useEffect(() => {
         new Promise<string>((resolve) => {
@@ -70,7 +71,7 @@ describe("useMountedRef", () => {
   it("still lets a read that answers while mounted set its state", async () => {
     let answer: (v: string) => void = () => {};
     function Reader() {
-      const mounted = useMountedRef();
+      const mounted = useStillHere();
       const [text, setText] = useState("waiting");
       useEffect(() => {
         new Promise<string>((resolve) => {

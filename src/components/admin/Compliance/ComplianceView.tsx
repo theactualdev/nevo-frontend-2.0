@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { api } from "@/lib/api/client";
 import {
   schoolIntelligenceApi,
@@ -96,7 +96,7 @@ export function ComplianceView({ back = null }: { back?: Back | null } = {}) {
    * call that can set `phase`.
    */
   const [consent, setConsent] = useState<ConsentInput>("unreadable");
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback(() => {
     schoolIntelligenceApi

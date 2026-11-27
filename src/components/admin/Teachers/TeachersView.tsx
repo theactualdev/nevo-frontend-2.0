@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSetupGate } from "@/hooks";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { classesApi } from "@/lib/api/classes";
 import { invitesApi, type Invitation } from "@/lib/api/invites";
 import { teachersApi, type TeacherSummary } from "@/lib/api/teachers";
@@ -115,7 +115,7 @@ export function TeachersView() {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   /** D24 / D01b: resending pauses while setup is unfinished, as it does on D19. */
   const { writesPaused } = useSetupGate();
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   useEffect(() => {
     const pending = timers.current;

@@ -14,7 +14,7 @@ import {
 } from "@/lib/api/ageChecks";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { studentsApi, type AdminStudentDetail } from "@/lib/api/students";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { cn } from "@/lib/utils";
 import { BackLink } from "../BackLink";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -138,7 +138,7 @@ export function DobHoldView({ back = null }: { back?: Back | null }) {
   const [held, setHeld] = useState<AgeCheck[]>([]);
   const [people, setPeople] = useState<Map<string, Person>>(() => new Map());
   const [done, setDone] = useState<Record<string, Done>>({});
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const read = useCallback(() => {
     ageChecksApi

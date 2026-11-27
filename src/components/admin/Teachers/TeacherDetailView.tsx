@@ -25,7 +25,7 @@ import {
   TEXT_ACTION,
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { AssignTeachingSheet } from "../Classes/AssignTeachingSheet";
 import { RemoveAccessSheet } from "./RemoveAccessSheet";
 import { InviteActions } from "./InviteActions";
@@ -139,7 +139,7 @@ export function TeacherDetailView({
   const [now] = useState(() => Date.now());
   const [me] = useState(() => getSession()?.userId ?? null);
   const { holders: ls, setHolders: setLs } = useLearningSupport();
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
   /*
    * THE ONLY HOLDER KEEPS THEIR ACCESS (SCRUM-248). Said before the sheet
    * opens, because the sheet hands classes over first and revokes last: a

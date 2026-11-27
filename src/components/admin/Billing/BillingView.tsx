@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import {
   billingApi,
   latestReportByInvoice,
@@ -123,7 +123,7 @@ export function BillingView() {
    * which is never wrong, only less complete.
    */
   const [reports, setReports] = useState<Record<string, TransferReport>>({});
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   /** Adding or removing a contact can move the primary; read it again. */
   const rereadPrimary = useCallback(() => {

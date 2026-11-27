@@ -38,7 +38,7 @@ import {
   TEXT_ACTION,
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { AddGuardianForm } from "./AddGuardianForm";
 import { CANNOT_SEND_LINE, useMaySendConsent } from "./consentRole";
 import { ConsentFormDownload } from "./ConsentFormDownload";
@@ -161,7 +161,7 @@ export function StudentDetailView({
   const [addingGuardian, setAddingGuardian] = useState(false);
   /** What the request just sent to a new guardian said about delivery. */
   const [guardianAdded, setGuardianAdded] = useState<string | null>(null);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   /*
    * HELD FOR A DATE OF BIRTH CHECK (SCRUM-243; D07b fixed in 96cd4b4). The

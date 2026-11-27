@@ -5,7 +5,7 @@ import {
   notificationPrefsApi,
   type NotificationPreference,
 } from "@/lib/api/settings";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
 import { CARD, PRIMARY_BTN, ROW_DIVIDER } from "../Roster/primitives";
@@ -97,7 +97,7 @@ export function NotificationPreferences({ scopes }: { scopes: PermissionScope[] 
   const [failed, setFailed] = useState<string | null>(null);
 
   const visible = useMemo(() => categoriesForScopes(scopes), [scopes]);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback(() => {
     notificationPrefsApi

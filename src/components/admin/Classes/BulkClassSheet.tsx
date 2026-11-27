@@ -2,7 +2,7 @@
 
 import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { sessionLabel } from "./groupByYear";
 import {
   classesApi,
@@ -151,7 +151,7 @@ export function BulkClassSheet({
   const [schoolSubjects, setSchoolSubjects] = useState<SchoolSubject[] | null>(null);
   const [subjectsFailed, setSubjectsFailed] = useState(false);
   const [copied, setCopied] = useState<Copied | null>(null);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const fetchSubjects = useCallback(() => {
     subjectsApi

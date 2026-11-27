@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { NevoLockup } from "@/components/shared/NevoLockup";
 import { ApiError } from "@/lib/api/client";
 import { getSession } from "@/lib/auth/session";
@@ -191,7 +191,7 @@ export function ConfirmEmail({ token }: { token: string }) {
    * way proves nothing, so it keeps the frame's part-way line.
    */
   const [signedOut, setSignedOut] = useState(false);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   /*
    * The request alone. No synchronous setState, because this runs from an

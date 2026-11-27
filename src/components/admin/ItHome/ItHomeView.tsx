@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { ApiError } from "@/lib/api/client";
 import { schoolApi, type School } from "@/lib/api/school";
 import {
@@ -74,7 +74,7 @@ export function ItHomeView() {
   const [history, setHistory] = useState<RosterSyncHistory | null>(null);
   /** Distinct from `history === null`, which is also the not-yet-loaded state. */
   const [historyFailed, setHistoryFailed] = useState(false);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback(() => {
     /*

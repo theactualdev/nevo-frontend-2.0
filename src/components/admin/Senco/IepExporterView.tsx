@@ -8,7 +8,7 @@ import {
   type IepExportShare,
 } from "@/lib/api/export";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { ApiError, apiErrorCode, apiErrorMessage, incidentId } from "@/lib/api/client";
 import { IncidentLine } from "@/components/teacher/Upload/ParseFallback";
 import { studentsApi, type AdminStudentRow, type ParentLink } from "@/lib/api/students";
@@ -258,7 +258,7 @@ export function IepExporterView({
   const [shares, setShares] = useState<IepExportShare[] | null>(null);
   const [sharesFailed, setSharesFailed] = useState(false);
   const [savedAt, setSavedAt] = useState(false);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   // The clock is read in an effect, never during render. Default period is the
   // last four months, which is about a Nigerian half-term.

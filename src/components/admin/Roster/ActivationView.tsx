@@ -20,7 +20,7 @@ import { schoolApi, type School } from "@/lib/api/school";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { useSetupGate } from "@/hooks";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { billingCurrency, mayActivate, screenFor } from "./activation";
 import { SignInDetailsDownload } from "../Students/SignInDetailsDownload";
 import { ConsentFormDownload } from "../Students/ConsentFormDownload";
@@ -80,7 +80,7 @@ export function ActivationView() {
    * school is not active.
    */
   const { refresh: refreshGate } = useSetupGate();
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback(() => {
     /*

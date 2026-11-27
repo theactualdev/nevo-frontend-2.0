@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { invitesApi, type JoinLookup } from "@/lib/api/invites";
 import { INVITE_CONFLICT_COPY, isInviteConflict, linkIsDead } from "@/lib/auth/linkAnswer";
@@ -104,7 +104,7 @@ export function JoinLanding({ token }: { token: string }) {
   const [lookup, setLookup] = useState<JoinLookup | null>(null);
 
   const [attempt, setAttempt] = useState(0);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   useEffect(() => {
     invitesApi

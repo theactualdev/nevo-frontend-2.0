@@ -38,7 +38,7 @@ import {
   ROW_DIVIDER,
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { SignInDetailsDownload } from "./SignInDetailsDownload";
 import { ERASURE_LINE } from "./EraseRecordModal";
 import { ChildAvatar } from "../Roster/ChildAvatar";
@@ -144,7 +144,7 @@ export function StudentsView() {
    */
   const [lastBulk, setLastBulk] = useState<string[]>([]);
   const [missingEmailOnly, setMissingEmailOnly] = useState(false);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback((cid: string, inactive: boolean) => {
     Promise.all([

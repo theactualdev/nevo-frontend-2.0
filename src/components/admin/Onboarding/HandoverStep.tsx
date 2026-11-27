@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { readContact, schoolApi, type School } from "@/lib/api/school";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { cn } from "@/lib/utils";
 import { CheckIcon, Spinner } from "../Roster/primitives";
 import {
@@ -26,7 +26,7 @@ type Phase = "loading" | "ready" | "failed";
 export function HandoverStep({ state }: { state: WizardState }) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [school, setSchool] = useState<School | null>(null);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback(() => {
     schoolApi

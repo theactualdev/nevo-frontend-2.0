@@ -3,7 +3,7 @@
 import { NevoSelect } from "@/components/shared/NevoSelect";
 import { useCallback, useEffect, useState } from "react";
 import { analyticsApi, type CohortTransformation } from "@/lib/api/analytics";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { classesApi } from "@/lib/api/classes";
 import { yearGroupLabel, yearGroupOrder } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
@@ -46,7 +46,7 @@ export function YearGroupFigures() {
   /* A read can settle after the figures unmount (a test's teardown, or the
      admin leaving the page). Setting state then is a no-op at best, and in a
      torn-down test environment it throws. */
-  const mounted = useMountedRef();
+  const mounted = useStillHere();
 
   const readGroups = useCallback(() => {
     classesApi

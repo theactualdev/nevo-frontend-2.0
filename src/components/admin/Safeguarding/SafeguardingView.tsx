@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { aboutAChild, categoryLabel, safetyApi, type SafetyEvent } from "@/lib/api/safety";
 import { getSession } from "@/lib/auth/session";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { cn } from "@/lib/utils";
 import { useLearningSupport } from "../LearningSupport/useLearningSupport";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -67,7 +67,7 @@ export function SafeguardingView() {
   const [acking, setAcking] = useState<string | null>(null);
   const [ackFailed, setAckFailed] = useState<string | null>(null);
   const [me] = useState(() => getSession()?.userId ?? null);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const read = useCallback(() => {
     safetyApi

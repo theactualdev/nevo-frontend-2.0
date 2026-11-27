@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { notificationsApi, type Notification } from "@/lib/api/notifications";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { cn } from "@/lib/utils";
 import { ROW_DIVIDER } from "../Roster/primitives";
 import { NotificationRow } from "./NotificationRow";
@@ -72,7 +72,7 @@ export function NotificationsPanel({
   const [allRead, setAllRead] = useState(false);
   const [now, setNow] = useState(0);
   const panel = useRef<HTMLDivElement>(null);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   /*
    * Its own callback so the failure state can offer a retry. It used to live

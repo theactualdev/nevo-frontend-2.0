@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { feedbackApi } from "@/lib/api/feedback";
 import { CheckIcon, CloseIcon, PausedNote } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { schoolApi } from "@/lib/api/school";
 import { NoAccess, failureKind } from "../NoAccess";
 import { getSession } from "@/lib/auth/session";
@@ -138,7 +138,7 @@ export function AdminTeamView() {
     retry: retryLs,
   } = useLearningSupport();
   const [me] = useState(() => getSession()?.userId ?? null);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   useEffect(() => {
     schoolApi

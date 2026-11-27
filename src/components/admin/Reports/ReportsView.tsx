@@ -9,7 +9,7 @@ import {
   type SchoolHealth,
   type TransformationMetrics,
 } from "@/lib/api/analytics";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
 import { CARD, PRIMARY_BTN } from "../Roster/primitives";
@@ -147,7 +147,7 @@ export function ReportsView() {
    */
   const [masteryFailed, setMasteryFailed] = useState(false);
   const [transformationFailed, setTransformationFailed] = useState(false);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const load = useCallback(() => {
     // School health answers first because it carries the schoolId the other

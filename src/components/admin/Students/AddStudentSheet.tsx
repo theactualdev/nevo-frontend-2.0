@@ -8,7 +8,7 @@ import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { onboardingApi, type AdditionQuote } from "@/lib/api/onboarding";
 import { consentsApi } from "@/lib/api/consents";
 import { studentsApi } from "@/lib/api/students";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import { formatMoney, formatVatRate } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { billingCurrency } from "../Roster/activation";
@@ -112,7 +112,7 @@ export function AddStudentSheet({
   const maySend = useMaySendConsent();
   /** The server's words when it refused because this parent already said no. */
   const [refusedNote, setRefusedNote] = useState<string | null>(null);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   useEffect(() => {
     classesApi

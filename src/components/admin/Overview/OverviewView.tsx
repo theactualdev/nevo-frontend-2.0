@@ -23,7 +23,7 @@ import { SetupPausedBanner } from "../SetupPausedBanner";
 import { SchoolCodeCard } from "./SchoolCodeCard";
 import { CardUnread } from "./CardUnread";
 import { useSetupGate } from "@/hooks/useSetupGate";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import {
   readAcademic,
   readOnboarding,
@@ -268,7 +268,7 @@ export function OverviewView() {
       return next;
     });
   }, []);
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   const readOverview = useCallback(() => {
     schoolApi

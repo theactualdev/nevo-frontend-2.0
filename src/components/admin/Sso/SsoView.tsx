@@ -19,7 +19,7 @@ import { withBack } from "../back";
 import { WriteFailed } from "../WriteFailed";
 import { SupportEmailLink } from "../SupportEmail";
 import { usePermissions } from "@/hooks";
-import { useMountedRef } from "@/hooks/useMountedRef";
+import { useStillHere } from "@/hooks/useStillHere";
 import {
   dataFlowHeading,
   isDisconnected,
@@ -160,7 +160,7 @@ export function SsoView() {
   const [asked, setAsked] = useState<SsoProvider | null>(null);
   const [school, setSchool] = useState<School | null>(null);
   const { hasScope } = usePermissions();
-  const mounted = useMountedRef(); // A read that answers after this has gone sets nothing (check 21).
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
 
   /*
    * THE COPY CONFIRMATION IS THE COPY BUTTON'S, not the page's.
