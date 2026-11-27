@@ -183,3 +183,36 @@ describe("taking access away from the only holder", () => {
     ).toBeInTheDocument();
   });
 });
+
+/*
+ * L86 (Lydia, 25 Nov): at least one administrator holds Learning Support.
+ * Gbenga is the only admin holding it, a teacher holds it too: Remove access
+ * says why at once, offers no confirm, and sends nothing.
+ */
+describe("taking access away from the only administrator holding it (L86)", () => {
+  const TEACHER_HOLDS = { ...GBENGA_HOLDS, userId: "u-tunde", name: "Tunde Bello", role: "teacher" };
+
+  it("is refused before the confirm, with the reason", async () => {
+    holders.mockResolvedValue(ls({ holders: [GBENGA_HOLDS, TEACHER_HOLDS] }));
+    render(<AdminTeamView />);
+    await screen.findByText("Gbenga Adebayo");
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove access" })[0]);
+    expect(
+      await screen.findByText(
+        "Gbenga Adebayo is the only administrator in your school with Learning Support, so their access can't be removed. Give Learning Support to another administrator first, then remove their access.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/will no longer be able to open the admin areas/)).toBeNull();
+    expect(deactivate).not.toHaveBeenCalled();
+  });
+
+  it("opens the confirm as before when another administrator holds it", async () => {
+    holders.mockResolvedValue(
+      ls({ holders: [GBENGA_HOLDS, { ...GBENGA_HOLDS, userId: "u-chidi", name: "Chidi Adebayo" }] }),
+    );
+    render(<AdminTeamView />);
+    await screen.findByText("Gbenga Adebayo");
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove access" })[0]);
+    expect(await screen.findByText(/Gbenga Adebayo will no longer be able to open the admin areas/)).toBeInTheDocument();
+  });
+});

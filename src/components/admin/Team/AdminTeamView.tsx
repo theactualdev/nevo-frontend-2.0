@@ -29,7 +29,12 @@ import {
   LearningSupportLine,
   lastHolderAccessLine,
 } from "../LearningSupport/LearningSupportLine";
-import { LAST_LEARNING_SUPPORT_HOLDER, refusedWith } from "@/lib/api/learningSupport";
+import {
+  LAST_LEARNING_SUPPORT_HOLDER,
+  lastAdminHolder,
+  lastAdminHolderAccessLine,
+  refusedWith,
+} from "@/lib/api/learningSupport";
 import {
   FOUNDING_LOCK_LINE,
   seatWords,
@@ -478,6 +483,14 @@ function MemberRow({
         <button
           type="button"
           onClick={() => {
+            // L86: the school's only administrator holding Learning Support
+            // keeps their access - said now, never asked to confirm first.
+            // (The only holder at all is refused by the server, in its words.)
+            if (ls && ls.holders.length > 1 && lastAdminHolder(ls, m.userId)) {
+              setConfirming(false);
+              setRefusal(lastAdminHolderAccessLine(name));
+              return;
+            }
             setRefusal(null);
             setConfirming((c) => !c);
           }}

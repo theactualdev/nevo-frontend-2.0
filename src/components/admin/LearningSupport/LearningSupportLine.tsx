@@ -5,6 +5,7 @@ import { ApiError, apiErrorMessage } from "@/lib/api/client";
 import {
   SELF_GRANT_FORBIDDEN,
   holderFor,
+  lastAdminHolder,
   learningSupportApi,
   refusedWith,
   type LearningSupportHolder,
@@ -85,6 +86,8 @@ export function LearningSupportLine({
   const [working, setWorking] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [lastHolder, setLastHolder] = useState(false);
+  /** L86: the school's only administrator holding it - refused here, nothing sent. */
+  const [lastAdmin, setLastAdmin] = useState(false);
 
   const held = holderFor(holders, person.userId);
   const granted = held ? grantedLine(held, me) : null;
@@ -98,6 +101,12 @@ export function LearningSupportLine({
   const toggle = () => {
     if (!enabled) return;
     const removing = Boolean(held);
+    // The only holder AT ALL is the server's refusal, in D03b's own words
+    // (below); this is the narrower rule, others holding it but no admin.
+    if (removing && holders.holders.length > 1 && lastAdminHolder(holders, person.userId)) {
+      setLastAdmin(true);
+      return;
+    }
     setWorking(true);
     setRefusal(null);
     (removing ? learningSupportApi.remove : learningSupportApi.grant)(person.userId)
@@ -164,6 +173,9 @@ export function LearningSupportLine({
       {lastHolder ? (
         <LastHolderDialog name={person.name} onClose={() => setLastHolder(false)} />
       ) : null}
+      {lastAdmin ? (
+        <LastAdminHolderDialog name={person.name} onClose={() => setLastAdmin(false)} />
+      ) : null}
     </div>
   );
 }
@@ -175,6 +187,21 @@ export function LastHolderDialog({ name, onClose }: { name: string; onClose: () 
       icon="heart"
       title="Someone needs to hold Learning Support"
       body={`${name} is the only person in your school with Learning Support right now. Give it to someone else first, then you can remove it here.`}
+      onClose={onClose}
+    />
+  );
+}
+
+/**
+ * D03b's calm refusal again, for L86 (Lydia, 25 Nov): at least one
+ * administrator holds Learning Support. D03b's words, for an administrator.
+ */
+export function LastAdminHolderDialog({ name, onClose }: { name: string; onClose: () => void }) {
+  return (
+    <CalmRefusal
+      icon="heart"
+      title="An administrator needs to hold Learning Support"
+      body={`${name} is the only administrator in your school with Learning Support right now. Give it to another administrator first, then you can remove it here.`}
       onClose={onClose}
     />
   );

@@ -1,4 +1,5 @@
 import { api, ApiError, apiErrorCode } from "./client";
+import { isAdminRole } from "@/lib/constants/permissions";
 
 /**
  * Learning Support (SCRUM-247): who may open the learning support view of a
@@ -77,4 +78,23 @@ export function holderFor(
   userId: string,
 ): LearningSupportHolder | null {
   return list?.holders.find((h) => h.userId === userId) ?? null;
+}
+
+/**
+ * Whether this person is the school's ONLY ADMINISTRATOR holding Learning
+ * Support. Lydia, 25 Nov (L86): "Require at least one admin holder. A school
+ * where nobody can see safeguarding flags is the worst available outcome" -
+ * teachers who hold it don't count, as the teacher view isn't built yet.
+ * Teslim is asked to enforce it on the server too; until then the console
+ * keeps it, from the server's own list. Unknown (no list) is never a yes.
+ */
+export function lastAdminHolder(list: LearningSupportHolders | null, userId: string): boolean {
+  const held = holderFor(list, userId);
+  if (!list || !held || !isAdminRole(held.role)) return false;
+  return !list.holders.some((h) => h.userId !== userId && isAdminRole(h.role));
+}
+
+/** Said where that removal is refused - the access-removal line's words, for an administrator. */
+export function lastAdminHolderAccessLine(name: string): string {
+  return `${name} is the only administrator in your school with Learning Support, so their access can't be removed. Give Learning Support to another administrator first, then remove their access.`;
 }
