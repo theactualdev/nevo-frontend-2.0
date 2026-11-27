@@ -68,7 +68,8 @@ beforeEach(() => {
 
 describe("Help-seeking on a learner's profile (D08b)", () => {
   it("says how often over the fortnight and mostly about what, in the ratified words - never what was asked", async () => {
-    evidence.mockResolvedValue(ev());
+    // One topic the server let through: the line names it, so no list.
+    evidence.mockResolvedValue(ev({ categories: { lesson_help: 9 } }));
     const { container } = render(<LearnerProfileView studentId="s1" />);
     await waitFor(() =>
       expect(visibleText(container)).toMatch(
@@ -77,9 +78,64 @@ describe("Help-seeking on a learner's profile (D08b)", () => {
     );
     expect(evidence).toHaveBeenCalledWith("s1", 14);
     expect(visibleText(container)).toMatch(/What Amara and Nevo said to each other is never shown here\./);
-    // No per-topic counts: the server floors no topic, so none are listed.
-    expect(visibleText(container)).not.toMatch(/\b9\b|\b5\b/);
+    expect(container.querySelector("[data-help-topics]")).toBeNull();
+    expect(visibleText(container)).not.toMatch(/A topic appears only once/);
+    expect(visibleText(container)).not.toMatch(/\b9\b/);
     expect(visibleText(container)).not.toMatch(/helpful/i);
+  });
+
+  /*
+   * S10 (backend v44, 25 Nov): the server floors each topic now, so every one
+   * it sends may be shown - D08b's ranked list, in the server's words, most
+   * asked first. Names only: no count and no bar beside a topic, nothing that
+   * reads as a score, and no floor of the device's own.
+   */
+  it("lists the topics the server sends, most asked first, in its words - and never a count", async () => {
+    evidence.mockResolvedValue(
+      ev({
+        categories: { concept_question: 5, lesson_help: 9, homework: 3 },
+        categoryLabels: { lesson_help: "Lesson help", concept_question: "Questions about an idea", homework: "Homework" },
+      }),
+    );
+    const { container } = render(<LearnerProfileView studentId="s1" />);
+    await waitFor(() => expect(container.querySelector("[data-help-topics]")).not.toBeNull());
+    expect(visibleText(container)).toMatch(
+      /Amara asked Nevo for help 14 times this fortnight, most often about these topics\./,
+    );
+    const items = [...(container.querySelector("[data-help-topics]") as HTMLElement).querySelectorAll("li")];
+    expect(items.map((li) => li.textContent)).toEqual(["Lesson help", "Questions about an idea", "Homework"]);
+    expect(visibleText(container)).toMatch(
+      /A topic appears only once Amara has asked about it enough times to be worth showing\. What Amara and Nevo said to each other is never shown here\./,
+    );
+    // How often orders the list and is never shown.
+    expect(visibleText(container)).not.toMatch(/\b9\b|\b5\b|\b3\b/);
+  });
+
+  it("keeps a topic the server sends even when it was asked about only once - the floor is the server's", async () => {
+    evidence.mockResolvedValue(
+      ev({
+        categories: { lesson_help: 9, homework: 1 },
+        categoryLabels: { lesson_help: "Lesson help", homework: "Homework" },
+      }),
+    );
+    const { container } = render(<LearnerProfileView studentId="s1" />);
+    await waitFor(() => expect(container.querySelector("[data-help-topics]")).not.toBeNull());
+    const items = [...(container.querySelector("[data-help-topics]") as HTMLElement).querySelectorAll("li")];
+    expect(items.map((li) => li.textContent)).toEqual(["Lesson help", "Homework"]);
+  });
+
+  it("never prints a topic the server sends no words for", async () => {
+    evidence.mockResolvedValue(
+      ev({
+        categories: { lesson_help: 9, concept_question: 5, class_planning: 4 },
+        categoryLabels: { lesson_help: "Lesson help", concept_question: "Questions about an idea" },
+      }),
+    );
+    const { container } = render(<LearnerProfileView studentId="s1" />);
+    await waitFor(() => expect(container.querySelector("[data-help-topics]")).not.toBeNull());
+    expect(visibleText(container)).not.toMatch(/class_planning|class planning/i);
+    const items = [...(container.querySelector("[data-help-topics]") as HTMLElement).querySelectorAll("li")];
+    expect(items.map((li) => li.textContent)).toEqual(["Lesson help", "Questions about an idea"]);
   });
 
   it("draws nothing at all when the server withholds it below its minimum", async () => {
