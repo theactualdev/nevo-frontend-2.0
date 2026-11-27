@@ -54,6 +54,18 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
+// A holder, as anyone who can mark a flag seen is - and the only viewer whose
+// lists are the school's, so the only one an all-clear or a total is for.
+vi.mock("@/lib/api/learningSupport", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/learningSupport")>();
+  return {
+    ...actual,
+    learningSupportApi: {
+      ...actual.learningSupportApi,
+      holders: async () => ({ holders: [], viewerHoldsIt: true }),
+    },
+  };
+});
 
 const flag = (id: string): AttentionFlag => ({
   id,

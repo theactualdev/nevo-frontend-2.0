@@ -67,17 +67,23 @@ describe("collectAdaptationWindow", () => {
     const out = await collectAdaptationWindow(fetchPage, 2);
     expect(out.complete).toBe(false);
     expect(out.perLearner).toEqual({});
+    // Not a failure: nothing went wrong, there was just more than we read.
+    expect(out.error).toBeUndefined();
   });
 
-  it("reports nothing when a page fails", async () => {
+  it("reports nothing when a page fails, and hands back why", async () => {
+    // The caller says a failure and stays quiet on a refusal (Hub, 26 Nov),
+    // so it needs the error, not just `complete: false`.
+    const down = new Error("500");
     const fetchPage = vi
       .fn()
       .mockResolvedValueOnce({ events: fullPage(0), total: 500 })
-      .mockRejectedValueOnce(new Error("500"));
+      .mockRejectedValueOnce(down);
 
     const out = await collectAdaptationWindow(fetchPage);
     expect(out.complete).toBe(false);
     expect(out.perLearner).toEqual({});
+    expect(out.error).toBe(down);
   });
 
   it("ignores `total` entirely, in both directions", async () => {

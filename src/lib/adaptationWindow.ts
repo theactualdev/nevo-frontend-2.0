@@ -43,6 +43,12 @@ export interface AdaptationWindow {
   perLearner: Record<string, number>;
   /** False means: report NO figures. Not "report what we have". */
   complete: boolean;
+  /**
+   * What a page that did not answer threw, when that is why `complete` is
+   * false - so the caller can say a failure and stay quiet on a refusal
+   * (Hub, 26 Nov). Absent when the pages simply ran past the cap.
+   */
+  error?: unknown;
 }
 
 /** The ISO instant `WINDOW_DAYS` ago, which is what "this week" means here. */
@@ -71,9 +77,9 @@ export async function collectAdaptationWindow(
     let batch;
     try {
       batch = await fetchPage(page * PAGE);
-    } catch {
+    } catch (error) {
       // A page that failed makes the whole window a floor.
-      return { perLearner: {}, complete: false };
+      return { perLearner: {}, complete: false, error };
     }
     const events = Array.isArray(batch?.events) ? batch.events : [];
 
