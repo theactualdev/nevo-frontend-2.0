@@ -160,3 +160,16 @@ export function categoryLabel(category: string | null | undefined): string | nul
     ? CATEGORY_META[category as AdminCategory].name
     : null;
 }
+
+/**
+ * A row's label: `categoryLabel`, except for a SAFEGUARDING NOTICE (S16,
+ * backend v43). The server files it under "attention", which this console
+ * names "Something changed suddenly" - untrue above a safeguarding flag. So it
+ * carries no label at all; its title and body stay as sent. Raised as S24 (its
+ * own category): once that ships, the unknown-category rule above draws no
+ * label anyway, and this special case comes out.
+ */
+export function rowLabel(n: { type: string; category?: string | null }): string | null {
+  if (n.type === "safeguarding_flag") return null;
+  return categoryLabel(n.category);
+}
