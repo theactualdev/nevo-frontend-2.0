@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import type { LessonDetailResponse, LessonSegment } from "@/lib/api/lessons";
 
 vi.mock("@/components/shared/IllustrationWrapper", () => ({
@@ -108,6 +108,9 @@ describe("variant review entry", () => {
  * can see and filtering client-side - so the screen could say "one of several"
  * and never which. `lesson.classes` landed on 25 Sep: one query, only classes
  * with somebody assigned, names included.
+ *
+ * Since L85 (Lydia, 25 Nov) the classes are said once, on C06b's "Assigned
+ * to" card; the list that repeated them under it is gone.
  */
 describe("where this lesson went", () => {
   const CLASSES = [
@@ -127,48 +130,32 @@ describe("where this lesson went", () => {
       />,
     );
 
-  it("names every class, not one of them", () => {
-    show({ classes: CLASSES });
+  it("names every class, not one of them, in the one Assigned to card", () => {
+    const { container } = show({ classes: CLASSES });
 
-    expect(screen.getByText("JSS 2A")).toBeInTheDocument();
-    expect(screen.getByText("JSS 2B")).toBeInTheDocument();
-    expect(screen.getByText("JSS 2C")).toBeInTheDocument();
+    const card = container.querySelector("[data-assigned-to]") as HTMLElement;
+    expect(card).toHaveTextContent("Assigned toJSS 2A · JSS 2B · JSS 2C");
   });
 
-  it("counts children, and says student for one of them", () => {
+  it("says it once - no second list of the same classes (L85)", () => {
+    // Lydia, 25 Nov: "The same fact twice, back to back, is the thing to
+    // remove rather than reconcile." Drop "Where this lesson went".
     show({ classes: CLASSES });
 
-    expect(screen.getByText("28 students")).toBeInTheDocument();
-    expect(screen.getByText("1 student")).toBeInTheDocument();
+    expect(screen.queryByText(/Where this lesson went/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/JSS 2A/)).toHaveLength(1);
   });
 
   it("says nothing at all when the server sent no classes", () => {
     /*
      * ABSENT IS NOT EMPTY. An older deployment sends no `classes` field, and
      * "not assigned to any class" over that would invent the one fact this
-     * section exists to report.
+     * card exists to report.
      */
-    show();
+    const { container } = show();
 
+    expect(container.querySelector("[data-assigned-to]")).toBeNull();
     expect(screen.queryByText(/Where this lesson went/i)).not.toBeInTheDocument();
-  });
-
-  it("leaves the count off a class it was not given one for", () => {
-    // 0 children is a class the lesson reached nobody in; absent is not knowing.
-    show({ classes: [{ id: "c-1", name: "JSS 2A" }] });
-
-    // The list's own row - C06b's "Assigned to" card names the class too.
-    const list = screen.getByText(/Where this lesson went/i).nextElementSibling as HTMLElement;
-    expect(within(list).getByText("JSS 2A")).toBeInTheDocument();
-    expect(screen.queryByText(/students?$/)).not.toBeInTheDocument();
-  });
-
-  it("says nobody is in a class that reached nobody", () => {
-    // 0 is a fact and absent is not knowing one. The contract makes
-    // `studentCount` optional, so both shapes arrive and they are different.
-    show({ classes: [{ id: "c-1", name: "JSS 2A", studentCount: 0 }] });
-
-    expect(screen.getByText("0 students")).toBeInTheDocument();
   });
 
   it("does not caveat the progress when there is only one class to be about", () => {
