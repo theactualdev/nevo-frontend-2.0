@@ -23,6 +23,7 @@ vi.mock("@/components/shared/IllustrationWrapper", () => ({
 import { InsightsView } from "./InsightsView";
 import { useAskNevoClass } from "@/components/teacher/Shell/askNevoScope";
 import { TEACHER_CLASSES } from "@/lib/mocks/teacherClasses";
+import { getClassInsights } from "@/lib/mocks/teacherInsights";
 import { visibleText } from "@/test/visibleText";
 
 /**
@@ -270,5 +271,45 @@ describe("the walkthrough's misconception card", () => {
 
     const title = await screen.findByText("Common misconception in algebraic fractions");
     expect(title.parentElement!.querySelector("p")).toHaveClass("text-pretty");
+  });
+});
+
+/**
+ * "Reading may be affecting results in …" was worked out on the device from
+ * `u - r > 20` - a threshold, which rule 3 forbids even on a walkthrough (Hub,
+ * 25 Nov). It is fixture text now, drawn where the fixture says so and
+ * nowhere else, however far apart the two tracks are.
+ */
+describe("the walkthrough's reading line under a concept", () => {
+  it("is drawn where the fixture carries it, and only there", async () => {
+    useTeacherClasses.mockReturnValue(state());
+    render(<InsightsView />);
+    fireEvent.click(screen.getByRole("button", { name: FIXTURE_CLASS }));
+
+    expect(
+      await screen.findByText("Reading may be affecting results in Word problems: rates & ratio"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText(/Reading may be affecting results/)).toHaveLength(1);
+  });
+
+  it("is never worked out from the two tracks", async () => {
+    const concept = getClassInsights(TEACHER_CLASSES[0].id)!.concepts!.find(
+      (c) => c.name === "Algebraic fractions",
+    )!;
+    const was = { u: concept.u, r: concept.r };
+    // Ninety points apart, with no note in the fixture.
+    Object.assign(concept, { u: 95, r: 5 });
+    try {
+      useTeacherClasses.mockReturnValue(state());
+      render(<InsightsView />);
+      fireEvent.click(screen.getByRole("button", { name: FIXTURE_CLASS }));
+
+      await screen.findByText("Where the class stands");
+      expect(
+        screen.queryByText(/Reading may be affecting results in Algebraic fractions/),
+      ).not.toBeInTheDocument();
+    } finally {
+      Object.assign(concept, was);
+    }
   });
 });
