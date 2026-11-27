@@ -87,6 +87,12 @@ vi.mock("@/lib/api/students", () => ({
 vi.mock("@/lib/api/intelligence", () => ({
   intelligenceApi: { allFlags: () => Promise.resolve({ flags: [], complete: true }) },
 }));
+// Requests from parents: the compliance tile's "N findings to review" (L51).
+const rightsLog = vi.fn();
+vi.mock("@/lib/api/consents", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/consents")>();
+  return { ...actual, consentsApi: { ...actual.consentsApi, rightsLog: (q: unknown) => rightsLog(q) } };
+});
 // D26's figures, for the Overview's quiet line into them (backlog 48).
 const transformation = vi.fn();
 vi.mock("@/lib/api/analytics", async (importOriginal) => {
@@ -131,6 +137,8 @@ beforeEach(() => {
     suppressed: false,
   });
   audit.mockReset();
+  rightsLog.mockReset();
+  rightsLog.mockResolvedValue({ entries: [], total: 0, limit: 100, offset: 0 });
   adaptationLog.mockReset();
   narrative.mockReset();
   overview.mockReset();
@@ -502,5 +510,46 @@ describe("the School transformation line", () => {
     expect(visibleText(container)).not.toMatch(/Lessons seen through/);
     expect(visibleText(container)).toMatch(/Students enrolled/);
     expect(visibleText(container)).not.toMatch(/couldn't load your school's overview/i);
+  });
+});
+
+/*
+ * L51 (Lydia, 25 Nov): the tile's "N findings to review" counts what
+ * Compliance lists - requests from parents not yet resolved - never the
+ * internal audit scan's findings, which are ruled off-screen.
+ */
+describe("the compliance tile's findings to review (L51)", () => {
+  const request = (id: string, resolvedAt: string | null) => ({
+    id,
+    studentId: "s1",
+    studentName: "Amara Obi",
+    parentId: "p1",
+    parentName: "Ada Obi",
+    requestType: "request_data",
+    reasonRecorded: false,
+    status: resolvedAt ? "resolved" : "pending",
+    createdAt: "2026-11-20T09:00:00Z",
+    resolvedAt,
+  });
+
+  it("counts the parents' requests still open, not the scan's findings", async () => {
+    audit.mockResolvedValue({ ...AUDIT, compliant: false, findings: [{}, {}, {}] });
+    rightsLog.mockResolvedValue({
+      entries: [request("r1", null), request("r2", null), request("r3", "2026-11-22T09:00:00Z")],
+      total: 3,
+      limit: 100,
+      offset: 0,
+    });
+    const { container } = render(<OverviewView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/2 findings to review/));
+    expect(visibleText(container)).not.toMatch(/3 findings to review/);
+  });
+
+  it("says nothing about findings when the requests can't be read - never the scan's count", async () => {
+    audit.mockResolvedValue({ ...AUDIT, compliant: false, findings: [{}, {}, {}] });
+    rightsLog.mockRejectedValue(new Error("500"));
+    const { container } = render(<OverviewView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Checked/));
+    expect(visibleText(container)).not.toMatch(/to review/);
   });
 });
