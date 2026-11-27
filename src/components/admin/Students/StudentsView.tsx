@@ -14,7 +14,8 @@ import { cn } from "@/lib/utils";
 import {
   ConsentPill,
   mayRequestConsent,
-  withoutRecordedConsent,
+  outstandingConsent,
+  withdrawnCount,
   consentDateLine,
   consentGiven,
 } from "./ConsentPill";
@@ -243,14 +244,15 @@ export function StudentsView() {
    * Olayinka): D25's tallies at the top - cleared, outstanding, and how each
    * was given - rather than a page of their own. Counts of the school's own
    * records over everyone enrolled, read as sent; nothing is scored.
-   * "Outstanding" is every record that isn't confirmed, as
-   * `withoutRecordedConsent` counts it.
+   * "Outstanding" is what the school can still chase, and a withdrawn consent
+   * is its own tally (L53, 25 Nov) - only the parent can lift it.
    */
   const tallies = useMemo(() => {
     const confirmed = enrolled.filter((s) => s.consent?.status === "confirmed");
     return {
       cleared: confirmed.length,
-      outstanding: withoutRecordedConsent(enrolled),
+      outstanding: outstandingConsent(enrolled),
+      withdrawn: withdrawnCount(enrolled),
       digital: confirmed.filter((s) => consentGiven(s.consent?.channel ?? null) === "digital").length,
       written: confirmed.filter((s) => consentGiven(s.consent?.channel ?? null) === "written").length,
     };
@@ -277,8 +279,10 @@ export function StudentsView() {
       .filter((s) => !onlyIds || onlyIds.has(s.id))
       .filter((s) => {
         if (!consent) return true;
-        // L24: the school-wide outstanding list is this filter, on this view.
-        if (consent === "outstanding") return Boolean(s.consent) && s.consent.status !== "confirmed";
+        // L24: the school-wide outstanding list is this filter, on this view -
+        // and, as its tally, never a withdrawn consent (L53).
+        if (consent === "outstanding")
+          return Boolean(s.consent) && s.consent.status !== "confirmed" && s.consent.status !== "withdrawn";
         /*
          * NO "no record at all" OPTION, and there was one for a day.
          *
@@ -408,6 +412,7 @@ export function StudentsView() {
           <div data-consent-tallies className="mt-5 flex flex-wrap gap-3">
             <Tally n={String(tallies.cleared)} label="cleared" />
             <Tally n={String(tallies.outstanding)} label="outstanding" />
+            <Tally n={String(tallies.withdrawn)} label="withdrawn" />
             <Tally
               n={`${tallies.digital} digital · ${tallies.written} written`}
               label="how it was given"

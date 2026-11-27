@@ -126,6 +126,22 @@ export function withoutRecordedConsent(
 }
 
 /**
+ * Consent the school can still chase: asked and unanswered, or not asked yet.
+ *
+ * Every record that isn't confirmed, LESS the withdrawn ones - Lydia, 25 Nov
+ * (L53): "Count withdrawn separately from outstanding. A school cannot chase
+ * something only a parent can lift." `withoutRecordedConsent` stays what it
+ * says, for the screens that ask who has no consent at all.
+ */
+export function outstandingConsent(
+  rows: { consent?: StudentConsent | null }[],
+): number {
+  return rows.filter(
+    (r) => r.consent && r.consent.status !== "confirmed" && r.consent.status !== "withdrawn",
+  ).length;
+}
+
+/**
  * Students a parent has actively withdrawn.
  *
  * A parent's explicit refusal - `processingWithdrawn` - kept apart from the
