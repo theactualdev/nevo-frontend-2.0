@@ -302,6 +302,9 @@ describe("D07's consent column", () => {
       "Pending",
       "Not sent",
       "Withdrawn",
+      // L24 (Lydia, 25 Nov): how a confirmed consent was given.
+      "Written",
+      "Digital",
     ]);
   });
 });
