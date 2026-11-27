@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   allowanceSpent,
+  roleRefused,
+  childBlockReason,
   HISTORY_DAYS,
   HISTORY_LIMIT,
   recentThreads,
@@ -173,5 +175,74 @@ describe("safetyStop", () => {
     ).toBeNull();
     expect(safetyStop(new ApiError(0, "offline"))).toBeNull();
     expect(safetyStop(new Error("content_safety_blocked"))).toBeNull();
+  });
+});
+
+/**
+ * L55 (Lydia, 25 Nov): an account that may not ask is a 403 with its own
+ * code. Told apart by the code, as the allowance and the stop are.
+ */
+describe("roleRefused", () => {
+  const refusal = (status: number, code: string) =>
+    new ApiError(status, "x", {
+      detail: { code, reason: "account_cannot_ask", availableRoles: [], message: "You cannot ask Nevo in that role." },
+    });
+
+  it("is the 403 that says this account cannot ask in that role", () => {
+    expect(roleRefused(refusal(403, "ask_role_forbidden"))).toBe(true);
+  });
+
+  it("is not a safety stop, another learner's context, or any other 403", () => {
+    expect(roleRefused(refusal(403, "content_safety_blocked"))).toBe(false);
+    expect(roleRefused(refusal(403, "student_context_forbidden"))).toBe(false);
+    expect(roleRefused(new ApiError(403, "x"))).toBe(false);
+  });
+
+  it("is not that code on any other status, nor a failure with no response", () => {
+    expect(roleRefused(refusal(500, "ask_role_forbidden"))).toBe(false);
+    expect(roleRefused(new ApiError(0, "offline"))).toBe(false);
+    expect(roleRefused(new Error("ask_role_forbidden"))).toBe(false);
+  });
+});
+
+/**
+ * L46 (Lydia, 25 Nov) and the Hub's ruling the same day: a child's block has
+ * a line of Lydia's for "other" and "names_person" only. Everything else -
+ * trusted_adult, no reason, a reason this build does not know - keeps the
+ * server's line, because it could be a child at risk.
+ */
+describe("childBlockReason", () => {
+  const stop = (reason?: unknown) =>
+    new ApiError(403, "x", {
+      detail: {
+        code: "content_safety_blocked",
+        message: "m",
+        ...(reason === undefined ? {} : { reason }),
+      },
+    });
+
+  it("names the two reasons with a line of Lydia's", () => {
+    expect(childBlockReason(stop("other"))).toBe("other");
+    expect(childBlockReason(stop("names_person"))).toBe("names_person");
+  });
+
+  it("is null for trusted_adult, so the server's line stands", () => {
+    expect(childBlockReason(stop("trusted_adult"))).toBeNull();
+  });
+
+  it("is null for a block with no reason - today's server, safeguard blocks included", () => {
+    expect(childBlockReason(stop())).toBeNull();
+  });
+
+  it("is null for a reason this build does not know, which could be a new safeguarding one", () => {
+    expect(childBlockReason(stop("self_harm_v2"))).toBeNull();
+    expect(childBlockReason(stop(7))).toBeNull();
+  });
+
+  it("is null for any refusal that is not a safety stop", () => {
+    expect(
+      childBlockReason(new ApiError(403, "x", { detail: { code: "ask_role_forbidden", reason: "other" } })),
+    ).toBeNull();
+    expect(childBlockReason(new ApiError(0, "offline"))).toBeNull();
   });
 });

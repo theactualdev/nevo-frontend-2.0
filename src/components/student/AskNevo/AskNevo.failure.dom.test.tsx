@@ -179,3 +179,50 @@ describe("a rate limit that is not the allowance", () => {
     expect(screen.queryByText(/asked everything for today/)).toBeNull();
   });
 });
+
+/**
+ * L55 (Lydia, 25 Nov). An account that may not ask gets her line - never the
+ * server's message, which names a role, and never "try again in a moment",
+ * which cannot work.
+ */
+describe("a child on an account that may not ask Nevo", () => {
+  const refused = () =>
+    new ApiError(403, "Forbidden", {
+      detail: {
+        code: "ask_role_forbidden",
+        reason: "account_cannot_ask",
+        availableRoles: [],
+        message: "You cannot ask Nevo in that role.",
+      },
+    });
+
+  it("is told Ask Nevo is not available on this account", async () => {
+    ask.mockReset().mockRejectedValue(refused());
+
+    await askSomething("What is a fraction?");
+
+    expect(screen.getByText("Ask Nevo is not available on this account.")).toBeVisible();
+  });
+
+  it("never reads the server's role message, nor a failure to try again", async () => {
+    ask.mockReset().mockRejectedValue(refused());
+
+    await askSomething("What is a fraction?");
+
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/in that role|couldn.t answer|in a moment|on us/i);
+  });
+
+  it("keeps the ordinary failure for another learner's context, which is not this account", async () => {
+    ask.mockReset().mockRejectedValue(
+      new ApiError(403, "Forbidden", {
+        detail: { code: "student_context_forbidden", reason: "another_learners_context", message: "m" },
+      }),
+    );
+
+    await askSomething("What is a fraction?");
+
+    expect(screen.getByText(/couldn.t answer that just now/i)).toBeVisible();
+    expect(screen.queryByText(/not available on this account/)).toBeNull();
+  });
+});

@@ -11,6 +11,8 @@ import { useHasSession } from "@/hooks/useHasSession";
 import { askNevoApi, asUuid } from "@/lib/api";
 import {
   allowanceSpent,
+  roleRefused,
+  childBlockReason,
   safetyStop,
   type AnswerBlock,
   type SafetyStop,
@@ -108,6 +110,33 @@ const COULD_NOT_ANSWER =
  */
 const ALLOWANCE_SPENT =
   "You've asked everything for today. You can ask again tomorrow.";
+
+/**
+ * What a child is told when this account may not ask at all (Lydia, 25 Nov,
+ * L55): the server's `ask_role_forbidden`. Her words, never the server's
+ * message, which names a role and means nothing to a child. Not a failure
+ * either: "try again in a moment" sends a child back to something that
+ * cannot work.
+ */
+const NOT_ON_THIS_ACCOUNT = "Ask Nevo is not available on this account.";
+
+/**
+ * A CHILD'S BLOCK, BY ITS REASON (S2). The server's line - "Nevo can't help
+ * with this one. Please talk to a trusted adult or your teacher." - is right
+ * for a child in difficulty and wrong for one who typed a friend's name
+ * (Lydia, 11 Nov: "reserved for the category it was written for"). So:
+ * - "other": Lydia's 25 Nov line (L46), the one the individual learner route
+ *   already has;
+ * - "names_person": her 11 Nov line;
+ * - anything else - "trusted_adult", no reason, a reason this build does not
+ *   know - the server's line, unchanged (Hub ruling, 25 Nov). Today no block
+ *   carries a reason, safeguard ones included, so today every block reads
+ *   the server's line, as it did. See `childBlockReason`.
+ */
+const CHILD_BLOCK_LINES = {
+  other: "That one is outside what I can help with. Ask me about the lesson you are working on.",
+  names_person: "Nevo doesn't use people's names. Try asking without the name.",
+} as const;
 
 /**
  * Mock reply engine - calm, canned, and honest about its limits. The
@@ -274,6 +303,8 @@ export function AskNevo() {
     let spent = false;
     /** The safety check stopped it: not a failure either, and never retried. */
     let stopped: SafetyStop | null = null;
+    /** This account may not ask (L55): not a failure, and no retry fixes it. */
+    let refused = false;
     const answer = askNevoApi
       .ask(
         {
@@ -291,6 +322,9 @@ export function AskNevo() {
       .catch((cause) => {
         spent = allowanceSpent(cause);
         stopped = safetyStop(cause);
+        refused = roleRefused(cause);
+        const reason = childBlockReason(cause);
+        if (stopped && reason) stopped = { message: CHILD_BLOCK_LINES[reason] };
         return null;
       });
     /*
@@ -361,7 +395,9 @@ export function AskNevo() {
             }
           : spent
             ? { who: "nevo", text: ALLOWANCE_SPENT }
-            : signedIn
+            : refused
+              ? { who: "nevo", text: NOT_ON_THIS_ACCOUNT }
+              : signedIn
               ? { who: "nevo", text: COULD_NOT_ANSWER, failed: true }
               : // Say so. A visitor on the walkthrough cannot tell a canned
                 // reply from real tutoring either, and should not have to.

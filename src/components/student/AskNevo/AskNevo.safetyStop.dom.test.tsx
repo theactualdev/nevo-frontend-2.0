@@ -202,10 +202,13 @@ describe("a question the safety check stops", () => {
 
 describe("every other refusal keeps the ordinary failure, with its line to try again", () => {
   it.each([
+    // A role refusal is no longer one of these: it reads Lydia's line,
+    // "Ask Nevo is not available on this account." (25 Nov, L55 - see the
+    // failure tests). Another learner's context still is.
     [
-      "a 403 that is a role refusal",
+      "a 403 for another learner's context",
       new ApiError(403, "Forbidden", {
-        detail: { code: "ask_role_forbidden", message: "You cannot ask Nevo in that role." },
+        detail: { code: "student_context_forbidden", message: "Student Ask Nevo must use the current student." },
       }),
     ],
     ["a 403 that names no code", new ApiError(403, "Forbidden")],
@@ -228,5 +231,57 @@ describe("every other refusal keeps the ordinary failure, with its line to try a
     expect(screen.getByText("What is a fraction?")).toBeVisible();
     expect(screen.queryByRole("status")).toBeNull();
     expect(document.body.textContent).not.toMatch(/trusted adult/i);
+  });
+});
+
+/**
+ * L46 (Lydia, 25 Nov) and the Hub's ruling the same day, all five cases.
+ * Lydia's lines for "other" and "names_person"; the server's trusted-adult
+ * line for "trusted_adult", for NO reason, and for any reason this build
+ * does not know - an unknown value could be a new safeguarding category.
+ */
+describe("which line a child reads, by the block's reason", () => {
+  const OTHER = "That one is outside what I can help with. Ask me about the lesson you are working on.";
+  const NAMES = "Nevo doesn't use people's names. Try asking without the name.";
+  const blockedFor = (reason?: string) =>
+    new ApiError(403, "Forbidden", {
+      detail: {
+        code: "content_safety_blocked",
+        message: SERVER_WORDS,
+        ...(reason === undefined ? {} : { reason }),
+      },
+    });
+  const reads = async (reason?: string) => {
+    ask.mockRejectedValue(blockedFor(reason));
+    open();
+    await send(BLOCKED);
+    return screen.getByRole("status").textContent;
+  };
+
+  it("other: Lydia's line, and never the trusted-adult line", async () => {
+    expect(await reads("other")).toBe(OTHER);
+    expect(document.body.textContent).not.toMatch(/trusted adult/i);
+  });
+
+  it("names_person: Lydia's line for a name", async () => {
+    expect(await reads("names_person")).toBe(NAMES);
+    expect(document.body.textContent).not.toMatch(/trusted adult/i);
+  });
+
+  it("trusted_adult: the server's line, unchanged", async () => {
+    expect(await reads("trusted_adult")).toBe(SERVER_WORDS);
+  });
+
+  it("a safeguard block that arrives with no reason still points to a trusted adult", async () => {
+    // Today's server: every learner block, a safeguard one included, carries
+    // only {code, message}. Reading that as "other" would tell a child at
+    // risk to ask about their lesson.
+    expect(await reads()).toBe(SERVER_WORDS);
+    expect(document.body.textContent).not.toContain(OTHER);
+  });
+
+  it("a reason this build does not know: the server's line, never L46's", async () => {
+    expect(await reads("a_category_added_next_year")).toBe(SERVER_WORDS);
+    expect(document.body.textContent).not.toContain(OTHER);
   });
 });

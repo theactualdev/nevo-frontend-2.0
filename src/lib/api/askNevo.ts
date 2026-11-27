@@ -228,6 +228,30 @@ export function allowanceSpent(cause: unknown): boolean {
 }
 
 /**
+ * The code on the 403 `POST /api/v1/ask-nevo/` answers when the account may
+ * not ask in the role it asked as (backend `ask_role_forbidden`, with a
+ * `reason` and `availableRoles` since T8, 20 Nov). The code is the one clients
+ * switch on; its `message` names a role, which means nothing to a child.
+ */
+export const ROLE_REFUSED_CODE = "ask_role_forbidden";
+
+/**
+ * Was this refusal the account itself, not the question?
+ *
+ * BY ITS CODE, as the allowance and the stop are. Asking again cannot change
+ * it, so it is never the "try again in a moment" failure (Lydia, 25 Nov, L55).
+ * Not `student_context_forbidden` either: that one is about whose context was
+ * sent, not about this account, and keeps the ordinary failure.
+ */
+export function roleRefused(cause: unknown): boolean {
+  return (
+    cause instanceof ApiError &&
+    cause.status === 403 &&
+    apiErrorCode(cause.detail) === ROLE_REFUSED_CODE
+  );
+}
+
+/**
  * The code on the 403 `POST /api/v1/ask-nevo/` answers when a question, or the
  * answer it would have drawn, trips the safety check (SCRUM-259). The spec's
  * 403 description names it first; the backend's `SafetyBlocked` sends it as
@@ -266,6 +290,38 @@ export function safetyStop(cause: unknown): SafetyStop | null {
 /** What a teacher's safety stop was about, as the server says it. */
 export type SafetyBlockReason = "names_person" | "other";
 
+/** The `reason` a safety stop's 403 carries beside its code, as sent. */
+function stopReason(cause: unknown): unknown {
+  const outer = (cause as ApiError).detail;
+  const inner =
+    outer && typeof outer === "object" ? (outer as { detail?: unknown }).detail : undefined;
+  return inner && typeof inner === "object" ? (inner as { reason?: unknown }).reason : undefined;
+}
+
+/**
+ * The two block reasons a CHILD has a line of Lydia's for (S2, backend
+ * branch s2-child-block-reason: `detail.reason` on a learner's block, one of
+ * trusted_adult, names_person or other).
+ */
+export type ChildBlockReason = "names_person" | "other";
+
+/**
+ * A CHILD'S question the safety check held back, and whether it is one of
+ * the two reasons with a line of Lydia's: "other" (25 Nov, L46) or
+ * "names_person" (11 Nov). Null for every other stop - "trusted_adult", NO
+ * reason, and any reason this build does not know - and the server's own
+ * line stands for those (Hub ruling, 25 Nov). An unknown value could be a new
+ * safeguarding category, and today's server sends no reason at all, safeguard
+ * blocks included; reading either as "other" would take the trusted-adult
+ * pointer from the child it was written for. Null too for a refusal that is
+ * not a safety stop.
+ */
+export function childBlockReason(cause: unknown): ChildBlockReason | null {
+  if (!safetyStop(cause)) return null;
+  const reason = stopReason(cause);
+  return reason === "names_person" || reason === "other" ? reason : null;
+}
+
 /**
  * A TEACHER'S question the safety check held back, and why (backend 815f222,
  * live in 62966f1: `detail.reason`, teacher audience only). "names_person" is
@@ -275,12 +331,7 @@ export type SafetyBlockReason = "names_person" | "other";
  */
 export function teacherSafetyBlock(cause: unknown): SafetyBlockReason | null {
   if (!safetyStop(cause)) return null;
-  const outer = (cause as ApiError).detail;
-  const inner =
-    outer && typeof outer === "object" ? (outer as { detail?: unknown }).detail : undefined;
-  const reason =
-    inner && typeof inner === "object" ? (inner as { reason?: unknown }).reason : undefined;
-  return reason === "names_person" ? "names_person" : "other";
+  return stopReason(cause) === "names_person" ? "names_person" : "other";
 }
 
 /** `GET /api/v1/ask-nevo/allowance` (AskNevoAllowanceResponse). */
