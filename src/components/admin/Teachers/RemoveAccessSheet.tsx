@@ -145,7 +145,9 @@ export function RemoveAccessSheet({
     loadStaff();
   }, [loadStaff]);
 
-  const firstName = teacher.name.split(" ").filter(Boolean).slice(-1)[0] ?? teacher.name;
+  // L45 (Lydia, 25 Nov): the FIRST name, as "Message {first}" does. This
+  // took the last word, so "Keep Adeyemi's access" for Folake Adeyemi.
+  const firstName = teacher.name.split(" ").filter(Boolean)[0] ?? teacher.name;
   const outstanding = held.filter((h) => plan[h.assignmentId]?.kind === "unresolved").length;
   const ready = outstanding === 0;
 
