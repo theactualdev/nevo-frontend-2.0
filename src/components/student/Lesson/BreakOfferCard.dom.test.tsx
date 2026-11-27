@@ -80,10 +80,33 @@ describe("the break card", () => {
 
   it("draws nothing for a kind this player does not take", () => {
     const onShown = vi.fn();
-    offer("stop_for_the_day", { onShown });
+    offer("nap", { onShown });
 
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.queryByText(/stop here for today/i)).toBeNull();
     expect(onShown).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * L60 (Lydia, 25 Nov): 17d S5's third card, with her body in place of the
+ * frame's, which claimed the latest place is kept (D88).
+ */
+describe("stopping for today", () => {
+  it("is the frame's third card, in Lydia's words", () => {
+    offer("stop_for_day");
+
+    expect(screen.getByText("It's okay to stop here for today.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Your last saved point is kept, and this lesson will be here when you come back."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Stop for today" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Stay a little longer" })).toBeInTheDocument();
+  });
+
+  it("never claims the place itself is kept (D88)", () => {
+    offer("stop_for_day");
+
+    expect(document.body.textContent).not.toMatch(/right where you are|nothing is lost/i);
   });
 });
