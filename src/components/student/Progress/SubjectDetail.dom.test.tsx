@@ -556,3 +556,73 @@ describe("a progress read that failed", () => {
     Object.defineProperty(window, "location", { configurable: true, value: was });
   });
 });
+
+/**
+ * L61 (Lydia, 25 Nov) on L11 (19 Nov) and frame 23b: a card for each concept
+ * that is due, Home's card as it is, at most three, and the rest behind one
+ * control that reads "See the rest" and counts nothing.
+ */
+describe("several concepts due at once", () => {
+  const FIVE = [
+    { conceptId: "c-1", name: "Adding fractions" },
+    { conceptId: "c-2", name: "Equivalent fractions" },
+    { conceptId: "c-3", name: "Telling the time" },
+    { conceptId: "c-4", name: "Reading a number line" },
+    { conceptId: "c-5", name: "Shapes and their sides" },
+  ];
+  const due = (concepts: { conceptId: string; name: string }[]) => {
+    hooks.useStudentProgress.mockReturnValue({
+      subjects: [{ slug: "Mathematics", name: "Mathematics", concepts }],
+      lessons: [],
+      reflection: null,
+      highlights: [],
+      loading: false,
+      failed: false,
+      live: true,
+    });
+    hooks.useDueReviews.mockReturnValue({
+      due: new Set(concepts.map((c) => c.conceptId)),
+      playable: new Map(concepts.map((c) => [c.conceptId, `lesson-${c.conceptId}`])),
+      loading: false,
+      failed: false,
+    });
+  };
+
+  it("draws Home's review card for each of the first three, and no more", async () => {
+    signIn();
+    due(FIVE);
+
+    render(<SubjectDetail subject={null} slug="Mathematics" />);
+
+    await screen.findByRole("link", { name: /take another look at Adding fractions/i });
+    expect(screen.getAllByRole("heading", { name: "A quick look back" })).toHaveLength(3);
+    expect(screen.getAllByText("Something from last week is ready for a quick review.")).toHaveLength(3);
+    expect(screen.getAllByRole("link", { name: /take another look at/i })).toHaveLength(3);
+    expect(screen.queryByRole("link", { name: /take another look at Reading a number line/i })).toBeNull();
+  });
+
+  it("keeps the rest behind See the rest, which counts nothing", async () => {
+    signIn();
+    due(FIVE);
+
+    render(<SubjectDetail subject={null} slug="Mathematics" />);
+
+    const control = await screen.findByRole("button", { name: "See the rest" });
+    expect(control.textContent).not.toMatch(/\d/);
+
+    fireEvent.click(control);
+
+    expect(screen.getAllByRole("link", { name: /take another look at/i })).toHaveLength(5);
+    expect(screen.queryByRole("button", { name: "See the rest" })).toBeNull();
+  });
+
+  it("draws no control when three or fewer are due", async () => {
+    signIn();
+    due(FIVE.slice(0, 3));
+
+    render(<SubjectDetail subject={null} slug="Mathematics" />);
+
+    await screen.findByRole("link", { name: /take another look at Telling the time/i });
+    expect(screen.queryByRole("button", { name: "See the rest" })).toBeNull();
+  });
+});
