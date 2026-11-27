@@ -280,6 +280,29 @@ describe("LiveClassInsights - with something to say", () => {
     expect(screen.queryByText(/Still gathering/)).not.toBeInTheDocument();
     expect(screen.queryByText(/couldn’t load/i)).not.toBeInTheDocument();
   });
+
+  it("says 'Not enough yet to show this.' for a track with no estimate - never an empty bar", () => {
+    // Hub, 25 Nov: the student profile's nothing-state, on C09's panel too.
+    useClassInsights.mockReturnValue(
+      state({
+        concepts: [
+          { conceptId: "k1", name: "Equivalent fractions", understanding: null, reading: 52, studentCount: 18 },
+          { conceptId: "k2", name: "Ratio", understanding: null, reading: null, studentCount: 18 },
+        ],
+      }),
+    );
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(
+      screen.queryByRole("progressbar", { name: "Equivalent fractions - understanding" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("progressbar", { name: "Equivalent fractions - reading level" }),
+    ).toHaveAttribute("aria-valuenow", "52");
+    expect(screen.queryByRole("progressbar", { name: /^Ratio/ })).not.toBeInTheDocument();
+    // One for the fractions' understanding, one for Ratio as a whole.
+    expect(screen.getAllByText("Not enough yet to show this.")).toHaveLength(2);
+  });
 });
 
 /**
