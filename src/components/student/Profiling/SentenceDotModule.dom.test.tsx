@@ -795,3 +795,47 @@ describe("SentenceDotModule — a read trial says how many words it showed", () 
     expect(dots).not.toHaveProperty("readingWordCount");
   });
 });
+
+/**
+ * L8 (Lydia, 25 Nov: keep "Not sure", drawn as 09f). A decline is not an
+ * answer, so it is not drawn like one; and D174's Violet-Ink for its words.
+ */
+describe("SentenceDotModule - Not sure, as 09f draws it", () => {
+  const notSure = () => screen.getByRole("button", { name: "Not sure" });
+  const answer = () => screen.getByRole("button", { name: "To track her savings for school fees" });
+
+  it("rests violet-bordered, its words in Violet-Ink", () => {
+    render(<SentenceDotModule band="ss" onComplete={() => {}} />);
+
+    expect(notSure()).toHaveClass("border-nevo-violet", "bg-nevo-cream", "text-nevo-violet-text");
+    expect(notSure()).not.toHaveClass("text-nevo-violet");
+  });
+
+  it("chosen, fills violet with near-black words, and leaves every answer at rest", () => {
+    render(<SentenceDotModule band="ss" onComplete={() => {}} />);
+
+    fireEvent.click(notSure());
+
+    expect(notSure()).toHaveClass("bg-nevo-violet", "text-nevo-near-black", "font-semibold");
+    expect(answer()).not.toHaveClass("bg-nevo-navy");
+  });
+
+  it("stays as it was when an answer is chosen", () => {
+    render(<SentenceDotModule band="ss" onComplete={() => {}} />);
+
+    fireEvent.click(answer());
+
+    expect(answer()).toHaveClass("bg-nevo-navy");
+    expect(notSure()).toHaveClass("bg-nevo-cream", "text-nevo-violet-text");
+  });
+
+  it("gives the sentence band's Not sure and P1-3's I don't know the same ink", () => {
+    render(<SentenceDotModule band="p46" onComplete={() => {}} />);
+    expect(notSure()).toHaveClass("text-nevo-violet-text");
+    cleanup();
+
+    giveJsdomAVoice();
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+    expect(screen.getByRole("button", { name: /I don.t know/ })).toHaveClass("text-nevo-violet-text");
+  });
+});

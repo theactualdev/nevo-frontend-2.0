@@ -452,14 +452,21 @@ export function HeardPictures({
         onClick={() => onPick(AUDIO_PICS.length, { notSure: true })}
         className={cn(
           "flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-[10px] border-2 border-nevo-violet text-sm font-medium transition-transform active:scale-[0.97] sm:w-[220px]",
+          // D174 (09f): the words in Violet-Ink, which passes 4.5:1 on
+          // cream where the violet failed. The mark keeps the frame's violet
+          // (`idkIconStyle`'s #9a9ccb) - D174 is text only - except on the
+          // violet fill, where it would vanish.
           picked === AUDIO_PICS.length
             ? "bg-nevo-violet text-nevo-near-black"
-            : "bg-nevo-cream text-nevo-violet",
+            : "bg-nevo-cream text-nevo-violet-text",
         )}
       >
         <span
           aria-hidden
-          className="size-[22px] shrink-0"
+          className={cn(
+            "size-[22px] shrink-0",
+            picked !== AUDIO_PICS.length && "text-nevo-violet",
+          )}
           dangerouslySetInnerHTML={{ __html: SHRUG }}
         />
         I don&apos;t know
@@ -654,7 +661,7 @@ export function SentenceDotModule({
                       )
                     }
                     className={cn(
-                      "flex min-h-12 w-full cursor-pointer items-center rounded-[10px] border-2 px-4 py-3.5 text-left text-[15px] leading-[1.4]",
+                      "flex min-h-12 w-full cursor-pointer items-center rounded-[10px] border-2 px-4 py-3.5 text-left text-[15px] leading-[1.4] text-pretty",
                       picked === i
                         ? "border-nevo-navy bg-nevo-navy text-nevo-cream"
                         : "border-nevo-navy bg-nevo-cream text-nevo-near-black",
@@ -671,7 +678,19 @@ export function SentenceDotModule({
                       { ...passageRead, notSure: true },
                     )
                   }
-                  className="flex min-h-12 w-full cursor-pointer items-center rounded-[10px] border-2 border-nevo-violet bg-nevo-cream px-4 py-3.5 text-left text-sm font-medium text-nevo-violet"
+                  /*
+                    09f: A DECLINE IS NOT AN ANSWER, SO IT IS NOT DRAWN LIKE
+                    ONE. An answer fills navy; "Not sure" chosen fills violet,
+                    near-black words at 600, the same border - and the four
+                    answers are at rest beside it, so the screen records one
+                    thing, not two. At rest its words are Violet-Ink (D174).
+                  */
+                  className={cn(
+                    "flex min-h-12 w-full cursor-pointer items-center rounded-[10px] border-2 border-nevo-violet px-4 py-3.5 text-left text-sm leading-[1.4] text-pretty",
+                    picked === PASSAGE_OPTIONS.length
+                      ? "bg-nevo-violet font-semibold text-nevo-near-black"
+                      : "bg-nevo-cream font-medium text-nevo-violet-text",
+                  )}
                 >
                   Not sure
                 </button>
