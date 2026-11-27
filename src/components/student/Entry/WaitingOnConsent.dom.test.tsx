@@ -411,3 +411,51 @@ describe("held at the age check", () => {
     fetchSpy.mockRestore();
   });
 });
+
+/**
+ * Backlog item 5 (Hub, 27 Nov): a press whose read failed changed nothing on
+ * screen - the inert button Lydia ruled out (31 Oct). The read now shows on
+ * the button while it is out, as the entry check's Try again does, and a
+ * failed read settles back without claiming it checked.
+ */
+describe("Check again, while its read is out", () => {
+  it("shows the read on the button, and settles when it answers", async () => {
+    let settle: (v: "still-waiting") => void = () => {};
+    render(
+      <WaitingOnConsent
+        onCheckAgain={() => new Promise<"still-waiting">((resolve) => (settle = resolve))}
+      />,
+    );
+    const check = screen.getByRole("button", { name: "Check again" });
+
+    fireEvent.click(check);
+
+    expect(check).toHaveAttribute("aria-busy", "true");
+    expect(check).toBeDisabled();
+
+    await act(async () => settle("still-waiting"));
+
+    expect(check).not.toHaveAttribute("aria-busy");
+    expect(check).toBeEnabled();
+    expect(screen.getByText(CHECKED_NOTHING_YET)).toBeInTheDocument();
+  });
+
+  it("settles back after a read that failed, and never says it checked", async () => {
+    let fail: (e: Error) => void = () => {};
+    render(
+      <WaitingOnConsent
+        onCheckAgain={() => new Promise<void>((_, reject) => (fail = reject))}
+      />,
+    );
+    const check = screen.getByRole("button", { name: "Check again" });
+
+    fireEvent.click(check);
+    expect(check).toHaveAttribute("aria-busy", "true");
+
+    await act(async () => fail(new Error("offline")));
+
+    expect(check).not.toHaveAttribute("aria-busy");
+    expect(check).toBeEnabled();
+    expect(screen.queryByText(CHECKED_NOTHING_YET)).toBeNull();
+  });
+});
