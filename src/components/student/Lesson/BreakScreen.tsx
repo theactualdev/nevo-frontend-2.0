@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ComponentProps } from "react";
+import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 import { Leaf } from "lucide-react";
 import { IllustrationWrapper } from "@/components/shared";
 import { BREAK_PICTURES } from "@/components/shared/breakPictures";
@@ -265,5 +265,151 @@ export function BreakScreen({
         </>
       )}
     </div>
+  );
+}
+
+/** The two kinds 18b takes in place; movement and full keep frame 18's screen. */
+export function breakTakenInPlace(type: BreakType | null | undefined): boolean {
+  return type === BREAK_TYPES.MICRO || type === BREAK_TYPES.CONSOLIDATION;
+}
+
+/**
+ * THE MICRO AND CONSOLIDATION BREAKS, TAKEN IN PLACE (18b; Lydia, 25 Nov,
+ * L12, and 26 Oct: "micro and consolidation in place, movement and full take
+ * the screen"). A filled card in the reading column, beneath the segment: the
+ * top bar, the progress and the segment stay on screen and the segment is
+ * left exactly as it was - not dimmed, not a sheet, not a dialog. The
+ * picture, the lines and the chips are the break module's own.
+ *
+ * - ONE CONTROL ENDS THE REST (18b): "Keep going" for the micro break,
+ *   "Continue" for the consolidation one. So the micro break no longer ends
+ *   itself after its hold, as the takeover's does: the card is the child's to
+ *   close, and nothing on it times the rest.
+ * - No countdown, no timer, and nothing said about saving (D208).
+ * - The same signal seams as the takeover: its start on mount, its length on
+ *   the way out, the feelings on Continue.
+ *
+ * Focus comes to the card as it opens, which also brings it into view on a
+ * long segment: a child who did not see it could not end it.
+ */
+export function InPlaceBreak({
+  type,
+  onDone,
+  onStart,
+  onEnd,
+  onFeelings,
+}: {
+  /** Any kind; only micro and consolidation are drawn (rule 5 for the rest). */
+  type: BreakType;
+  onDone: () => void;
+  onStart?: () => void;
+  onEnd?: (durationMs: number) => void;
+  onFeelings?: (feelings: string[]) => void;
+}) {
+  const titleId = useId();
+  const card = useRef<HTMLElement>(null);
+  const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set());
+  const startedAt = useRef(0);
+  const started = useRef(false);
+  const onStartRef = useRef(onStart);
+  useEffect(() => {
+    onStartRef.current = onStart;
+  }, [onStart]);
+
+  useEffect(() => {
+    if (started.current) return; // StrictMode double-invoke guard
+    started.current = true;
+    // Monotonic (rule 4): the break's length is sent to the engine.
+    startedAt.current = performance.now();
+    onStartRef.current?.();
+    card.current?.scrollIntoView?.({ block: "nearest" });
+    card.current?.focus({ preventScroll: true });
+  }, []);
+
+  const finish = () => {
+    if (type === BREAK_TYPES.CONSOLIDATION) onFeelings?.([...chosen]);
+    onEnd?.(Math.max(0, Math.round(performance.now() - startedAt.current)));
+    onDone();
+  };
+
+  if (!breakTakenInPlace(type)) return null;
+  const micro = type === BREAK_TYPES.MICRO;
+  return (
+    <section
+      ref={card}
+      tabIndex={-1}
+      aria-labelledby={titleId}
+      data-break-in-place={type}
+      className="mt-[22px] flex flex-col items-center rounded-[12px] bg-nevo-cream-elevated px-5 py-6 text-center text-nevo-near-black shadow-[0_2px_8px_rgba(0,0,0,0.06)] outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300 md:mt-[26px] md:px-7 md:py-[30px]"
+    >
+      {micro ? (
+        <>
+          <BreakArt
+            {...BREAK_PICTURES.micro}
+            alt="A figure sitting calmly with eyes closed"
+            motion="breathe"
+            className="w-[132px] md:w-[170px] xl:w-[150px]"
+          />
+          <h2
+            id={titleId}
+            className="mt-5 text-[19px] font-medium md:mt-6 md:text-[21px] xl:mt-[22px]"
+          >
+            Take a breath
+          </h2>
+        </>
+      ) : (
+        <>
+          <BreakArt
+            {...BREAK_PICTURES.consolidation}
+            alt="A figure thinking, hand resting on chin"
+            className="h-[104px] w-auto md:h-[130px] xl:h-[118px]"
+          />
+          <h2
+            id={titleId}
+            className="mt-5 max-w-[320px] text-[19px] leading-[1.4] font-medium md:mt-6 md:text-[21px] xl:mt-[22px]"
+          >
+            How are you feeling right now?
+          </h2>
+          <span className="mt-2.5 text-[13px] text-nevo-near-black/55">
+            Tap any that fit - there&apos;s no wrong answer.
+          </span>
+          <div className="mt-4 flex max-w-[300px] flex-wrap justify-center gap-2.5 md:max-w-[420px] xl:max-w-[480px]">
+            {FEELINGS.map((f) => {
+              const on = chosen.has(f);
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() =>
+                    setChosen((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(f)) next.delete(f);
+                      else next.add(f);
+                      return next;
+                    })
+                  }
+                  className={cn(
+                    "inline-flex h-11 cursor-pointer items-center rounded-full border-[1.5px] px-[18px] text-[15px] transition-transform active:scale-[0.98]",
+                    on
+                      ? "border-nevo-navy bg-nevo-navy font-medium text-nevo-cream"
+                      : "border-nevo-near-black/16 bg-nevo-cream font-normal text-nevo-near-black",
+                  )}
+                >
+                  {f}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+      <button
+        type="button"
+        onClick={finish}
+        className="mt-[22px] flex h-[52px] w-full cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy text-base font-medium text-nevo-cream transition-transform active:scale-[0.99] md:mt-[26px] md:max-w-[320px] xl:mt-6"
+      >
+        {micro ? "Keep going" : "Continue"}
+      </button>
+    </section>
   );
 }

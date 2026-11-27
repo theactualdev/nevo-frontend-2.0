@@ -199,11 +199,22 @@ describe("leaving part way", () => {
       expect(push).not.toHaveBeenCalled();
       expect(writes().map(([s]) => s)).not.toContain(LESSON_STATUS.EXITED);
 
+      // 18b: taken in place, under the part it was taken on - which stays
+      // on screen throughout - and ended by its one control, not its hold.
+      expect(screen.getByText("Body of Denominators.")).toBeTruthy();
+      // The arrows wait under it, not drawn: 18b draws none.
+      const arrows = screen.getByRole("button", { name: "Next", hidden: true }).closest("nav")!;
+      expect(arrows).toHaveAttribute("inert");
+      expect(arrows).toHaveClass("invisible");
       await act(async () => {
         vi.advanceTimersByTime(8_100);
       });
+      expect(screen.getByText("Take a breath")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
 
+      expect(screen.queryByText("Take a breath")).toBeNull();
       expect(screen.getByText("Body of Denominators.")).toBeTruthy();
+      expect(arrows).not.toHaveClass("invisible");
     } finally {
       vi.useRealTimers();
     }
