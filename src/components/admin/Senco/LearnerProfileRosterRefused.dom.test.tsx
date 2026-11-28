@@ -138,7 +138,7 @@ beforeEach(() => {
 describe("What Nevo has noticed, for an admin the roster route refuses", () => {
   it("is left out - no failure line, no Try again, no claim that Nevo found nothing", async () => {
     const { container } = render(<LearnerProfileView studentId="s1" />);
-    await screen.findByText("Concept mastery");
+    await screen.findByText("Current accommodations");
     await waitFor(() => expect(h.roster).toHaveBeenCalledWith("c1"));
 
     await waitFor(() => expect(visibleText(container)).not.toMatch(/What Nevo has noticed/i));

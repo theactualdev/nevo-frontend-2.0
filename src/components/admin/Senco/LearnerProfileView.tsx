@@ -655,8 +655,14 @@ export function LearnerProfileView({
         * ("Two tracks per concept…") is gone: both describe the bars this
         * replaces, so they would be untrue over it. D08b has no other line of
         * its own, so it has none (Hub, 28 Nov; with Lydia in L99).
+        *
+        * WITH NO CONCEPTS, NO SECTION - as C08 draws it (Hub, 28 Nov). Its
+        * old line, "No concepts have enough practice behind them yet.", was
+        * in neither frame (the 1 Sep D8 build) and described the probability
+        * threshold the bars had: under S21 a concept appears on any evidence
+        * at all. Only a read that failed draws the section empty, to say so.
         */}
-      {masteryAbsent ? null : (
+      {masteryAbsent || (!failed.mastery && mastery.length === 0) ? null : (
         <>
           <SectionLabel>Concept mastery</SectionLabel>
           <div className={cn(CARD, "mt-2.5")}>
@@ -664,10 +670,6 @@ export function LearnerProfileView({
               <div className="px-6 py-6">
                 <ReadFailed firstName={firstName} what="concept record" onRetry={load} />
               </div>
-            ) : mastery.length === 0 ? (
-              <p className="m-0 px-6 py-6 text-sm text-nevo-near-black/62">
-                No concepts have enough practice behind them yet.
-              </p>
             ) : (
               mastery.map((c, i) => (
                 <div

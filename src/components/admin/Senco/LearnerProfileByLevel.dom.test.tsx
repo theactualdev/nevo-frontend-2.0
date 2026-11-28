@@ -132,6 +132,20 @@ describe("D08b's concept mastery, by level", () => {
   });
 });
 
+describe("a learner with no concepts yet", () => {
+  // As C08 draws it (Hub, 28 Nov): no section at all - and not the old "No
+  // concepts have enough practice behind them yet.", which was in neither
+  // frame and described the bars' probability threshold.
+  it("draws no Concept mastery section, and no line about practice", async () => {
+    masteryByLevel.mockResolvedValue(concepts());
+    const { container } = render(<LearnerProfileView studentId="s1" />);
+    await waitFor(() => expect(masteryByLevel).toHaveBeenCalled());
+    await screen.findByText("Current accommodations");
+    await waitFor(() => expect(screen.queryByText("Concept mastery")).toBeNull());
+    expect(visibleText(container)).not.toMatch(/enough practice/);
+  });
+});
+
 describe("when the mastery read doesn't answer", () => {
   it("says a failed read failed, with the profile's own line and a retry", async () => {
     masteryByLevel.mockRejectedValue(new ApiError(500, "Server error"));
