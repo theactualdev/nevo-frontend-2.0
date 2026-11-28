@@ -81,8 +81,11 @@ describe("C08's Concept mastery, by level", () => {
     expect(screen.getByRole("heading", { name: "Concept mastery" })).toBeInTheDocument();
     const text = visibleText(container);
     expect(text).toMatch(/Solving linear equations\s*Knowing and understanding\s*Reached\s*Application\s*Working at it\s*Analysis and evaluation\s*Not arrived yet\s*Reading level\s*At level/);
-    // Nothing observed at Application or Analysis: not drawn as "Not arrived yet".
-    expect(text).toMatch(/Simplifying expressions\s*Knowing and understanding\s*Reached\s*Reading level\s*Support needed/);
+    // Nothing observed at Application or Analysis: "Not checked yet" (Lydia,
+    // L99), never "Not arrived yet".
+    expect(text).toMatch(
+      /Simplifying expressions\s*Knowing and understanding\s*Reached\s*Application\s*Not checked yet\s*Analysis and evaluation\s*Not checked yet\s*Reading level\s*Support needed/,
+    );
     expect(screen.queryByRole("progressbar")).toBeNull();
     expect(text).not.toMatch(/\d+%|Understanding\b/);
   });
