@@ -17,7 +17,7 @@ import {
 import { OBSERVATION_COPY, observationCount } from "@/lib/constants/observations";
 import { cn } from "@/lib/utils";
 import { SummaryChip } from "@/components/teacher/shared/SummaryChip";
-import { MasteryDualTrack } from "./MasteryDualTrack";
+import { CONCEPT_MASTERY_LEAD, MasteryByLevel } from "./MasteryByLevel";
 import { RecommendSheet } from "./RecommendSheet";
 import { SessionPanel } from "./SessionPanel";
 import { ShareSheet } from "./ShareSheet";
@@ -301,22 +301,15 @@ export function StudentProfile({
               Concept mastery
             </h3>
             <p className="mt-2 text-[13.5px] leading-[1.5] text-nevo-near-black/60 xl:mt-[9px] xl:max-w-[660px] xl:text-sm xl:leading-[1.55]">
-              <span className="xl:hidden">
-                Understanding and reading load, per topic. When they part
-                company, it&apos;s usually the reading.
-              </span>
-              <span className="hidden xl:inline">
-                {`Two tracks per topic: how well ${firstName} has understood it, and how much the reading load is shaping the result. When the tracks part company, it's usually the reading, not the maths.`}
-              </span>
+              {CONCEPT_MASTERY_LEAD}
             </p>
             <div className="mt-3.5 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:gap-[22px] xl:px-[26px] xl:py-6">
               {student.concepts.map((c) => (
-                <MasteryDualTrack
+                <MasteryByLevel
                   key={c.name}
                   concept={c.name}
-                  understanding={c.u}
-                  reading={c.r}
-                  flag={c.flag}
+                  levels={c.levels}
+                  reading={c.reading}
                 />
               ))}
             </div>

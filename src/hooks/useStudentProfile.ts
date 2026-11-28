@@ -7,7 +7,10 @@ import {
   type ConversationEvidence,
   studentsApi,
   type Accommodations,
-  type ConceptMasteryRow,
+  type ConceptLevels,
+  type MasteryLevel,
+  type MasteryLevelState,
+  type ReadingDemand,
   type LessonProgress,
   type Recommendation,
   type StudentAdaptation,
@@ -35,14 +38,22 @@ import { LEARNING_SUPPORT_REQUIRED, refusedWith } from "@/lib/api/learningSuppor
  * is exactly what the frame's early state says.
  */
 
+/**
+ * One concept as the By Level design draws it (S21, live 27 Nov): a state per
+ * curriculum level, with reading beside them. The bars, and the 0-100 this
+ * used to turn the engine's probabilities into for them, are gone - S21 sends
+ * no probability, and nothing here makes one.
+ */
 export interface MasteryConcept {
   conceptId: string;
-  /** Resolved from `/api/concepts`; the id itself if it cannot be. */
   name: string;
-  /** 0-100, as the frame's bars want. Null when the engine sent none. */
-  understanding: number | null;
-  reading: number | null;
-  practiceCount: number;
+  /**
+   * Only the levels the engine observed something at, exactly as sent. An
+   * absent level is NOT `not` - nothing is filled in here.
+   */
+  levels: Partial<Record<MasteryLevel, MasteryLevelState>>;
+  /** Null when nothing is observed. */
+  reading: ReadingDemand | null;
 }
 
 /**
@@ -109,10 +120,18 @@ export function helpSeekingLine(
 /** Where one background read stands. */
 export type ReadState = "loading" | "ready" | "failed";
 
+/**
+ * The mastery read's refusals are their own states (Hub, 28 Nov): a 403
+ * (`staff_role_required`) is "refused" and a 404 (a child outside the
+ * viewer's reach) "missing" - neither one a read that a retry could land, so
+ * neither draws the failure line that offers one.
+ */
+export type MasteryReadState = ReadState | "refused" | "missing";
+
 /** The reads that fill a profile in, each allowed to fail on its own. */
 export interface ProfileReads {
   learnerProfile: ReadState;
-  mastery: ReadState;
+  mastery: MasteryReadState;
   recommendations: ReadState;
   adaptations: ReadState;
   accommodations: ReadState;
@@ -152,20 +171,16 @@ export interface StudentProfileState {
   failed: boolean;
 }
 
-/**
- * A probability as the bars want it, or null for none. `pct(null)` was 0 -
- * `Math.min(1, null)` is 0 - so a concept the engine had no estimate for
- * drew as an empty bar, which "reads as zero, which is a claim we have not
- * earned" (Lydia, SCRUM-200, 28 Oct).
- */
-const pct = (p: number | null | undefined): number | null =>
-  typeof p === "number" && Number.isFinite(p)
-    ? Math.round(Math.max(0, Math.min(1, p)) * 100)
-    : null;
+/** Where a mastery read that did not answer leaves the section. */
+function masteryNotRead(err: unknown): MasteryReadState {
+  if (err instanceof ApiError && err.status === 403) return "refused";
+  if (err instanceof ApiError && err.status === 404) return "missing";
+  return "failed";
+}
 
 export function useStudentProfile(studentId: string): StudentProfileState {
   const [profile, setProfile] = useState<StudentProfileResponse | null>(null);
-  const [mastery, setMastery] = useState<ConceptMasteryRow[]>([]);
+  const [mastery, setMastery] = useState<ConceptLevels[]>([]);
   const [evidence, setEvidence] = useState<ConversationEvidence | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [adaptations, setAdaptations] = useState<StudentAdaptation[]>([]);
@@ -226,16 +241,16 @@ export function useStudentProfile(studentId: string): StudentProfileState {
 
     // Enrichment. Each is allowed to fail on its own - and each now SAYS
     // whether it did, rather than leaving its empty default to speak.
-    const settle = (key: keyof ProfileReads, to: ReadState) => {
+    const settle = <K extends keyof ProfileReads>(key: K, to: ProfileReads[K]) => {
       if (!cancelled) setReads((r) => ({ ...r, [key]: to }));
     };
     void studentsApi
-      .mastery(studentId)
-      .then((rows) => {
-        if (!cancelled) setMastery(rows);
+      .masteryByLevel(studentId)
+      .then((res) => {
+        if (!cancelled) setMastery(Array.isArray(res?.concepts) ? res.concepts : []);
         settle("mastery", "ready");
       })
-      .catch(() => settle("mastery", "failed"));
+      .catch((err: unknown) => settle("mastery", masteryNotRead(err)));
     void conversationEvidenceApi
       .forStudent(studentId)
       .then((res) => {
@@ -312,20 +327,15 @@ export function useStudentProfile(studentId: string): StudentProfileState {
     learningSupport,
     helpSeeking: helpSeekingLine(evidence),
     profile,
-    // A row the engine could not name is a bar with no label - nothing a
-    // teacher can act on - so it is left out rather than drawn blank.
-    concepts: mastery.filter((m) => m.conceptName).map((m) => ({
+    // A concept with no name is a row with no label - nothing a teacher can
+    // act on - so it is left out rather than drawn blank. The contract
+    // requires the name; this is the guard for the day it doesn't arrive.
+    concepts: mastery.filter((m) => m?.conceptName).map((m) => ({
       conceptId: m.conceptId,
-      // Straight from the mastery read since 31 Aug. It used to be resolved
-      // through a second, best-effort `/api/concepts` call whose failure was
-      // swallowed - and when it failed a teacher was shown a raw UUID as the
-      // name of the concept their student was struggling with.
-      name: m.conceptName as string,
-      // Both nullable since d461b60. A null stays null, and the bar says
-      // "Not enough yet to show this." in its place (`MasteryDualTrack`).
-      understanding: pct(m.masteryProbabilityConcept),
-      reading: pct(m.masteryProbabilityReading),
-      practiceCount: m.practiceCount,
+      name: m.conceptName,
+      // As sent. No level is filled in, and none is defaulted to `not`.
+      levels: m.levels && typeof m.levels === "object" ? m.levels : {},
+      reading: m.reading ?? null,
     })),
     recommendations,
     adaptations,

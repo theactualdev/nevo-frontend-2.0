@@ -25,16 +25,16 @@ import { LiveRecommendSheet } from "./LiveRecommendSheet";
 import { LiveShareSheet } from "./LiveShareSheet";
 import type { StudentProfileState } from "@/hooks/useStudentProfile";
 import { cn } from "@/lib/utils";
-import { MasteryDualTrack } from "./MasteryDualTrack";
+import { CONCEPT_MASTERY_LEAD, MasteryByLevel } from "./MasteryByLevel";
 import { PhoneRosterBar } from "@/components/teacher/Shell/PhoneBackBar";
 
 /**
  * C08 Student Profile for a real student.
  *
  * WHAT IS SHOWN. Who they are, whether anything is flagged, how they are
- * doing per concept - the dual-track bars the frame already draws, from
- * `mastery/student` - and whatever Nevo recommends, which the backend writes
- * in plain language already.
+ * doing per concept - a state per curriculum level, as the By Level design
+ * draws it, from S21's `students/{id}/mastery` - and whatever Nevo
+ * recommends, which the backend writes in plain language already.
  *
  * WHAT IS RULED OUT (Olayinka, 30 Aug 2026), not merely deferred: the
  * learner profile's `workingMemoryCapacity` and `attentionSpan` are never
@@ -527,6 +527,9 @@ export function LiveStudentProfile({
             sessions, adaptations and the help-seeking line are for a bigger
             screen. */}
         <div className="max-md:hidden">
+        {/* Only a read that FAILED says so. A refusal (403) or a child out
+            of reach (404) is "refused" or "missing": no retry would land,
+            so the section is simply absent (Hub, 28 Nov). */}
         {concepts.length === 0 && read("mastery") === "failed" && (
           <>
             <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-9")}>Concept mastery</h3>
@@ -540,15 +543,14 @@ export function LiveStudentProfile({
           <>
             <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-9")}>Concept mastery</h3>
             <p className="mt-2 text-[13.5px] leading-[1.5] text-nevo-near-black/60 xl:mt-[9px] xl:max-w-[660px] xl:text-sm xl:leading-[1.55]">
-              How well each idea has landed, and how much the reading itself is
-              shaping that.
+              {CONCEPT_MASTERY_LEAD}
             </p>
             <div className="mt-3.5 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-elevation-1 xl:mt-4 xl:gap-[22px] xl:px-[26px] xl:py-6">
               {concepts.map((c) => (
-                <MasteryDualTrack
+                <MasteryByLevel
                   key={c.conceptId}
                   concept={c.name}
-                  understanding={c.understanding}
+                  levels={c.levels}
                   reading={c.reading}
                 />
               ))}

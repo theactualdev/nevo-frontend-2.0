@@ -1,4 +1,5 @@
 import type { ObservationPattern } from "@/lib/api/classes";
+import type { MasteryLevel, MasteryLevelState, ReadingDemand } from "@/lib/api/students";
 import { OBSERVATION_COPY } from "@/lib/constants/observations";
 import { TEACHER_CLASSES, type TeacherClass } from "./teacherClasses";
 
@@ -57,18 +58,16 @@ import { TEACHER_CLASSES, type TeacherClass } from "./teacherClasses";
  * the enum directly, with no local alias standing between them.
  */
 
+/**
+ * One concept as the By Level design draws it - the live read's shape (S21),
+ * so the walkthrough and the live profile never show two models. No figure
+ * and no flag: the server sends neither, and nothing here may stand one in.
+ */
 export interface ConceptMastery {
   name: string;
-  /** 0-100. */
-  u: number;
-  /** 0-100. */
-  r: number;
-  /**
-   * Fixture text for the pill, rendered as given; "none" suppresses it. The
-   * component computes no label of its own (since 17 Sep), and nothing here
-   * may work one out from `u` and `r` either (rule 3).
-   */
-  flag?: string;
+  /** Only the levels something was observed at. */
+  levels: Partial<Record<MasteryLevel, MasteryLevelState>>;
+  reading: ReadingDemand | null;
 }
 
 export interface EvidenceItem {
@@ -228,14 +227,29 @@ const AMARA: Omit<StudentProfileData, "classId" | "className"> = {
     "revisited_content",
   ],
   observationCounts: { completed_lessons: 12 },
-  // No `flag` on any of these four, so no pill renders on this data - the
-  // frame's intent, not a gap. (The component's auto-flag thresholds this
-  // comment once relied on were removed on 17 Sep.)
+  // C08's own sample rows (928cf30): RWN/at, RRW/support, WNN/at and RWW/at -
+  // reached, working and not, knowing to analysis. No flag on any of them.
   concepts: [
-    { name: "Solving linear equations", u: 84, r: 66 },
-    { name: "Simplifying expressions", u: 79, r: 63 },
-    { name: "Algebraic fractions", u: 58, r: 60 },
-    { name: "Comprehension: prose texts", u: 86, r: 72 },
+    {
+      name: "Solving linear equations",
+      levels: { knowing_and_understanding: "reached", application: "working", analysis_and_evaluation: "not" },
+      reading: "at",
+    },
+    {
+      name: "Simplifying expressions",
+      levels: { knowing_and_understanding: "reached", application: "reached", analysis_and_evaluation: "working" },
+      reading: "support",
+    },
+    {
+      name: "Algebraic fractions",
+      levels: { knowing_and_understanding: "working", application: "not", analysis_and_evaluation: "not" },
+      reading: "at",
+    },
+    {
+      name: "Comprehension: prose texts",
+      levels: { knowing_and_understanding: "reached", application: "working", analysis_and_evaluation: "working" },
+      reading: "at",
+    },
   ],
   evidence: [
     { concept: "Solving linear equations", badge: "Demonstrated", when: "Yesterday" },

@@ -5,6 +5,7 @@ const api = vi.hoisted(() => ({
   profile: vi.fn(),
   learnerProfile: vi.fn(),
   mastery: vi.fn(),
+  masteryByLevel: vi.fn(),
   recommendations: vi.fn(),
   adaptations: vi.fn(),
   progress: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
       profile: api.profile,
       learnerProfile: api.learnerProfile,
       mastery: api.mastery,
+      masteryByLevel: api.masteryByLevel,
       recommendations: api.recommendations,
       adaptations: api.adaptations,
       progress: api.progress,
@@ -58,6 +60,7 @@ beforeEach(() => {
   });
   api.learnerProfile.mockReset().mockResolvedValue({ status: "observed" });
   api.mastery.mockReset().mockResolvedValue([]);
+  api.masteryByLevel.mockReset().mockResolvedValue({ studentId: "s-1", concepts: [] });
   api.recommendations.mockReset().mockResolvedValue([]);
   api.adaptations.mockReset().mockResolvedValue([]);
   api.progress.mockReset().mockResolvedValue({ lessons: [] });
@@ -81,7 +84,7 @@ describe("the background reads", () => {
   });
 
   it("each say they failed, on their own", async () => {
-    api.mastery.mockRejectedValue(new Error("network"));
+    api.masteryByLevel.mockRejectedValue(new Error("network"));
     api.learnerProfile.mockRejectedValue(new Error("network"));
     const { result } = renderHook(() => useStudentProfile("s-1"));
 
@@ -112,11 +115,14 @@ describe("the progress read", () => {
 });
 
 describe("a mastery row the engine could not name", () => {
-  it("is left out rather than drawn as a bar with no label", async () => {
-    api.mastery.mockResolvedValue([
-      { conceptId: "c-1", conceptName: "Fractions", masteryProbabilityConcept: 0.6, masteryProbabilityReading: 0.5, practiceCount: 3 },
-      { conceptId: "c-2", conceptName: null, masteryProbabilityConcept: 0.4, masteryProbabilityReading: 0.3, practiceCount: 1 },
-    ]);
+  it("is left out rather than drawn as a row with no label", async () => {
+    api.masteryByLevel.mockResolvedValue({
+      studentId: "s-1",
+      concepts: [
+        { conceptId: "c-1", conceptName: "Fractions", levels: { application: "working" } },
+        { conceptId: "c-2", conceptName: "", levels: { application: "reached" } },
+      ],
+    });
     const { result } = renderHook(() => useStudentProfile("s-1"));
 
     await waitFor(() => expect(result.current.reads?.mastery).toBe("ready"));
@@ -125,33 +131,93 @@ describe("a mastery row the engine could not name", () => {
 });
 
 /*
- * SCRUM-200 (Lydia, 28 Oct). `pct(null)` was 0, so a concept with no estimate
- * drew as an empty bar - "the empty bar reads as zero, which is a claim we
- * have not earned".
+ * S21 (Teslim, live 27 Nov): the By Level read. A state per curriculum level,
+ * reading beside them, and no probability anywhere - so there is nothing to
+ * turn into a bar, and nothing to default.
  */
-describe("a mastery row with no estimate", () => {
-  it("stays null rather than becoming zero", async () => {
-    api.mastery.mockResolvedValue([
-      { conceptId: "c-1", conceptName: "Fractions", masteryProbabilityConcept: null, masteryProbabilityReading: null, practiceCount: 0 },
-      { conceptId: "c-2", conceptName: "Decimals", masteryProbabilityConcept: 0.62, masteryProbabilityReading: null, practiceCount: 2 },
-    ]);
+describe("the By Level mastery read", () => {
+  it("reads S21's route, not the old bars' one", async () => {
     const { result } = renderHook(() => useStudentProfile("s-1"));
 
     await waitFor(() => expect(result.current.reads?.mastery).toBe("ready"));
-    expect(result.current.concepts.map((c) => [c.understanding, c.reading])).toEqual([
-      [null, null],
-      [62, null],
-    ]);
+    expect(api.masteryByLevel).toHaveBeenCalledWith("s-1");
+    expect(api.mastery).not.toHaveBeenCalled();
   });
 
-  it("keeps a real zero as zero", async () => {
-    api.mastery.mockResolvedValue([
-      { conceptId: "c-1", conceptName: "Fractions", masteryProbabilityConcept: 0, masteryProbabilityReading: 0, practiceCount: 4 },
-    ]);
+  it("keeps each level exactly as sent, and fills no absent level in as `not`", async () => {
+    api.masteryByLevel.mockResolvedValue({
+      studentId: "s-1",
+      concepts: [
+        {
+          conceptId: "c-1",
+          conceptName: "Fractions",
+          levels: { knowing_and_understanding: "reached" },
+          reading: "support",
+        },
+      ],
+    });
     const { result } = renderHook(() => useStudentProfile("s-1"));
 
-    await waitFor(() => expect(result.current.reads?.mastery).toBe("ready"));
-    expect(result.current.concepts[0]).toMatchObject({ understanding: 0, reading: 0 });
+    await waitFor(() => expect(result.current.concepts).toHaveLength(1));
+    expect(result.current.concepts[0]).toEqual({
+      conceptId: "c-1",
+      name: "Fractions",
+      levels: { knowing_and_understanding: "reached" },
+      reading: "support",
+    });
+  });
+
+  it("keeps a concept met only in reading, with no levels (b0bf27d)", async () => {
+    api.masteryByLevel.mockResolvedValue({
+      studentId: "s-1",
+      concepts: [{ conceptId: "c-1", conceptName: "Fractions", levels: {}, reading: "at" }],
+    });
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.concepts).toHaveLength(1));
+    expect(result.current.concepts[0]).toMatchObject({ levels: {}, reading: "at" });
+  });
+
+  it("leaves reading null when it is omitted - nothing observed", async () => {
+    api.masteryByLevel.mockResolvedValue({
+      studentId: "s-1",
+      concepts: [{ conceptId: "c-1", conceptName: "Fractions", levels: { application: "not" } }],
+    });
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.concepts).toHaveLength(1));
+    expect(result.current.concepts[0].reading).toBeNull();
+  });
+});
+
+/*
+ * 403, 404 and 500 each their own state (Hub, 28 Nov). Only a FAILED read
+ * offers a retry; a refusal of the role, or a child out of reach, never lands
+ * however often it is asked.
+ */
+describe("a mastery read that does not answer", () => {
+  it("is refused on a 403 - staff_role_required", async () => {
+    api.masteryByLevel.mockRejectedValue(
+      new ApiError(403, "Forbidden", { detail: { code: "staff_role_required" } }),
+    );
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.reads?.mastery).toBe("refused"));
+    expect(result.current.concepts).toEqual([]);
+  });
+
+  it("is missing on a 404 - a child outside the viewer's reach", async () => {
+    api.masteryByLevel.mockRejectedValue(new ApiError(404, "Not Found", { detail: "Student not found" }));
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.reads?.mastery).toBe("missing"));
+  });
+
+  it("failed on a 500, which a retry might land", async () => {
+    api.masteryByLevel.mockRejectedValue(new ApiError(500, "Server Error", {}));
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.reads?.mastery).toBe("failed"));
   });
 });
 

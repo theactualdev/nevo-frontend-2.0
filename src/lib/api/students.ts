@@ -79,6 +79,51 @@ export interface ConceptMasteryRow {
   seedingSource: string;
 }
 
+/**
+ * S21's mastery read (backend 58f31a6 and b0bf27d, live 27 Nov): a state for
+ * each curriculum level, per concept, as the By Level design draws it.
+ *
+ * NO PROBABILITY, SCORE OR PERCENTAGE IS SENT, and nothing here makes one.
+ * The engine decides what "reached" means; this client draws the word.
+ *
+ * The three levels, in the order a learner works up through them. The keys
+ * are the contract's and never shown: the words on screen are the frame's.
+ */
+export type MasteryLevel =
+  | "knowing_and_understanding"
+  | "application"
+  | "analysis_and_evaluation";
+
+/**
+ * `reached`, `working` or `not` - each a thing the engine OBSERVED. A level
+ * with nothing observed has no entry at all, and that is a different fact
+ * from `not`: the server's own docstring says they "are drawn differently".
+ */
+export type MasteryLevelState = "reached" | "working" | "not";
+
+/**
+ * What the material asks of the learner, beside the levels and never one of
+ * them. `none` means the concept has only been met in material that asks for
+ * very little reading, so there is nothing to say about it.
+ */
+export type ReadingDemand = "at" | "support" | "none";
+
+export interface ConceptLevels {
+  conceptId: string;
+  conceptName: string;
+  /** Only the levels something was observed at. */
+  levels: Partial<Record<MasteryLevel, MasteryLevelState>>;
+  /** Omitted when nothing is observed. */
+  reading?: ReadingDemand | null;
+}
+
+/** `GET /api/v1/students/{student_id}/mastery`. */
+export interface LearnerMastery {
+  studentId: string;
+  /** Every concept the learner has evidence on - levels, reading, or both. */
+  concepts: ConceptLevels[];
+}
+
 export interface Recommendation {
   id: string;
   studentId: string;
@@ -646,6 +691,15 @@ export const studentsApi = {
 
   mastery: (studentId: string) =>
     api.get<ConceptMasteryRow[]>(`/api/mastery/student/${studentId}`),
+
+  /**
+   * S21, the By Level read. For teacher, senco_admin and other_admin: 403
+   * `staff_role_required` for anyone else, and 404 for a child outside the
+   * viewer's reach or school. The old read above stays for the screens still
+   * on the bars (Lydia, 9 Nov: they switch together).
+   */
+  masteryByLevel: (studentId: string) =>
+    api.get<LearnerMastery>(`/api/v1/students/${studentId}/mastery`),
 
   recommendations: (studentId: string) =>
     api.get<Recommendation[]>(`/api/intelligence/recommendations/${studentId}`),
