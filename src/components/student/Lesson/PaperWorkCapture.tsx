@@ -39,13 +39,20 @@ import {
  *   will see how you did." - and Keep going, the frame's.
  * - P5's second sentence: "If you can photograph it later, Nevo will still
  *   read it."
- * - P7, a person in the photo, in the frame's layout.
- * - P8, a send that fails, in the frame's layout - its own state, so nothing
- *   calls a dropped connection an unreadable photo. The photo is kept to send
- *   again.
  * - Anything else the check holds, in P6's layout.
  * Each of her lines is one paragraph; its first sentence takes the frame's
  * bold line and the rest the sentence under it. Not a word is changed.
+ *
+ * P7 AND P8 IN THE FRAME'S WORDS (Lydia, 28 Nov, on L16 and L17: all three
+ * photo states are drawn, in student/ and Individual Learner/ alike):
+ * - P7, a person in the photo: "There's someone in this one" / "Nevo only
+ *   needs your page. Take it again with just your working in the frame, or
+ *   carry on without it." Retake, and Continue without it in navy.
+ * - P8, a send that fails: "Something went wrong. We're on it." / "Your
+ *   photo is still here on your device. Try sending it again, or carry on
+ *   and send it later." Its own state, so nothing calls a dropped connection
+ *   an unreadable photo, and the photo is kept to send again: Try again
+ *   leads in navy, with Continue without it the quiet line under it.
  *
  * P9, read but the working needs more doing, in her words (28 Nov, L94):
  * "There's more to do on this one" / "Nevo read your page, and part of the
@@ -428,8 +435,8 @@ export function PaperWorkCapture({
       {step === "person" && photo && (
         <PhotoHeld
           url={photo.url}
-          title="There's a person in this photo."
-          body="Nevo only reads your written work, so take another one of just the page."
+          title="There's someone in this one"
+          body="Nevo only needs your page. Take it again with just your working in the frame, or carry on without it."
           again="Retake"
           onAgain={() => void openCamera()}
           onCarryOn={carryOnWithout}
@@ -465,9 +472,10 @@ export function PaperWorkCapture({
       {step === "sendFailed" && photo && (
         <PhotoHeld
           url={photo.url}
-          title="That didn't send."
-          body="Try again, and if it still doesn't work you can carry on and photograph it later."
+          title="Something went wrong. We're on it."
+          body="Your photo is still here on your device. Try sending it again, or carry on and send it later."
           again="Try again"
+          againLeads
           busy={sending}
           onAgain={() => void send()}
           onCarryOn={carryOnWithout}
@@ -625,9 +633,9 @@ function Picture({ url, className }: { url: string; className: string }) {
 }
 
 /**
- * P6's layout, for the frame's other holds on a photo (P7, P8) and the
- * check's: the photo, a calm violet box with the line, and two ways on - the
- * second always carries on without it, so no state is a dead end (17g).
+ * P6's layout, for the frame's other holds on a photo (P7, P8, P9) and the
+ * check's: the photo, a calm violet box with the line, and two ways on - one
+ * always carries on, so no state is a dead end (17g).
  */
 function PhotoHeld({
   url,
@@ -635,6 +643,7 @@ function PhotoHeld({
   body,
   again,
   busy = false,
+  againLeads = false,
   onAgain,
   carryOn = "Continue without it",
   onCarryOn,
@@ -644,6 +653,12 @@ function PhotoHeld({
   body: string;
   again: string;
   busy?: boolean;
+  /**
+   * P8's order: sending again is the way on, so it leads in navy, and
+   * carrying on is the quiet line under it. Otherwise the retake is the
+   * outlined button beside the navy way on.
+   */
+  againLeads?: boolean;
   onAgain: () => void;
   /** The way on: "Continue without it", or P9's "Keep going". */
   carryOn?: string;
@@ -659,24 +674,41 @@ function PhotoHeld({
           {body}
         </p>
       </div>
-      <div className="mt-3.5 flex gap-3">
-        <button
-          type="button"
-          disabled={busy}
-          aria-busy={busy || undefined}
-          onClick={onAgain}
-          className={SECONDARY}
-        >
-          {again}
-        </button>
-        <button
-          type="button"
-          onClick={onCarryOn}
-          className={`${SOLID} h-[52px] flex-1 rounded-[10px] text-[15px]`}
-        >
-          {carryOn}
-        </button>
-      </div>
+      {againLeads ? (
+        <div className="mt-3.5 flex flex-col">
+          <button
+            type="button"
+            disabled={busy}
+            aria-busy={busy || undefined}
+            onClick={onAgain}
+            className={`${SOLID} h-[52px] w-full rounded-[10px] text-[15px] disabled:cursor-default`}
+          >
+            {again}
+          </button>
+          <button type="button" onClick={onCarryOn} className={QUIET}>
+            {carryOn}
+          </button>
+        </div>
+      ) : (
+        <div className="mt-3.5 flex gap-3">
+          <button
+            type="button"
+            disabled={busy}
+            aria-busy={busy || undefined}
+            onClick={onAgain}
+            className={SECONDARY}
+          >
+            {again}
+          </button>
+          <button
+            type="button"
+            onClick={onCarryOn}
+            className={`${SOLID} h-[52px] flex-1 rounded-[10px] text-[15px]`}
+          >
+            {carryOn}
+          </button>
+        </div>
+      )}
     </>
   );
 }

@@ -256,7 +256,7 @@ describe("sending the photo", () => {
     expect(onContinue).toHaveBeenCalledWith("without_photo");
   });
 
-  it("says a send that fails is the send (P8, L16), keeps the photo, and sends it again", async () => {
+  it("says a send that fails is the send in the frame's P8 words (L17), keeps the photo, and sends it again", async () => {
     const { onSend, onContinue } = mount();
     onSend.mockRejectedValueOnce(new Error("Network")).mockResolvedValue("read");
     await toCamera();
@@ -264,12 +264,21 @@ describe("sending the photo", () => {
 
     fireEvent.click(button("Use this photo"));
 
-    expect(await screen.findByText("That didn't send.")).toBeVisible();
+    expect(await screen.findByText("Something went wrong. We're on it.")).toBeVisible();
     expect(
-      screen.getByText("Try again, and if it still doesn't work you can carry on and photograph it later."),
+      screen.getByText(
+        "Your photo is still here on your device. Try sending it again, or carry on and send it later.",
+      ),
     ).toBeVisible();
     expect(screen.queryByText("We couldn't quite read that one")).toBeNull();
     expect(revokeObjectURL).not.toHaveBeenCalled();
+    // The frame's order: Try again leads in navy, carrying on is the quiet line.
+    expect(button("Try again")).toHaveClass("bg-nevo-navy");
+    expect(button("Continue without it")).not.toHaveClass("bg-nevo-navy");
+    expect(
+      button("Try again").compareDocumentPosition(button("Continue without it")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
     fireEvent.click(button("Try again"));
     expect(await screen.findByText("Got it, Nevo has read your page.")).toBeVisible();
@@ -283,7 +292,7 @@ describe("sending the photo", () => {
     await toCamera();
     await snap();
     fireEvent.click(button("Use this photo"));
-    await screen.findByText("That didn't send.");
+    await screen.findByText("Something went wrong. We're on it.");
 
     fireEvent.click(button("Continue without it"));
 
@@ -293,15 +302,15 @@ describe("sending the photo", () => {
   it.each([
     [
       "person",
-      "There's a person in this photo.",
-      "Nevo only reads your written work, so take another one of just the page.",
+      "There's someone in this one",
+      "Nevo only needs your page. Take it again with just your working in the frame, or carry on without it.",
     ],
     [
       "held",
       "Nevo couldn't read this one.",
       "Take another photo of just the page, with the whole page in frame.",
     ],
-  ] as const)("says a %s hold in Lydia's words (L16, L41), with a retake and a way on", async (verdict, title, body) => {
+  ] as const)("says a %s hold in its words (P7's frame, L41), with a retake and a navy way on", async (verdict, title, body) => {
     const { onSend, onContinue } = mount();
     onSend.mockResolvedValue(verdict);
     await toCamera();
@@ -312,6 +321,8 @@ describe("sending the photo", () => {
     expect(await screen.findByText(title)).toBeVisible();
     expect(screen.getByText(body)).toBeVisible();
     expect(screen.getByRole("status")).toHaveTextContent(title);
+    expect(button("Continue without it")).toHaveClass("bg-nevo-navy");
+    expect(button("Retake")).not.toHaveClass("bg-nevo-navy");
     fireEvent.click(button("Retake"));
     await screen.findByText("Line your page up inside the frame");
     expect(onContinue).not.toHaveBeenCalled();
