@@ -42,6 +42,13 @@ export const WAITING_WAY_BACK = "/auth/login";
  * nothing was checked. A new press clears it until its own answer is in, so
  * each answer is said afresh.
  *
+ * AND THE READ SHOWS WHILE IT IS OUT (backlog item 5, Hub 27 Nov). A press
+ * that failed used to change nothing at all - the inert button Lydia ruled
+ * out. Now the button carries its own read, as the entry check's Try again
+ * does (backlog 28): its spinner and `aria-busy` while the read is out, and
+ * then it settles. Still no words for it, and a failed read is never told it
+ * checked. What a failed read should say is asked of Lydia (L96).
+ *
  * "ASK YOUR TEACHER" IS A SENTENCE, NOT A CONTROL (Lydia, 31 Oct): "a child
  * cannot message a teacher from that screen and a control that appears to do
  * nothing is worse than a sentence." So where the frame draws its button,
@@ -117,16 +124,24 @@ export function WaitingOnConsent({
 } = {}) {
   const checking = useRef(false);
   const [checked, setChecked] = useState(false);
+  /** The read is out: the button shows it (backlog item 5). */
+  const [busy, setBusy] = useState(false);
+  // A read that answers after the screen has gone sets nothing.
+  const here = useStillHere();
   const checkAgain = () => {
     // One read at a time: a second press while one is out does nothing.
     if (!onCheckAgain || checking.current) return;
     checking.current = true;
     setChecked(false);
+    setBusy(true);
     void onCheckAgain()
-      .then((found) => setChecked(found === "still-waiting"))
+      .then((found) => {
+        if (here.current) setChecked(found === "still-waiting");
+      })
       .catch(() => {})
       .finally(() => {
         checking.current = false;
+        if (here.current) setBusy(false);
       });
   };
 
@@ -138,7 +153,12 @@ export function WaitingOnConsent({
         <HoldMessage hold={hold} />
         {hold === "consent" && onCheckAgain && (
           <div className="mt-[30px] w-full max-w-[360px] sm:mt-9">
-            <Button className="w-full text-base" onClick={checkAgain}>
+            <Button
+              className="w-full text-base"
+              onClick={checkAgain}
+              loading={busy}
+              aria-busy={busy || undefined}
+            >
               Check again
             </Button>
             {/* Held open, so the line arriving moves nothing below it. */}
