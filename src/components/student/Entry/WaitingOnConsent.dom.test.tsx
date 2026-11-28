@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import {
   ASK_YOUR_TEACHER,
   CHECKED_NOTHING_YET,
+  COULD_NOT_CHECK,
   WAITING_WAY_BACK,
   WaitingOnConsent,
   WaitingOnConsentPage,
@@ -197,11 +198,22 @@ describe("Check again", () => {
     expect(screen.getByRole("status").textContent).toBe(CHECKED_NOTHING_YET);
   });
 
+  // L96 (Lydia, 28 Nov): her line where nothing was checked, never "Checked".
   it.each([
     ["the read failed", () => Promise.reject(new Error("offline"))],
-    ["the read did not answer", () => Promise.resolve(undefined)],
-  ])("says nothing new when %s - nothing was checked", async (_, read) => {
+    ["the read came back unread", () => Promise.resolve("unread" as const)],
+  ])("says it could not check when %s", async (_, read) => {
     render(<WaitingOnConsent onCheckAgain={read} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await act(async () => {});
+
+    expect(screen.getByRole("status").textContent).toBe(COULD_NOT_CHECK);
+    expect(COULD_NOT_CHECK).toBe("We couldn't check just now. Try again in a moment.");
+  });
+
+  it("says nothing where the read moved the child on", async () => {
+    render(<WaitingOnConsent onCheckAgain={() => Promise.resolve(undefined)} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Check again" }));
     await act(async () => {});
@@ -273,7 +285,7 @@ describe("Check again, for a child signed in and sent here from a door", () => {
     expect(screen.getByRole("button", { name: "Check again" })).toBeTruthy();
   });
 
-  it("says it checked when the gate answers still waiting, and not when it did not answer", async () => {
+  it("says it checked when the gate answers still waiting, and that it could not when it did not answer", async () => {
     studentDestination.mockResolvedValueOnce("/student/waiting");
     render(<WaitingOnConsentPage />);
     const check = screen.getByRole("button", { name: "Check again" });
@@ -287,7 +299,7 @@ describe("Check again, for a child signed in and sent here from a door", () => {
     );
     fireEvent.click(check);
     await act(async () => {});
-    expect(screen.getByRole("status").textContent).toBe("");
+    expect(screen.getByRole("status").textContent).toBe(COULD_NOT_CHECK);
   });
 });
 
@@ -457,5 +469,6 @@ describe("Check again, while its read is out", () => {
     expect(check).not.toHaveAttribute("aria-busy");
     expect(check).toBeEnabled();
     expect(screen.queryByText(CHECKED_NOTHING_YET)).toBeNull();
+    expect(screen.getByText(COULD_NOT_CHECK)).toBeInTheDocument();
   });
 });
