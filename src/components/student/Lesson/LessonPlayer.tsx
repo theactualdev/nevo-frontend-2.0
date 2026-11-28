@@ -2621,7 +2621,8 @@ export function LessonPlayer({
    * way out is the break, or Exit lesson.
    *
    * This replaces 38a's "forward, never back to the question". Lydia, 19 Nov
-   * (L13): "Back, not forward ... Sending them back lets the child demonstrate
+   * (L13; reconfirmed 28 Nov, L88, her 25 Nov "forward" withdrawn): "Back,
+   * not forward ... Sending them back lets the child demonstrate
    * the step, which both confirms the hand-off worked and corrects the
    * estimate." And the server agrees (T9): `advanceAfterHandoff` is always
    * false - "retry the original check" - and with its comprehension gate off

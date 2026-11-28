@@ -303,6 +303,12 @@ let speaking: SpeechSynthesisUtterance | null = null;
  * generated, nothing here is blocked"). No voice is chosen, so what the child
  * hears is whichever voice the device has; no recording is waited on.
  *
+ * IT SHIPS (Lydia, 28 Nov, L4): "not a placeholder waiting on a recording,
+ * and a recorded voice later is an improvement rather than a prerequisite".
+ * Before Primary 1 to 3 goes out it is listened to on a real device reading
+ * real question text, Nigerian names and places included; if it fails that,
+ * the recording becomes a blocker.
+ *
  * Shared with the daily warm-up's heard round (D81), so both say it alike.
  */
 export function speak(sentence: string, onEnd?: () => void): void {

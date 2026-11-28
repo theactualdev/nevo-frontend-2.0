@@ -194,7 +194,8 @@ export function AskNevo() {
   const { trackEvent } = useSignals(signalSession, undefined, "ask_nevo");
   const [open, setOpen] = useState(false);
   /*
-   * FIXED IN PLACE, NEVER DRAGGED (Lydia, 19 Nov, L6): "A draggable launcher
+   * FIXED IN PLACE, NEVER DRAGGED (Lydia, 19 Nov, L6; reconfirmed 28 Nov,
+   * L87, her 25 Nov "keep it draggable" withdrawn): "A draggable launcher
    * gets moved by accident, lands over content, and the child cannot find it
    * again. It also makes its position unpredictable for any instruction
    * anyone gives about it." The place a child once dragged it to was kept on
