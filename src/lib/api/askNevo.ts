@@ -299,30 +299,6 @@ function stopReason(cause: unknown): unknown {
 }
 
 /**
- * The two block reasons a CHILD has a line of Lydia's for (S2, backend
- * branch s2-child-block-reason: `detail.reason` on a learner's block, one of
- * trusted_adult, names_person or other).
- */
-export type ChildBlockReason = "names_person" | "other";
-
-/**
- * A CHILD'S question the safety check held back, and whether it is one of
- * the two reasons with a line of Lydia's: "other" (25 Nov, L46) or
- * "names_person" (11 Nov). Null for every other stop - "trusted_adult", NO
- * reason, and any reason this build does not know - and the server's own
- * line stands for those (Hub ruling, 25 Nov). An unknown value could be a new
- * safeguarding category, and today's server sends no reason at all, safeguard
- * blocks included; reading either as "other" would take the trusted-adult
- * pointer from the child it was written for. Null too for a refusal that is
- * not a safety stop.
- */
-export function childBlockReason(cause: unknown): ChildBlockReason | null {
-  if (!safetyStop(cause)) return null;
-  const reason = stopReason(cause);
-  return reason === "names_person" || reason === "other" ? reason : null;
-}
-
-/**
  * A TEACHER'S question the safety check held back, and why (backend 815f222,
  * live in 62966f1: `detail.reason`, teacher audience only). "names_person" is
  * a block for a name; anything else - "other", or no reason at all from an
