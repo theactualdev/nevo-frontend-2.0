@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import {
   classesApi,
   type AdminClass,
@@ -248,9 +249,12 @@ export function LearnerProfileView({
   /** D08b's "What changed, and when" (backlog 42) - its own read, its own failure. */
   const { state: history, retry: retryHistory } = useAccommodationHistory(studentId, lacksRole);
 
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
+
   const load = useCallback(() => {
     Promise.all([studentsApi.get(studentId), classesApi.list(true)])
       .then(([s, c]) => {
+        if (!mounted.current) return;
         setStudent(s);
         setClasses(c);
         setPhase("ready");
@@ -270,6 +274,7 @@ export function LearnerProfileView({
         setRoleRefused(false);
         setMasteryAbsent(false);
         const fail = (section: keyof typeof failed) => (err: unknown) => {
+          if (!mounted.current) return;
           setFailed((f) => ({ ...f, [section]: true }));
           if (failureKind(err) === "denied") setDenied((d) => ({ ...d, [section]: true }));
           if (err instanceof ApiError && apiErrorCode(err.detail) === LEARNING_SUPPORT_REQUIRED) {
@@ -278,14 +283,19 @@ export function LearnerProfileView({
         };
         studentsApi
           .accommodations(studentId)
-          .then(setAccommodations)
+          .then((a) => {
+            if (mounted.current) setAccommodations(a);
+          })
           .catch(fail("accommodations"));
         // S21's By Level read (GET /students/{id}/mastery), the teacher's
         // profile's own function: a state per level per concept, no number.
         studentsApi
           .masteryByLevel(studentId)
-          .then((r) => setMastery(Array.isArray(r?.concepts) ? r.concepts : []))
+          .then((r) => {
+            if (mounted.current) setMastery(Array.isArray(r?.concepts) ? r.concepts : []);
+          })
           .catch((err: unknown) => {
+            if (!mounted.current) return;
             if (err instanceof ApiError && (err.status === 403 || err.status === 404)) {
               setMasteryAbsent(true);
               return;
@@ -294,20 +304,27 @@ export function LearnerProfileView({
           });
         studentsApi
           .adaptations(studentId)
-          .then(setAdaptations)
+          .then((a) => {
+            if (mounted.current) setAdaptations(a);
+          })
           .catch(fail("adaptations"));
         // A fortnight: D08b's period, and the ratified line's.
         setHelpPhase("loading");
         conversationEvidenceApi
           .forStudent(studentId, 14)
           .then((ev) => {
+            if (!mounted.current) return;
             setHelp(ev);
             setHelpPhase("ready");
           })
-          .catch((err: unknown) => setHelpPhase(failureKind(err) === "denied" ? "denied" : "failed"));
+          .catch((err: unknown) => {
+            if (mounted.current) setHelpPhase(failureKind(err) === "denied" ? "denied" : "failed");
+          });
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
-  }, [studentId]);
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(failureKind(err));
+      });
+  }, [studentId, mounted]);
 
   useEffect(() => {
     load();

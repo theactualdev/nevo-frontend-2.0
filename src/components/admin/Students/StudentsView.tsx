@@ -44,6 +44,7 @@ import { SignInDetailsDownload } from "./SignInDetailsDownload";
 import { ERASURE_LINE } from "./EraseRecordModal";
 import { ChildAvatar } from "../Roster/ChildAvatar";
 import { lookOfChild } from "@/lib/profile/rosterLook";
+import { ConsentFormDownload } from "./ConsentFormDownload";
 
 /**
  * D7 Students - the school roster.
@@ -419,6 +420,17 @@ export function StudentsView() {
             </div>
           ) : null}
         </div>
+
+        {/*
+          * D25 PC-03's header control, on the roster (backlog 50): the blank
+          * consent form, for a family who'd rather sign on paper. D25's other
+          * two - Record written consent and Upload signed forms - wait on
+          * Lydia (L97): a written consent is recorded from the child's own
+          * record, and there is no route to upload forms in bulk.
+          */}
+        {phase === "ready" && enrolled.length > 0 ? (
+          <ConsentFormDownload className="mt-4" />
+        ) : null}
 
         {/* D25 PC-03's tallies, on the roster (Lydia 19 Nov, L24). */}
         {phase === "ready" && enrolled.length > 0 ? (

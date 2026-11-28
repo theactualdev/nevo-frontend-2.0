@@ -13,6 +13,8 @@ import { subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
 import { YEAR_GROUPS, yearGroupLabel, yearGroupOptions } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
+import { onboardingApi } from "@/lib/api/onboarding";
+import { saveFile } from "../Roster/saveFile";
 import { CopyDown, type CopyTarget } from "./CopyDown";
 import { SubjectPicker } from "./SubjectPicker";
 import {
@@ -522,10 +524,16 @@ export function BulkClassSheet({
                 * and Copy down. A class that's already there is struck
                 * through with its note and offers neither: it is never sent.
                 */}
-              <span className={LABEL}>
-                Subjects for each class &middot; {toSend.length}{" "}
-                {toSend.length === 1 ? "class" : "classes"}
-              </span>
+              {/* D05 draws "Download the class template" on this line, on
+                  the right (backlog 25): the server's own classes file, the
+                  same download the roster importer gives its templates. */}
+              <div className="mb-[7px] flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <span className={cn(LABEL, "mb-0")}>
+                  Subjects for each class &middot; {toSend.length}{" "}
+                  {toSend.length === 1 ? "class" : "classes"}
+                </span>
+                <ClassTemplateDownload />
+              </div>
               {subjectsFailed ? (
                 <ReadFailed
                   className="mb-2.5"
@@ -643,5 +651,44 @@ export function BulkClassSheet({
         </>
       )}
     </Sheet>
+  );
+}
+
+/**
+ * D05's "Download the class template" (backlog 25): GET
+ * /onboarding/templates/classes, saved as the roster importer saves its own,
+ * with the importer's words while it fetches and if it fails.
+ */
+function ClassTemplateDownload() {
+  const [state, setState] = useState<"" | "loading" | "failed">("");
+  const here = useStillHere();
+  const download = () => {
+    if (state === "loading") return;
+    setState("loading");
+    onboardingApi
+      .template("classes")
+      .then((blob) => {
+        saveFile(blob, "nevo-classes.csv");
+        if (here.current) setState("");
+      })
+      .catch(() => {
+        if (here.current) setState("failed");
+      });
+  };
+  return (
+    <span className="flex flex-col items-end">
+      <button
+        type="button"
+        onClick={download}
+        className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
+      >
+        {state === "loading" ? "Fetching…" : "Download the class template"}
+      </button>
+      {state === "failed" ? (
+        <span className="text-[12.5px] text-nevo-near-black/55">
+          That didn&rsquo;t download. Try again in a moment.
+        </span>
+      ) : null}
+    </span>
   );
 }

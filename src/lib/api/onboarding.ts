@@ -257,7 +257,7 @@ export const onboardingApi = {
    * checks, so the console holds no column list of its own - a copy here is
    * how a school once downloaded a file its own upload rejected.
    */
-  template: (name: "students" | "teachers") =>
+  template: (name: "students" | "teachers" | "classes") =>
     api.blob(`/api/v1/onboarding/templates/${name}`),
 
   /**

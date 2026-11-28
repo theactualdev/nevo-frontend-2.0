@@ -8,6 +8,10 @@ import { Button } from "@/components/shared";
 import { CombinedMark } from "@/components/shared/BrandMarks";
 import { ErrorScreen } from "@/components/shared/SystemScreens";
 import { useOnline } from "@/components/student/Shell/TabOfflineBanner";
+import {
+  TRY_AGAIN_PRESSED,
+  TryAgainLabel,
+} from "@/components/student/Shell/OfflineScreen";
 import { useAuth } from "@/hooks";
 import { UNCHECKED_ROUTE } from "@/lib/auth/consentHold";
 import { studentDestination } from "@/lib/auth/entryGate";
@@ -114,15 +118,17 @@ export function EntryCheckFailed({ next }: { next?: string }) {
       <p className="mt-2 max-w-[440px] text-[15px] leading-[1.55] text-nevo-near-black/60 sm:mt-2.5 sm:text-base">
         No internet connection right now.
       </p>
-      {/* Its read on its way shows, as online (backlog 28). */}
+      {/* Its read on its way shows, as online (backlog 28) - in frame
+          28's own pressed and trying states, as the offline full screen it
+          is drawn from (L5): "Trying again", at full strength. */}
       <Button
         variant="ghost"
-        className="mt-8 h-12 w-full max-w-[290px] text-[15px] font-normal sm:max-w-[340px]"
-        loading={checking}
+        className={`mt-8 h-12 w-full max-w-[290px] gap-2.5 text-[15px] font-normal disabled:opacity-100 sm:max-w-[340px] ${TRY_AGAIN_PRESSED}`}
+        disabled={checking}
         aria-busy={checking || undefined}
         onClick={retry}
       >
-        Try again
+        <TryAgainLabel trying={checking} />
       </Button>
       <Button
         variant="ghost"

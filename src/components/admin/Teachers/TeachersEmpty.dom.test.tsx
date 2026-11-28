@@ -25,7 +25,11 @@ vi.mock("@/lib/api/invites", async (importOriginal) => {
 describe("Teachers with nobody on it yet", () => {
   it("says what inviting does, in D06's words, and offers only the invitation", async () => {
     const { container } = render(<TeachersView />);
-    expect(await screen.findByRole("heading", { name: "No teachers yet" })).toBeInTheDocument();
+    // 3 s, not findBy's 1 s default: on a loaded machine the mocked list
+    // answered 1-1.8 s after the effect (traced 27 Nov), on main as well.
+    expect(
+      await screen.findByRole("heading", { name: "No teachers yet" }, { timeout: 3000 }),
+    ).toBeInTheDocument();
     const text = visibleText(container);
     expect(text).toMatch(/Invite your teachers and each one gets their own console\./);
     expect(text).toMatch(

@@ -94,7 +94,7 @@ describe("a notification row's label", () => {
       }),
     );
     expect(container.textContent).not.toMatch(/PlatformRoster/);
-    expect(container.textContent).toMatch(/Platform\s+Roster sync could not run\s+Google refused the last sync\.\s+1d ago/);
+    expect(container.textContent).toMatch(/Platform\s+Roster sync could not run\s+Google refused the last sync\.\s+Yesterday, \d{1,2}:\d{2} (AM|PM)/);
     // The look is the same: the label still reads just "Platform".
     expect(screen.getByText("Platform").textContent?.trim()).toBe("Platform");
   });

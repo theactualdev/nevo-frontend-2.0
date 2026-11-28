@@ -4,6 +4,7 @@ import { NevoSelect } from "@/components/shared/NevoSelect";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import {
   classesApi,
   type AdminClass,
@@ -241,20 +242,23 @@ export function SencoView() {
   const [supportRead, setSupportRead] = useState<"pending" | "ok" | "failed" | "refused">(
     "pending",
   );
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
   const readSupport = useCallback(() => {
     // The failure line clears when a read answers, not when one starts.
     accommodationsApi
       .listActive()
       .then((rows) => {
+        if (!mounted.current) return;
         setSupport(Object.fromEntries(rows.map((r) => [r.studentId, r.active])));
         setSupportRead("ok");
       })
       .catch((err: unknown) => {
+        if (!mounted.current) return;
         setSupport(null);
         if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setRoleRefused(true);
         setSupportRead(failureKind(err) === "denied" ? "refused" : "failed");
       });
-  }, []);
+  }, [mounted]);
   /*
    * ADAPTATIONS THIS WEEK, unread: said above the list, as Active support's
    * failure is (Hub, 26 Nov) - a row with no figure must not read as a quiet
@@ -275,32 +279,40 @@ export function SencoView() {
         .then((log) => ({ events: log.events, total: log.total })),
     )
       .then((w) => {
+        if (!mounted.current) return;
         setAdaptationsWeek(w.complete ? w.perLearner : null);
         setAdaptationsFailed("error" in w && failureKind(w.error) !== "denied");
       })
       .catch((err: unknown) => {
+        if (!mounted.current) return;
         setAdaptationsWeek(null);
         setAdaptationsFailed(failureKind(err) !== "denied");
       });
-  }, []);
+  }, [mounted]);
 
   const loadConcerns = useCallback(() => {
     escalationsApi
       .allOpen()
-      .then(({ open, complete }) => {
-        setConcerns(open);
-        setConcernsRead(complete);
+      .then((read) => {
+        if (!mounted.current) return;
+        setConcerns(read.open);
+        setConcernsRead(read.complete);
         setConcernsFailed(false);
       })
       .catch(() => {
+        if (!mounted.current) return;
         setConcerns(null);
         setConcernsFailed(true);
       });
     teachersApi
       .list()
-      .then((ts) => setTeacherNames(Object.fromEntries(ts.map((t) => [t.id, t.name]))))
-      .catch(() => setTeacherNames({}));
-  }, []);
+      .then((ts) => {
+        if (mounted.current) setTeacherNames(Object.fromEntries(ts.map((t) => [t.id, t.name])));
+      })
+      .catch(() => {
+        if (mounted.current) setTeacherNames({});
+      });
+  }, [mounted]);
 
   const load = useCallback(() => {
     // Their own read, their own failure: a concern list that didn't answer
@@ -328,6 +340,7 @@ export function SencoView() {
       classesApi.list(),
     ])
       .then(([f, s, c]) => {
+        if (!mounted.current) return;
         setFlags(f.flags);
         setFlagsComplete(f.complete);
         setStudents(s);
@@ -357,6 +370,7 @@ export function SencoView() {
           classesApi
             .classStudents(klass.id)
             .then((inClass) => {
+              if (!mounted.current) return;
               setClassOf((prev) => {
                 const next = { ...prev };
                 inClass.forEach((st) => {
@@ -374,16 +388,19 @@ export function SencoView() {
               });
               setClassRead((prev) => ({ ...prev, [klass.id]: "ok" }));
             })
-            .catch((err: unknown) =>
+            .catch((err: unknown) => {
+              if (!mounted.current) return;
               setClassRead((prev) => ({
                 ...prev,
                 [klass.id]: failureKind(err) === "denied" ? "refused" : "failed",
-              })),
-            );
+              }));
+            });
         });
       })
-      .catch((err: unknown) => setPhase(failureKind(err)));
-  }, [loadConcerns, readSupport, readAdaptations]);
+      .catch((err: unknown) => {
+        if (mounted.current) setPhase(failureKind(err));
+      });
+  }, [loadConcerns, readSupport, readAdaptations, mounted]);
 
   useEffect(() => {
     load();

@@ -229,3 +229,32 @@ describe("Back while Try again is asking", () => {
     expect(replace).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * L5 (Lydia, 25 Nov): the offline screen here is frame 28's, so its Try
+ * again takes the frame's trying state too - "Trying again" and the ring, at
+ * full strength - as the offline full screen does.
+ */
+describe("Try again offline, while it reads", () => {
+  it("says Trying again with the frame's ring, not dimmed, until the read answers", async () => {
+    online.mockReturnValue(false);
+    let answer: (to: string) => void = () => {};
+    studentDestination.mockImplementation(
+      () => new Promise<string>((resolve) => (answer = resolve)),
+    );
+    render(<EntryCheckFailed next={LESSON} />);
+    const tryAgain = screen.getByRole("button", { name: "Try again" });
+
+    fireEvent.click(tryAgain);
+
+    expect(tryAgain).toHaveAccessibleName("Trying again");
+    expect(tryAgain.querySelector("[data-trying-ring]")).not.toBeNull();
+    expect(tryAgain).toHaveClass("disabled:opacity-100", "active:bg-nevo-navy/10");
+
+    await act(async () => {
+      answer(STILL_UNCHECKED);
+    });
+
+    expect(tryAgain).toHaveAccessibleName("Try again");
+  });
+});

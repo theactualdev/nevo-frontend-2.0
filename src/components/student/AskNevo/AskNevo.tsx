@@ -12,7 +12,6 @@ import { askNevoApi, asUuid } from "@/lib/api";
 import {
   allowanceSpent,
   roleRefused,
-  childBlockReason,
   safetyStop,
   type AnswerBlock,
   type SafetyStop,
@@ -119,24 +118,6 @@ const ALLOWANCE_SPENT =
  * cannot work.
  */
 const NOT_ON_THIS_ACCOUNT = "Ask Nevo is not available on this account.";
-
-/**
- * A CHILD'S BLOCK, BY ITS REASON (S2). The server's line - "Nevo can't help
- * with this one. Please talk to a trusted adult or your teacher." - is right
- * for a child in difficulty and wrong for one who typed a friend's name
- * (Lydia, 11 Nov: "reserved for the category it was written for"). So:
- * - "other": Lydia's 25 Nov line (L46), the one the individual learner route
- *   already has;
- * - "names_person": her 11 Nov line;
- * - anything else - "trusted_adult", no reason, a reason this build does not
- *   know - the server's line, unchanged (Hub ruling, 25 Nov). Today no block
- *   carries a reason, safeguard ones included, so today every block reads
- *   the server's line, as it did. See `childBlockReason`.
- */
-const CHILD_BLOCK_LINES = {
-  other: "That one is outside what I can help with. Ask me about the lesson you are working on.",
-  names_person: "Nevo doesn't use people's names. Try asking without the name.",
-} as const;
 
 /**
  * Mock reply engine - calm, canned, and honest about its limits. The
@@ -323,8 +304,8 @@ export function AskNevo() {
         spent = allowanceSpent(cause);
         stopped = safetyStop(cause);
         refused = roleRefused(cause);
-        const reason = childBlockReason(cause);
-        if (stopped && reason) stopped = { message: CHILD_BLOCK_LINES[reason] };
+        // The server's line, for every reason (Lydia, 26 Nov; backend
+        // c1b775d): see `StopScreen`.
         return null;
       });
     /*
@@ -707,6 +688,16 @@ export function AskNevo() {
 /**
  * THE SAFETY STOP'S OWN SCREEN (SCRUM-259): the server's words and nothing
  * else, in the drawer's body where the thread was.
+ *
+ * FOR EVERY REASON (Lydia, 26 Nov, shipped by the backend in c1b775d, live
+ * in 6c6b3fc). A child's block carries one of two reasons - names_person, or
+ * trusted_adult for everything else and anything in doubt - and its
+ * `message` is her line for that reason. "Three lines would hand a child a
+ * map of where the welfare threshold sits; two tells them only that names
+ * are treated specially." So the app has no line of its own for any reason:
+ * the 25 Nov override (L46's "other" line, and her 11 Nov names line) is
+ * gone, and a reason this build has never seen still reads the server's
+ * words.
  *
  * NO FRAME DRAWS THIS STATE. Frame 26's states are entry, conversation,
  * thinking, cannot-help and the three history views. The ticket allowed it to

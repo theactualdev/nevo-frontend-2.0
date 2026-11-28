@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { CombinedMark } from "@/components/shared/BrandMarks";
 import { getSession } from "@/lib/auth/session";
@@ -87,6 +88,12 @@ export function OfflineNotice({ online }: { online: boolean }) {
  * changes and nothing is said: the screen already says it. The frame's
  * ghost button, alone, since "See saved lessons" is not on this screen.
  *
+ * ITS PRESSED AND TRYING STATES ARE THE FRAME'S (28, 20 Nov drawing batch;
+ * Lydia, 25 Nov, L5). Pressed, a 10% navy fill at 500. While the network is
+ * asked, a ring and "Trying again", at full strength - it dimmed to 60% and
+ * kept saying "Try again", which reads as a button that has given up. See
+ * `TryAgainLabel`.
+ *
  * OVER THE TAB, NOT IN PLACE OF IT. The tab stays mounted underneath, so
  * anything half-written is still there when the screen goes. Modal and not
  * dismissable, the way `AccountPauseHost` holds a screen over a page.
@@ -168,13 +175,44 @@ export function OfflineScreen() {
             onClick={tryAgain}
             disabled={trying}
             aria-busy={trying}
-            className="mt-8 h-12 w-full max-w-[290px] cursor-pointer rounded-[10px] text-[15px] text-nevo-navy transition-transform active:scale-[0.98] disabled:cursor-default disabled:opacity-60 sm:mt-9 sm:w-[340px] sm:max-w-none"
+            className={cn(
+              "mt-8 flex h-12 w-full max-w-[290px] cursor-pointer items-center justify-center gap-2.5 rounded-[10px] text-[15px] text-nevo-navy transition-transform disabled:cursor-default sm:mt-9 sm:w-[340px] sm:max-w-none",
+              TRY_AGAIN_PRESSED,
+            )}
           >
-            Try again
+            <TryAgainLabel trying={trying} />
           </button>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+  );
+}
+
+/**
+ * Frame 28's pressed Try again (20 Nov drawing batch): a 10% navy fill at
+ * 500, as well as the press's own 0.98.
+ */
+export const TRY_AGAIN_PRESSED =
+  "active:scale-[0.98] active:bg-nevo-navy/10 active:font-medium";
+
+/**
+ * Frame 28's Try again, and its trying state (20 Nov drawing batch; Lydia,
+ * 25 Nov, L5): a 17px ring and "Trying again", 10 apart, at full strength.
+ * The ring turns only where motion is allowed; drawn, it already says the
+ * read is out. One label for every Try again the frame's offline screen
+ * draws, so they cannot drift apart.
+ */
+export function TryAgainLabel({ trying }: { trying: boolean }) {
+  if (!trying) return <>Try again</>;
+  return (
+    <>
+      <span
+        aria-hidden
+        data-trying-ring
+        className="inline-block size-[17px] shrink-0 rounded-full border-2 border-nevo-navy/22 border-t-nevo-navy motion-safe:animate-spin"
+      />
+      Trying again
+    </>
   );
 }
 

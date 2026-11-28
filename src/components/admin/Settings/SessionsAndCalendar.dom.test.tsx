@@ -86,10 +86,11 @@ describe("signing a device out", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/Another device/));
 
     fireEvent.click(button(container, "End it")!);
+    // SCRUM-99's END ONE line, word for word (backlog 23).
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/will be signed out/),
+      expect(visibleText(container)).toMatch(/Whoever is using that device will be asked to sign in again\./),
     );
-    expect(visibleText(container)).toMatch(/Nothing of theirs is lost/);
+    expect(visibleText(container)).not.toMatch(/Nothing of theirs is lost/);
     // Nothing has happened yet.
     expect(endSession).not.toHaveBeenCalled();
   });
@@ -217,5 +218,28 @@ describe("when signing a device out does not go through", () => {
     // And the ended row doesn't come back with its button.
     expect(button(container, "Sign out everywhere else")).toBeUndefined();
     expect(button(container, "End it")).toBeUndefined();
+  });
+});
+
+/*
+ * D12c (backlog 2): "This device" first, the rest in the server's order, and
+ * the frame's own line under them - not a paraphrase.
+ */
+describe("where you're signed in, as D12c draws it", () => {
+  it("lists this device first, whatever order the server sends", async () => {
+    sessions.mockResolvedValue([session("s2", false), session("s1", true), session("s3", false)]);
+    const { container } = render(<AccountSettings />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/This device/));
+    const rows = visibleText(container).match(/This device|Another device/g);
+    expect(rows).toEqual(["This device", "Another device", "Another device"]);
+  });
+
+  it("says D12c's line under the rows, in its words", async () => {
+    sessions.mockResolvedValue([session("s1", true), session("s2", false)]);
+    const { container } = render(<AccountSettings />);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/Don.t recognise one\? End it here, then change your password\./),
+    );
+    expect(visibleText(container)).not.toMatch(/not what device it is on/);
   });
 });
