@@ -38,16 +38,19 @@ export const WAITING_WAY_BACK = "/auth/login";
  * checked, with nothing changed yet. A button that looks inert teaches a child
  * the app is broken." A read that answered "still waiting" puts "Checked just
  * now. Nothing yet." under the button, in a slot held for it so nothing
- * moves. Only an answer says it: a read that failed shows nothing new, since
- * nothing was checked. A new press clears it until its own answer is in, so
- * each answer is said afresh.
+ * moves. A new press clears it until its own answer is in, so each answer
+ * is said afresh.
+ *
+ * AND IT SAYS WHEN IT COULD NOT CHECK (Lydia, 28 Nov, L96): "We couldn't
+ * check just now. Try again in a moment.", in the same slot - for a read that
+ * failed and for one that came back unread. Never "Checked just now" for
+ * either: nothing was checked.
  *
  * AND THE READ SHOWS WHILE IT IS OUT (backlog item 5, Hub 27 Nov). A press
  * that failed used to change nothing at all - the inert button Lydia ruled
  * out. Now the button carries its own read, as the entry check's Try again
  * does (backlog 28): its spinner and `aria-busy` while the read is out, and
- * then it settles. Still no words for it, and a failed read is never told it
- * checked. What a failed read should say is asked of Lydia (L96).
+ * then it settles, with the answer's line under it.
  *
  * "ASK YOUR TEACHER" IS A SENTENCE, NOT A CONTROL (Lydia, 31 Oct): "a child
  * cannot message a teacher from that screen and a control that appears to do
@@ -101,12 +104,18 @@ export const WAITING_COPY: Record<
 /** Under Check again, once a read has answered "still waiting" (Lydia, 2 Nov). */
 export const CHECKED_NOTHING_YET = "Checked just now. Nothing yet.";
 
+/** Under Check again, once a read has failed or come back unread (Lydia, 28 Nov, L96). */
+export const COULD_NOT_CHECK = "We couldn't check just now. Try again in a moment.";
+
 /** Where the frame draws "Ask your teacher" (Lydia, 2 Nov). */
 export const ASK_YOUR_TEACHER =
   "You can ask your teacher whether your school has confirmed yet.";
 
-/** What a Check again found: still waiting, or not that (moved on, or unread). */
-export type CheckAgainResult = "still-waiting" | void;
+/**
+ * What a Check again found: still waiting; "unread", where the read came back
+ * without an answer; or nothing, where it moved the child on.
+ */
+export type CheckAgainResult = "still-waiting" | "unread" | void;
 
 export function WaitingOnConsent({
   hold = "consent",
@@ -117,13 +126,15 @@ export function WaitingOnConsent({
   /**
    * Read the child's consent again, and go on if it has come. 00d's alone:
    * the age check's hold has nothing a child can do (D121). Resolves
-   * "still-waiting" when the read answered and nothing has changed; a read
-   * that failed rejects, or resolves with nothing.
+   * "still-waiting" when the read answered and nothing has changed, and
+   * "unread" when it came back without an answer; a read that failed rejects.
+   * Nothing, where it moved the child on.
    */
   onCheckAgain?: () => Promise<CheckAgainResult>;
 } = {}) {
   const checking = useRef(false);
-  const [checked, setChecked] = useState(false);
+  /** What the last answer says, under the button. */
+  const [said, setSaid] = useState<"checked" | "failed" | null>(null);
   /** The read is out: the button shows it (backlog item 5). */
   const [busy, setBusy] = useState(false);
   // A read that answers after the screen has gone sets nothing.
@@ -132,13 +143,18 @@ export function WaitingOnConsent({
     // One read at a time: a second press while one is out does nothing.
     if (!onCheckAgain || checking.current) return;
     checking.current = true;
-    setChecked(false);
+    setSaid(null);
     setBusy(true);
     void onCheckAgain()
       .then((found) => {
-        if (here.current) setChecked(found === "still-waiting");
+        if (!here.current) return;
+        setSaid(
+          found === "still-waiting" ? "checked" : found === "unread" ? "failed" : null,
+        );
       })
-      .catch(() => {})
+      .catch(() => {
+        if (here.current) setSaid("failed");
+      })
       .finally(() => {
         checking.current = false;
         if (here.current) setBusy(false);
@@ -166,7 +182,11 @@ export function WaitingOnConsent({
               role="status"
               className="mt-3 min-h-[21px] text-center text-sm leading-[1.5] text-nevo-near-black/70"
             >
-              {checked ? CHECKED_NOTHING_YET : ""}
+              {said === "checked"
+                ? CHECKED_NOTHING_YET
+                : said === "failed"
+                  ? COULD_NOT_CHECK
+                  : ""}
             </p>
           </div>
         )}
@@ -190,7 +210,7 @@ export function WaitingOnConsent({
  * Check again asks the consent gate again, as the doors do
  * (`studentDestination`), and goes where it says: on, or to 00e if consent
  * has gone. Still waiting stays here and says it checked; a read that did not
- * answer stays here as it was.
+ * answer stays here and says it could not check.
  */
 export function WaitingOnConsentPage() {
   const router = useRouter();
@@ -202,8 +222,8 @@ export function WaitingOnConsentPage() {
         const to = await studentDestination();
         const path = to.split(/[?#]/)[0];
         if (path === WAITING_ROUTE) return "still-waiting";
-        // Nothing was checked: nothing new is said.
-        if (path === UNCHECKED_ROUTE) return;
+        // Nothing was checked, and it says so (L96).
+        if (path === UNCHECKED_ROUTE) return "unread";
         if (hereRef.current) router.replace(to);
       }}
     />

@@ -577,7 +577,7 @@ describe("where a match goes", () => {
     );
   });
 
-  it("stays on 00d when the lookup behind Check again does not answer", async () => {
+  it("stays on 00d when the lookup behind Check again does not answer, and says it could not check", async () => {
     lookup
       .mockResolvedValueOnce(matched({ consentState: "pending" }))
       .mockRejectedValueOnce(new ApiError(503, "cold start"));
@@ -590,8 +590,10 @@ describe("where a match goes", () => {
 
     expect(push).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Check again" })).toBeInTheDocument();
-    // Nothing was checked, so nothing new is said.
-    expect(screen.getByRole("status").textContent).toBe("");
+    // Nothing was checked, and it says so (Lydia, 28 Nov, L96).
+    expect(screen.getByRole("status").textContent).toBe(
+      "We couldn't check just now. Try again in a moment.",
+    );
   });
 
   it("holds a child whose consent was withdrawn on 00e, in place, never 00d (D117)", async () => {
