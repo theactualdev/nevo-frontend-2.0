@@ -55,6 +55,12 @@ export interface AttentionState {
   segmentId: string | null;
   awaySince: string | null;
   recordedAt: string | null;
+  /**
+   * How the server dated the transition it last recorded: on arrival, or
+   * from the device's own measured length. Typed from the deployed contract;
+   * the reply is not read for anything.
+   */
+  timingSource?: "server_arrival" | "client_elapsed_duration" | null;
   source: "browser_visibility_report";
 }
 
