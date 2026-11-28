@@ -206,7 +206,13 @@ export function AccountSettings() {
    * looked like nothing happened - the row came straight back. Expiry is the
    * server's to judge and `active` doesn't cover it yet (asked).
    */
-  const live = sessions.filter((s) => s.active);
+  /*
+   * "This device" FIRST, as D12c draws it (backlog 2), and the rest in the
+   * server's own order. A stable sort, so nothing else moves.
+   */
+  const live = sessions
+    .filter((s) => s.active)
+    .sort((a, b) => Number(b.current) - Number(a.current));
   const others = live.filter((s) => !s.current);
 
   const nameChanged =
@@ -587,9 +593,11 @@ export function AccountSettings() {
                   */}
                 {asking === s.id ? (
                   <div className="mt-3 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3">
+                    {/* SCRUM-99's END ONE line, word for word (backlog 23). It
+                        said "Nothing of theirs is lost", which nothing here
+                        knows. */}
                     <p className="m-0 text-[13.5px] leading-[1.5] text-nevo-navy">
-                      Whoever is using that device will be signed out and will
-                      need to sign in again. Nothing of theirs is lost.
+                      Whoever is using that device will be asked to sign in again.
                     </p>
                     <div className="mt-3 flex gap-2.5">
                       <button
@@ -676,13 +684,12 @@ export function AccountSettings() {
           </p>
         ) : null}
 
-        {/* The contract has no device name, so every other row reads the same.
-            Said out loud, because a list of identical rows otherwise looks
-            like a bug. */}
+        {/* D12c's own line (backlog 2), where it was paraphrased. The rows
+            can't name their device yet (no such field - Teslim's T18), but
+            each says when it was last active. */}
         {others.length > 0 ? (
           <p className="m-0 mt-3 text-[12.5px] leading-[1.5] text-nevo-near-black/50">
-            We can tell you when each session was last active, but not what
-            device it is on - so if you don&rsquo;t recognise one, sign it out.
+            Don&rsquo;t recognise one? End it here, then change your password.
           </p>
         ) : null}
       </SettingsSection>
