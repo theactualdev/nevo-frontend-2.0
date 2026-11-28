@@ -75,8 +75,13 @@ describe("MasteryByLevel - the three states", () => {
   });
 });
 
+/**
+ * Lydia, L99 (28 Nov): DRAW THE ROW. Leaving an absent level out was itself a
+ * false signal - a teacher could not tell "never tested" from "tested and not
+ * reached". "Not checked yet", lighter, in none of the state colours.
+ */
 describe("MasteryByLevel - a level with nothing observed", () => {
-  it("is not drawn as Not arrived yet beside a level that has a state", () => {
+  it("is drawn as Not checked yet beside a level that has a state - never Not arrived yet", () => {
     // The common case: a child who has only met knowledge-level items. The
     // frame's fallback drew the other two as "Not arrived yet" - an untrue
     // state; the server says an absent level and `not` are different facts.
@@ -87,18 +92,64 @@ describe("MasteryByLevel - a level with nothing observed", () => {
         reading={null}
       />,
     );
-    expect(levelRows(container)).toEqual(["Knowing and understandingReached"]);
+    expect(levelRows(container)).toEqual([
+      "Knowing and understandingReached",
+      "ApplicationNot checked yet",
+      "Analysis and evaluationNot checked yet",
+    ]);
     expect(visibleText(container)).not.toMatch(/Not arrived yet/);
   });
 
-  it("says the frame's sentence when no level has a state - one line, not three", () => {
+  it("takes a lighter treatment than Not arrived yet, in none of the state colours", () => {
+    const { container } = render(
+      <MasteryByLevel
+        concept="Photosynthesis"
+        levels={{ knowing_and_understanding: "reached", application: "not" }}
+        reading={null}
+      />,
+    );
+    const unchecked = container.querySelector("[data-state='unchecked']")!;
+    const not = container.querySelector("[data-state='not']")!;
+    // No navy, no lavender, anywhere on the row - mark, name or word.
+    expect(unchecked.outerHTML).not.toMatch(/nevo-navy|nevo-violet/);
+    // Lighter than `not`'s: a fainter border on the same hollow dot, and
+    // lighter greys for the name and the word.
+    const [uMark, uName, uWord] = [...unchecked.children].map((el) => el.className);
+    const [nMark, nName, nWord] = [...not.children].map((el) => el.className);
+    const alpha = (cls: string, prop: "border" | "text") =>
+      Number(cls.match(new RegExp(`${prop}-nevo-near-black/(\\d+)`))?.[1]);
+    expect(alpha(uMark, "border")).toBeLessThan(alpha(nMark, "border"));
+    expect(alpha(uName, "text")).toBeLessThan(alpha(nName, "text"));
+    expect(alpha(uWord, "text")).toBeLessThan(alpha(nWord, "text"));
+  });
+
+  it("says the frame's sentence when all three are absent - one line, not three rows", () => {
     const { container } = render(<MasteryByLevel concept="Photosynthesis" levels={{}} reading={null} />);
     expect(screen.getByText(NOTHING_AT_ANY_LEVEL)).toBeInTheDocument();
     expect(NOTHING_AT_ANY_LEVEL).toBe("Nothing recorded at any level yet.");
     expect(levelRows(container)).toEqual([]);
+    expect(visibleText(container)).not.toMatch(/Not checked yet/);
+  });
+});
+
+describe("MasteryByLevel - a value it cannot read", () => {
+  it("leaves that row out - neither Not checked yet nor one of the three", () => {
+    // "Not checked yet" claims no check was seen, which cannot be said of a
+    // value we cannot read (Hub, on L99).
+    const { container } = render(
+      <MasteryByLevel
+        concept="Photosynthesis"
+        levels={{ knowing_and_understanding: "reached", application: "mastered" as never }}
+        reading={null}
+      />,
+    );
+    expect(levelRows(container)).toEqual([
+      "Knowing and understandingReached",
+      "Analysis and evaluationNot checked yet",
+    ]);
   });
 
-  it("treats a value it does not know as nothing observed, not as one of the three", () => {
+  it("with no state the engine sent anywhere, says the frame's sentence", () => {
     const { container } = render(
       <MasteryByLevel
         concept="Photosynthesis"
@@ -107,7 +158,7 @@ describe("MasteryByLevel - a level with nothing observed", () => {
       />,
     );
     expect(levelRows(container)).toEqual([]);
-    expect(visibleText(container)).not.toMatch(/Reached|Working at it|Not arrived yet/);
+    expect(visibleText(container)).not.toMatch(/Reached|Working at it|Not arrived yet|Not checked yet/);
     expect(screen.getByText(NOTHING_AT_ANY_LEVEL)).toBeInTheDocument();
   });
 });
@@ -127,7 +178,12 @@ describe("MasteryByLevel - reading, beside the levels", () => {
     const { container } = render(
       <MasteryByLevel concept="Photosynthesis" levels={{ application: "working" }} reading="support" />,
     );
-    expect(levelRows(container)).toEqual(["ApplicationWorking at it"]);
+    expect(levelRows(container)).toEqual([
+      "Knowing and understandingNot checked yet",
+      "ApplicationWorking at it",
+      "Analysis and evaluationNot checked yet",
+    ]);
+    expect(levelRows(container).join(" ")).not.toMatch(/Reading|Support needed/);
   });
 
   it("draws no row for none, for nothing observed, or for a value it does not know", () => {

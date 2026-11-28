@@ -25,14 +25,15 @@ import { cn } from "@/lib/utils";
  *    `not` are different facts and are drawn differently" (backend
  *    src/nevo/mastery/read.py:22-23). The frame's fallback (`look[v] ||
  *    look.not`) drew it as "Not arrived yet" whenever another level had a
- *    state: an untrue state, in a case its sample data never had. So it is
- *    left out, with no new words and no new mark, and only the levels with
- *    an entry are drawn, in curriculum order - the REDUCED build (rule 10;
- *    Hub, 28 Nov). The look for an absent row is with Lydia as L99;
- *  - a value this client does not know: the same as no entry, and it counts
- *    toward nothing-at-any-level. "Not arrived yet" belongs to `not` alone;
- *    drawing anything else as it asserts a state nobody sent (rule 5).
- * With no level to draw, the frame's own sentence stands in for all three.
+ *    state: an untrue state, in a case its sample data never had. It is
+ *    drawn as its own row, "Not checked yet" (Lydia, L99, 28 Nov): leaving
+ *    it out was a false signal too, since a teacher could not tell a level
+ *    never tested from one tested and not reached. See `UNCHECKED`;
+ *  - a value this client does not know: the row is left out. "Not checked
+ *    yet" would claim no check was seen, which cannot be said of a value we
+ *    cannot read, and "Not arrived yet" belongs to `not` alone (rule 5).
+ * With no level holding a state the engine sent - all three absent, or
+ * unreadable - the frame's own sentence stands in for all three rows.
  */
 
 /** In the order a learner works up through them, in the frame's words. */
@@ -85,8 +86,31 @@ const LOOK: Record<
   },
 };
 
+/**
+ * A LEVEL WITH NOTHING OBSERVED (Lydia, L99, 28 Nov): "Not checked yet",
+ * which is distinct from "Not arrived yet" and literally true - no check at
+ * that level has been seen. It reads as an absence rather than a negative
+ * result, so in her words it takes "a lighter treatment and none of the
+ * state colours": no navy and no lavender, a mark fainter than `not`'s hollow
+ * dot, and greys lighter than `not`'s for the name and the word.
+ *
+ * THE FRAME DOES NOT DRAW THIS ROW YET. The treatment is built from L99's
+ * words alone; the exact greys and the border are ours until the frame has
+ * it, and change to the frame's then.
+ */
+const UNCHECKED = {
+  mark: "border-[1.5px] border-nevo-near-black/14 bg-transparent",
+  core: false,
+  word: "Not checked yet",
+  wordClass: "font-normal text-nevo-near-black/45",
+  nameClass: "text-nevo-near-black/50",
+};
+
 const known = (v: unknown): v is MasteryLevelState =>
   typeof v === "string" && Object.prototype.hasOwnProperty.call(LOOK, v);
+
+/** No entry at all: nothing observed. Not the same as a value we cannot read. */
+const absent = (v: unknown): boolean => v === undefined || v === null;
 
 /** The frame's words for reading. `none`, absent or unknown: no row. */
 const READING: Partial<Record<ReadingDemand, { word: string; wordClass: string }>> = {
@@ -104,10 +128,15 @@ export function MasteryByLevel({
   levels: Partial<Record<MasteryLevel, MasteryLevelState>>;
   reading: ReadingDemand | null;
 }) {
-  const drawn = LEVELS.flatMap(([key, name]) => {
+  const rows = LEVELS.flatMap(([key, name]) => {
     const state: unknown = levels?.[key];
-    return known(state) ? [{ key, name, look: LOOK[state] }] : [];
+    if (known(state)) return [{ key, name, state, look: LOOK[state] }];
+    if (absent(state)) return [{ key, name, state: "unchecked", look: UNCHECKED }];
+    // A value we cannot read: no row at all.
+    return [];
   });
+  /** At least one level holds a state the engine sent; otherwise one line. */
+  const anyObserved = rows.some((r) => r.state !== "unchecked");
   const readingLook =
     typeof reading === "string" && Object.prototype.hasOwnProperty.call(READING, reading)
       ? READING[reading]
@@ -123,14 +152,14 @@ export function MasteryByLevel({
         </div>
       )}
 
-      {drawn.length === 0 ? (
+      {!anyObserved ? (
         <p className="m-0 text-[12.5px] leading-[1.55] text-nevo-near-black/55">
           {NOTHING_AT_ANY_LEVEL}
         </p>
       ) : (
         <ul className="m-0 flex list-none flex-col gap-[7px] p-0">
-          {drawn.map(({ key, name, look }) => (
-            <li key={key} className="flex items-center gap-2.5" data-level={key}>
+          {rows.map(({ key, name, state, look }) => (
+            <li key={key} className="flex items-center gap-2.5" data-level={key} data-state={state}>
               <span aria-hidden className={cn(DOT, look.mark)}>
                 {look.core && <span className="block size-[5px] rounded-full bg-nevo-violet" />}
               </span>
