@@ -317,6 +317,55 @@ export function reportProbeNothingToAsk(found: ProbeNothingToAsk): void {
   send(probeNothingToAskReport(found, window.location.pathname));
 }
 
+/** A focus event the server refused (`POST .../attention`). */
+export interface AttentionRefused {
+  /** The HTTP status it answered. */
+  status: number;
+  /**
+   * The server's `detail.code`, or for a validation 422 the field it named
+   * ("invalid body.segmentId"), or null where it sent neither.
+   */
+  code: string | null;
+  action: "away" | "return";
+}
+
+/**
+ * The report for a refused focus event. Pure.
+ *
+ * WHY IT EXISTS (28 Nov). Production received no focus event from 14 Nov,
+ * and the player's reporter stops a sitting's events at the first refusal -
+ * so whatever the server was refusing, nobody could see it. Now each refusal
+ * says what it was: the action, the status and the server's own code. NOTHING
+ * ELSE: no sitting, section or child id, nor anything the request carried.
+ * The route has its values taken out, as every report's does.
+ */
+export function attentionRefusedReport(
+  { status, code, action }: AttentionRefused,
+  pathname: string,
+): ClientErrorReport {
+  return {
+    message: `Focus event refused: ${action} answered ${status}${code ? ` ${code}` : ""}`.slice(
+      0,
+      MESSAGE_MAX,
+    ),
+    route: pathname ? reportableRoute(pathname) : null,
+    stack: null,
+    appVersion: appVersion(),
+    surface: "student",
+    incidentId: null,
+  };
+}
+
+/**
+ * Report a refused focus event. Sent the way a crash is - once per fault per
+ * page, never a word on screen if it fails, and not from a development build.
+ */
+export function reportAttentionRefused(refused: AttentionRefused): void {
+  if (typeof window === "undefined") return;
+  if (process.env.NODE_ENV === "development") return;
+  send(attentionRefusedReport(refused, window.location.pathname));
+}
+
 /** One report, once per fault per page, fire-and-forget. */
 function send(report: ClientErrorReport): void {
   const fault = [

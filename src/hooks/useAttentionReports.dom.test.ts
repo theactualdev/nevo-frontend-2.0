@@ -22,6 +22,12 @@ vi.mock("@/lib/api/attention", () => ({
   },
 }));
 
+const refusedReports = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/api/clientErrors", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/clientErrors")>()),
+  reportAttentionRefused: (...a: unknown[]) => refusedReports(...a),
+}));
+
 const SESSION = "4f1c2a9e-8b7d-4c3a-9e2f-1a2b3c4d5e6f";
 const SEG_A = "0b9d6c1e-2f3a-4b5c-8d7e-6f5a4b3c2d1e";
 const SEG_B = "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d";
@@ -771,5 +777,95 @@ describe("when the player ends the sitting", () => {
       ["return", SEG_A],
       ["return", SEG_A],
     ]);
+  });
+});
+
+/**
+ * 28 Nov: production received no focus event from 14 Nov, and a sitting
+ * stopped at its first refusal without a word. Every refusal is reported now,
+ * with what the server said and nothing that names a child, a sitting or a
+ * section. A failure that is tried again is not a refusal, and says nothing.
+ */
+describe("a refusal is never silent", () => {
+  beforeEach(() => refusedReports.mockReset());
+
+  it("reports a sitting the server no longer holds, with its code", async () => {
+    report.mockRejectedValueOnce(
+      new ApiError(404, "gone", { detail: { code: "active_session_not_found" } }),
+    );
+    mount();
+    await settle();
+
+    expect(refusedReports).toHaveBeenCalledExactlyOnceWith({
+      status: 404,
+      code: "active_session_not_found",
+      action: "return",
+    });
+  });
+
+  it("reports a section that is not the lesson's, and still goes on to the next", async () => {
+    report.mockRejectedValueOnce(
+      new ApiError(404, "no section", { detail: { code: "lesson_section_not_found" } }),
+    );
+    const { rerender } = mount();
+    await settle();
+    rerender({ on: true, sessionId: SESSION, segmentId: SEG_B });
+    await settle();
+
+    expect(refusedReports).toHaveBeenCalledExactlyOnceWith({
+      status: 404,
+      code: "lesson_section_not_found",
+      action: "return",
+    });
+    expect(sent()).toEqual([
+      ["return", SEG_A],
+      ["return", SEG_B],
+    ]);
+  });
+
+  it("names the field a validation 422 refused, never the value it was given", async () => {
+    report.mockRejectedValueOnce(
+      new ApiError(422, "invalid", {
+        detail: [{ type: "uuid_parsing", loc: ["body", "segmentId"], msg: "bad", input: SEG_A }],
+      }),
+    );
+    mount();
+    await settle();
+
+    expect(refusedReports).toHaveBeenCalledExactlyOnceWith({
+      status: 422,
+      code: "invalid body.segmentId",
+      action: "return",
+    });
+    expect(JSON.stringify(refusedReports.mock.calls)).not.toContain(SEG_A);
+  });
+
+  it("reports a refused away as an away", async () => {
+    report
+      .mockResolvedValueOnce({ state: "returned" })
+      .mockRejectedValueOnce(new ApiError(403, "no", { detail: { code: "student_required" } }));
+    mount();
+    await settle();
+    setVisibility("hidden");
+    await settle();
+
+    expect(refusedReports).toHaveBeenCalledExactlyOnceWith({
+      status: 403,
+      code: "student_required",
+      action: "away",
+    });
+  });
+
+  it("says nothing for a failure it will try again", async () => {
+    report
+      .mockRejectedValueOnce(new ApiError(0, "offline"))
+      .mockRejectedValueOnce(new ApiError(503, "unavailable"));
+    vi.useFakeTimers();
+    mount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+
+    expect(refusedReports).not.toHaveBeenCalled();
   });
 });

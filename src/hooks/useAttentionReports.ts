@@ -7,6 +7,7 @@ import {
   type AttentionReport,
 } from "@/lib/api/attention";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
+import { reportAttentionRefused } from "@/lib/api/clientErrors";
 import { usableSession } from "@/lib/auth/doorSession";
 import { randomId } from "@/lib/utils";
 
@@ -27,7 +28,10 @@ import { randomId } from "@/lib/utils";
  * - in order, one at a time, so a return never lands before its away;
  * - each event's id made once, so a retry is the same event to the server;
  * - a network failure or a server error is tried again, sooner when the
- *   device comes back online; a refusal is not;
+ *   device comes back online; a refusal is not - AND A REFUSAL IS REPORTED
+ *   (28 Nov): production received no focus event from 14 Nov, and a sitting
+ *   that stopped at its first refusal stopped without a word to anyone, so
+ *   nobody could see what the server was refusing. See `refusalCode`;
  * - what is unsent survives the page in storage, and goes first next time.
  *
  * THE LENGTH OF EVERY ABSENCE THIS PAGE SAW BEGIN (Teslim, e5a0544 and
@@ -87,6 +91,27 @@ function bounded(ms: number): number | undefined {
 }
 
 const shelfKey = (owner: string) => `${SHELF}.${owner}`;
+
+/**
+ * What a refusal says it was: the server's `detail.code`, or for a
+ * validation 422 (FastAPI's, which carries no code) the field it named. Never
+ * the value it was given - that is a sitting or section id.
+ */
+function refusalCode(cause: ApiError): string | null {
+  const code = apiErrorCode(cause.detail);
+  if (code) return code;
+  const inner =
+    cause.detail && typeof cause.detail === "object"
+      ? (cause.detail as { detail?: unknown }).detail
+      : undefined;
+  if (Array.isArray(inner)) {
+    const loc = (inner[0] as { loc?: unknown } | undefined)?.loc;
+    if (Array.isArray(loc) && loc.every((p) => typeof p === "string" || typeof p === "number")) {
+      return `invalid ${loc.join(".")}`;
+    }
+  }
+  return null;
+}
 
 function readShelf(owner: string): Record<string, Held> {
   try {
@@ -249,11 +274,10 @@ function reporterFor(owner: string, sessionId: string): Reporter {
         // Refused: the same request would be refused again, so it goes.
         // A sitting that has ended, a section that is not the lesson's, a
         // signed-out or non-student account: nothing more for this sitting
-        // but the section that is not the lesson's.
-        if (
-          status === 404 &&
-          apiErrorCode((cause as ApiError).detail) === "lesson_section_not_found"
-        ) {
+        // but the section that is not the lesson's. Said, either way.
+        const code = refusalCode(cause as ApiError);
+        reportAttentionRefused({ status, code, action: next.action });
+        if (status === 404 && code === "lesson_section_not_found") {
           held.queue.shift();
           onScreenSince.delete(next.clientEventId);
           save();
