@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { OfflineNotice, strandedOffline } from "./OfflineScreen";
 import { offlineArt, resetOfflineArt } from "./offlineArt";
 import { clearSession, setSession } from "@/lib/auth/session";
@@ -288,5 +288,44 @@ describe("the full screen's Try again", () => {
     expect(button).toBeDisabled();
     answer(new Response(null, { status: 204 }));
     await waitFor(() => expect(online).toHaveBeenCalledTimes(1));
+  });
+});
+
+/**
+ * L5 (Lydia, 25 Nov): frame 28's pressed and trying states, from the 20 Nov
+ * drawing batch. While the network is asked, a ring and "Trying again" at
+ * full strength - not the same words, dimmed.
+ */
+describe("the full screen's Try again, while it asks", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("says Trying again with the frame's ring, at full strength, and goes back to Try again", async () => {
+    let answer: (r: Response) => void = () => {};
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => (answer = resolve))));
+    signIn("child-a");
+    render(<OfflineNotice online={false} />);
+    const button = await screen.findByRole("button", { name: "Try again" });
+
+    fireEvent.click(button);
+
+    expect(button).toHaveAccessibleName("Trying again");
+    expect(button).toHaveAttribute("aria-busy", "true");
+    expect(button.querySelector("[data-trying-ring]")).not.toBeNull();
+    expect(button.className).not.toMatch(/opacity/);
+
+    await act(async () => answer(new Response(null, { status: 503 })));
+
+    expect(button).toHaveAccessibleName("Try again");
+    expect(button.querySelector("[data-trying-ring]")).toBeNull();
+  });
+
+  it("draws the frame's pressed state: a 10% navy fill at 500", async () => {
+    signIn("child-a");
+    render(<OfflineNotice online={false} />);
+
+    expect(await screen.findByRole("button", { name: "Try again" })).toHaveClass(
+      "active:bg-nevo-navy/10",
+      "active:font-medium",
+    );
   });
 });
