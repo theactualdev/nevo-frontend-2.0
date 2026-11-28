@@ -28,6 +28,7 @@ import {
   templateColumns,
   toFixLabel,
 } from "./rosterImport";
+import { saveFile } from "./saveFile";
 
 /**
  * D24 OB-01 "Add your roster" and OB-02 "What Nevo found".
@@ -111,17 +112,6 @@ const KINDS: {
   },
 ];
 
-/** Hand a fetched file to the browser to save, as the invoice PDF does. */
-function saveFile(blob: Blob, name: string) {
-  const href = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = href;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(href);
-}
 
 export function RosterImportView() {
   const [phase, setPhase] = useState<Phase>("loading");
