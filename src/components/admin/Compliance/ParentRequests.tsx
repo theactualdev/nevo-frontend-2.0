@@ -10,6 +10,7 @@ import {
 import { longDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
+import { openParentRequests } from "../Overview/openParentRequests";
 
 /**
  * What parents have asked of this school (`GET /consents/rights-log`): data
@@ -46,6 +47,22 @@ export function ParentRequests() {
   const [rows, setRows] = useState<ParentRightLogRow[]>([]);
   const [total, setTotal] = useState(0);
   const [more, setMore] = useState<"idle" | "loading" | "failed">("idle");
+  /**
+   * D22b's "N unresolved" (backlog 101): the requests not yet resolved, read
+   * off every page as the Overview's "findings to review" is (L51), so the two
+   * can't disagree. Null when it can't be known - then only the total shows.
+   */
+  const [unresolved, setUnresolved] = useState<number | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void openParentRequests().then((n) => {
+      if (alive) setUnresolved(n);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const read = useCallback((alive: () => boolean) => {
     consentsApi
@@ -106,18 +123,34 @@ export function ParentRequests() {
           }}
         />
       ) : rows.length === 0 ? (
+        /* D22b's empty line (backlog 102). Under L51 a finding IS a request
+           from a parent, so the Overview's "findings" and this say the same. */
         <p className="mt-3 text-[17px] font-medium text-nevo-near-black/50">
-          No requests from parents.
+          No compliance findings.
         </p>
       ) : (
         <>
-          <div className="mt-3 flex items-baseline gap-[9px]">
-            <span className="text-[30px] leading-none font-semibold tracking-[-0.01em] text-nevo-near-black">
-              {total}
-            </span>
-            <span className="text-[14px] text-nevo-near-black/60">
-              {total === 1 ? "request" : "requests"}
-            </span>
+          {/* D22b's two figures (backlog 101): findings, then unresolved. */}
+          <div data-findings-count className="mt-3 flex items-center gap-[18px]">
+            <div className="flex items-baseline gap-[9px]">
+              <span className="text-[30px] leading-none font-semibold tracking-[-0.01em] text-nevo-near-black">
+                {total}
+              </span>
+              <span className="text-[14px] text-nevo-near-black/60">
+                {total === 1 ? "finding" : "findings"}
+              </span>
+            </div>
+            {unresolved !== null ? (
+              <>
+                <span aria-hidden="true" className="h-[26px] w-px bg-nevo-near-black/14" />
+                <div className="flex items-baseline gap-[9px]">
+                  <span className="text-[30px] leading-none font-semibold tracking-[-0.01em] text-nevo-navy">
+                    {unresolved}
+                  </span>
+                  <span className="text-[14px] text-nevo-near-black/60">unresolved</span>
+                </div>
+              </>
+            ) : null}
           </div>
           <ul className="m-0 mt-4 flex list-none flex-col gap-2.5 p-0">
             {rows.map((r) => {
