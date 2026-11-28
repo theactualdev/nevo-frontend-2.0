@@ -665,8 +665,8 @@ export function LearnerProfileView({
       {/*
         * CONCEPT MASTERY, BY LEVEL (the By Level design; S21). Each concept is
         * the shared MasteryByLevel: a state per curriculum level in the
-        * frame's words, only the levels the engine observed something at
-        * (L99), reading beside them, no flag and no number.
+        * frame's words - a level with nothing observed as "Not checked yet"
+        * (Lydia, 28 Nov, L99) - reading beside them, no flag and no number.
         *
         * The label drops the frame's "· dual-track" and the frame's lead line
         * ("Two tracks per concept…") is gone: both describe the bars this

@@ -9,9 +9,11 @@ import { LearnerProfileView } from "./LearnerProfileView";
  * D08b's concept mastery, BY LEVEL (the "Nevo Mastery By Level" design; S21's
  * read, live 27 Nov), drawn by the same component as the teacher's profile,
  * to the hub's five answers (28 Nov):
- *  1. only the levels with an entry, in curriculum order; none at all is
+ *  1. every level in curriculum order, a level with no entry as "Not
+ *     checked yet" (Lydia, 28 Nov, L99 - it was left out, which hid whether a
+ *     level was never tested or tested and not reached); none at all is still
  *     "Nothing recorded at any level yet.";
- *  2. a value this client doesn't know is the same as no entry;
+ *  2. a value this client doesn't know draws no row;
  *  3. no stale lead line, and no "· dual-track";
  *  4. a failed read says so; a 403 or 404 leaves the section out, silently;
  *  5. reading beside the levels, "none" draws no row; no flag, no number.
@@ -73,7 +75,7 @@ beforeEach(() => {
 });
 
 describe("D08b's concept mastery, by level", () => {
-  it("draws each observed level in the frame's words and curriculum order, and leaves an unobserved one out", async () => {
+  it("draws every level in the frame's words and curriculum order, one with no entry as Not checked yet (L99)", async () => {
     masteryByLevel.mockResolvedValue(
       concepts({
         conceptId: "c1",
@@ -86,13 +88,13 @@ describe("D08b's concept mastery, by level", () => {
     await waitFor(() => expect(block(container, "Fractions")).toBeTruthy());
     expect(masteryByLevel).toHaveBeenCalledWith("s1");
     expect(visibleText(block(container, "Fractions"))).toBe(
-      "Fractions Knowing and understanding Reached Application Working at it Reading level At level",
+      "Fractions Knowing and understanding Reached Application Working at it Analysis and evaluation Not checked yet Reading level At level",
     );
-    // Analysis and evaluation has no entry: not drawn, and never "Not arrived yet".
-    expect(visibleText(container)).not.toMatch(/Analysis and evaluation|Not arrived yet/);
+    // No entry is "Not checked yet" - never "Not arrived yet", which is `not`.
+    expect(visibleText(container)).not.toMatch(/Not arrived yet/);
   });
 
-  it("says Not arrived yet only for `not`, and treats a value it doesn't know as no entry", async () => {
+  it("says Not arrived yet only for `not`, Not checked yet for no entry, and draws no row for a value it doesn't know", async () => {
     masteryByLevel.mockResolvedValue(
       concepts({
         conceptId: "c1",
@@ -102,7 +104,9 @@ describe("D08b's concept mastery, by level", () => {
     );
     const { container } = render(<LearnerProfileView studentId="s1" />);
     await waitFor(() => expect(block(container, "Ratios")).toBeTruthy());
-    expect(visibleText(block(container, "Ratios"))).toBe("Ratios Knowing and understanding Not arrived yet");
+    expect(visibleText(block(container, "Ratios"))).toBe(
+      "Ratios Knowing and understanding Not arrived yet Analysis and evaluation Not checked yet",
+    );
   });
 
   it("says the frame's sentence when nothing is recorded at any level, with reading beside it", async () => {
