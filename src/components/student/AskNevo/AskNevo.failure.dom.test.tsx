@@ -226,3 +226,47 @@ describe("a child on an account that may not ask Nevo", () => {
     expect(screen.queryByText(/not available on this account/)).toBeNull();
   });
 });
+
+/**
+ * L95 (Lydia, 28 Nov): "Take the prompts and the box away. The line alone,
+ * with the way back." A refusal that leaves the input up invites a child to
+ * ask again and be refused again.
+ */
+describe("a child on an account that may not ask Nevo, the line alone", () => {
+  const refusedByRole = () =>
+    new ApiError(403, "Forbidden", {
+      detail: { code: "ask_role_forbidden", reason: "account_cannot_ask", availableRoles: [], message: "x" },
+    });
+
+  it("shows the line in the drawer's body, announced, with no prompts and nothing to ask with", async () => {
+    ask.mockReset().mockRejectedValue(refusedByRole());
+
+    await askSomething("What is a fraction?");
+
+    expect(screen.getByRole("status").textContent).toBe("Ask Nevo is not available on this account.");
+    expect(screen.queryByLabelText("Ask a question")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+    expect(screen.queryByText("What can I help with?")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Give me a hint" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Past conversations" })).toBeNull();
+    // The question is not left on screen as a turn that was refused.
+    expect(screen.queryByText("What is a fraction?")).toBeNull();
+  });
+
+  it("keeps the way back: the drawer's own close", async () => {
+    ask.mockReset().mockRejectedValue(refusedByRole());
+
+    await askSomething("What is a fraction?");
+
+    expect(screen.getByRole("button", { name: /close/i })).toBeInTheDocument();
+  });
+
+  it("leaves an ordinary failure as it was: the thread, the prompts and the box", async () => {
+    ask.mockReset().mockRejectedValue(new Error("offline"));
+
+    await askSomething("What is a fraction?");
+
+    expect(screen.getByLabelText("Ask a question")).toBeInTheDocument();
+    expect(screen.getByText("What can I help with?")).toBeInTheDocument();
+  });
+});
