@@ -70,15 +70,14 @@ const REQUEST_RECORDED =
   "Your request has been recorded and sent to the school. They will reply to you directly.";
 
 /**
- * The same, said on each card BEFORE it is sent (Lydia 25 Nov, L43: "Change
- * them in L35's spirit, so both cards carry the approved wording"). They
- * promised a copy emailed to an address, and a review within 48 hours - what
- * L35 took out of the confirmations. The approved sentence, in the future
- * tense, because nothing is recorded until the parent sends it; once sent, the
- * confirmation takes its place, so a card never says both.
+ * What each card says BEFORE it is sent - Lydia's words (28 Nov, L93 for
+ * L43): "Your request goes to the school, and they will reply to you
+ * directly", in place of the passive, two-verb line built from L35's. They
+ * used to promise a copy emailed to an address and a review within 48 hours -
+ * what L35 took out of the confirmations. Once sent, the confirmation takes
+ * its place, so a card never says both.
  */
-const REQUEST_WILL_BE_RECORDED =
-  "Your request will be recorded and sent to the school. They will reply to you directly.";
+const REQUEST_GOES_TO_SCHOOL = "Your request goes to the school, and they will reply to you directly.";
 
 /**
  * The four transparency sections. Content is the parental-notice material
@@ -520,7 +519,7 @@ export function ParentDataManagement({
       <div className={`${CARD} mt-3.5`}>
         <h3 className={H3}>Request {child}&rsquo;s Data</h3>
         {outcome?.right === "request_data" && phase === "done" ? null : (
-          <p className={BODY}>{REQUEST_WILL_BE_RECORDED}</p>
+          <p className={BODY}>{REQUEST_GOES_TO_SCHOOL}</p>
         )}
         {outcome?.right === "request_data" && phase === "done" ? (
           <p className={NOTE}>
@@ -569,7 +568,7 @@ export function ParentDataManagement({
           </h3>
         )}
         {outcome?.right === "object" && phase === "done" ? null : (
-          <p className={BODY}>{`Tell us your concern. ${REQUEST_WILL_BE_RECORDED}`}</p>
+          <p className={BODY}>{`Tell us your concern. ${REQUEST_GOES_TO_SCHOOL}`}</p>
         )}
         {outcome?.right === "object" && phase === "done" ? (
           <p className={NOTE}>

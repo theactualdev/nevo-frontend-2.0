@@ -233,7 +233,7 @@ describe("objecting", () => {
     // Lydia, 25 Nov (L43): what happens, in L35's words - no review window.
     expect(
       screen.getByText(
-        "Tell us your concern. Your request will be recorded and sent to the school. They will reply to you directly.",
+        "Tell us your concern. Your request goes to the school, and they will reply to you directly.",
       ),
     ).toBeInTheDocument();
   });
@@ -302,13 +302,13 @@ describe("objecting", () => {
     const text = () => container.textContent ?? "";
     expect(text()).not.toMatch(/We will prepare a copy|email address your school has|48 hours/);
     expect(
-      screen.getByText("Your request will be recorded and sent to the school. They will reply to you directly."),
+      screen.getByText("Your request goes to the school, and they will reply to you directly."),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^Request .*data$/i }));
     expect(
       await screen.findByText(/Your request has been recorded and sent to the school\. They will reply to you directly\./),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Your request will be recorded and sent to the school. They will reply to you directly.")).toBeNull();
+    expect(screen.queryByText("Your request goes to the school, and they will reply to you directly.")).toBeNull();
   });
 
   it("does not claim a note failed when none was written", async () => {
