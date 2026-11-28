@@ -397,6 +397,8 @@ function LiveSubjectDetail({
                   headingId={`review-${c.conceptId}`}
                   linkLabel={`Take another look at ${c.name}`}
                   className=""
+                  // Equal items, no primary among them (Lydia, 28 Nov, L94).
+                  secondary
                 />
               </div>
             ))}
