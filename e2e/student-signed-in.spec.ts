@@ -107,6 +107,10 @@ import { serverFailure } from "./serverFailure";
  *    where there is one, so a run moves nothing a child sees: part-way stays
  *    part-way. Only when none is part-way does it open a lesson not yet
  *    started - which makes that one part-way, once, and later runs reuse it.
+ *    It also sends the sitting's FOCUS EVENTS and holds production to them
+ *    (28 Nov): the first return as the section shows, then an away and a
+ *    return round a hide the test forces. Visibility only - they say nothing
+ *    about the child, and they change nothing a child sees.
  *
  * Every other test is READ-ONLY and is held to it: it records every write the
  * page sends and fails on any (`expectNoWrites`). Never, anywhere in this file:
@@ -303,6 +307,51 @@ interface Write {
   method: string;
   path: string;
   body: unknown;
+}
+
+/**
+ * The player's focus event of this action, answered (`POST .../attention`).
+ *
+ * WHY THIS IS HERE (Lydia, 28 Nov; Teslim's spec of the same day).
+ * Production received no focus event from 14 Nov, and Teslim cannot turn on
+ * level mastery recording until it does. Nobody noticed, because the player
+ * stopped a sitting's events at the first refusal and said nothing. This
+ * runs against production as the probe child, so a refusal fails the build
+ * rather than going quiet again.
+ */
+function focusEvent(page: Page, action: "away" | "return") {
+  return page.waitForResponse(
+    (response) => {
+      const request = response.request();
+      if (request.method() !== "POST") return false;
+      if (!/\/students\/me\/sessions\/[^/]+\/attention$/.test(new URL(response.url()).pathname)) {
+        return false;
+      }
+      try {
+        return (request.postDataJSON() as { action?: unknown } | null)?.action === action;
+      } catch {
+        return false;
+      }
+    },
+    { timeout: LIVE_MS },
+  );
+}
+
+/** Says what production answered, when it was not a 2xx. */
+async function accepted(response: Awaited<ReturnType<typeof focusEvent>>, what: string) {
+  const status = response.status();
+  const body = status >= 300 ? await response.text().catch(() => "") : "";
+  expect(status, `${what} was refused by production: ${status} ${body}`.trim()).toBeLessThan(300);
+  expect(status).toBeGreaterThanOrEqual(200);
+}
+
+/** Make the page hidden or visible, as the browser says it when a tab goes. */
+async function setPageVisibility(page: Page, state: "hidden" | "visible") {
+  await page.evaluate((s) => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => s });
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => s === "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, state);
 }
 
 /**
@@ -1079,6 +1128,9 @@ test.describe("a signed-in student", () => {
 
     const writes = recordWrites(page);
     await plantSession(page);
+    // Listening before the page opens: the first return goes as soon as the
+    // sitting is known, which can be before anything below is awaited.
+    const firstReturn = focusEvent(page, "return");
     // The link the child's own card uses: the assignment rides along.
     const response = await page.goto(
       `/student/lessons/${lesson!.lessonId}?assignment=${encodeURIComponent(lesson!.assignmentId)}`,
@@ -1099,6 +1151,40 @@ test.describe("a signed-in student", () => {
     // IA 31: never available while the player is teaching.
     await expect(page.getByRole("button", { name: "Ask Nevo" })).toHaveCount(0);
     await expectNoSampleMarks(page, "The lesson player");
+
+    /*
+     * FOCUS EVENTS, IN PRODUCTION (28 Nov). The section on screen starts the
+     * clock with a return; a hidden page sends an away; visible again, a
+     * return that carries how long the child was gone. All three accepted -
+     * and an away with its own section, and a return with the length on it,
+     * as Teslim's contract asks.
+     */
+    const opened = await firstReturn;
+    await accepted(opened, "The first focus event (return, as the section showed)");
+    const section = (opened.request().postDataJSON() as { segmentId: string }).segmentId;
+
+    const away = focusEvent(page, "away");
+    await setPageVisibility(page, "hidden");
+    const wentAway = await away;
+    await accepted(wentAway, "The away as the page was hidden");
+    expect(
+      (wentAway.request().postDataJSON() as { segmentId: string }).segmentId,
+      "The away named another section than the one on screen.",
+    ).toBe(section);
+
+    const back = focusEvent(page, "return");
+    await setPageVisibility(page, "visible");
+    const cameBack = await back;
+    await accepted(cameBack, "The return as the page was visible again");
+    const returned = cameBack.request().postDataJSON() as {
+      segmentId: string;
+      clientAwayDurationMs?: number;
+    };
+    expect(returned.segmentId, "The return named another section than the away.").toBe(section);
+    expect(
+      typeof returned.clientAwayDurationMs,
+      "The return did not say how long the child was away.",
+    ).toBe("number");
 
     await page.getByRole("button", { name: "Exit lesson" }).click();
     const leave = page.getByRole("dialog");
