@@ -270,7 +270,24 @@ const handedOffAtDeadline = async () => {
   expect(screen.getByText("Body of Denominators.")).toBeTruthy();
 };
 
+/*
+ * NO REAL NETWORK IN THIS FILE (28 Nov). The player sends what this file
+ * does not stand in for - its focus events - through the API client, and
+ * every answer the client sees sets the server clock from its `Date` header
+ * (`noteServerClock`). The grace window is timed by that clock. Where
+ * something answered at jsdom's origin (localhost:3000: any dev server left
+ * running), a real date - today - against this file's faked 22 Oct put the
+ * clock weeks out, `msUntilServerTime` came to 0 and the read went at once:
+ * the test failed whenever that answer landed before the third miss's read
+ * was timed, and passed when it did not. On CI nothing answers, so it never
+ * showed there. Now every request this file does not stand in for fails as
+ * it does on CI, wherever it runs.
+ */
 beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => Promise.reject(new TypeError("No network in this test."))),
+  );
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   vi.setSystemTime(T0);
   resetServerClock();
@@ -298,6 +315,7 @@ afterEach(() => {
   clearSession();
   resetServerClock();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 describe("the panel at the end of the grace window", () => {
