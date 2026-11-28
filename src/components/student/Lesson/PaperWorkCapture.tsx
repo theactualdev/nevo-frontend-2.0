@@ -47,11 +47,11 @@ import {
  * Each of her lines is one paragraph; its first sentence takes the frame's
  * bold line and the rest the sentence under it. Not a word is changed.
  *
- * STILL HELD: P9, read but the working needs more doing. Lydia: "the
- * existing P9 state and keeps its wording" - but 17g (reworked 25 Nov) draws
- * P9 "copy not written", so there is no wording to keep. Raised, not
- * guessed: such a photo hands straight back to the lesson
- * (`onContinue("needs_work")`).
+ * P9, read but the working needs more doing, in her words (28 Nov, L94):
+ * "There's more to do on this one" / "Nevo read your page, and part of the
+ * working is still missing. Finish it and take another photo, or keep
+ * going." In the frame's layout, with its two ways on: Retake, and Keep
+ * going (`onContinue("needs_work")`).
  *
  * TYPED, WHERE THERE IS NO CAMERA (Lydia, 25 Nov, L59), built to her spec
  * before its frame, from what exists. Where the check's steps can be typed
@@ -138,6 +138,7 @@ type Step =
   | "person"
   | "held"
   | "sendFailed"
+  | "moreToDo"
   | "noCamera"
   | "typed";
 
@@ -282,12 +283,12 @@ export function PaperWorkCapture({
       setStep(verdict);
       return;
     }
-    dropPhoto();
+    // P9: read, with more to do - the page stays on screen beside her words.
     if (verdict === "needs_work") {
-      // P9 has no words yet (see the docblock): straight back to the lesson.
-      onContinue("needs_work");
+      setStep("moreToDo");
       return;
     }
+    dropPhoto();
     setStep("done");
   };
 
@@ -443,6 +444,21 @@ export function PaperWorkCapture({
           again="Retake"
           onAgain={() => void openCamera()}
           onCarryOn={carryOnWithout}
+        />
+      )}
+
+      {step === "moreToDo" && photo && (
+        <PhotoHeld
+          url={photo.url}
+          title="There's more to do on this one"
+          body="Nevo read your page, and part of the working is still missing. Finish it and take another photo, or keep going."
+          again="Retake"
+          onAgain={() => void openCamera()}
+          carryOn="Keep going"
+          onCarryOn={() => {
+            dropPhoto();
+            onContinue("needs_work");
+          }}
         />
       )}
 
@@ -620,6 +636,7 @@ function PhotoHeld({
   again,
   busy = false,
   onAgain,
+  carryOn = "Continue without it",
   onCarryOn,
 }: {
   url: string;
@@ -628,6 +645,8 @@ function PhotoHeld({
   again: string;
   busy?: boolean;
   onAgain: () => void;
+  /** The way on: "Continue without it", or P9's "Keep going". */
+  carryOn?: string;
   onCarryOn: () => void;
 }) {
   return (
@@ -655,7 +674,7 @@ function PhotoHeld({
           onClick={onCarryOn}
           className={`${SOLID} h-[52px] flex-1 rounded-[10px] text-[15px]`}
         >
-          Continue without it
+          {carryOn}
         </button>
       </div>
     </>

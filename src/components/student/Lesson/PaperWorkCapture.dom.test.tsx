@@ -317,7 +317,7 @@ describe("sending the photo", () => {
     expect(onContinue).not.toHaveBeenCalled();
   });
 
-  it("hands a photo read but needing more work straight back: P9 has no words yet", async () => {
+  it("says a photo read with more to do in Lydia's P9 words, with Retake and Keep going (L94)", async () => {
     const { onSend, onContinue } = mount();
     onSend.mockResolvedValue("needs_work");
     await toCamera();
@@ -325,9 +325,32 @@ describe("sending the photo", () => {
 
     fireEvent.click(button("Use this photo"));
 
-    await waitFor(() => expect(onContinue).toHaveBeenCalledWith("needs_work"));
-    expect(screen.queryByRole("status")).toBeNull();
+    expect(await screen.findByText("There's more to do on this one")).toBeVisible();
+    expect(
+      screen.getByText(
+        "Nevo read your page, and part of the working is still missing. Finish it and take another photo, or keep going.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("There's more to do on this one");
+    expect(onContinue).not.toHaveBeenCalled();
+
+    fireEvent.click(button("Keep going"));
+    expect(onContinue).toHaveBeenCalledWith("needs_work");
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:photo-1");
+  });
+
+  it("takes another photo from P9 on Retake", async () => {
+    const { onSend, onContinue } = mount();
+    onSend.mockResolvedValue("needs_work");
+    await toCamera();
+    await snap();
+    fireEvent.click(button("Use this photo"));
+    await screen.findByText("There's more to do on this one");
+
+    fireEvent.click(button("Retake"));
+
+    await screen.findByText("Line your page up inside the frame");
+    expect(onContinue).not.toHaveBeenCalled();
   });
 
   it("keeps the picture out of device storage", async () => {
