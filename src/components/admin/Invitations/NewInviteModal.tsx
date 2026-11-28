@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useStillHere } from "@/hooks/useStillHere";
 import type { AdminClass } from "@/lib/api/classes";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
 import {
@@ -102,12 +103,20 @@ export function NewInviteModal({
   /** Whether `sent` came back from a reissue rather than a new invitation. */
   const [reissued, setReissued] = useState(false);
 
+  const mounted = useStillHere(); // A read that answers after this has gone sets nothing (check 21).
+
   const fetchSubjects = useCallback(() => {
     subjectsApi
       .list()
-      .then((rows) => setSchoolSubjects(Array.isArray(rows) ? rows : []))
-      .catch(() => setSubjectsFailed(true));
-  }, []);
+      .then((rows) => {
+        if (!mounted.current) return;
+        setSchoolSubjects(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!mounted.current) return;
+        setSubjectsFailed(true);
+      });
+  }, [mounted]);
   useEffect(() => {
     fetchSubjects();
   }, [fetchSubjects]);
