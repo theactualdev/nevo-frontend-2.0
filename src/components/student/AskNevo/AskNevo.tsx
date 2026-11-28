@@ -118,6 +118,14 @@ const ALLOWANCE_SPENT =
  * cannot work.
  */
 const NOT_ON_THIS_ACCOUNT = "Ask Nevo is not available on this account.";
+/*
+ * AND IT STANDS ALONE (Lydia, 28 Nov, L95): "Take the prompts and the box
+ * away. The line alone, with the way back. Leaving the input in place invites
+ * a child to ask again and be refused again, which is the worst version of a
+ * refusal." So it takes the drawer's body, as the safety stop does, and
+ * nothing to ask with is drawn under it while the drawer is open. The way
+ * back is the drawer's own close.
+ */
 
 /**
  * Mock reply engine - calm, canned, and honest about its limits. The
@@ -228,6 +236,8 @@ export function AskNevo() {
    * something new. See `StopScreen`.
    */
   const [stop, setStop] = useState<SafetyStop | null>(null);
+  /** This account may not ask (L55): the line alone, and nothing to ask with (L95). */
+  const [accountRefused, setAccountRefused] = useState(false);
   const signedIn = useHasSession();
   const history = useAskNevoHistory(open && signedIn);
   const kb = useNevoKeyboardDock();
@@ -348,6 +358,13 @@ export function AskNevo() {
         setThinking(false);
         return;
       }
+      // L95: not a turn in the thread either - the line alone, in its place.
+      if (refused) {
+        setMessages((m) => m.filter((message) => message !== asked));
+        setAccountRefused(true);
+        setThinking(false);
+        return;
+      }
       // The server's own verdict, reported here rather than inside the state
       // update below, which React may run twice.
       if (res?.canHelp === false)
@@ -376,9 +393,7 @@ export function AskNevo() {
             }
           : spent
             ? { who: "nevo", text: ALLOWANCE_SPENT }
-            : refused
-              ? { who: "nevo", text: NOT_ON_THIS_ACCOUNT }
-              : signedIn
+            : signedIn
               ? { who: "nevo", text: COULD_NOT_ANSWER, failed: true }
               : // Say so. A visitor on the walkthrough cannot tell a canned
                 // reply from real tutoring either, and should not have to.
@@ -466,7 +481,7 @@ export function AskNevo() {
               open an empty list that looks like a child with no conversations
               rather than a visitor with no account.
             */}
-            {signedIn && view === "chat" && (
+            {signedIn && view === "chat" && !accountRefused && (
               <button
                 type="button"
                 aria-label="Past conversations"
@@ -499,6 +514,8 @@ export function AskNevo() {
                 />
               )}
             </div>
+          ) : accountRefused ? (
+            <StopScreen message={NOT_ON_THIS_ACCOUNT} />
           ) : stop ? (
             <StopScreen message={stop.message} />
           ) : (
@@ -622,6 +639,7 @@ export function AskNevo() {
             new", so history is somewhere to look rather than somewhere to be
             stuck. Typing from a transcript returns to the live thread.
           */}
+          {!accountRefused && (
           <div className="shrink-0 border-t border-nevo-near-black/8 px-4 py-3">
             <div
               className={cn(
@@ -666,8 +684,9 @@ export function AskNevo() {
               </button>
             </div>
           </div>
+          )}
 
-          {kb.open && (
+          {kb.open && !accountRefused && (
             <NevoKeyboard
               layout="qwerty"
               onKey={(c) => setInput((v) => v + c)}
