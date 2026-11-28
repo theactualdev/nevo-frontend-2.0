@@ -22,6 +22,12 @@ import { ReportsView } from "./ReportsView";
 
 const outcomes = vi.fn();
 const mastery = vi.fn();
+// The year-group figures (47) read the classes list for their picker. No
+// classes here, so they draw their own nothing-state, never a failed read.
+vi.mock("@/lib/api/classes", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/classes")>();
+  return { ...actual, classesApi: { ...actual.classesApi, list: async () => [] } };
+});
 vi.mock("@/lib/api/analytics", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/analytics")>();
   return {

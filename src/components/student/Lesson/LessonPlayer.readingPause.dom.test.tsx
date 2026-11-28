@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import {
   READING_PAUSE_END,
@@ -195,9 +195,9 @@ describe("the pause at the end of the reading", () => {
 
     expect(screen.getByText("Take a breath")).toBeInTheDocument();
 
-    act(() => {
-      vi.advanceTimersByTime(20_000);
-    });
+    // 18b (L12): the break is taken in place and ends on "Keep going" - it has
+    // no timer of its own any more, so nothing ends it but the child.
+    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
 
     expect(screen.getByText(QUESTION)).toBeInTheDocument();
     expect(pauseHeading()).toBeNull();
