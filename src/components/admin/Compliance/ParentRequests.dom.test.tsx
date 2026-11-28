@@ -21,6 +21,12 @@ vi.mock("@/lib/api/consents", async (importOriginal) => {
   };
 });
 
+// D22b's "N unresolved" reads every page through its own helper (tested in
+// openParentRequests.test.ts). Answered here on its own, so it never takes a
+// page answer meant for the list.
+const openParentRequests = vi.fn<() => Promise<number | null>>();
+vi.mock("../Overview/openParentRequests", () => ({ openParentRequests: () => openParentRequests() }));
+
 const row = (over: Partial<ParentRightLogRow>): ParentRightLogRow => ({
   id: over.id ?? "r1",
   studentId: "s1",
@@ -44,6 +50,8 @@ const page = (entries: ParentRightLogRow[], total = entries.length, offset = 0):
 
 beforeEach(() => {
   rightsLog.mockReset();
+  openParentRequests.mockReset();
+  openParentRequests.mockResolvedValue(null);
 });
 
 describe("Requests from parents", () => {
@@ -61,7 +69,8 @@ describe("Requests from parents", () => {
     expect(text).toMatch(/Consent withdrawal/);
     expect(text).toMatch(/Objection to processing/);
     expect(text).toMatch(/5 September 2026/);
-    expect(text).toMatch(/3\s*requests/);
+    // D22b's count (backlog 101): findings, the word the Overview uses too.
+    expect(text).toMatch(/3\s*findings/);
     expect(screen.getAllByText("Pending")).toHaveLength(2);
     expect(screen.getAllByText("Resolved")).toHaveLength(1);
     // The log sends both names. Neither reaches the screen.
@@ -69,10 +78,33 @@ describe("Requests from parents", () => {
     expect(text).toMatch(/category and status only, by design/);
   });
 
-  it("says plainly when nothing has been asked", async () => {
+  it("says plainly when nothing has been asked, in D22b's words", async () => {
     rightsLog.mockResolvedValue(page([]));
     const { container } = render(<ParentRequests />);
-    await waitFor(() => expect(visibleText(container)).toMatch(/No requests from parents\./));
+    await waitFor(() => expect(visibleText(container)).toMatch(/No compliance findings\./));
+  });
+
+  /*
+   * Backlog 101: D22b's second figure, "N unresolved" - the requests no one
+   * has resolved, counted as the Overview counts them (L51). Unknown, it isn't
+   * drawn: the total stands alone, never a guessed or partial figure.
+   */
+  it("says how many are unresolved beside the total, as D22b draws it", async () => {
+    rightsLog.mockResolvedValue(page([row({ id: "a" }), row({ id: "b", resolvedAt: "2026-09-03T10:00:00Z" })], 41));
+    openParentRequests.mockResolvedValue(17);
+    const { container } = render(<ParentRequests />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/17\s*unresolved/));
+    expect(visibleText(container.querySelector("[data-findings-count]") as HTMLElement)).toMatch(
+      /^41\s*findings\s*17\s*unresolved$/,
+    );
+  });
+
+  it("shows the total alone when the unresolved count can't be known", async () => {
+    rightsLog.mockResolvedValue(page([row({ id: "a" })], 41));
+    openParentRequests.mockResolvedValue(null);
+    const { container } = render(<ParentRequests />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/41\s*findings/));
+    expect(visibleText(container)).not.toMatch(/unresolved/);
   });
 
   it("loads older requests a page at a time", async () => {
