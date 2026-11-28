@@ -1,4 +1,5 @@
 import { randomInt } from "node:crypto";
+import { appendFileSync } from "node:fs";
 import {
   expect,
   test,
@@ -338,6 +339,24 @@ function focusEvent(page: Page, action: "away" | "return") {
     },
     { timeout: LIVE_MS },
   );
+}
+
+/**
+ * A guard that could not run says so where the run is read (Hub, 28 Nov).
+ * CI's reporter prints only a count of skips ("94 passed, 3 skipped"), so a
+ * skipped guard read as a green one and proved nothing. Both ways at once:
+ * a workflow warning on the run, and a line in the job's summary - the
+ * second does not depend on the reporter passing a test's output through.
+ */
+function announceSkip(title: string, reason: string) {
+  console.log(`::warning title=${title}::${reason}`);
+  const summary = process.env.GITHUB_STEP_SUMMARY;
+  if (!summary) return;
+  try {
+    appendFileSync(summary, `- :warning: **${title}:** ${reason}\n`);
+  } catch {
+    // No summary to write to: the warning above still stands.
+  }
 }
 
 /** Says what production answered, when it was not a 2xx. */
@@ -1127,6 +1146,12 @@ test.describe("a signed-in student", () => {
      * forward, never answers anything, and leaves straight away.
      */
     const lesson = lessonToOpen();
+    if (!lesson) {
+      announceSkip(
+        "Focus guard skipped",
+        "The probe has no lesson set and open, so production's focus events were NOT checked this run.",
+      );
+    }
     test.skip(!lesson, "The probe has no lesson set and open to them, so there is nothing to play.");
 
     const writes = recordWrites(page);
