@@ -8,6 +8,7 @@ import type {
   KeyPointConfidence,
   LessonReview,
   LessonSegment,
+  MasteryLevel,
   ReviewSignoff,
 } from "@/lib/api/lessons";
 import type { LessonMediaItem } from "@/lib/api/media";
@@ -354,6 +355,11 @@ export interface CheckRow {
   level?: string | null;
   /** Nevo inferred the level, so the checks sign-off accepts it. */
   levelByNevo?: boolean;
+  /** The level as the server names it, for "Change level" (C24). */
+  masteryLevel?: MasteryLevel | null;
+  /** What C24's level write needs to find the check. */
+  questionId?: string;
+  scope?: "checkpoint" | "assessment";
   segmentId: string;
   /** The section it sits in. */
   label: string;
@@ -421,6 +427,9 @@ export function checksView(review: LessonReview, segments: LessonSegment[]): Che
   const rows = (review.checks ?? []).map((c, i): CheckRow & { check: CheckReviewItem } => ({
     key: `${c.segmentId}:${c.questionId}`,
     level: levelWords(c.masteryLevel),
+    masteryLevel: levelWords(c.masteryLevel) ? (c.masteryLevel ?? null) : null,
+    questionId: c.questionId,
+    scope: c.scope ?? "checkpoint",
     levelByNevo: !!levelWords(c.masteryLevel) && c.masteryLevelAuthoredBy !== "person",
     segmentId: c.segmentId,
     label: labelOf(c.segmentId, c.segmentTitle),
@@ -482,6 +491,9 @@ export function checksView(review: LessonReview, segments: LessonSegment[]): Che
  * C24's words for the three levels (1397ec4), and nothing for anything else.
  * Teacher-facing only: a level is never named to a child (test 4).
  */
+/** C24's three levels, in the frame's order. */
+export const LEVELS: MasteryLevel[] = ["knowledge", "application", "analysis"];
+
 const LEVEL_WORDS: Record<string, string> = {
   knowledge: "Knowing & understanding",
   application: "Application",
