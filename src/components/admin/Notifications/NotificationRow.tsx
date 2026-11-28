@@ -27,6 +27,63 @@ import { cn } from "@/lib/utils";
  */
 
 /**
+ * D13's FOUR AREAS, each with the frame's own glyph (backlog 72): Roster,
+ * Learning support, IT & SSO and Billing. A row's area comes from its
+ * category, by the map the hub approved on 27 Nov - consent to Roster,
+ * billing to Billing, account ("Platform": roster sync, sign-in) to IT & SSO,
+ * attention to Learning support. Anything else keeps the bell, rather than
+ * being given an area nobody said it belongs to.
+ */
+type Area = "roster" | "senco" | "it" | "billing" | "bell";
+
+const AREA_BY_CATEGORY: Record<string, Area> = {
+  consent: "roster",
+  billing: "billing",
+  account: "it",
+  attention: "senco",
+};
+
+export function areaOf(category: string | null | undefined): Area {
+  return (category && AREA_BY_CATEGORY[category]) || "bell";
+}
+
+function AreaGlyph({ area }: { area: Area }) {
+  switch (area) {
+    case "roster":
+      return (
+        <>
+          <circle cx="9" cy="8" r="3" />
+          <path d="M3.5 20a5.5 5.5 0 0 1 11 0" />
+        </>
+      );
+    case "senco":
+      return <path d="M12 20s-6.5-4.2-9-8A4.7 4.7 0 0 1 12 6.3 4.7 4.7 0 0 1 21 12c-2.5 3.8-9 8-9 8z" />;
+    case "it":
+      return (
+        <>
+          <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+          <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+          <path d="M21 3v5h-5" />
+        </>
+      );
+    case "billing":
+      return (
+        <>
+          <rect x="2.5" y="5" width="19" height="14" rx="2.2" />
+          <path d="M2.5 9.5h19" />
+        </>
+      );
+    default:
+      return (
+        <>
+          <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </>
+      );
+  }
+}
+
+/**
  * The icon tile.
  *
  * One accent treatment exists in this design: soft violet for the row worth
@@ -34,10 +91,11 @@ import { cn } from "@/lib/utils";
  * amber, and no exclamation glyph anywhere in the set - so "accent" here means
  * unread, not urgent.
  */
-function IconTile({ accent, size }: { accent: boolean; size: number }) {
+function IconTile({ accent, size, area }: { accent: boolean; size: number; area: Area }) {
   return (
     <span
       aria-hidden="true"
+      data-area={area}
       className={cn(
         "flex flex-none items-center justify-center rounded-[10px] text-nevo-navy",
         accent ? "bg-nevo-violet/24" : "bg-nevo-navy/10",
@@ -50,12 +108,11 @@ function IconTile({ accent, size }: { accent: boolean; size: number }) {
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth={area === "bell" ? 2 : 1.8}
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        <AreaGlyph area={area} />
       </svg>
     </span>
   );
@@ -64,21 +121,30 @@ function IconTile({ accent, size }: { accent: boolean; size: number }) {
 /**
  * Relative time, computed from a timestamp captured once by the caller rather
  * than read here - React purity, and it keeps every row on the same clock.
+ *
+ * IN D13's WORDS (backlog 72), where it was "2h ago" and "1d ago". The panel
+ * (D13) says "2 hours ago", "Yesterday", "2 days ago"; the page (D13b) says
+ * "2 hours ago", "Yesterday, 9:04 AM", and the date after that ("22 July").
+ * Minutes follow the hours' pattern; neither frame draws one.
  */
-function relative(iso: string, now: number): string {
+export function relative(iso: string, now: number, compact = false): string {
   const then = Date.parse(iso);
   if (Number.isNaN(then)) return "";
+  const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"} ago`;
   const mins = Math.round((now - then) / 60_000);
   if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) return plural(mins, "minute");
   const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return plural(hours, "hour");
   const days = Math.round(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(then).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-  });
+  const date = new Date(then);
+  if (days === 1) {
+    return compact
+      ? "Yesterday"
+      : `Yesterday, ${date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+  }
+  if (compact && days < 7) return plural(days, "day");
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
 }
 
 export function NotificationRow({
@@ -145,7 +211,7 @@ export function NotificationRow({
           : undefined
       }
     >
-      <IconTile accent={unread} size={compact ? 34 : 38} />
+      <IconTile accent={unread} size={compact ? 34 : 38} area={areaOf(notification.category)} />
 
       {/*
         * The {" "} between these lines is a space nobody sees - white space
@@ -186,7 +252,7 @@ export function NotificationRow({
           </>
         ) : null}
         <p className="m-0 mt-1 text-xs text-nevo-near-black/50">
-          {relative(notification.createdAt, now ?? Date.parse(notification.createdAt))}
+          {relative(notification.createdAt, now ?? Date.parse(notification.createdAt), compact)}
         </p>
       </div>
 
