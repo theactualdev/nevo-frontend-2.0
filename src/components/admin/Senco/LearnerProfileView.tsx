@@ -17,7 +17,7 @@ import {
   studentsApi,
   type Accommodations,
   type AdminStudentDetail,
-  type ConceptMasteryRow,
+  type ConceptLevels,
   type ConversationEvidence,
   type StudentAdaptation,
 } from "@/lib/api/students";
@@ -43,6 +43,7 @@ import { useLearningSupport } from "../LearningSupport/useLearningSupport";
 import { NEEDS_LEARNING_SUPPORT, UnavailableAction } from "../LearningSupport/Unavailable";
 import { SafeguardingRecord } from "../Safeguarding/SafeguardingRecord";
 import { ChildAvatar } from "../Roster/ChildAvatar";
+import { MasteryByLevel } from "@/components/teacher/Student/MasteryByLevel";
 import type { AvatarLook } from "@/lib/profile/avatarLook";
 import { lookOfChild } from "@/lib/profile/rosterLook";
 
@@ -53,12 +54,12 @@ import { lookOfChild } from "@/lib/profile/rosterLook";
  * no raw signal talk." That sentence governs every decision on this screen,
  * and two of them are worth spelling out:
  *
- * 1. THE DUAL-TRACK MASTERY BARS CARRY NO NUMBERS. The comparison is the whole
- *    point of the section - understanding against the reading level the
- *    material demands, so that a gap points at the text rather than the
- *    concept - but a percentage beside a child's name is a confidence score,
- *    which this screen explicitly does not show. Two bars and a plain sentence
- *    say the same thing without inviting anyone to quote a figure at a parent.
+ * 1. CONCEPT MASTERY IS A STATE PER CURRICULUM LEVEL, NEVER A NUMBER (the By
+ *    Level design, "Nevo Mastery By Level", 928cf30; S21's read, live 27
+ *    Nov). The dual-track bars it replaced were a numbered bar in everything
+ *    but the number; a percentage beside a child's name is a confidence
+ *    score, which this screen explicitly does not show. The same shared
+ *    component as the teacher's profile (C08), so the two cannot drift.
  *
  * 2. ACCOMMODATIONS ARE A RECORD OF WHAT NEVO IS DOING, NOT A LABEL ABOUT THE
  *    CHILD. The frame is emphatic and the copy says so on screen. `source` and
@@ -178,7 +179,13 @@ export function LearnerProfileView({
   const [accommodations, setAccommodations] = useState<Accommodations | null>(
     null,
   );
-  const [mastery, setMastery] = useState<ConceptMasteryRow[]>([]);
+  const [mastery, setMastery] = useState<ConceptLevels[]>([]);
+  /*
+   * A 403 or a 404 on the mastery read (Hub, 28 Nov): no retry would land -
+   * the viewer may not read it, or the child is out of reach - so the
+   * section is ABSENT, with no line. Only a read that failed says so.
+   */
+  const [masteryAbsent, setMasteryAbsent] = useState(false);
   const [adaptations, setAdaptations] = useState<StudentAdaptation[]>([]);
   /*
    * IN FLIGHT IS NOT THE SAME AS ANSWERED. The roster read starts only once
@@ -261,6 +268,7 @@ export function LearnerProfileView({
           adaptations: false,
         });
         setRoleRefused(false);
+        setMasteryAbsent(false);
         const fail = (section: keyof typeof failed) => (err: unknown) => {
           setFailed((f) => ({ ...f, [section]: true }));
           if (failureKind(err) === "denied") setDenied((d) => ({ ...d, [section]: true }));
@@ -272,10 +280,18 @@ export function LearnerProfileView({
           .accommodations(studentId)
           .then(setAccommodations)
           .catch(fail("accommodations"));
+        // S21's By Level read (GET /students/{id}/mastery), the teacher's
+        // profile's own function: a state per level per concept, no number.
         studentsApi
-          .mastery(studentId)
-          .then(setMastery)
-          .catch(fail("mastery"));
+          .masteryByLevel(studentId)
+          .then((r) => setMastery(Array.isArray(r?.concepts) ? r.concepts : []))
+          .catch((err: unknown) => {
+            if (err instanceof ApiError && (err.status === 403 || err.status === 404)) {
+              setMasteryAbsent(true);
+              return;
+            }
+            fail("mastery")(err);
+          });
         studentsApi
           .adaptations(studentId)
           .then(setAdaptations)
@@ -629,75 +645,47 @@ export function LearnerProfileView({
         </>
       )}
 
-      <SectionLabel>Concept mastery · dual-track</SectionLabel>
-      <div className={cn(CARD, "mt-2.5")}>
-        <p className="m-0 px-6 pb-4 pt-[22px] text-[13px] leading-[1.6] text-nevo-near-black/60">
-          Two tracks per concept: how well {firstName} understands it, and the
-          reading level the material demands. When the two part company, the
-          barrier is the text, not the concept - the distinction this profile
-          exists to draw.
-        </p>
-        {failed.mastery ? (
-          <div className="border-t border-nevo-near-black/8 px-6 py-6">
-            <ReadFailed
-              firstName={firstName}
-              what="concept record"
-              onRetry={load}
-              denied={denied.mastery}
-            />
-          </div>
-        ) : mastery.length === 0 ? (
-          <p className="m-0 border-t border-nevo-near-black/8 px-6 py-6 text-sm text-nevo-near-black/62">
-            No concepts have enough practice behind them yet.
-          </p>
-        ) : (
-          mastery.slice(0, 10).map((row, i) => {
-            // Bars, never numbers - see the note at the top of this file.
-            /*
-             * A NULL IS NO ESTIMATE, NEVER A ZERO (SCRUM-200; Lydia, 28 Oct).
-             * Both tracks are nullable since d461b60, and `Math.min(1, null)`
-             * drew an empty bar - which reads as zero, "a claim we have not
-             * earned". A track with no estimate says so in words instead.
-             */
-            const concept = barWidth(row.masteryProbabilityConcept);
-            const reading = barWidth(row.masteryProbabilityReading);
-            /*
-             * No "Reading is the barrier here". It was drawn whenever the
-             * concept track led the reading track by more than 0.15 - a
-             * threshold this screen invented (architecture rule 3), turned
-             * into a statement about a named child the engine never made.
-             * Reports dropped its copy of the same label in #573.
-             */
-            return (
-              <div
-                key={row.conceptId}
-                className={cn(
-                  "px-6 py-4",
-                  i < Math.min(mastery.length, 10) - 1 && ROW_DIVIDER,
-                )}
-              >
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-[14.5px] font-semibold text-nevo-near-black">
-                    {row.conceptName}
-                  </span>
-                </div>
-                <div className="mt-3 flex flex-col gap-2">
-                  <Track
-                    label="Understands the idea"
-                    value={concept}
-                    tone="navy"
-                  />
-                  <Track
-                    label="Handles the reading"
-                    value={reading}
-                    tone="violet"
-                  />
-                </div>
+      {/*
+        * CONCEPT MASTERY, BY LEVEL (the By Level design; S21). Each concept is
+        * the shared MasteryByLevel: a state per curriculum level in the
+        * frame's words, only the levels the engine observed something at
+        * (L99), reading beside them, no flag and no number.
+        *
+        * The label drops the frame's "· dual-track" and the frame's lead line
+        * ("Two tracks per concept…") is gone: both describe the bars this
+        * replaces, so they would be untrue over it. D08b has no other line of
+        * its own, so it has none (Hub, 28 Nov; with Lydia in L99).
+        */}
+      {masteryAbsent ? null : (
+        <>
+          <SectionLabel>Concept mastery</SectionLabel>
+          <div className={cn(CARD, "mt-2.5")}>
+            {failed.mastery ? (
+              <div className="px-6 py-6">
+                <ReadFailed firstName={firstName} what="concept record" onRetry={load} />
               </div>
-            );
-          })
-        )}
-      </div>
+            ) : mastery.length === 0 ? (
+              <p className="m-0 px-6 py-6 text-sm text-nevo-near-black/62">
+                No concepts have enough practice behind them yet.
+              </p>
+            ) : (
+              mastery.map((c, i) => (
+                <div
+                  key={c.conceptId}
+                  data-concept
+                  className={cn("px-6 py-4", i < mastery.length - 1 && ROW_DIVIDER)}
+                >
+                  <MasteryByLevel
+                    concept={c.conceptName}
+                    levels={c.levels ?? {}}
+                    reading={c.reading ?? null}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
 
       <SectionLabel>Recent adaptations</SectionLabel>
       <div className={cn(CARD, "mt-2.5")}>
@@ -911,50 +899,3 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * One track of the dual-track bar. No number, by design - the label says what
- * it is and the length says how far along, which is all a SENCo needs to see
- * the two diverge.
- */
-/** The server's 0-1 estimate as a bar width, or null when it sent none. */
-function barWidth(estimate: number | null): number | null {
-  if (typeof estimate !== "number" || !Number.isFinite(estimate)) return null;
-  return Math.max(0, Math.min(1, estimate));
-}
-
-function Track({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  /** Null: no estimate yet - said in words, never drawn as an empty bar. */
-  value: number | null;
-  tone: "navy" | "violet";
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="w-[150px] flex-none text-[12.5px] text-nevo-near-black/62">
-        {label}
-      </span>
-      {value === null ? (
-        <span className="flex-1 text-[12.5px] text-nevo-near-black/55">
-          Not enough yet to show this.
-        </span>
-      ) : (
-        <span
-          aria-hidden="true"
-          className="h-2 flex-1 overflow-hidden rounded-full bg-nevo-near-black/[0.08]"
-        >
-          <span
-            className={cn(
-              "block h-full rounded-full",
-              tone === "navy" ? "bg-nevo-navy" : "bg-nevo-violet",
-            )}
-            style={{ width: `${Math.round(value * 100)}%` }}
-          />
-        </span>
-      )}
-    </div>
-  );
-}

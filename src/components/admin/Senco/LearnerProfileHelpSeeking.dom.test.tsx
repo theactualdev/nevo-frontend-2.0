@@ -36,6 +36,7 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
       accommodations: async () => null,
       adaptations: async () => [],
       mastery: async () => [],
+      masteryByLevel: async () => ({ studentId: "s1", concepts: [] }),
     },
   };
 });

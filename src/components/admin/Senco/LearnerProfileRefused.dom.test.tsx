@@ -43,6 +43,7 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
       }),
       accommodations: async () => null,
       mastery: async () => [],
+      masteryByLevel: async () => ({ studentId: "s1", concepts: [] }),
       adaptations: async () => {
         throw new ApiError(403, "Forbidden");
       },

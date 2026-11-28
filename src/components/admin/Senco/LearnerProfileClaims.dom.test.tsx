@@ -42,18 +42,18 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
       }),
       accommodations: async () => null,
       adaptations: async () => [],
-      // Concept far ahead of reading: the gap the old label fired on.
-      mastery: async () => [
-        {
-          studentId: "s1",
-          conceptId: "c1",
-          conceptName: "Fractions",
-          masteryProbabilityConcept: 0.9,
-          masteryProbabilityReading: 0.2,
-          attentionWeights: {},
-          practiceCount: 12,
-        },
-      ],
+      // Knowing reached, reading needing support: the gap the old label fired on.
+      masteryByLevel: async () => ({
+        studentId: "s1",
+        concepts: [
+          {
+            conceptId: "c1",
+            conceptName: "Fractions",
+            levels: { knowing_and_understanding: "reached" },
+            reading: "support",
+          },
+        ],
+      }),
     },
   };
 });
@@ -66,11 +66,12 @@ vi.mock("@/lib/api/classes", async (importOriginal) => {
 });
 
 describe("the learner profile's concept rows", () => {
-  it("state no diagnosis of their own, however far apart the bars are", async () => {
+  it("state no diagnosis of their own, however far apart the level and the reading are", async () => {
     const { container } = render(<LearnerProfileView studentId="s1" />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Fractions/));
-    // The section intro explains the two tracks in general; what went is the
-    // per-concept verdict about this child.
+    // The per-concept verdict about this child went with the bars; By Level
+    // draws only the engine's states, in the frame's words.
     expect(visibleText(container)).not.toMatch(/Reading is the barrier here/);
+    expect(visibleText(container)).not.toMatch(/\d+\s*%/);
   });
 });

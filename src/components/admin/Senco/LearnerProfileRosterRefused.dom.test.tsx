@@ -60,6 +60,7 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
       }),
       accommodations: () => h.accommodations(),
       mastery: async () => [],
+      masteryByLevel: async () => ({ studentId: "s1", concepts: [] }),
       adaptations: async () => [],
     },
     // Below the server's floor, so help-seeking draws nothing of its own.
@@ -137,7 +138,7 @@ beforeEach(() => {
 describe("What Nevo has noticed, for an admin the roster route refuses", () => {
   it("is left out - no failure line, no Try again, no claim that Nevo found nothing", async () => {
     const { container } = render(<LearnerProfileView studentId="s1" />);
-    await screen.findByText("Concept mastery · dual-track");
+    await screen.findByText("Concept mastery");
     await waitFor(() => expect(h.roster).toHaveBeenCalledWith("c1"));
 
     await waitFor(() => expect(visibleText(container)).not.toMatch(/What Nevo has noticed/i));
