@@ -156,20 +156,35 @@ export function preferencesIntro(visible: CategoryMeta[], scopes: PermissionScop
  * ("MODALITY SHIFT") in front of an admin.
  */
 export function categoryLabel(category: string | null | undefined): string | null {
-  return category && category in CATEGORY_META
-    ? CATEGORY_META[category as AdminCategory].name
-    : null;
+  if (!category) return null;
+  if (category in CATEGORY_META) return CATEGORY_META[category as AdminCategory].name;
+  return ROW_ONLY_LABELS[category] ?? null;
 }
 
 /**
+ * Labels for categories a ROW can carry that are not preference streams, so
+ * they are named here and not in `CATEGORY_META` - that table draws a switch
+ * in Notification preferences for each entry, and the server keeps no
+ * preference for these.
+ *
+ * "safeguarding": Lydia, 28 Nov (L91) - "The small label, when S24 gives it
+ * a category, is 'Safeguarding'." Named before S24 ships, so it shows the
+ * moment the server sends the category; the hub has asked Teslim for exactly
+ * this value.
+ */
+const ROW_ONLY_LABELS: Record<string, string> = {
+  safeguarding: "Safeguarding",
+};
+
+/**
  * A row's label: `categoryLabel`, except for a SAFEGUARDING NOTICE (S16,
- * backend v43). The server files it under "attention", which this console
- * names "Something changed suddenly" - untrue above a safeguarding flag. So it
- * carries no label at all; its title and body stay as sent. Raised as S24 (its
- * own category): once that ships, the unknown-category rule above draws no
- * label anyway, and this special case comes out.
+ * backend v43). Until S24, the server files it under "attention", which this
+ * console names "Something changed suddenly" - untrue above a safeguarding
+ * flag. So it carries a label only once its category is "safeguarding" (L91:
+ * "Safeguarding"), and none before; its title and body stay as sent either
+ * way. Once S24 ships, this special case can come out.
  */
 export function rowLabel(n: { type: string; category?: string | null }): string | null {
-  if (n.type === "safeguarding_flag") return null;
+  if (n.type === "safeguarding_flag" && n.category !== "safeguarding") return null;
   return categoryLabel(n.category);
 }
