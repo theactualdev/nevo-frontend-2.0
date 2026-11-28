@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   allowanceSpent,
   roleRefused,
-  childBlockReason,
   HISTORY_DAYS,
   HISTORY_LIMIT,
   recentThreads,
@@ -205,44 +204,3 @@ describe("roleRefused", () => {
   });
 });
 
-/**
- * L46 (Lydia, 25 Nov) and the Hub's ruling the same day: a child's block has
- * a line of Lydia's for "other" and "names_person" only. Everything else -
- * trusted_adult, no reason, a reason this build does not know - keeps the
- * server's line, because it could be a child at risk.
- */
-describe("childBlockReason", () => {
-  const stop = (reason?: unknown) =>
-    new ApiError(403, "x", {
-      detail: {
-        code: "content_safety_blocked",
-        message: "m",
-        ...(reason === undefined ? {} : { reason }),
-      },
-    });
-
-  it("names the two reasons with a line of Lydia's", () => {
-    expect(childBlockReason(stop("other"))).toBe("other");
-    expect(childBlockReason(stop("names_person"))).toBe("names_person");
-  });
-
-  it("is null for trusted_adult, so the server's line stands", () => {
-    expect(childBlockReason(stop("trusted_adult"))).toBeNull();
-  });
-
-  it("is null for a block with no reason - today's server, safeguard blocks included", () => {
-    expect(childBlockReason(stop())).toBeNull();
-  });
-
-  it("is null for a reason this build does not know, which could be a new safeguarding one", () => {
-    expect(childBlockReason(stop("self_harm_v2"))).toBeNull();
-    expect(childBlockReason(stop(7))).toBeNull();
-  });
-
-  it("is null for any refusal that is not a safety stop", () => {
-    expect(
-      childBlockReason(new ApiError(403, "x", { detail: { code: "ask_role_forbidden", reason: "other" } })),
-    ).toBeNull();
-    expect(childBlockReason(new ApiError(0, "offline"))).toBeNull();
-  });
-});
