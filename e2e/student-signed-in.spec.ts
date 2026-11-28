@@ -110,7 +110,10 @@ import { serverFailure } from "./serverFailure";
  *    It also sends the sitting's FOCUS EVENTS and holds production to them
  *    (28 Nov): the first return as the section shows, then an away and a
  *    return round a hide the test forces. Visibility only - they say nothing
- *    about the child, and they change nothing a child sees.
+ *    about the child, and they change nothing a child sees. Where the
+ *    section offers a second format, it is switched to - a format choice
+ *    for that section, written to the sitting - held to the same events,
+ *    and switched back, so the probe is left on the format it opened in.
  *
  * Every other test is READ-ONLY and is held to it: it records every write the
  * page sends and fails on any (`expectNoWrites`). Never, anywhere in this file:
@@ -1185,6 +1188,39 @@ test.describe("a signed-in student", () => {
       typeof returned.clientAwayDurationMs,
       "The return did not say how long the child was away.",
     ).toBe("number");
+
+    /*
+     * AND IN ANOTHER FORMAT, where the section offers one (Hub, 28 Nov): a
+     * base-format-only run could pass while children on the format path were
+     * refused. Switched back after, so the probe stays as it was.
+     */
+    const formats = page.getByRole("group", { name: "Lesson format" });
+    const other = formats.locator('button[aria-pressed="false"]:not([disabled])').first();
+    if ((await formats.count()) > 0 && (await other.count()) > 0) {
+      const original = formats.locator('button[aria-pressed="true"]').first();
+      const originalName = await original.getAttribute("aria-label");
+      await other.click();
+      await expect(other).toHaveAttribute("aria-pressed", "true", { timeout: LIVE_MS });
+
+      const awayInFormat = focusEvent(page, "away");
+      await setPageVisibility(page, "hidden");
+      const wentInFormat = await awayInFormat;
+      await accepted(wentInFormat, "The away in another format");
+      expect((wentInFormat.request().postDataJSON() as { segmentId: string }).segmentId).toBe(section);
+
+      const backInFormat = focusEvent(page, "return");
+      await setPageVisibility(page, "visible");
+      await accepted(await backInFormat, "The return in another format");
+
+      if (originalName) {
+        await formats.getByRole("button", { name: originalName, exact: true }).click();
+      }
+    } else {
+      test.info().annotations.push({
+        type: "focus events",
+        description: "This section offers one format, so no other format was walked.",
+      });
+    }
 
     await page.getByRole("button", { name: "Exit lesson" }).click();
     const leave = page.getByRole("dialog");
