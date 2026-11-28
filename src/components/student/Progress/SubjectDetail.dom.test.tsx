@@ -626,3 +626,43 @@ describe("several concepts due at once", () => {
     expect(screen.queryByRole("button", { name: "See the rest" })).toBeNull();
   });
 });
+
+/**
+ * L94 (Lydia, 28 Nov): three due reviews are three equal items, so none of
+ * their buttons is navy - all take the same non-primary treatment.
+ */
+describe("the review cards' buttons on a subject page", () => {
+  it("are all the same non-primary button, none of them navy", async () => {
+    signIn();
+    const concepts = [
+      { conceptId: "c-1", name: "Adding fractions" },
+      { conceptId: "c-2", name: "Equivalent fractions" },
+      { conceptId: "c-3", name: "Telling the time" },
+    ];
+    hooks.useStudentProgress.mockReturnValue({
+      subjects: [{ slug: "Mathematics", name: "Mathematics", concepts }],
+      lessons: [],
+      reflection: null,
+      highlights: [],
+      loading: false,
+      failed: false,
+      live: true,
+    });
+    hooks.useDueReviews.mockReturnValue({
+      due: new Set(concepts.map((c) => c.conceptId)),
+      playable: new Map(concepts.map((c) => [c.conceptId, `lesson-${c.conceptId}`])),
+      loading: false,
+      failed: false,
+    });
+
+    render(<SubjectDetail subject={null} slug="Mathematics" />);
+
+    const links = await screen.findAllByRole("link", { name: /take another look at/i });
+    expect(links).toHaveLength(3);
+    for (const link of links) {
+      expect(link).toHaveClass("border-nevo-navy", "text-nevo-navy");
+      expect(link.className).not.toMatch(/(^|\s)bg-nevo-navy(\s|$)/);
+    }
+    expect(new Set(links.map((l) => l.className)).size).toBe(1);
+  });
+});

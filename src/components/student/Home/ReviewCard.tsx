@@ -35,7 +35,15 @@ import { cn } from "@/lib/utils";
  * The props below are only what a second page needs to place it: where the
  * review comes back to, its own heading id, a link name that says which
  * concept (several "Start a review" links side by side), and its spacing.
- * Nothing it draws changes.
+ * Nothing it draws changes - but its button (below).
+ *
+ * ON A SUBJECT PAGE ITS BUTTON IS NOT NAVY (Lydia, 28 Nov, L94): "None of
+ * the three is a primary action, so none of them is navy. Three due reviews
+ * are three equivalent items ... All three take the same non-primary
+ * treatment. The one-navy rule holds because a screen has one primary
+ * action, and a list of equal items has none." So `secondary` draws the
+ * console's secondary button - a navy rule and navy words on the card - for
+ * every card in the list alike. Home's one card keeps its navy primary.
  */
 export function ReviewCard({
   review,
@@ -43,6 +51,7 @@ export function ReviewCard({
   headingId = "home-review",
   linkLabel,
   className = "mt-7",
+  secondary = false,
 }: {
   review: Pick<LearningWork, "conceptName" | "lessonId" | "conceptId">;
   /** Where the review's ways out return to; Home when not given. */
@@ -52,6 +61,8 @@ export function ReviewCard({
   /** The link's accessible name, where several cards share its words. */
   linkLabel?: string;
   className?: string;
+  /** One of a list of equal reviews: the non-primary button (L94). */
+  secondary?: boolean;
 }) {
   const name = review.conceptName.trim();
   return (
@@ -83,7 +94,12 @@ export function ReviewCard({
       <Link
         href={reviewSessionHref(review.lessonId, review.conceptId, back)}
         aria-label={linkLabel}
-        className="mt-[18px] flex h-[50px] cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy text-[15px] font-semibold text-nevo-cream transition-colors hover:bg-nevo-navy/90 active:scale-[0.99]"
+        className={cn(
+          "mt-[18px] flex h-[50px] cursor-pointer items-center justify-center rounded-[10px] text-[15px] font-semibold transition-colors active:scale-[0.99]",
+          secondary
+            ? "border-[1.5px] border-nevo-navy bg-transparent text-nevo-navy hover:bg-nevo-navy/6"
+            : "bg-nevo-navy text-nevo-cream hover:bg-nevo-navy/90",
+        )}
       >
         Start a review
       </Link>
